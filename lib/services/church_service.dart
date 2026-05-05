@@ -57,6 +57,18 @@ class ChurchService {
     return cities;
   }
 
+  static Future<Set<String>> fetchUserFollowedChurchIds() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return <String>{};
+    final response = await _client
+        .from(_followsTable)
+        .select('church_id')
+        .eq('user_id', user.id);
+    return (response as List)
+        .map((row) => row['church_id'].toString())
+        .toSet();
+  }
+
   static Future<bool> isFollowing(String churchId) async {
     final user = _client.auth.currentUser;
     if (user == null) return false;

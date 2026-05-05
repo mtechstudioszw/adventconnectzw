@@ -6,6 +6,8 @@ import '../screens/auth/signup_screen.dart';
 import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
+import '../models/event_model.dart';
+import '../screens/events/event_details_screen.dart';
 import '../screens/events/events_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
@@ -67,6 +69,20 @@ final GoRouter appRouter = GoRouter(
       path: '/events',
       name: 'events',
       builder: (context, state) => const EventsScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          name: 'event_details',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            final initial = state.extra is Event ? state.extra as Event : null;
+            return EventDetailsScreen(
+              eventId: id,
+              initialEvent: initial,
+            );
+          },
+        ),
+      ],
     ),
     GoRoute(
       path: '/prayer',

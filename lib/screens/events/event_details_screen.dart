@@ -20,7 +20,8 @@ class EventDetailsScreen extends StatefulWidget {
   State<EventDetailsScreen> createState() => _EventDetailsScreenState();
 }
 
-class _EventDetailsScreenState extends State<EventDetailsScreen> {
+class _EventDetailsScreenState extends State<EventDetailsScreen>
+    with SingleTickerProviderStateMixin {
   Event? _event;
   bool _loading = true;
   bool _isRsvped = false;
@@ -29,12 +30,26 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Timer? _ticker;
   Duration _timeRemaining = Duration.zero;
 
+  late final AnimationController _entrance;
+  late final Animation<double> _fade;
+  late final Animation<double> _slide;
+
   @override
   void initState() {
     super.initState();
     _event = widget.initialEvent;
     _loading = widget.initialEvent == null;
     _updateTimeRemaining();
+
+    _entrance = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..forward();
+    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
+    _slide = Tween<double>(begin: 12, end: 0).animate(
+      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
+    );
+
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(_updateTimeRemaining);
     });
@@ -44,6 +59,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _entrance.dispose();
     super.dispose();
   }
 
@@ -79,7 +95,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Future<void> _toggleRsvp() async {
     final event = _event;
     if (event == null) return;
-
     setState(() => _rsvpBusy = true);
     try {
       if (_isRsvped) {
@@ -118,7 +133,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
-      body: SafeArea(child: _buildBody()),
+      body: _buildBody(),
     );
   }
 
@@ -159,12 +174,39 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(child: _buildHero(event)),
-        SliverToBoxAdapter(child: _buildHeader(event)),
-        SliverToBoxAdapter(child: _buildCountdown(event)),
-        SliverToBoxAdapter(child: _buildRsvpButton(event)),
-        SliverToBoxAdapter(child: _buildAbout(event)),
-        SliverToBoxAdapter(child: _buildLocation(event)),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        SliverToBoxAdapter(
+          child: AnimatedBuilder(
+            animation: _entrance,
+            builder: (context, child) => Opacity(
+              opacity: _fade.value,
+              child: Transform.translate(
+                offset: Offset(0, _slide.value),
+                child: child,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildMetaRow(event),
+                  const SizedBox(height: 20),
+                  _buildCountdown(event),
+                  const SizedBox(height: 16),
+                  _buildRsvpButton(event),
+                  const SizedBox(height: 24),
+                  _buildOrganizer(event),
+                  const SizedBox(height: 16),
+                  _buildAbout(event),
+                  if (event.location != null && event.location!.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _buildLocation(event),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -174,160 +216,193 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       children: [
         AspectRatio(
           aspectRatio: 1,
-          child: event.coverPhotoUrl == null || event.coverPhotoUrl!.isEmpty
-              ? Container(
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.appBarGradient,
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.event,
-                      size: 96,
-                      color: AppColors.white,
-                    ),
-                  ),
-                )
-              : Image.network(
-                  event.coverPhotoUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
-                    color: AppColors.lightGrey,
-                    child: const Icon(
-                      Icons.broken_image_outlined,
-                      size: 64,
-                      color: Color.fromRGBO(26, 26, 46, 0.3),
-                    ),
-                  ),
-                ),
+          child: _CoverImage(url: event.coverPhotoUrl),
         ),
-        Positioned(
-          top: 12,
-          left: 12,
-          child: Material(
-            color: const Color.fromRGBO(0, 0, 0, 0.4),
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: () => context.canPop()
-                  ? context.pop()
-                  : context.goNamed('events'),
-              child: const Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(Icons.arrow_back,
-                    color: AppColors.white, size: 22),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.15),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.75),
+                  ],
+                  stops: const [0.0, 0.4, 1.0],
+                ),
               ),
             ),
+          ),
+        ),
+        SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(
+              children: [
+                _CircleIconButton(
+                  icon: Icons.arrow_back,
+                  onTap: () => context.canPop()
+                      ? context.pop()
+                      : context.goNamed('events'),
+                ),
+                const Spacer(),
+                _CircleIconButton(
+                  icon: Icons.share_outlined,
+                  onTap: () {},
+                ),
+              ],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 24,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _formatChip(event.eventDate, event.eventTime),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                event.title,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.displayMedium.copyWith(
+                  color: AppColors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  height: 1.15,
+                ),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildHeader(Event event) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(event.title, style: AppTextStyles.displayMedium),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(
-                Icons.calendar_today_outlined,
-                size: 18,
-                color: AppColors.primaryBlue,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _formatFullDate(event.eventDate),
-                style: AppTextStyles.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Icon(
-                Icons.access_time,
-                size: 18,
-                color: AppColors.primaryBlue,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _formatTime(event.eventTime),
-                style: AppTextStyles.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+  Widget _buildMetaRow(Event event) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(
-                Icons.people_outline,
-                size: 18,
-                color: AppColors.primaryBlue,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                event.capacity != null
-                    ? '${event.rsvpCount} / ${event.capacity} attendees'
-                    : '${event.rsvpCount} attendees',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.primaryBlue,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+        ],
+      ),
+      child: Row(
+        children: [
+          _MetaTile(
+            icon: Icons.calendar_today_outlined,
+            label: 'Date',
+            value: _formatShortDate(event.eventDate),
+          ),
+          _verticalDivider(),
+          _MetaTile(
+            icon: Icons.access_time,
+            label: 'Time',
+            value: _formatTime(event.eventTime),
+          ),
+          _verticalDivider(),
+          _MetaTile(
+            icon: Icons.people_outline,
+            label: 'Going',
+            value: event.capacity != null
+                ? '${event.rsvpCount}/${event.capacity}'
+                : '${event.rsvpCount}',
           ),
         ],
       ),
     );
   }
 
+  Widget _verticalDivider() {
+    return Container(
+      width: 1,
+      height: 36,
+      color: const Color.fromRGBO(26, 26, 46, 0.08),
+    );
+  }
+
   Widget _buildCountdown(Event event) {
     final isPast = event.isPast;
     final remaining = _timeRemaining;
-
     final days = remaining.inDays;
     final hours = remaining.inHours % 24;
     final minutes = remaining.inMinutes % 60;
     final seconds = remaining.inSeconds % 60;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Text(
-                isPast ? 'Event has ended' : 'Starts in',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (isPast)
-                Text(
-                  _formatPastAgo(event.startsAt),
-                  style: AppTextStyles.headlineMedium.copyWith(
-                    color: AppColors.textDark,
-                  ),
-                )
-              else
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _CountdownUnit(value: days, label: 'days'),
-                    _CountdownUnit(value: hours, label: 'hrs'),
-                    _CountdownUnit(value: minutes, label: 'min'),
-                    _CountdownUnit(value: seconds, label: 'sec'),
-                  ],
-                ),
-            ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.30),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-        ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Text(
+            isPast ? 'EVENT HAS ENDED' : 'STARTS IN',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.white.withValues(alpha: 0.7),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.0,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (isPast)
+            Text(
+              _formatPastAgo(event.startsAt),
+              style: AppTextStyles.headlineMedium.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _CountdownUnit(value: days, label: 'days'),
+                _CountdownUnit(value: hours, label: 'hrs'),
+                _CountdownUnit(value: minutes, label: 'min'),
+                _CountdownUnit(value: seconds, label: 'sec'),
+              ],
+            ),
+        ],
       ),
     );
   }
@@ -353,18 +428,88 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       onTap = null;
       isPrimary = false;
     } else {
-      label = 'RSVP';
+      label = 'RSVP for this event';
       onTap = _rsvpBusy ? null : _toggleRsvp;
       isPrimary = true;
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-      child: SizedBox(
-        width: double.infinity,
-        child: isPrimary
-            ? _PrimaryButton(label: label, busy: _rsvpBusy, onTap: onTap)
-            : _SecondaryButton(label: label, busy: _rsvpBusy, onTap: onTap),
+    return SizedBox(
+      width: double.infinity,
+      child: isPrimary
+          ? _PrimaryButton(label: label, busy: _rsvpBusy, onTap: onTap)
+          : _SecondaryButton(label: label, busy: _rsvpBusy, onTap: onTap),
+    );
+  }
+
+  Widget _buildOrganizer(Event event) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.campaign_outlined,
+              color: AppColors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'ORGANIZED BY',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  event.churchId != null
+                      ? 'Affiliated SDA church'
+                      : 'Advent Connect ZW',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.chevron_right,
+            color: Color.fromRGBO(26, 26, 46, 0.4),
+          ),
+        ],
       ),
     );
   }
@@ -373,84 +518,110 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (event.description == null || event.description!.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('About this event', style: AppTextStyles.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                event.description!,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.8),
-                  height: 1.5,
-                ),
-              ),
-            ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
-        ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'About this event',
+            style: AppTextStyles.titleLarge.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            event.description!,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.8),
+              height: 1.55,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildLocation(Event event) {
-    if (event.location == null || event.location!.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
               aspectRatio: 16 / 9,
               child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.lightGrey,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: const Color.fromRGBO(26, 26, 46, 0.08),
-                    ),
-                  ),
-                ),
+                color: AppColors.lightGrey,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    CustomPaint(
-                      painter: _MapGridPainter(),
-                    ),
+                    CustomPaint(painter: _MapGridPainter()),
                     Center(
                       child: Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: AppColors.primaryBlue,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color:
-                                  AppColors.primaryBlue.withValues(alpha: 0.3),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
+                              color: AppColors.primaryBlue
+                                  .withValues(alpha: 0.4),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
                           ],
                         ),
                         child: const Icon(
                           Icons.place,
                           color: AppColors.white,
-                          size: 28,
+                          size: 30,
                         ),
                       ),
                     ),
-                    const Positioned(
+                    Positioned(
                       bottom: 8,
                       right: 8,
-                      child: _MapPlaceholderBadge(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color.fromRGBO(0, 0, 0, 0.55),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Map preview',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -461,7 +632,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Location', style: AppTextStyles.titleLarge),
+                  Text(
+                    'Location',
+                    style: AppTextStyles.titleLarge.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,7 +650,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          event.location!,
+                          event.location ?? '',
                           style: AppTextStyles.bodyMedium,
                         ),
                       ),
@@ -489,15 +665,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
-  String _formatFullDate(DateTime d) {
+  String _formatChip(DateTime date, String time) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
     ];
-    const days = [
-      'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+    return '${months[date.month - 1]} ${date.day}  •  ${_formatTime(time)}';
+  }
+
+  String _formatShortDate(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    return '${days[d.weekday - 1]}, ${d.day} ${months[d.month - 1]} ${d.year}';
+    return '${d.day} ${months[d.month - 1]}';
   }
 
   String _formatTime(String time) {
@@ -506,8 +687,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final hour = int.tryParse(parts[0]) ?? 0;
     final minute = int.tryParse(parts[1]) ?? 0;
     final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour =
-        hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
     return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
   }
 
@@ -516,6 +696,48 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (diff.inDays >= 1) return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
     if (diff.inHours >= 1) return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
     return '${diff.inMinutes} minute${diff.inMinutes != 1 ? 's' : ''} ago';
+  }
+}
+
+class _MetaTile extends StatelessWidget {
+  const _MetaTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, size: 18, color: AppColors.primaryBlue),
+          const SizedBox(height: 6),
+          Text(
+            label.toUpperCase(),
+            style: AppTextStyles.labelSmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.5),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.titleMedium.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -529,27 +751,34 @@ class _CountdownUnit extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 60,
+          height: 60,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
+            color: AppColors.white.withValues(alpha: 0.16),
             borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.white.withValues(alpha: 0.18),
+            ),
           ),
           child: Text(
             value.toString().padLeft(2, '0'),
             style: AppTextStyles.headlineMedium.copyWith(
               color: AppColors.white,
               fontWeight: FontWeight.w700,
+              fontSize: 22,
+              height: 1,
             ),
           ),
         ),
         const SizedBox(height: 6),
         Text(
-          label,
+          label.toUpperCase(),
           style: AppTextStyles.labelSmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.6),
-            letterSpacing: 0.5,
+            color: AppColors.white.withValues(alpha: 0.65),
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.4,
           ),
         ),
       ],
@@ -563,7 +792,6 @@ class _PrimaryButton extends StatelessWidget {
     required this.busy,
     required this.onTap,
   });
-
   final String label;
   final bool busy;
   final VoidCallback? onTap;
@@ -571,16 +799,16 @@ class _PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Opacity(
-      opacity: onTap == null ? 0.6 : 1,
+      opacity: onTap == null && !busy ? 0.6 : 1,
       child: Container(
         decoration: BoxDecoration(
           gradient: AppColors.primaryGradient,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primaryBlue.withValues(alpha: 0.25),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: AppColors.primaryBlue.withValues(alpha: 0.30),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -590,18 +818,24 @@ class _PrimaryButton extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(14),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(vertical: 18),
               child: Center(
                 child: busy
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 22,
+                        height: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.4,
                           color: AppColors.white,
                         ),
                       )
-                    : Text(label, style: AppTextStyles.buttonText),
+                    : Text(
+                        label,
+                        style: AppTextStyles.buttonText.copyWith(
+                          fontSize: 15,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
               ),
             ),
           ),
@@ -617,7 +851,6 @@ class _SecondaryButton extends StatelessWidget {
     required this.busy,
     required this.onTap,
   });
-
   final String label;
   final bool busy;
   final VoidCallback? onTap;
@@ -629,7 +862,7 @@ class _SecondaryButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         side: BorderSide(
           color: onTap == null
-              ? const Color.fromRGBO(26, 26, 46, 0.2)
+              ? const Color.fromRGBO(26, 26, 46, 0.18)
               : const Color.fromRGBO(26, 26, 46, 0.4),
           width: 1.5,
         ),
@@ -640,8 +873,8 @@ class _SecondaryButton extends StatelessWidget {
       ),
       child: busy
           ? const SizedBox(
-              width: 20,
-              height: 20,
+              width: 22,
+              height: 22,
               child: CircularProgressIndicator(
                 strokeWidth: 2.4,
                 color: AppColors.textDark,
@@ -653,29 +886,68 @@ class _SecondaryButton extends StatelessWidget {
                 color: onTap == null
                     ? const Color.fromRGBO(26, 26, 46, 0.5)
                     : AppColors.textDark,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
               ),
             ),
     );
   }
 }
 
-class _MapPlaceholderBadge extends StatelessWidget {
-  const _MapPlaceholderBadge();
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color.fromRGBO(0, 0, 0, 0.55),
-        borderRadius: BorderRadius.circular(8),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(0, 0, 0, 0.35),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: AppColors.white, size: 20),
+        ),
       ),
-      child: Text(
-        'Map preview',
-        style: AppTextStyles.labelSmall.copyWith(
-          color: AppColors.white,
-          fontWeight: FontWeight.w600,
+    );
+  }
+}
+
+class _CoverImage extends StatelessWidget {
+  const _CoverImage({this.url});
+  final String? url;
+
+  @override
+  Widget build(BuildContext context) {
+    if (url == null || url!.isEmpty) {
+      return Container(
+        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        child: Center(
+          child: Icon(
+            Icons.event,
+            color: AppColors.white.withValues(alpha: 0.55),
+            size: 80,
+          ),
+        ),
+      );
+    }
+    return Image.network(
+      url!,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Container(
+        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        child: Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: AppColors.white.withValues(alpha: 0.55),
+            size: 56,
+          ),
         ),
       ),
     );
@@ -688,7 +960,6 @@ class _MapGridPainter extends CustomPainter {
     final paint = Paint()
       ..color = const Color.fromRGBO(21, 101, 192, 0.08)
       ..strokeWidth = 1;
-
     const spacing = 28.0;
     for (double x = 0; x < size.width; x += spacing) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);

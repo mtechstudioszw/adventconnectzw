@@ -16,8 +16,11 @@ class EventsScreen extends StatefulWidget {
 }
 
 class _EventsScreenState extends State<EventsScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final TabController _tabController;
+  late final AnimationController _entrance;
+  late final Animation<double> _fade;
+  late final Animation<double> _slide;
   final _searchController = TextEditingController();
   Timer? _debounce;
 
@@ -34,12 +37,21 @@ class _EventsScreenState extends State<EventsScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
+    _entrance = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..forward();
+    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
+    _slide = Tween<double>(begin: 12, end: 0).animate(
+      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
+    );
     _bootstrap();
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _entrance.dispose();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
@@ -162,37 +174,79 @@ class _EventsScreenState extends State<EventsScreen>
     return MainScaffold(
       title: 'Events',
       currentIndex: 2,
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          _buildDateFilter(),
-          Container(
-            color: AppColors.lightGrey,
-            child: TabBar(
-              controller: _tabController,
-              labelColor: AppColors.primaryBlue,
-              unselectedLabelColor: const Color.fromRGBO(26, 26, 46, 0.5),
-              indicatorColor: AppColors.primaryBlue,
-              indicatorWeight: 3,
-              labelStyle: AppTextStyles.titleSmall.copyWith(
-                fontWeight: FontWeight.w700,
+      body: AnimatedBuilder(
+        animation: _entrance,
+        builder: (context, child) => Opacity(
+          opacity: _fade.value,
+          child: Transform.translate(
+            offset: Offset(0, _slide.value),
+            child: child,
+          ),
+        ),
+        child: Column(
+          children: [
+            _buildSearchBar(),
+            _buildDateFilter(),
+            _buildPillTabs(),
+            const SizedBox(height: 4),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildList(_upcoming, _loadingUpcoming, isUpcoming: true),
+                  _buildList(_past, _loadingPast, isUpcoming: false),
+                ],
               ),
-              tabs: const [
-                Tab(text: 'Upcoming'),
-                Tab(text: 'Past'),
-              ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPillTabs() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color.fromRGBO(26, 26, 46, 0.06),
           ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildList(_upcoming, _loadingUpcoming, isUpcoming: true),
-                _buildList(_past, _loadingPast, isUpcoming: false),
-              ],
-            ),
+        ),
+        child: TabBar(
+          controller: _tabController,
+          dividerColor: Colors.transparent,
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelColor: AppColors.white,
+          unselectedLabelColor: const Color.fromRGBO(26, 26, 46, 0.6),
+          indicator: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-        ],
+          labelStyle: AppTextStyles.titleSmall.copyWith(
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+            letterSpacing: 0.3,
+          ),
+          unselectedLabelStyle: AppTextStyles.titleSmall.copyWith(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          tabs: const [
+            Tab(text: 'Upcoming'),
+            Tab(text: 'Past'),
+          ],
+        ),
       ),
     );
   }

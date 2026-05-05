@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -19,7 +20,21 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _navigate() async {
     await Future.delayed(const Duration(seconds: 2));
-    if (mounted) context.goNamed('home');
+    if (!mounted) return;
+
+    if (AuthService.isSignedIn) {
+      context.goNamed('home');
+      return;
+    }
+
+    final ageVerified = await AuthService.isAgeVerified();
+    if (!mounted) return;
+
+    if (ageVerified) {
+      context.goNamed('login');
+    } else {
+      context.goNamed('age_verification');
+    }
   }
 
   @override

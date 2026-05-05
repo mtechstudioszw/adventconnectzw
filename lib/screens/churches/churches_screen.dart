@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/main_scaffold.dart';
 import '../widgets/tab_placeholder.dart';
 
 class ChurchesScreen extends StatelessWidget {
@@ -6,10 +7,14 @@ class ChurchesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TabPlaceholder(
-      icon: Icons.church_outlined,
+    return const MainScaffold(
       title: 'Churches',
-      subtitle: 'Find and follow churches near you.',
+      currentIndex: 1,
+      body: TabPlaceholder(
+        icon: Icons.church_outlined,
+        title: 'Churches',
+        subtitle: 'Find and follow churches near you.',
+      ),
     );
   }
 }

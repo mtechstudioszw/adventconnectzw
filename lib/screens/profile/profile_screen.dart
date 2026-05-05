@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/main_scaffold.dart';
 import '../widgets/tab_placeholder.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -6,10 +7,14 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TabPlaceholder(
-      icon: Icons.person_outline,
+    return const MainScaffold(
       title: 'Profile',
-      subtitle: 'Your account, settings, and activity.',
+      currentIndex: 4,
+      body: TabPlaceholder(
+        icon: Icons.person_outline,
+        title: 'Profile',
+        subtitle: 'Your account, settings, and activity.',
+      ),
     );
   }
 }

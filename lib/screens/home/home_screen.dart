@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/main_scaffold.dart';
 import '../widgets/tab_placeholder.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -6,10 +7,14 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TabPlaceholder(
-      icon: Icons.home_outlined,
+    return const MainScaffold(
       title: 'Home',
-      subtitle: 'Your personalised feed will live here.',
+      currentIndex: 0,
+      body: TabPlaceholder(
+        icon: Icons.home_outlined,
+        title: 'Home',
+        subtitle: 'Your personalised feed will live here.',
+      ),
     );
   }
 }

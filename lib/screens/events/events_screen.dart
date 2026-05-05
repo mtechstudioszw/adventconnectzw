@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/main_scaffold.dart';
 import '../widgets/tab_placeholder.dart';
 
 class EventsScreen extends StatelessWidget {
@@ -6,10 +7,14 @@ class EventsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TabPlaceholder(
-      icon: Icons.event_outlined,
+    return const MainScaffold(
       title: 'Events',
-      subtitle: 'Services, conferences, and gatherings across Zimbabwe.',
+      currentIndex: 2,
+      body: TabPlaceholder(
+        icon: Icons.event_outlined,
+        title: 'Events',
+        subtitle: 'Services, conferences, and gatherings across Zimbabwe.',
+      ),
     );
   }
 }

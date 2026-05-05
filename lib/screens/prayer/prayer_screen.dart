@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/main_scaffold.dart';
 import '../widgets/tab_placeholder.dart';
 
 class PrayerScreen extends StatelessWidget {
@@ -6,10 +7,14 @@ class PrayerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const TabPlaceholder(
-      icon: Icons.volunteer_activism_outlined,
+    return const MainScaffold(
       title: 'Prayer',
-      subtitle: 'Share requests and pray with the community.',
+      currentIndex: 3,
+      body: TabPlaceholder(
+        icon: Icons.volunteer_activism_outlined,
+        title: 'Prayer',
+        subtitle: 'Share requests and pray with the community.',
+      ),
     );
   }
 }

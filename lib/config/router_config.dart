@@ -3,7 +3,11 @@ import 'package:go_router/go_router.dart';
 import '../screens/auth/age_verification_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
-import '../screens/main_shell.dart';
+import '../screens/churches/churches_screen.dart';
+import '../screens/events/events_screen.dart';
+import '../screens/home/home_screen.dart';
+import '../screens/prayer/prayer_screen.dart';
+import '../screens/profile/profile_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -36,7 +40,27 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/home',
       name: 'home',
-      builder: (context, state) => const MainShell(),
+      builder: (context, state) => const HomeScreen(),
+    ),
+    GoRoute(
+      path: '/churches',
+      name: 'churches',
+      builder: (context, state) => const ChurchesScreen(),
+    ),
+    GoRoute(
+      path: '/events',
+      name: 'events',
+      builder: (context, state) => const EventsScreen(),
+    ),
+    GoRoute(
+      path: '/prayer',
+      name: 'prayer',
+      builder: (context, state) => const PrayerScreen(),
+    ),
+    GoRoute(
+      path: '/profile',
+      name: 'profile',
+      builder: (context, state) => const ProfileScreen(),
     ),
   ],
   errorBuilder: (context, state) => Scaffold(

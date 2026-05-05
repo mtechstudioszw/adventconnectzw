@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,7 +16,7 @@ void main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  if (Platform.isAndroid) {
+  if (!kIsWeb && Platform.isAndroid) {
     await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
   }
 

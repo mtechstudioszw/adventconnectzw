@@ -7,8 +7,10 @@ import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
 import '../models/event_model.dart';
+import '../models/prayer_model.dart';
 import '../screens/events/event_details_screen.dart';
 import '../screens/events/events_screen.dart';
+import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
 import '../screens/profile/profile_screen.dart';
@@ -88,6 +90,21 @@ final GoRouter appRouter = GoRouter(
       path: '/prayer',
       name: 'prayer',
       builder: (context, state) => const PrayerScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          name: 'prayer_details',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            final initial =
+                state.extra is Prayer ? state.extra as Prayer : null;
+            return PrayerDetailsScreen(
+              prayerId: id,
+              initialPrayer: initial,
+            );
+          },
+        ),
+      ],
     ),
     GoRoute(
       path: '/profile',

@@ -231,7 +231,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             const Spacer(),
                             _CircleIconButton(
                               icon: Icons.settings_outlined,
-                              onTap: () {},
+                              onTap: () => context.pushNamed('settings'),
                             ),
                           ],
                         ),

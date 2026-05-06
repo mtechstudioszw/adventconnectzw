@@ -1,0 +1,401 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../../theme/app_colors.dart';
+import '../../../theme/app_text_styles.dart';
+
+class LegalSection {
+  const LegalSection({
+    required this.title,
+    required this.body,
+    this.bullets = const [],
+  });
+
+  final String title;
+  final String body;
+  final List<String> bullets;
+}
+
+class LegalLayout extends StatefulWidget {
+  const LegalLayout({
+    super.key,
+    required this.kicker,
+    required this.title,
+    required this.subtitle,
+    required this.lastUpdated,
+    required this.intro,
+    required this.sections,
+  });
+
+  final String kicker;
+  final String title;
+  final String subtitle;
+  final String lastUpdated;
+  final String intro;
+  final List<LegalSection> sections;
+
+  @override
+  State<LegalLayout> createState() => _LegalLayoutState();
+}
+
+class _LegalLayoutState extends State<LegalLayout>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _entrance;
+  late final Animation<double> _fade;
+  late final Animation<double> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _entrance = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..forward();
+    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
+    _slide = Tween<double>(begin: 12, end: 0).animate(
+      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _entrance.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.lightGrey,
+      body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          children: [
+            _buildHero(context),
+            AnimatedBuilder(
+              animation: _entrance,
+              builder: (context, child) => Opacity(
+                opacity: _fade.value,
+                child: Transform.translate(
+                  offset: Offset(0, _slide.value),
+                  child: child,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildLastUpdated(),
+                    const SizedBox(height: 14),
+                    _buildIntroCard(),
+                    const SizedBox(height: 14),
+                    _buildSectionsCard(),
+                    const SizedBox(height: 24),
+                    Center(
+                      child: Text(
+                        '© ${DateTime.now().year} Advent Connect ZW',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: const Color.fromRGBO(26, 26, 46, 0.45),
+                          fontSize: 11,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHero(BuildContext context) {
+    return ClipPath(
+      clipper: _HeroClipper(),
+      child: Container(
+        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _CircleIconButton(
+                      icon: Icons.arrow_back,
+                      onTap: () => context.canPop()
+                          ? context.pop()
+                          : context.goNamed('settings'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.kicker,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.white.withValues(alpha: 0.55),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.title,
+                        style: AppTextStyles.displayMedium.copyWith(
+                          color: AppColors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.subtitle,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.white.withValues(alpha: 0.72),
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLastUpdated() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.update,
+            color: AppColors.primaryBlue,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Last updated: ${widget.lastUpdated}',
+            style: AppTextStyles.labelMedium.copyWith(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w700,
+              fontSize: 12.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIntroCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Text(
+        widget.intro,
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: const Color.fromRGBO(26, 26, 46, 0.85),
+          fontSize: 14.5,
+          height: 1.6,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < widget.sections.length; i++) ...[
+            _SectionBlock(
+              index: i + 1,
+              section: widget.sections[i],
+            ),
+            if (i != widget.sections.length - 1) ...[
+              const SizedBox(height: 18),
+              const Divider(
+                height: 1,
+                color: Color.fromRGBO(26, 26, 46, 0.06),
+              ),
+              const SizedBox(height: 18),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionBlock extends StatelessWidget {
+  const _SectionBlock({required this.index, required this.section});
+  final int index;
+  final LegalSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$index',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                section.title,
+                style: AppTextStyles.titleLarge.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15.5,
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          section.body,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.82),
+            fontSize: 14,
+            height: 1.65,
+          ),
+        ),
+        if (section.bullets.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          for (final b in section.bullets)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 7, right: 10),
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primaryBlue,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      b,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.82),
+                        fontSize: 14,
+                        height: 1.55,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HeroClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 24);
+    path.quadraticBezierTo(
+      size.width / 2,
+      size.height,
+      size.width,
+      size.height - 24,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.white.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+          ),
+          child: Icon(icon, color: AppColors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}

@@ -15,15 +15,20 @@ import '../screens/events/event_details_screen.dart';
 import '../screens/events/events_screen.dart';
 import '../screens/jobs/job_details_screen.dart';
 import '../screens/jobs/jobs_screen.dart';
+import '../screens/legal/guidelines_screen.dart';
+import '../screens/legal/privacy_screen.dart';
+import '../screens/legal/terms_screen.dart';
 import '../screens/marketplace/marketplace_screen.dart';
 import '../screens/marketplace/product_details_screen.dart';
 import '../screens/messaging/chat_screen.dart';
 import '../screens/messaging/conversations_screen.dart';
+import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/settings/settings_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -34,6 +39,11 @@ final GoRouter appRouter = GoRouter(
       path: '/splash',
       name: 'splash',
       builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: '/onboarding',
+      name: 'onboarding',
+      builder: (context, state) => const OnboardingScreen(),
     ),
     GoRoute(
       path: '/age-verification',
@@ -187,6 +197,26 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const EditProfileScreen(),
         ),
       ],
+    ),
+    GoRoute(
+      path: '/settings',
+      name: 'settings',
+      builder: (context, state) => const SettingsScreen(),
+    ),
+    GoRoute(
+      path: '/terms',
+      name: 'terms',
+      builder: (context, state) => const TermsScreen(),
+    ),
+    GoRoute(
+      path: '/privacy',
+      name: 'privacy',
+      builder: (context, state) => const PrivacyScreen(),
+    ),
+    GoRoute(
+      path: '/guidelines',
+      name: 'guidelines',
+      builder: (context, state) => const GuidelinesScreen(),
     ),
   ],
   errorBuilder: (context, state) => Scaffold(

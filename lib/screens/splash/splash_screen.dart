@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
+import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../onboarding/onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -76,18 +78,26 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (AuthService.isSignedIn) {
-      context.goNamed('home');
+      final ageVerified = await AuthService.isAgeVerified();
+      if (!mounted) return;
+      context.goNamed(ageVerified ? 'home' : 'age_verification');
+      return;
+    }
+
+    final hasSeenOnboarding = await SecureStorageService.read(
+          OnboardingScreen.onboardingFlagKey,
+        ) ==
+        'true';
+    if (!mounted) return;
+
+    if (!hasSeenOnboarding) {
+      context.goNamed('onboarding');
       return;
     }
 
     final ageVerified = await AuthService.isAgeVerified();
     if (!mounted) return;
-
-    if (ageVerified) {
-      context.goNamed('login');
-    } else {
-      context.goNamed('age_verification');
-    }
+    context.goNamed(ageVerified ? 'login' : 'age_verification');
   }
 
   @override

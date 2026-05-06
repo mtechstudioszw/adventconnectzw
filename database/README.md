@@ -129,8 +129,8 @@ What gets seeded after step 4:
 | Table | Read | Write |
 |---|---|---|
 | `churches` | Anyone | Service role only (admin tools) |
-| `profiles` | Any signed-in user | Owner only |
-| `events` | Approved events visible to all; pending visible to organizer | Organizer only |
+| `profiles` | Self always; others only if `is_discoverable = TRUE AND is_banned = FALSE` | Owner only |
+| `events` | Approved events visible to all; pending visible to organizer | Organizer only — but **status column is locked at the trigger level** (admin/service-role only) |
 | `event_rsvps`, `church_followers` | Any signed-in user | Owner only |
 | `prayers` | Public + anonymous → all auth; church_only → followers; private rows → author | Author only |
 | `prayer_responses` | Any signed-in user | Owner only |
@@ -140,6 +140,56 @@ What gets seeded after step 4:
 | `messages` | Conversation participants only | Sender only |
 
 > Service-role keys bypass RLS. Use them only on the server (Edge Functions, admin scripts) — never ship them in the Flutter bundle.
+
+### Banned users — global write block
+
+A helper function `public.user_is_active()` is called from every `INSERT`
+**and `UPDATE`** policy (profiles, prayers, prayer_responses, events,
+event_rsvps, products, jobs, conversations, messages). It returns `TRUE`
+only when the caller has a profile row and `is_banned = FALSE`.
+
+Setting `profiles.is_banned = TRUE` immediately blocks that user from:
+
+- Creating any new content (posts, prayers, products, jobs, messages, RSVPs)
+- Editing any existing content they own (including their own profile row,
+  so they can't unban themselves)
+- Bumping conversation state (typing, last-read markers)
+
+Existing rows stay where they are — clean them up server-side as part of
+your moderation workflow. Reads are still permitted (so they can see
+their own data) but the discoverability filter on `profiles` hides them
+from everyone else.
+
+### Anonymous prayers — read via the view
+
+Prayers stored with `visibility = 'anonymous'` still keep `author_id` on
+the row (the author needs it to manage their own post). Clients must read
+through the **`public.prayers_public`** view, which masks `author_id`
+to `NULL` when `visibility = 'anonymous'`.
+
+```dart
+// Flutter — read anonymous-safe prayers
+final rows = await supabase.from('prayers_public').select();
+
+// Writes still target the underlying table:
+await supabase.from('prayers').insert({...});
+```
+
+The view is defined `WITH (security_invoker = on)` so the underlying RLS
+on `prayers` (visibility, church_only follower checks) still runs.
+
+### Event approval
+
+Event organizers can edit their own events (title, description, dates,
+venue, etc.) but **cannot** change the `status` column themselves —
+a `BEFORE UPDATE OF status` trigger raises if a non-service-role caller
+tries to flip pending → approved. Admin approval needs to land via:
+
+- a Supabase Edge Function using the service-role key, or
+- a separate admin app authenticated as a service account
+
+This is a deliberate placeholder — wire it up to the moderation queue
+when that surface ships.
 
 ---
 

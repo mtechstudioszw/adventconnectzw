@@ -23,6 +23,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ---------------------------------------------------------------------
+--  Helper: TRUE iff the current authenticated user has a profile and
+--  is not banned. Used by every write policy so banned users can post
+--  nothing — prayers, events, products, jobs, messages.
+--
+--  SECURITY DEFINER so the lookup bypasses RLS on profiles (otherwise
+--  a tightening of the profiles SELECT policy could cause the helper
+--  to falsely deny). The function only reads is_banned for the caller.
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.user_is_active()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE id = auth.uid()
+      AND is_banned = FALSE
+  );
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public;
+
 
 -- =====================================================================
 --  TABLE 1 — churches
@@ -482,31 +501,70 @@ CREATE POLICY "churches_select_all" ON public.churches
 
 -- INSERT/UPDATE/DELETE intentionally have no policy → service role only.
 
--- ---- profiles: authenticated read, owner write -----------------------
-CREATE POLICY "profiles_select_authenticated" ON public.profiles
-  FOR SELECT USING (auth.role() = 'authenticated');
+-- ---- profiles: discoverable + not-banned, plus always self ----------
+-- Banned and private profiles are hidden from everyone except the owner.
+CREATE POLICY "profiles_select_discoverable_or_self" ON public.profiles
+  FOR SELECT USING (
+    auth.role() = 'authenticated' AND (
+      auth.uid() = id
+      OR (is_discoverable = TRUE AND is_banned = FALSE)
+    )
+  );
 
 CREATE POLICY "profiles_insert_self" ON public.profiles
   FOR INSERT WITH CHECK (auth.uid() = id);
 
 CREATE POLICY "profiles_update_self" ON public.profiles
-  FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+  FOR UPDATE USING (auth.uid() = id AND public.user_is_active())
+              WITH CHECK (auth.uid() = id AND public.user_is_active());
 
 CREATE POLICY "profiles_delete_self" ON public.profiles
   FOR DELETE USING (auth.uid() = id);
 
 -- ---- events: public read, owner write --------------------------------
+-- Organizers can edit their own content (title, description, dates,
+-- location, etc.) but the `status` column (pending / approved /
+-- rejected) is locked at the trigger level — see
+-- public.events_block_owner_status_change below.
+--
+-- Admin approval policy needed — implement via server function or a
+-- separate admin role using the service_role key. Trigger lets
+-- service_role bypass the status-lock.
 CREATE POLICY "events_select_all" ON public.events
   FOR SELECT USING (status = 'approved' OR organizer_id = auth.uid());
 
 CREATE POLICY "events_insert_authenticated" ON public.events
-  FOR INSERT WITH CHECK (auth.uid() = organizer_id);
+  FOR INSERT WITH CHECK (
+    auth.uid() = organizer_id
+    AND public.user_is_active()
+  );
 
 CREATE POLICY "events_update_owner" ON public.events
-  FOR UPDATE USING (auth.uid() = organizer_id) WITH CHECK (auth.uid() = organizer_id);
+  FOR UPDATE USING (auth.uid() = organizer_id AND public.user_is_active())
+              WITH CHECK (auth.uid() = organizer_id AND public.user_is_active());
 
 CREATE POLICY "events_delete_owner" ON public.events
   FOR DELETE USING (auth.uid() = organizer_id);
+
+-- Block organizers from self-approving / re-opening their own events.
+-- service_role (admin tools, edge functions) bypasses this check.
+CREATE OR REPLACE FUNCTION public.events_block_owner_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF auth.role() = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+  IF OLD.status IS DISTINCT FROM NEW.status THEN
+    RAISE EXCEPTION 'event status can only be changed by an admin'
+      USING ERRCODE = '42501';   -- insufficient_privilege
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE TRIGGER trg_events_block_owner_status_change
+  BEFORE UPDATE OF status ON public.events
+  FOR EACH ROW EXECUTE FUNCTION public.events_block_owner_status_change();
 
 -- ---- event_rsvps: authenticated read, self-write ---------------------
 CREATE POLICY "event_rsvps_select_authenticated" ON public.event_rsvps
@@ -516,7 +574,8 @@ CREATE POLICY "event_rsvps_insert_self" ON public.event_rsvps
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "event_rsvps_update_self" ON public.event_rsvps
-  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  FOR UPDATE USING (auth.uid() = user_id AND public.user_is_active())
+              WITH CHECK (auth.uid() = user_id AND public.user_is_active());
 
 CREATE POLICY "event_rsvps_delete_self" ON public.event_rsvps
   FOR DELETE USING (auth.uid() = user_id);
@@ -552,10 +611,14 @@ CREATE POLICY "prayers_select_visible" ON public.prayers
   );
 
 CREATE POLICY "prayers_insert_self" ON public.prayers
-  FOR INSERT WITH CHECK (auth.uid() = author_id);
+  FOR INSERT WITH CHECK (
+    auth.uid() = author_id
+    AND public.user_is_active()
+  );
 
 CREATE POLICY "prayers_update_self" ON public.prayers
-  FOR UPDATE USING (auth.uid() = author_id) WITH CHECK (auth.uid() = author_id);
+  FOR UPDATE USING (auth.uid() = author_id AND public.user_is_active())
+              WITH CHECK (auth.uid() = author_id AND public.user_is_active());
 
 CREATE POLICY "prayers_delete_self" ON public.prayers
   FOR DELETE USING (auth.uid() = author_id);
@@ -565,7 +628,10 @@ CREATE POLICY "prayer_responses_select_authenticated" ON public.prayer_responses
   FOR SELECT USING (auth.role() = 'authenticated');
 
 CREATE POLICY "prayer_responses_insert_self" ON public.prayer_responses
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+  FOR INSERT WITH CHECK (
+    auth.uid() = user_id
+    AND public.user_is_active()
+  );
 
 CREATE POLICY "prayer_responses_delete_self" ON public.prayer_responses
   FOR DELETE USING (auth.uid() = user_id);
@@ -575,10 +641,14 @@ CREATE POLICY "products_select_visible" ON public.products
   FOR SELECT USING (status <> 'removed' OR seller_id = auth.uid());
 
 CREATE POLICY "products_insert_self" ON public.products
-  FOR INSERT WITH CHECK (auth.uid() = seller_id);
+  FOR INSERT WITH CHECK (
+    auth.uid() = seller_id
+    AND public.user_is_active()
+  );
 
 CREATE POLICY "products_update_self" ON public.products
-  FOR UPDATE USING (auth.uid() = seller_id) WITH CHECK (auth.uid() = seller_id);
+  FOR UPDATE USING (auth.uid() = seller_id AND public.user_is_active())
+              WITH CHECK (auth.uid() = seller_id AND public.user_is_active());
 
 CREATE POLICY "products_delete_self" ON public.products
   FOR DELETE USING (auth.uid() = seller_id);
@@ -590,10 +660,14 @@ CREATE POLICY "jobs_select_visible" ON public.jobs
   );
 
 CREATE POLICY "jobs_insert_self" ON public.jobs
-  FOR INSERT WITH CHECK (auth.uid() = poster_id);
+  FOR INSERT WITH CHECK (
+    auth.uid() = poster_id
+    AND public.user_is_active()
+  );
 
 CREATE POLICY "jobs_update_self" ON public.jobs
-  FOR UPDATE USING (auth.uid() = poster_id) WITH CHECK (auth.uid() = poster_id);
+  FOR UPDATE USING (auth.uid() = poster_id AND public.user_is_active())
+              WITH CHECK (auth.uid() = poster_id AND public.user_is_active());
 
 CREATE POLICY "jobs_delete_self" ON public.jobs
   FOR DELETE USING (auth.uid() = poster_id);
@@ -606,8 +680,8 @@ CREATE POLICY "conversations_insert_participant" ON public.conversations
   FOR INSERT WITH CHECK (auth.uid() = ANY (participant_ids));
 
 CREATE POLICY "conversations_update_participant" ON public.conversations
-  FOR UPDATE USING (auth.uid() = ANY (participant_ids))
-              WITH CHECK (auth.uid() = ANY (participant_ids));
+  FOR UPDATE USING (auth.uid() = ANY (participant_ids) AND public.user_is_active())
+              WITH CHECK (auth.uid() = ANY (participant_ids) AND public.user_is_active());
 
 -- ---- messages: only conversation participants ------------------------
 CREATE POLICY "messages_select_participant" ON public.messages
@@ -622,6 +696,7 @@ CREATE POLICY "messages_select_participant" ON public.messages
 CREATE POLICY "messages_insert_sender" ON public.messages
   FOR INSERT WITH CHECK (
     auth.uid() = sender_id
+    AND public.user_is_active()
     AND EXISTS (
       SELECT 1 FROM public.conversations c
       WHERE c.id = messages.conversation_id
@@ -630,10 +705,45 @@ CREATE POLICY "messages_insert_sender" ON public.messages
   );
 
 CREATE POLICY "messages_update_sender" ON public.messages
-  FOR UPDATE USING (auth.uid() = sender_id) WITH CHECK (auth.uid() = sender_id);
+  FOR UPDATE USING (auth.uid() = sender_id AND public.user_is_active())
+              WITH CHECK (auth.uid() = sender_id AND public.user_is_active());
 
 CREATE POLICY "messages_delete_sender" ON public.messages
   FOR DELETE USING (auth.uid() = sender_id);
+
+
+-- =====================================================================
+--  VIEW — prayers_public
+--
+--  Hides author_id when visibility = 'anonymous' so curious clients
+--  cannot deanonymise the author by querying directly.
+--
+--  ⚠️  The Flutter app must read prayers from this view, NOT from
+--      public.prayers. Writes (insert/update/delete) still go through
+--      the underlying table because views aren't writable.
+--
+--  security_invoker = on  → the view runs the underlying RLS as the
+--  caller, so visibility / church_only filtering still applies.
+-- =====================================================================
+CREATE OR REPLACE VIEW public.prayers_public
+WITH (security_invoker = on) AS
+SELECT
+  id,
+  CASE WHEN visibility = 'anonymous' THEN NULL ELSE author_id END AS author_id,
+  title,
+  content,
+  visibility,
+  church_id,
+  prayer_count,
+  comment_count,
+  is_urgent,
+  is_answered,
+  expires_at,
+  created_at,
+  updated_at
+FROM public.prayers;
+
+GRANT SELECT ON public.prayers_public TO authenticated;
 
 
 -- =====================================================================

@@ -103,6 +103,28 @@ class AuthService {
     await SecureStorageService.clearAll();
   }
 
+  static Future<AuthResult> updateProfile({
+    String? fullName,
+    String? bio,
+    String? churchId,
+  }) async {
+    try {
+      final current = currentUser?.userMetadata ?? const {};
+      final next = <String, dynamic>{...current};
+      if (fullName != null) next['full_name'] = fullName.trim();
+      if (bio != null) next['bio'] = bio.trim();
+      if (churchId != null) next['church_id'] = churchId;
+      final response = await _client.auth.updateUser(
+        UserAttributes(data: next),
+      );
+      return AuthResult.success(response.user);
+    } on AuthException catch (e) {
+      return AuthResult.failure(e.message);
+    } catch (_) {
+      return AuthResult.failure('Could not update profile.');
+    }
+  }
+
   static Future<void> markAgeVerified(DateTime birthDate) async {
     await SecureStorageService.write(
       _birthDateKey,

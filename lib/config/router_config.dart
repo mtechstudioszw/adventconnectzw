@@ -13,6 +13,7 @@ import '../screens/events/events_screen.dart';
 import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
+import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
@@ -110,6 +111,13 @@ final GoRouter appRouter = GoRouter(
       path: '/profile',
       name: 'profile',
       builder: (context, state) => const ProfileScreen(),
+      routes: [
+        GoRoute(
+          path: 'edit',
+          name: 'edit_profile',
+          builder: (context, state) => const EditProfileScreen(),
+        ),
+      ],
     ),
   ],
   errorBuilder: (context, state) => Scaffold(

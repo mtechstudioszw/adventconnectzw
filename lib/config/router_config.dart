@@ -8,8 +8,11 @@ import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
 import '../models/event_model.dart';
 import '../models/prayer_model.dart';
+import '../models/product_model.dart';
 import '../screens/events/event_details_screen.dart';
 import '../screens/events/events_screen.dart';
+import '../screens/marketplace/marketplace_screen.dart';
+import '../screens/marketplace/product_details_screen.dart';
 import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
@@ -102,6 +105,26 @@ final GoRouter appRouter = GoRouter(
             return PrayerDetailsScreen(
               prayerId: id,
               initialPrayer: initial,
+            );
+          },
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/marketplace',
+      name: 'marketplace',
+      builder: (context, state) => const MarketplaceScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          name: 'product_details',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            final initial =
+                state.extra is Product ? state.extra as Product : null;
+            return ProductDetailsScreen(
+              productId: id,
+              initialProduct: initial,
             );
           },
         ),

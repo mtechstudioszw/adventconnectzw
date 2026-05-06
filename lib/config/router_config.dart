@@ -7,12 +7,18 @@ import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
 import '../models/event_model.dart';
+import '../models/job_model.dart';
+import '../models/message_model.dart';
 import '../models/prayer_model.dart';
 import '../models/product_model.dart';
 import '../screens/events/event_details_screen.dart';
 import '../screens/events/events_screen.dart';
+import '../screens/jobs/job_details_screen.dart';
+import '../screens/jobs/jobs_screen.dart';
 import '../screens/marketplace/marketplace_screen.dart';
 import '../screens/marketplace/product_details_screen.dart';
+import '../screens/messaging/chat_screen.dart';
+import '../screens/messaging/conversations_screen.dart';
 import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
@@ -125,6 +131,46 @@ final GoRouter appRouter = GoRouter(
             return ProductDetailsScreen(
               productId: id,
               initialProduct: initial,
+            );
+          },
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/jobs',
+      name: 'jobs',
+      builder: (context, state) => const JobsScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          name: 'job_details',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            final initial = state.extra is Job ? state.extra as Job : null;
+            return JobDetailsScreen(
+              jobId: id,
+              initialJob: initial,
+            );
+          },
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/messages',
+      name: 'messages',
+      builder: (context, state) => const ConversationsScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          name: 'chat',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            final initial = state.extra is Conversation
+                ? state.extra as Conversation
+                : null;
+            return ChatScreen(
+              conversationId: id,
+              initialConversation: initial,
             );
           },
         ),

@@ -457,6 +457,24 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           const _Divider(),
           _SettingsRow(
+            icon: Icons.chat_bubble_outline,
+            label: 'Messages',
+            onTap: () => context.goNamed('messages'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.work_outline,
+            label: 'Jobs',
+            onTap: () => context.goNamed('jobs'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.storefront_outlined,
+            label: 'Marketplace',
+            onTap: () => context.goNamed('marketplace'),
+          ),
+          const _Divider(),
+          _SettingsRow(
             icon: Icons.shield_outlined,
             label: 'Privacy & security',
             onTap: () {},

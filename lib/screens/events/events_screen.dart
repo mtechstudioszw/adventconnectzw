@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/event_card.dart';
 import '../widgets/main_scaffold.dart';
+import '../widgets/post_form_widgets.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -174,6 +175,10 @@ class _EventsScreenState extends State<EventsScreen>
     return MainScaffold(
       title: 'Events',
       currentIndex: 2,
+      floatingActionButton: const PostFab(
+        routeName: 'post_event',
+        tooltip: 'Post an event',
+      ),
       body: AnimatedBuilder(
         animation: _entrance,
         builder: (context, child) => Opacity(

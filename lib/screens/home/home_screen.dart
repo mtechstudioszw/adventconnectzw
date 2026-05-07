@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../services/auth_service.dart';
@@ -27,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen>
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
   bool _loading = true;
+  StreamSubscription<AuthState>? _authSub;
 
   @override
   void initState() {
@@ -39,12 +42,19 @@ class _HomeScreenState extends State<HomeScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    // Rebuild whenever the user's profile metadata changes (e.g. after a
+    // save in Edit Profile) so the greeting / welcome card refresh without
+    // requiring the user to relaunch the app.
+    _authSub = AuthService.authStateChanges.listen((_) {
+      if (mounted) setState(() {});
+    });
     _bootstrap();
   }
 
   @override
   void dispose() {
     _entrance.dispose();
+    _authSub?.cancel();
     super.dispose();
   }
 
@@ -141,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen>
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: _PrayersEmpty(
-                    onTap: () => context.goNamed('prayer'),
+                    onTap: () => context.pushNamed('prayer'),
                   ),
                 ),
                 const SizedBox(height: 28),

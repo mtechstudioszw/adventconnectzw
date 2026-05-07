@@ -109,7 +109,12 @@ class AuthService {
     String? churchId,
   }) async {
     try {
-      final current = currentUser?.userMetadata ?? const {};
+      final user = currentUser;
+      if (user == null) {
+        return AuthResult.failure('Sign in to update your profile.');
+      }
+
+      final current = user.userMetadata ?? const {};
       final next = <String, dynamic>{...current};
       if (fullName != null) next['full_name'] = fullName.trim();
       if (bio != null) next['bio'] = bio.trim();
@@ -117,6 +122,20 @@ class AuthService {
       final response = await _client.auth.updateUser(
         UserAttributes(data: next),
       );
+
+      final dbUpdates = <String, dynamic>{};
+      if (fullName != null) dbUpdates['full_name'] = fullName.trim();
+      if (bio != null) dbUpdates['bio'] = bio.trim();
+      if (churchId != null) {
+        dbUpdates['church_id'] =
+            churchId.isEmpty ? null : int.tryParse(churchId);
+      }
+      if (dbUpdates.isNotEmpty) {
+        await _client
+            .from('profiles')
+            .upsert({'id': user.id, ...dbUpdates}, onConflict: 'id');
+      }
+
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
       return AuthResult.failure(e.message);

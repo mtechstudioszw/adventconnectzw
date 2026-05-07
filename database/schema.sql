@@ -3,50 +3,31 @@
 --  Source of truth: ADVENT_CONNECT_ZW_MASTER_REFERENCE_V4.md (Part 11)
 --  Region: Africa (Cape Town)  |  Auth: Supabase Auth (email + Google)
 --
---  Run order:
---    1. schema.sql      (this file — tables, indexes, RLS, triggers)
---    2. seed_data.sql   (optional sample data for testing)
+--  File order (each section depends on the one before):
+--    1. Extensions
+--    2. Tables (+ their indexes)
+--    3. Helper functions    (reference tables defined in 2)
+--    4. Triggers            (reference functions defined in 3)
+--    5. Enable Row Level Security
+--    6. Policies            (reference user_is_active from 3)
+--    7. Views
+--    8. Realtime publication notes
 -- =====================================================================
 
--- Required extensions ---------------------------------------------------
+
+-- =====================================================================
+--  SECTION 1 — EXTENSIONS
+-- =====================================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";   -- trigram search on church names
 
--- ---------------------------------------------------------------------
---  Reusable trigger: keep updated_at fresh on UPDATE
--- ---------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at := NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- ---------------------------------------------------------------------
---  Helper: TRUE iff the current authenticated user has a profile and
---  is not banned. Used by every write policy so banned users can post
---  nothing — prayers, events, products, jobs, messages.
---
---  SECURITY DEFINER so the lookup bypasses RLS on profiles (otherwise
---  a tightening of the profiles SELECT policy could cause the helper
---  to falsely deny). The function only reads is_banned for the caller.
--- ---------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.user_is_active()
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.profiles
-    WHERE id = auth.uid()
-      AND is_banned = FALSE
-  );
-$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public;
-
 
 -- =====================================================================
---  TABLE 1 — churches
---  (Created first because profiles.home_church_id references it)
+--  SECTION 2 — TABLES (with their indexes)
+--  Dependency order: churches → profiles → everything else.
 -- =====================================================================
+
+-- ----- TABLE 1: churches ---------------------------------------------
 CREATE TABLE IF NOT EXISTS public.churches (
   id                      BIGSERIAL PRIMARY KEY,
   name                    TEXT NOT NULL,
@@ -84,14 +65,8 @@ CREATE INDEX IF NOT EXISTS idx_churches_verified       ON public.churches (verif
 CREATE INDEX IF NOT EXISTS idx_churches_status         ON public.churches (status);
 CREATE INDEX IF NOT EXISTS idx_churches_name_trgm      ON public.churches USING gin (name gin_trgm_ops);
 
-CREATE TRIGGER trg_churches_updated_at
-  BEFORE UPDATE ON public.churches
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-
--- =====================================================================
---  TABLE 2 — profiles  (extends auth.users)
--- =====================================================================
+-- ----- TABLE 2: profiles  (extends auth.users) -----------------------
 CREATE TABLE IF NOT EXISTS public.profiles (
   id                      UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name               TEXT,
@@ -120,14 +95,8 @@ CREATE INDEX IF NOT EXISTS idx_profiles_church_id      ON public.profiles (churc
 CREATE INDEX IF NOT EXISTS idx_profiles_account_type   ON public.profiles (account_type);
 CREATE INDEX IF NOT EXISTS idx_profiles_username       ON public.profiles (username);
 
-CREATE TRIGGER trg_profiles_updated_at
-  BEFORE UPDATE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-
--- =====================================================================
---  TABLE 3 — events
--- =====================================================================
+-- ----- TABLE 3: events -----------------------------------------------
 CREATE TABLE IF NOT EXISTS public.events (
   id                      BIGSERIAL PRIMARY KEY,
   title                   TEXT NOT NULL,
@@ -171,14 +140,8 @@ CREATE INDEX IF NOT EXISTS idx_events_organizer_id     ON public.events (organiz
 CREATE INDEX IF NOT EXISTS idx_events_status           ON public.events (status);
 CREATE INDEX IF NOT EXISTS idx_events_province_city    ON public.events (province, city);
 
-CREATE TRIGGER trg_events_updated_at
-  BEFORE UPDATE ON public.events
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-
--- =====================================================================
---  TABLE 4 — event_rsvps
--- =====================================================================
+-- ----- TABLE 4: event_rsvps ------------------------------------------
 CREATE TABLE IF NOT EXISTS public.event_rsvps (
   id                      BIGSERIAL PRIMARY KEY,
   event_id                BIGINT NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
@@ -193,9 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_event_rsvps_event_id    ON public.event_rsvps (ev
 CREATE INDEX IF NOT EXISTS idx_event_rsvps_user_id     ON public.event_rsvps (user_id);
 
 
--- =====================================================================
---  TABLE 5 — church_followers
--- =====================================================================
+-- ----- TABLE 5: church_followers -------------------------------------
 CREATE TABLE IF NOT EXISTS public.church_followers (
   id                      BIGSERIAL PRIMARY KEY,
   church_id               BIGINT NOT NULL REFERENCES public.churches(id) ON DELETE CASCADE,
@@ -208,9 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_church_followers_church ON public.church_follower
 CREATE INDEX IF NOT EXISTS idx_church_followers_user   ON public.church_followers (user_id);
 
 
--- =====================================================================
---  TABLE 6 — prayers   (named per V4: prayer_requests)
--- =====================================================================
+-- ----- TABLE 6: prayers   (V4 calls this prayer_requests) ------------
 CREATE TABLE IF NOT EXISTS public.prayers (
   id                      BIGSERIAL PRIMARY KEY,
   author_id               UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -233,14 +192,8 @@ CREATE INDEX IF NOT EXISTS idx_prayers_church_id       ON public.prayers (church
 CREATE INDEX IF NOT EXISTS idx_prayers_created_at      ON public.prayers (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_prayers_visibility      ON public.prayers (visibility);
 
-CREATE TRIGGER trg_prayers_updated_at
-  BEFORE UPDATE ON public.prayers
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-
--- =====================================================================
---  TABLE 7 — prayer_responses ("I'm Praying" reactions + comments)
--- =====================================================================
+-- ----- TABLE 7: prayer_responses -------------------------------------
 CREATE TABLE IF NOT EXISTS public.prayer_responses (
   id                      BIGSERIAL PRIMARY KEY,
   prayer_id               BIGINT NOT NULL REFERENCES public.prayers(id) ON DELETE CASCADE,
@@ -256,9 +209,7 @@ CREATE INDEX IF NOT EXISTS idx_prayer_responses_prayer ON public.prayer_response
 CREATE INDEX IF NOT EXISTS idx_prayer_responses_user   ON public.prayer_responses (user_id);
 
 
--- =====================================================================
---  TABLE 8 — products (marketplace)
--- =====================================================================
+-- ----- TABLE 8: products ---------------------------------------------
 CREATE TABLE IF NOT EXISTS public.products (
   id                      BIGSERIAL PRIMARY KEY,
   seller_id               UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -288,14 +239,8 @@ CREATE INDEX IF NOT EXISTS idx_products_status         ON public.products (statu
 CREATE INDEX IF NOT EXISTS idx_products_created_at     ON public.products (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_products_featured       ON public.products (is_featured) WHERE is_featured = TRUE;
 
-CREATE TRIGGER trg_products_updated_at
-  BEFORE UPDATE ON public.products
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-
--- =====================================================================
---  TABLE 9 — jobs   (named per V4: job_posts)
--- =====================================================================
+-- ----- TABLE 9: jobs   (V4 calls this job_posts) ---------------------
 CREATE TABLE IF NOT EXISTS public.jobs (
   id                      BIGSERIAL PRIMARY KEY,
   poster_id               UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -334,14 +279,8 @@ CREATE INDEX IF NOT EXISTS idx_jobs_province           ON public.jobs (province)
 CREATE INDEX IF NOT EXISTS idx_jobs_created_at         ON public.jobs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_expires_at         ON public.jobs (expires_at);
 
-CREATE TRIGGER trg_jobs_updated_at
-  BEFORE UPDATE ON public.jobs
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-
--- =====================================================================
---  TABLE 10 — conversations (1:1 direct messaging)
--- =====================================================================
+-- ----- TABLE 10: conversations (1:1 direct messaging) ----------------
 CREATE TABLE IF NOT EXISTS public.conversations (
   id                      BIGSERIAL PRIMARY KEY,
   participant_ids         UUID[] NOT NULL,
@@ -363,14 +302,8 @@ CREATE INDEX IF NOT EXISTS idx_conversations_participants
 CREATE INDEX IF NOT EXISTS idx_conversations_last_message_at
   ON public.conversations (last_message_at DESC NULLS LAST);
 
-CREATE TRIGGER trg_conversations_updated_at
-  BEFORE UPDATE ON public.conversations
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-
--- =====================================================================
---  TABLE 11 — messages
--- =====================================================================
+-- ----- TABLE 11: messages --------------------------------------------
 CREATE TABLE IF NOT EXISTS public.messages (
   id                      BIGSERIAL PRIMARY KEY,
   conversation_id         BIGINT NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
@@ -394,8 +327,35 @@ CREATE INDEX IF NOT EXISTS idx_messages_unread
 
 
 -- =====================================================================
---  COUNTER TRIGGERS — keep denormalised counts in sync
+--  SECTION 3 — HELPER FUNCTIONS
+--  (defined AFTER the tables they reference, so SQL-language functions
+--  pass parse-time validation)
 -- =====================================================================
+
+-- Reusable: keep updated_at fresh on UPDATE.
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at := NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- TRUE iff the calling user has a profile and is not banned.
+-- Used by every write policy so banned users can post nothing —
+-- prayers, events, products, jobs, messages, profile edits.
+--
+-- SECURITY DEFINER so the lookup bypasses RLS on profiles (otherwise
+-- a tightening of the profiles SELECT policy could falsely deny).
+CREATE OR REPLACE FUNCTION public.user_is_active()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE id = auth.uid()
+      AND is_banned = FALSE
+  );
+$$ LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public;
 
 -- church.follower_count
 CREATE OR REPLACE FUNCTION public.bump_church_follower_count()
@@ -409,10 +369,6 @@ BEGIN
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_church_followers_count
-  AFTER INSERT OR DELETE ON public.church_followers
-  FOR EACH ROW EXECUTE FUNCTION public.bump_church_follower_count();
 
 -- events.rsvp_count
 CREATE OR REPLACE FUNCTION public.bump_event_rsvp_count()
@@ -433,11 +389,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_event_rsvps_count
-  AFTER INSERT OR UPDATE OR DELETE ON public.event_rsvps
-  FOR EACH ROW EXECUTE FUNCTION public.bump_event_rsvp_count();
-
--- prayers.prayer_count (only counts response_type = 'praying')
+-- prayers.prayer_count / comment_count
 CREATE OR REPLACE FUNCTION public.bump_prayer_count()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -454,10 +406,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_prayer_responses_count
-  AFTER INSERT OR DELETE ON public.prayer_responses
-  FOR EACH ROW EXECUTE FUNCTION public.bump_prayer_count();
-
 -- conversations.last_message / last_message_at when a message is sent
 CREATE OR REPLACE FUNCTION public.update_conversation_on_message()
 RETURNS TRIGGER AS $$
@@ -472,16 +420,126 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Auto-create a public.profiles row when a new auth.users row is created.
+--
+-- The signUp call in lib/services/auth_service.dart passes full_name and
+-- birth_date as user metadata. We pull both out here so the new user has
+-- a usable profile from the moment they sign up.
+--
+-- ON CONFLICT DO NOTHING makes this idempotent — re-running auth signup or
+-- repairing missing rows by hand is safe.
+--
+-- The inner BEGIN/EXCEPTION block guards against malformed birth_date so
+-- a bad metadata value never blocks signup.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  birth_text  TEXT := NEW.raw_user_meta_data->>'birth_date';
+  birth_value DATE;
+BEGIN
+  BEGIN
+    birth_value := birth_text::TIMESTAMPTZ::DATE;
+  EXCEPTION WHEN OTHERS THEN
+    birth_value := NULL;
+  END;
+
+  INSERT INTO public.profiles (id, full_name, date_of_birth)
+  VALUES (
+    NEW.id,
+    NEW.raw_user_meta_data->>'full_name',
+    birth_value
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+-- Block organisers from self-approving / re-opening their own events.
+-- service_role (admin tools, edge functions) bypasses this check.
+CREATE OR REPLACE FUNCTION public.events_block_owner_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF auth.role() = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+  IF OLD.status IS DISTINCT FROM NEW.status THEN
+    RAISE EXCEPTION 'event status can only be changed by an admin'
+      USING ERRCODE = '42501';   -- insufficient_privilege
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+-- =====================================================================
+--  SECTION 4 — TRIGGERS
+-- =====================================================================
+
+-- updated_at maintenance on every mutable table
+CREATE TRIGGER trg_churches_updated_at
+  BEFORE UPDATE ON public.churches
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER trg_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER trg_events_updated_at
+  BEFORE UPDATE ON public.events
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER trg_prayers_updated_at
+  BEFORE UPDATE ON public.prayers
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER trg_products_updated_at
+  BEFORE UPDATE ON public.products
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER trg_jobs_updated_at
+  BEFORE UPDATE ON public.jobs
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER trg_conversations_updated_at
+  BEFORE UPDATE ON public.conversations
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Counter triggers
+CREATE TRIGGER trg_church_followers_count
+  AFTER INSERT OR DELETE ON public.church_followers
+  FOR EACH ROW EXECUTE FUNCTION public.bump_church_follower_count();
+
+CREATE TRIGGER trg_event_rsvps_count
+  AFTER INSERT OR UPDATE OR DELETE ON public.event_rsvps
+  FOR EACH ROW EXECUTE FUNCTION public.bump_event_rsvp_count();
+
+CREATE TRIGGER trg_prayer_responses_count
+  AFTER INSERT OR DELETE ON public.prayer_responses
+  FOR EACH ROW EXECUTE FUNCTION public.bump_prayer_count();
+
+-- Conversation rollup when a message is inserted
 CREATE TRIGGER trg_messages_update_conversation
   AFTER INSERT ON public.messages
   FOR EACH ROW EXECUTE FUNCTION public.update_conversation_on_message();
 
+-- Prevent organisers from changing event.status (admins use service_role)
+CREATE TRIGGER trg_events_block_owner_status_change
+  BEFORE UPDATE OF status ON public.events
+  FOR EACH ROW EXECUTE FUNCTION public.events_block_owner_status_change();
+
+-- Auto-create a profile row whenever a new auth user is created.
+-- This trigger lives on auth.users (a Supabase-managed table) — re-creating
+-- it on each schema run is harmless thanks to DROP IF EXISTS.
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
 
 -- =====================================================================
---  ROW LEVEL SECURITY
---  All tables RLS-enabled. Each policy is intentionally narrow.
+--  SECTION 5 — ENABLE ROW LEVEL SECURITY
 -- =====================================================================
-
 ALTER TABLE public.churches          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events            ENABLE ROW LEVEL SECURITY;
@@ -494,6 +552,10 @@ ALTER TABLE public.jobs              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages          ENABLE ROW LEVEL SECURITY;
 
+
+-- =====================================================================
+--  SECTION 6 — POLICIES
+-- =====================================================================
 
 -- ---- churches: public read, no app writes (admin via service role) ----
 CREATE POLICY "churches_select_all" ON public.churches
@@ -522,10 +584,10 @@ CREATE POLICY "profiles_delete_self" ON public.profiles
   FOR DELETE USING (auth.uid() = id);
 
 -- ---- events: public read, owner write --------------------------------
--- Organizers can edit their own content (title, description, dates,
+-- Organisers can edit their own content (title, description, dates,
 -- location, etc.) but the `status` column (pending / approved /
 -- rejected) is locked at the trigger level — see
--- public.events_block_owner_status_change below.
+-- public.events_block_owner_status_change.
 --
 -- Admin approval policy needed — implement via server function or a
 -- separate admin role using the service_role key. Trigger lets
@@ -545,26 +607,6 @@ CREATE POLICY "events_update_owner" ON public.events
 
 CREATE POLICY "events_delete_owner" ON public.events
   FOR DELETE USING (auth.uid() = organizer_id);
-
--- Block organizers from self-approving / re-opening their own events.
--- service_role (admin tools, edge functions) bypasses this check.
-CREATE OR REPLACE FUNCTION public.events_block_owner_status_change()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF auth.role() = 'service_role' THEN
-    RETURN NEW;
-  END IF;
-  IF OLD.status IS DISTINCT FROM NEW.status THEN
-    RAISE EXCEPTION 'event status can only be changed by an admin'
-      USING ERRCODE = '42501';   -- insufficient_privilege
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
-
-CREATE TRIGGER trg_events_block_owner_status_change
-  BEFORE UPDATE OF status ON public.events
-  FOR EACH ROW EXECUTE FUNCTION public.events_block_owner_status_change();
 
 -- ---- event_rsvps: authenticated read, self-write ---------------------
 CREATE POLICY "event_rsvps_select_authenticated" ON public.event_rsvps
@@ -591,9 +633,9 @@ CREATE POLICY "church_followers_delete_self" ON public.church_followers
   FOR DELETE USING (auth.uid() = user_id);
 
 -- ---- prayers: visibility-aware read, owner write ---------------------
--- Public prayers: any authenticated user can read.
+-- Public + anonymous: any authenticated user can read.
 -- church_only: only readers who follow the prayer's church.
--- anonymous:   readable; identity hidden in app layer.
+-- The author can always read their own.
 CREATE POLICY "prayers_select_visible" ON public.prayers
   FOR SELECT USING (
     auth.role() = 'authenticated' AND (
@@ -623,7 +665,7 @@ CREATE POLICY "prayers_update_self" ON public.prayers
 CREATE POLICY "prayers_delete_self" ON public.prayers
   FOR DELETE USING (auth.uid() = author_id);
 
--- ---- prayer_responses: read if you can read the prayer, self-write --
+-- ---- prayer_responses ------------------------------------------------
 CREATE POLICY "prayer_responses_select_authenticated" ON public.prayer_responses
   FOR SELECT USING (auth.role() = 'authenticated');
 
@@ -713,10 +755,10 @@ CREATE POLICY "messages_delete_sender" ON public.messages
 
 
 -- =====================================================================
---  VIEW — prayers_public
+--  SECTION 7 — VIEWS
 --
---  Hides author_id when visibility = 'anonymous' so curious clients
---  cannot deanonymise the author by querying directly.
+--  prayers_public hides author_id when visibility = 'anonymous' so
+--  curious clients cannot deanonymise the author by querying directly.
 --
 --  ⚠️  The Flutter app must read prayers from this view, NOT from
 --      public.prayers. Writes (insert/update/delete) still go through
@@ -747,8 +789,11 @@ GRANT SELECT ON public.prayers_public TO authenticated;
 
 
 -- =====================================================================
---  REALTIME — enable only for messaging surfaces
---  (Run these in Supabase Studio → Database → Replication or via SQL)
--- =====================================================================
+--  SECTION 8 — REALTIME
+--  Enable only for messaging surfaces. Run in Supabase Studio →
+--  Database → Replication, or uncomment the two lines below.
+    
+    
+    -- =====================================================================
 -- ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 -- ALTER PUBLICATION supabase_realtime ADD TABLE public.conversations;

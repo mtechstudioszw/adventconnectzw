@@ -13,16 +13,20 @@ import '../models/prayer_model.dart';
 import '../models/product_model.dart';
 import '../screens/events/event_details_screen.dart';
 import '../screens/events/events_screen.dart';
+import '../screens/events/post_event_screen.dart';
 import '../screens/jobs/job_details_screen.dart';
 import '../screens/jobs/jobs_screen.dart';
+import '../screens/jobs/post_job_screen.dart';
 import '../screens/legal/guidelines_screen.dart';
 import '../screens/legal/privacy_screen.dart';
 import '../screens/legal/terms_screen.dart';
+import '../screens/marketplace/add_product_screen.dart';
 import '../screens/marketplace/marketplace_screen.dart';
 import '../screens/marketplace/product_details_screen.dart';
 import '../screens/messaging/chat_screen.dart';
 import '../screens/messaging/conversations_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
+import '../screens/prayer/post_prayer_screen.dart';
 import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
@@ -93,6 +97,11 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const EventsScreen(),
       routes: [
         GoRoute(
+          path: 'post',
+          name: 'post_event',
+          builder: (context, state) => const PostEventScreen(),
+        ),
+        GoRoute(
           path: ':id',
           name: 'event_details',
           builder: (context, state) {
@@ -111,6 +120,11 @@ final GoRouter appRouter = GoRouter(
       name: 'prayer',
       builder: (context, state) => const PrayerScreen(),
       routes: [
+        GoRoute(
+          path: 'post',
+          name: 'post_prayer',
+          builder: (context, state) => const PostPrayerScreen(),
+        ),
         GoRoute(
           path: ':id',
           name: 'prayer_details',
@@ -132,6 +146,11 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const MarketplaceScreen(),
       routes: [
         GoRoute(
+          path: 'add',
+          name: 'add_product',
+          builder: (context, state) => const AddProductScreen(),
+        ),
+        GoRoute(
           path: ':id',
           name: 'product_details',
           builder: (context, state) {
@@ -151,6 +170,11 @@ final GoRouter appRouter = GoRouter(
       name: 'jobs',
       builder: (context, state) => const JobsScreen(),
       routes: [
+        GoRoute(
+          path: 'post',
+          name: 'post_job',
+          builder: (context, state) => const PostJobScreen(),
+        ),
         GoRoute(
           path: ':id',
           name: 'job_details',

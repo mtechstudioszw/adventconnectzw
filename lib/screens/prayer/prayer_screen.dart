@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/prayer_card.dart';
 import '../widgets/main_scaffold.dart';
+import '../widgets/post_form_widgets.dart';
 
 class PrayerScreen extends StatefulWidget {
   const PrayerScreen({super.key});
@@ -123,7 +124,15 @@ class _PrayerScreenState extends State<PrayerScreen>
   Widget build(BuildContext context) {
     return MainScaffold(
       title: 'Prayer',
-      currentIndex: 3,
+      // Prayer is reached from inside Profile (My prayers), so we highlight
+      // the Profile tab. Per master reference Part 7, Prayer is not a
+      // top-level tab.
+      currentIndex: 4,
+      floatingActionButton: const PostFab(
+        routeName: 'post_prayer',
+        tooltip: 'Share a prayer',
+        icon: Icons.volunteer_activism,
+      ),
       body: Stack(
         children: [
           RefreshIndicator(

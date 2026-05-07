@@ -6,7 +6,16 @@ class MainBottomNav extends StatelessWidget {
 
   final int currentIndex;
 
-  static const _routes = ['home', 'churches', 'events', 'prayer', 'profile'];
+  // Per master reference Part 7: 5 tabs are Home, Churches, Events,
+  // Marketplace, Profile. Prayer and Messaging live inside the Profile
+  // tab's menu rather than as top-level tabs.
+  static const _routes = [
+    'home',
+    'churches',
+    'events',
+    'marketplace',
+    'profile',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -33,9 +42,9 @@ class MainBottomNav extends StatelessWidget {
           label: 'Events',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.volunteer_activism_outlined),
-          activeIcon: Icon(Icons.volunteer_activism),
-          label: 'Prayer',
+          icon: Icon(Icons.shopping_bag_outlined),
+          activeIcon: Icon(Icons.shopping_bag),
+          label: 'Marketplace',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person_outline),

@@ -295,16 +295,17 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               ],
             ),
           ),
-          OutlinedButton(
-            onPressed: null,
-            style: OutlinedButton.styleFrom(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              side: const BorderSide(
-                color: Color.fromRGBO(26, 26, 46, 0.15),
+          // Replaced OutlinedButton with a styled Container — the Material
+          // OutlinedButton tries to compute intrinsic width during the
+          // SingleChildScrollView's two-pass layout and crashes with
+          // BoxConstraints(w=Infinity) on Flutter web. This decorative
+          // "coming soon" pill renders correctly without that issue.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color.fromRGBO(26, 26, 46, 0.15),
               ),
             ),
             child: Text(

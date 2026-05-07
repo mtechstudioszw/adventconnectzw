@@ -6,26 +6,42 @@ class PrayerService {
 
   static final SupabaseClient _client = Supabase.instance.client;
 
-  static const _table = 'prayers';
+  // V4 schema:
+  //   prayers              — base table; reads + writes go here
+  //   prayer_responses     — both reactions (response_type='praying') and
+  //                          comments (response_type='message')
+  //   profiles             — joined to surface display names; the schema
+  //                          intentionally has no denormalised name columns.
+  //
+  // Note: we keep `prayers_public` (a column-masking view) in the schema for
+  // future server-trusted access paths, but the Flutter app reads from the
+  // base table because PostgREST cannot resolve a foreign-key embed through
+  // a view. Anonymous masking happens in `_hydratePrayer` below.
+  static const _writeTable = 'prayers';
+  static const _readTable = 'prayers';
   static const _responsesTable = 'prayer_responses';
-  static const _commentsTable = 'prayer_comments';
+
+  static const _authorEmbed = 'author:author_id(full_name)';
 
   static Future<List<Prayer>> fetchPrayers() async {
     final response = await _client
-        .from(_table)
-        .select()
+        .from(_readTable)
+        .select('*, $_authorEmbed')
         .order('created_at', ascending: false)
         .limit(100);
     return (response as List)
-        .map((row) => Prayer.fromJson(row as Map<String, dynamic>))
+        .map((row) => _hydratePrayer(row as Map<String, dynamic>))
         .toList();
   }
 
   static Future<Prayer?> fetchPrayerById(String id) async {
-    final response =
-        await _client.from(_table).select().eq('id', id).maybeSingle();
+    final response = await _client
+        .from(_readTable)
+        .select('*, $_authorEmbed')
+        .eq('id', id)
+        .maybeSingle();
     if (response == null) return null;
-    return Prayer.fromJson(response);
+    return _hydratePrayer(response);
   }
 
   static Future<Set<String>> fetchUserPrayedIds() async {
@@ -34,7 +50,8 @@ class PrayerService {
     final response = await _client
         .from(_responsesTable)
         .select('prayer_id')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('response_type', 'praying');
     return (response as List)
         .map((row) => row['prayer_id'].toString())
         .toSet();
@@ -45,9 +62,10 @@ class PrayerService {
     if (user == null) return false;
     final response = await _client
         .from(_responsesTable)
-        .select('prayer_id')
+        .select('id')
         .eq('user_id', user.id)
         .eq('prayer_id', prayerId)
+        .eq('response_type', 'praying')
         .maybeSingle();
     return response != null;
   }
@@ -55,16 +73,20 @@ class PrayerService {
   static Future<List<PrayingUser>> fetchPrayingUsers(String prayerId) async {
     final response = await _client
         .from(_responsesTable)
-        .select('user_id, user_name, created_at')
+        .select('user_id, created_at, profiles:user_id(full_name)')
         .eq('prayer_id', prayerId)
+        .eq('response_type', 'praying')
         .order('created_at', ascending: false)
         .limit(50);
-    return (response as List)
-        .map((row) => PrayingUser(
-              userId: row['user_id']?.toString() ?? '',
-              userName: (row['user_name'] ?? 'A friend').toString(),
-            ))
-        .toList();
+    return (response as List).map((row) {
+      final map = row as Map<String, dynamic>;
+      final profile = map['profiles'] as Map<String, dynamic>?;
+      final name = (profile?['full_name'] as String?)?.trim();
+      return PrayingUser(
+        userId: map['user_id']?.toString() ?? '',
+        userName: name?.isNotEmpty == true ? name! : 'A friend',
+      );
+    }).toList();
   }
 
   static Future<void> pray(String prayerId) async {
@@ -72,12 +94,10 @@ class PrayerService {
     if (user == null) {
       throw const AuthException('Sign in to pray with the community.');
     }
-    final meta = user.userMetadata ?? const {};
-    final userName = (meta['full_name'] as String?)?.trim();
     await _client.from(_responsesTable).insert({
       'user_id': user.id,
       'prayer_id': prayerId,
-      'user_name': userName?.isNotEmpty == true ? userName : 'A friend',
+      'response_type': 'praying',
     });
   }
 
@@ -88,40 +108,61 @@ class PrayerService {
         .from(_responsesTable)
         .delete()
         .eq('user_id', user.id)
-        .eq('prayer_id', prayerId);
+        .eq('prayer_id', prayerId)
+        .eq('response_type', 'praying');
   }
 
-  static Future<Prayer> postPrayer(String content) async {
+  static Future<Prayer> postPrayer(
+    String content, {
+    String visibility = 'public',
+    bool isUrgent = false,
+    String? title,
+    String? churchId,
+  }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw const AuthException('Sign in to share a prayer.');
     }
-    final meta = user.userMetadata ?? const {};
-    final authorName = (meta['full_name'] as String?)?.trim();
-    final response = await _client
-        .from(_table)
+    // Insert and immediately read back the joined author name in a single
+    // round-trip. Reading from the base `prayers` table here (not the view)
+    // is fine — the author can always read their own row.
+    final inserted = await _client
+        .from(_writeTable)
         .insert({
           'author_id': user.id,
-          'author_name': authorName?.isNotEmpty == true ? authorName : 'A friend',
           'content': content.trim(),
-          'prayer_count': 0,
-          'comment_count': 0,
+          'visibility': visibility,
+          'is_urgent': isUrgent,
+          if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+          if (churchId != null) 'church_id': int.tryParse(churchId),
         })
-        .select()
+        .select('*, author:author_id(full_name)')
         .single();
-    return Prayer.fromJson(response);
+    return _hydratePrayer(inserted);
   }
 
   static Future<List<PrayerComment>> fetchComments(String prayerId) async {
     final response = await _client
-        .from(_commentsTable)
-        .select()
+        .from(_responsesTable)
+        .select('id, prayer_id, user_id, message, created_at, '
+            'profiles:user_id(full_name)')
         .eq('prayer_id', prayerId)
+        .eq('response_type', 'message')
         .order('created_at', ascending: true)
         .limit(200);
-    return (response as List)
-        .map((row) => PrayerComment.fromJson(row as Map<String, dynamic>))
-        .toList();
+    return (response as List).map((row) {
+      final map = row as Map<String, dynamic>;
+      final profile = map['profiles'] as Map<String, dynamic>?;
+      final name = (profile?['full_name'] as String?)?.trim();
+      return PrayerComment.fromJson({
+        'id': map['id'],
+        'prayer_id': map['prayer_id'],
+        'author_id': map['user_id'],
+        'author_name': name?.isNotEmpty == true ? name : 'A friend',
+        'content': map['message'] ?? '',
+        'created_at': map['created_at'],
+      });
+    }).toList();
   }
 
   static Future<PrayerComment> postComment(
@@ -132,19 +173,32 @@ class PrayerService {
     if (user == null) {
       throw const AuthException('Sign in to comment.');
     }
-    final meta = user.userMetadata ?? const {};
-    final authorName = (meta['full_name'] as String?)?.trim();
-    final response = await _client
-        .from(_commentsTable)
-        .insert({
-          'prayer_id': prayerId,
-          'author_id': user.id,
-          'author_name': authorName?.isNotEmpty == true ? authorName : 'A friend',
-          'content': content.trim(),
-        })
-        .select()
-        .single();
-    return PrayerComment.fromJson(response);
+    await _client.from(_responsesTable).insert({
+      'prayer_id': prayerId,
+      'user_id': user.id,
+      'response_type': 'message',
+      'message': content.trim(),
+    });
+
+    // Refresh the comment list so the caller sees its newest row.
+    final comments = await fetchComments(prayerId);
+    return comments.last;
+  }
+
+  static Prayer _hydratePrayer(Map<String, dynamic> row) {
+    // Mask the author for anonymous prayers in code, since we read from the
+    // base table now. The author can still see their own row's author_id —
+    // that's fine because the UI only shows their name to themselves.
+    final isAnonymous = (row['visibility'] as String?) == 'anonymous';
+    final author = row['author'] as Map<String, dynamic>?;
+    final name = (author?['full_name'] as String?)?.trim();
+    final masked = <String, dynamic>{
+      ...row,
+      if (isAnonymous) 'author_id': null,
+      'author_name':
+          isAnonymous ? 'Anonymous' : (name?.isNotEmpty == true ? name : 'A friend'),
+    };
+    return Prayer.fromJson(masked);
   }
 }
 

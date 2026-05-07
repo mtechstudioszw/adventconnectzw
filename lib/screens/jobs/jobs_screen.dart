@@ -6,6 +6,8 @@ import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/job_card.dart';
+import '../widgets/main_bottom_nav.dart';
+import '../widgets/post_form_widgets.dart';
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -88,12 +90,18 @@ class _JobsScreenState extends State<JobsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
+      bottomNavigationBar: const MainBottomNav(currentIndex: 3),
+      floatingActionButton: const PostFab(
+        routeName: 'post_job',
+        tooltip: 'Post a job',
+      ),
       body: SizedBox(
         height: MediaQuery.of(context).size.height,
         child: Column(
           children: [
             _buildHero(),
             _buildSearchBar(),
+            const _ShopJobsSegment(active: _Section.jobs),
             _buildCategoryStrip(),
             Expanded(
               child: RefreshIndicator(
@@ -372,6 +380,116 @@ class _CircleIconButton extends StatelessWidget {
             border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
           ),
           child: Icon(icon, color: AppColors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+enum _Section { shop, jobs }
+
+class _ShopJobsSegment extends StatelessWidget {
+  const _ShopJobsSegment({required this.active});
+  final _Section active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+        ),
+        child: Row(
+          children: [
+            _SegmentButton(
+              label: 'Shop',
+              icon: Icons.shopping_bag_outlined,
+              selected: active == _Section.shop,
+              onTap: active == _Section.shop
+                  ? null
+                  : () => context.goNamed('marketplace'),
+            ),
+            _SegmentButton(
+              label: 'Jobs',
+              icon: Icons.work_outline,
+              selected: active == _Section.jobs,
+              onTap: active == _Section.jobs
+                  ? null
+                  : () => context.goNamed('jobs'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SegmentButton extends StatelessWidget {
+  const _SegmentButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: selected ? AppColors.primaryGradient : null,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : [],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: selected
+                      ? AppColors.white
+                      : const Color.fromRGBO(26, 26, 46, 0.6),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: selected
+                        ? AppColors.white
+                        : const Color.fromRGBO(26, 26, 46, 0.7),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

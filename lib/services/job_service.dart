@@ -12,7 +12,7 @@ class JobService {
     String? search,
     String? category,
   }) async {
-    var query = _client.from(_table).select().eq('is_active', true);
+    var query = _client.from(_table).select().eq('status', 'open');
 
     if (category != null && category.isNotEmpty && category != 'all') {
       query = query.eq('category', category);
@@ -36,5 +36,45 @@ class JobService {
         await _client.from(_table).select().eq('id', id).maybeSingle();
     if (response == null) return null;
     return Job.fromJson(response);
+  }
+
+  static Future<String> postJob({
+    required String title,
+    required String description,
+    required String category,
+    required String province,
+    required String location,
+    String? company,
+    String? requirements,
+    String jobType = 'full_time',
+    String postType = 'hiring',
+    String? salaryRange,
+    bool sabbathFriendly = false,
+    bool isSdaInstitution = false,
+    String? contactPhone,
+    String? contactEmail,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to post a job.');
+    }
+    final inserted = await _client.from(_table).insert({
+      'poster_id': user.id,
+      'title': title.trim(),
+      'company': company?.trim(),
+      'description': description.trim(),
+      'requirements': requirements?.trim(),
+      'category': category,
+      'job_type': jobType,
+      'post_type': postType,
+      'salary_range': salaryRange?.trim(),
+      'province': province.trim(),
+      'location': location.trim(),
+      'sabbath_friendly': sabbathFriendly,
+      'is_sda_institution': isSdaInstitution,
+      'contact_phone': contactPhone?.trim(),
+      'contact_email': contactEmail?.trim(),
+    }).select('id').single();
+    return inserted['id'].toString();
   }
 }

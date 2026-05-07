@@ -441,49 +441,60 @@ class _ProfileScreenState extends State<ProfileScreen>
           _SettingsRow(
             icon: Icons.church_outlined,
             label: 'My churches',
-            onTap: () => context.goNamed('churches'),
+            onTap: () => context.pushNamed('churches'),
           ),
           const _Divider(),
           _SettingsRow(
             icon: Icons.event_outlined,
             label: 'My events',
-            onTap: () => context.goNamed('events'),
+            onTap: () => context.pushNamed('events'),
           ),
           const _Divider(),
           _SettingsRow(
             icon: Icons.volunteer_activism_outlined,
             label: 'My prayers',
-            onTap: () => context.goNamed('prayer'),
+            onTap: () => context.pushNamed('prayer'),
           ),
           const _Divider(),
           _SettingsRow(
             icon: Icons.chat_bubble_outline,
             label: 'Messages',
-            onTap: () => context.goNamed('messages'),
+            onTap: () => context.pushNamed('messages'),
           ),
           const _Divider(),
           _SettingsRow(
             icon: Icons.work_outline,
             label: 'Jobs',
-            onTap: () => context.goNamed('jobs'),
+            onTap: () => context.pushNamed('jobs'),
           ),
           const _Divider(),
           _SettingsRow(
             icon: Icons.storefront_outlined,
             label: 'Marketplace',
-            onTap: () => context.goNamed('marketplace'),
+            onTap: () => context.pushNamed('marketplace'),
           ),
           const _Divider(),
           _SettingsRow(
             icon: Icons.shield_outlined,
             label: 'Privacy & security',
-            onTap: () {},
+            onTap: () => context.pushNamed('settings'),
           ),
           const _Divider(),
           _SettingsRow(
             icon: Icons.help_outline,
             label: 'Help & support',
-            onTap: () {},
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Help center coming soon.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.white,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
           const _Divider(),
           _SettingsRow(

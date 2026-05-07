@@ -20,16 +20,16 @@ class EventService {
     var query = _client.from(_table).select();
 
     if (upcomingOnly) {
-      query = query.gte('event_date', _formatDate(today));
+      query = query.gte('start_date', _formatDate(today));
     } else {
-      query = query.lt('event_date', _formatDate(today));
+      query = query.lt('start_date', _formatDate(today));
     }
 
     if (from != null) {
-      query = query.gte('event_date', _formatDate(_dateOnly(from)));
+      query = query.gte('start_date', _formatDate(_dateOnly(from)));
     }
     if (to != null) {
-      query = query.lte('event_date', _formatDate(_dateOnly(to)));
+      query = query.lte('start_date', _formatDate(_dateOnly(to)));
     }
 
     if (search != null && search.trim().isNotEmpty) {
@@ -40,8 +40,8 @@ class EventService {
     }
 
     final response = await query
-        .order('event_date', ascending: upcomingOnly)
-        .order('event_time', ascending: upcomingOnly)
+        .order('start_date', ascending: upcomingOnly)
+        .order('start_time', ascending: upcomingOnly)
         .limit(200);
 
     return (response as List)
@@ -81,6 +81,45 @@ class EventService {
         .eq('event_id', eventId)
         .maybeSingle();
     return response != null;
+  }
+
+  static Future<String> postEvent({
+    required String title,
+    required DateTime startDate,
+    required String startTime,
+    String? description,
+    String? venue,
+    String? address,
+    String? province,
+    String? city,
+    String? category,
+    int? capacity,
+    String? contactName,
+    String? contactPhone,
+    String? coverPhotoUrl,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to post an event.');
+    }
+    final inserted = await _client.from(_table).insert({
+      'title': title.trim(),
+      'description': description?.trim(),
+      'start_date': _formatDate(_dateOnly(startDate)),
+      'start_time': startTime,
+      'venue': venue?.trim(),
+      'address': address?.trim(),
+      'province': province?.trim(),
+      'city': city?.trim(),
+      'category': category,
+      'capacity': capacity,
+      'contact_name': contactName?.trim(),
+      'contact_phone': contactPhone?.trim(),
+      'cover_photo_url': coverPhotoUrl?.trim(),
+      'organizer_id': user.id,
+      'event_source': 'community',
+    }).select('id').single();
+    return inserted['id'].toString();
   }
 
   static Future<void> rsvpToEvent(String eventId) async {

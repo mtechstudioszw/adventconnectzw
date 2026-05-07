@@ -9,11 +9,13 @@ class MainScaffold extends StatelessWidget {
     required this.title,
     required this.currentIndex,
     required this.body,
+    this.floatingActionButton,
   });
 
   final String title;
   final int currentIndex;
   final Widget body;
+  final Widget? floatingActionButton;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +30,7 @@ class MainScaffold extends StatelessWidget {
       ),
       body: SafeArea(child: body),
       bottomNavigationBar: MainBottomNav(currentIndex: currentIndex),
+      floatingActionButton: floatingActionButton,
     );
   }
 }

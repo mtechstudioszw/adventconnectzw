@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Claude Code working directory (local agent state, not project source)
+.claude/
+
+# Loose screenshots and diagnostic captures dropped into the repo root
+Screenshot*.png
+Screenshot*.jpg
+Screenshot*.jpeg

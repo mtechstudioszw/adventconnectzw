@@ -99,6 +99,20 @@ class AuthService {
   }
 
   static Future<void> signOut() async {
+    // Clear the FCM token first so the next user on this device doesn't
+    // inherit pushes addressed to the previous one. Best-effort —
+    // failures here must not block the sign-out itself.
+    try {
+      final user = _client.auth.currentUser;
+      if (user != null) {
+        await _client
+            .from('profiles')
+            .update({'fcm_token': null})
+            .eq('id', user.id);
+      }
+    } catch (_) {
+      // ignore — user may already be offline
+    }
     await _client.auth.signOut();
     await SecureStorageService.clearAll();
   }

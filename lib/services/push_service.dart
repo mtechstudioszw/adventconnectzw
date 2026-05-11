@@ -1,0 +1,201 @@
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'notification_service.dart';
+
+/// Top-level handler for FCM messages received while the app is in the
+/// background or fully killed. Must be a free function (not a method)
+/// because Flutter spawns it in a separate isolate.
+@pragma('vm:entry-point')
+Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+  // The system tray already shows the notification when `notification`
+  // is present in the payload — no action needed here. This handler
+  // only exists so background data-only messages don't get dropped.
+}
+
+/// Wires Firebase Cloud Messaging into the app. The Supabase Edge
+/// Function `notify-fcm` is what actually triggers a push when a row
+/// lands in `public.notifications`; this class handles the device side
+/// of that pipeline:
+///
+///   * Asks for notification permission once on first launch
+///   * Pulls the FCM device token + saves it to `profiles.fcm_token`
+///     so the Edge Function can target this device
+///   * Subscribes to token refresh events
+///   * Shows a heads-up notification when a push arrives in the
+///     foreground (system handles background + killed)
+///   * Lets you read the tap-event stream so app routes can deep-link
+///     into events / prayers / chats / etc.
+class PushService {
+  PushService._();
+
+  static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  static final FlutterLocalNotificationsPlugin _local =
+      FlutterLocalNotificationsPlugin();
+
+  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+    'advent_connect_zw_default',
+    'General notifications',
+    description: 'In-app activity, messages, RSVPs and approvals.',
+    importance: Importance.high,
+  );
+
+  static bool _initialized = false;
+  static final StreamController<RemoteMessage> _tapController =
+      StreamController<RemoteMessage>.broadcast();
+  static StreamSubscription<AuthState>? _authSub;
+  static StreamSubscription<String>? _tokenRefreshSub;
+
+  /// Stream of taps on a push notification (foreground or
+  /// system-tray-from-background). Listen from your router to deep-link
+  /// to the source content using `message.data['reference_type']` etc.
+  static Stream<RemoteMessage> get onMessageTap => _tapController.stream;
+
+  /// Call from main() after Firebase.initializeApp(). Safe to call
+  /// multiple times — subsequent calls no-op.
+  static Future<void> initialize() async {
+    if (_initialized) return;
+    _initialized = true;
+
+    // 1. Background isolate handler — must register before runApp().
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+
+    // 2. Local notifications plugin (used to render foreground pushes
+    //    as a heads-up banner and to host the Android channel).
+    await _local.initialize(
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
+      ),
+      onDidReceiveNotificationResponse: _onLocalTap,
+    );
+
+    final androidImpl = _local.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await androidImpl?.createNotificationChannel(_channel);
+    await androidImpl?.requestNotificationsPermission();
+
+    // 3. Ask FCM for permission (iOS-style — Android 13+ uses the same
+    //    permission machinery; older Androids auto-grant).
+    await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    // 4. Foreground messages → render via local notifications.
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+    // 5. Background tap (system tray) → forward to the tap stream.
+    FirebaseMessaging.onMessageOpenedApp.listen(_tapController.add);
+
+    // 6. Tap from killed state — initial message present in the stream
+    //    of the new run.
+    final initial = await _messaging.getInitialMessage();
+    if (initial != null) _tapController.add(initial);
+
+    // 7. Token refresh — Supabase profile stays in sync.
+    _tokenRefreshSub?.cancel();
+    _tokenRefreshSub = _messaging.onTokenRefresh.listen((t) async {
+      try {
+        await NotificationService.updateFcmToken(t);
+      } catch (e, st) {
+        debugPrint('PushService: token refresh save failed: $e\n$st');
+      }
+    });
+
+    // 8. Initial token + signed-in user → save now. The auth listener
+    //    below handles the "user signs in later" case.
+    await _maybeSaveTokenForCurrentUser();
+    _authSub?.cancel();
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      _maybeSaveTokenForCurrentUser();
+    });
+  }
+
+  /// Clear the FCM token on the profile (call from sign-out so old
+  /// devices stop receiving pushes for accounts that are no longer
+  /// logged in). Best-effort — failures don't block sign-out.
+  static Future<void> clearTokenForCurrentUser() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'fcm_token': null}).eq('id', user.id);
+    } catch (e, st) {
+      debugPrint('PushService: clear token failed: $e\n$st');
+    }
+  }
+
+  static Future<void> _maybeSaveTokenForCurrentUser() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final token = await _messaging.getToken();
+      if (token != null) await NotificationService.updateFcmToken(token);
+    } catch (e, st) {
+      debugPrint('PushService: token save failed: $e\n$st');
+    }
+  }
+
+  static Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    final notif = message.notification;
+    if (notif == null) return; // data-only payload — no UI to show
+    final title = notif.title ?? 'Advent Connect ZW';
+    final body = notif.body ?? '';
+    // Encode the original message into the payload string so the local
+    // tap handler can rebuild RemoteMessage.data on tap.
+    await _local.show(
+      notif.hashCode,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channel.id,
+          _channel.name,
+          channelDescription: _channel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+      payload: _serializePayload(message.data),
+    );
+  }
+
+  static void _onLocalTap(NotificationResponse response) {
+    final data = _deserializePayload(response.payload);
+    // Synthesize a minimal RemoteMessage so route listeners get the
+    // same shape whether the tap came from foreground or background.
+    final synthetic = RemoteMessage(data: data);
+    _tapController.add(synthetic);
+  }
+
+  static String _serializePayload(Map<String, dynamic> data) {
+    return data.entries
+        .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent('${e.value}')}')
+        .join('&');
+  }
+
+  static Map<String, dynamic> _deserializePayload(String? payload) {
+    if (payload == null || payload.isEmpty) return const {};
+    final out = <String, dynamic>{};
+    for (final pair in payload.split('&')) {
+      final i = pair.indexOf('=');
+      if (i <= 0) continue;
+      out[Uri.decodeComponent(pair.substring(0, i))] =
+          Uri.decodeComponent(pair.substring(i + 1));
+    }
+    return out;
+  }
+}

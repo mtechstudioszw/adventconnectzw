@@ -317,6 +317,50 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                       height: 1.5,
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => context.pushNamed('seller_dashboard'),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primaryBlue
+                                  .withValues(alpha: 0.30),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.storefront,
+                              color: AppColors.white,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Become a seller',
+                              style: AppTextStyles.buttonText.copyWith(
+                                fontSize: 14,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

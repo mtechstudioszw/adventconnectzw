@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
+import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -25,7 +26,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 
   List<Church> _churches = [];
   String? _selectedChurchId;
+  String? _profilePhotoUrl;
   bool _saving = false;
+  bool _uploadingPhoto = false;
   bool _loadingChurches = true;
   String? _error;
 
@@ -45,6 +48,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     _nameController.text = (meta['full_name'] as String?) ?? '';
     _bioController.text = (meta['bio'] as String?) ?? '';
     _selectedChurchId = (meta['church_id'] as String?);
+    _profilePhotoUrl = (meta['profile_photo_url'] as String?);
     _loadChurches();
   }
 
@@ -88,6 +92,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       fullName: _nameController.text.trim(),
       bio: _bioController.text.trim(),
       churchId: _selectedChurchId,
+      profilePhotoUrl: _profilePhotoUrl,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -237,7 +242,30 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
+  Future<void> _pickProfilePhoto() async {
+    if (_uploadingPhoto) return;
+    setState(() {
+      _uploadingPhoto = true;
+      _error = null;
+    });
+    try {
+      final url = await StorageService.pickAndUploadProfilePhoto();
+      if (!mounted) return;
+      if (url != null) {
+        setState(() => _profilePhotoUrl = url);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload photo. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   Widget _buildPhotoUploader() {
+    final hasPhoto =
+        _profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -257,7 +285,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
+              gradient: hasPhoto ? null : AppColors.primaryGradient,
+              color: hasPhoto ? AppColors.lightGrey : null,
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.white, width: 3),
               boxShadow: [
@@ -267,12 +296,16 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                   offset: const Offset(0, 4),
                 ),
               ],
+              image: hasPhoto
+                  ? DecorationImage(
+                      image: NetworkImage(_profilePhotoUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
             ),
-            child: const Icon(
-              Icons.person,
-              color: AppColors.white,
-              size: 36,
-            ),
+            child: hasPhoto
+                ? null
+                : const Icon(Icons.person, color: AppColors.white, size: 36),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -287,7 +320,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Photo upload coming soon.',
+                  hasPhoto
+                      ? 'Looking good. Tap change to swap it.'
+                      : 'Add a clear photo of yourself.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: const Color.fromRGBO(26, 26, 46, 0.6),
                   ),
@@ -295,25 +330,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               ],
             ),
           ),
-          // Replaced OutlinedButton with a styled Container — the Material
-          // OutlinedButton tries to compute intrinsic width during the
-          // SingleChildScrollView's two-pass layout and crashes with
-          // BoxConstraints(w=Infinity) on Flutter web. This decorative
-          // "coming soon" pill renders correctly without that issue.
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color.fromRGBO(26, 26, 46, 0.15),
-              ),
-            ),
-            child: Text(
-              'Upload',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.5),
-              ),
-            ),
+          _UploadButton(
+            label: hasPhoto ? 'Change' : 'Upload',
+            busy: _uploadingPhoto,
+            onTap: _pickProfilePhoto,
           ),
         ],
       ),
@@ -613,6 +633,54 @@ class _ErrorBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _UploadButton extends StatelessWidget {
+  const _UploadButton({
+    required this.label,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: busy ? null : onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.4),
+            ),
+          ),
+          child: busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primaryBlue,
+                  ),
+                )
+              : Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+        ),
       ),
     );
   }

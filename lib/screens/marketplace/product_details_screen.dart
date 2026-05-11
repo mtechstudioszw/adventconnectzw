@@ -323,81 +323,105 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
   }
 
   Widget _buildSellerCard(Product product) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: product.sellerId.isEmpty
+            ? null
+            : () => context.pushNamed(
+                  'seller_profile',
+                  pathParameters: {'userId': product.sellerId},
+                ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.storefront,
-              color: AppColors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                Text(
-                  'SELLER',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.5),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.4,
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.storefront,
+                    color: AppColors.white,
+                    size: 22,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        product.sellerName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleMedium.copyWith(
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SELLER',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: const Color.fromRGBO(26, 26, 46, 0.5),
+                          fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          fontSize: 14.5,
+                          letterSpacing: 1.4,
                         ),
                       ),
-                    ),
-                    if (product.sellerVerified) ...[
-                      const SizedBox(width: 6),
-                      const Icon(
-                        Icons.verified,
-                        size: 16,
-                        color: AppColors.goldAccent,
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              product.sellerName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14.5,
+                              ),
+                            ),
+                          ),
+                          if (product.sellerVerified) ...[
+                            const SizedBox(width: 6),
+                            const Icon(
+                              Icons.verified,
+                              size: 16,
+                              color: AppColors.goldAccent,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'View store',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
+                        ),
                       ),
                     ],
-                  ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  color: Color.fromRGBO(26, 26, 46, 0.4),
                 ),
               ],
             ),
           ),
-          const Icon(
-            Icons.chevron_right,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
-          ),
-        ],
+        ),
       ),
     );
   }

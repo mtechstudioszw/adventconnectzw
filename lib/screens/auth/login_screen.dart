@@ -78,132 +78,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _showForgotPasswordDialog() async {
-    final emailController = TextEditingController(
-      text: _emailController.text.trim(),
-    );
-    String? dialogError;
-    bool sending = false;
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppColors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: Text('Reset password', style: AppTextStyles.headlineSmall),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Enter your email and we\'ll send you a reset link.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.7),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    style: AppTextStyles.bodyLarge,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(
-                        Icons.email_outlined,
-                        color: AppColors.primaryBlue,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                  if (dialogError != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      dialogError!,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.red,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      sending ? null : () => Navigator.pop(dialogContext),
-                  child: Text(
-                    'Cancel',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                ),
-                FilledButton(
-                  onPressed: sending
-                      ? null
-                      : () async {
-                          final email = emailController.text.trim();
-                          if (email.isEmpty || !email.contains('@')) {
-                            setDialogState(() {
-                              dialogError = 'Enter a valid email';
-                            });
-                            return;
-                          }
-                          setDialogState(() {
-                            sending = true;
-                            dialogError = null;
-                          });
-                          final result =
-                              await AuthService.sendPasswordReset(email);
-                          if (!dialogContext.mounted) return;
-                          if (result.isSuccess) {
-                            Navigator.pop(dialogContext);
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Reset link sent. Check your inbox.',
-                                  style: AppTextStyles.bodyMedium.copyWith(
-                                    color: AppColors.white,
-                                  ),
-                                ),
-                              ),
-                            );
-                          } else {
-                            setDialogState(() {
-                              sending = false;
-                              dialogError = result.errorMessage;
-                            });
-                          }
-                        },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
-                  ),
-                  child: sending
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            color: AppColors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : Text('Send link', style: AppTextStyles.labelLarge),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    emailController.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -283,7 +157,8 @@ class _LoginScreenState extends State<LoginScreen>
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton(
-                                  onPressed: _showForgotPasswordDialog,
+                                  onPressed: () =>
+                                      context.goNamed('forgot_password'),
                                   style: TextButton.styleFrom(
                                     minimumSize: const Size(0, 32),
                                     padding: const EdgeInsets.symmetric(

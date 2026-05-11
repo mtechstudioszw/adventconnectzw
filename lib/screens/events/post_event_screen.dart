@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/event_service.dart';
+import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
@@ -31,6 +32,8 @@ class _PostEventScreenState extends State<PostEventScreen>
   TimeOfDay? _startTime;
   String? _province;
   String _category = 'community';
+  String? _coverPhotoUrl;
+  bool _uploadingPhoto = false;
   bool _saving = false;
   String? _error;
 
@@ -148,6 +151,7 @@ class _PostEventScreenState extends State<PostEventScreen>
         contactPhone: _contactPhoneController.text.isEmpty
             ? null
             : _contactPhoneController.text,
+        coverPhotoUrl: _coverPhotoUrl,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -198,6 +202,8 @@ class _PostEventScreenState extends State<PostEventScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      _buildFlyerCard(),
+                      const SizedBox(height: 16),
                       _buildBasicsCard(),
                       const SizedBox(height: 16),
                       _buildScheduleCard(),
@@ -222,6 +228,101 @@ class _PostEventScreenState extends State<PostEventScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _pickFlyer() async {
+    if (_uploadingPhoto) return;
+    setState(() {
+      _uploadingPhoto = true;
+      _error = null;
+    });
+    try {
+      final url = await StorageService.pickAndUploadEventFlyer();
+      if (!mounted) return;
+      if (url != null) setState(() => _coverPhotoUrl = url);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload flyer. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
+  Widget _buildFlyerCard() {
+    final hasPhoto = _coverPhotoUrl != null && _coverPhotoUrl!.isNotEmpty;
+    return PostFormCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'EVENT FLYER',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _uploadingPhoto ? null : _pickFlyer,
+              borderRadius: BorderRadius.circular(14),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                    ),
+                    image: hasPhoto
+                        ? DecorationImage(
+                            image: NetworkImage(_coverPhotoUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: _uploadingPhoto
+                      ? const SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: AppColors.primaryBlue,
+                          ),
+                        )
+                      : hasPhoto
+                          ? null
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.image_outlined,
+                                  color: AppColors.primaryBlue,
+                                  size: 36,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tap to add a flyer',
+                                  style: AppTextStyles.labelMedium.copyWith(
+                                    color: AppColors.primaryBlue,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

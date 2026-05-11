@@ -107,8 +107,9 @@ class _SignupScreenState extends State<SignupScreen>
     }
 
     setState(() => _loading = true);
+    final email = _emailController.text.trim();
     final result = await AuthService.signUp(
-      email: _emailController.text.trim(),
+      email: email,
       password: _passwordController.text,
       fullName: _nameController.text.trim(),
       birthDate: _birthDate!,
@@ -117,7 +118,10 @@ class _SignupScreenState extends State<SignupScreen>
     setState(() => _loading = false);
 
     if (result.isSuccess) {
-      context.goNamed('home');
+      // After signUp, Supabase emails a confirmation link. The verification
+      // screen surfaces that and watches for the signed-in event so it can
+      // advance to profile setup once the link is tapped.
+      context.goNamed('email_verification', extra: email);
     } else {
       setState(() => _serverError = result.errorMessage);
     }

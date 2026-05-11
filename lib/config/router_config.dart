@@ -1,8 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../screens/admin/admin_dashboard_screen.dart';
+import '../screens/admin/admin_login_screen.dart';
+import '../screens/admin/pending_approvals_screen.dart';
 import '../screens/auth/age_verification_screen.dart';
+import '../screens/auth/email_verification_screen.dart';
+import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/login_screen.dart';
+import '../screens/auth/profile_setup_church_screen.dart';
+import '../screens/auth/profile_setup_screen.dart';
+import '../screens/auth/reset_password_screen.dart';
 import '../screens/auth/signup_screen.dart';
+import '../screens/churches/church_announcements_screen.dart';
+import '../screens/churches/claim_church_screen.dart';
+import '../screens/churches/suggest_church_screen.dart';
+import '../screens/churches/suggest_edit_screen.dart';
+import '../screens/home/post_notice_screen.dart';
+import '../screens/home/search_screen.dart';
+import '../screens/profile/blocked_users_screen.dart';
+import '../screens/profile/member_directory_screen.dart';
+import '../screens/profile/my_directory_profile_screen.dart';
+import '../screens/profile/my_events_screen.dart';
+import '../screens/profile/notification_preferences_screen.dart';
+import '../screens/profile/sabbath_timer_screen.dart';
+import '../screens/profile/saved_listings_screen.dart';
+import '../screens/utility/offline_screen.dart';
+import '../screens/utility/report_submitted_screen.dart';
+import '../services/church_service.dart';
 import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
@@ -11,6 +35,7 @@ import '../models/job_model.dart';
 import '../models/message_model.dart';
 import '../models/prayer_model.dart';
 import '../models/product_model.dart';
+import '../models/seller_model.dart';
 import '../screens/events/event_details_screen.dart';
 import '../screens/events/events_screen.dart';
 import '../screens/events/post_event_screen.dart';
@@ -32,6 +57,11 @@ import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/seller/edit_store_screen.dart';
+import '../screens/seller/manage_products_screen.dart';
+import '../screens/seller/seller_dashboard_screen.dart';
+import '../screens/seller/seller_profile_screen.dart';
+import '../screens/seller/setup_store_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
@@ -68,15 +98,60 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
+      path: '/email-verification',
+      name: 'email_verification',
+      builder: (context, state) {
+        final email = state.extra is String ? state.extra as String : '';
+        return EmailVerificationScreen(email: email);
+      },
+    ),
+    GoRoute(
+      path: '/profile-setup',
+      name: 'profile_setup',
+      builder: (context, state) => const ProfileSetupScreen(),
+    ),
+    GoRoute(
+      path: '/profile-setup-church',
+      name: 'profile_setup_church',
+      builder: (context, state) => const ProfileSetupChurchScreen(),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      name: 'forgot_password',
+      builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/reset-password',
+      name: 'reset_password',
+      builder: (context, state) => const ResetPasswordScreen(),
+    ),
+    GoRoute(
       path: '/home',
       name: 'home',
       builder: (context, state) => const HomeScreen(),
+      routes: [
+        GoRoute(
+          path: 'search',
+          name: 'search',
+          builder: (context, state) => const SearchScreen(),
+        ),
+        GoRoute(
+          path: 'post-notice',
+          name: 'post_notice',
+          builder: (context, state) => const PostNoticeScreen(),
+        ),
+      ],
     ),
     GoRoute(
       path: '/churches',
       name: 'churches',
       builder: (context, state) => const ChurchesScreen(),
       routes: [
+        GoRoute(
+          path: 'suggest',
+          name: 'suggest_church',
+          builder: (context, state) => const SuggestChurchScreen(),
+        ),
         GoRoute(
           path: ':id',
           name: 'church_details',
@@ -88,6 +163,32 @@ final GoRouter appRouter = GoRouter(
               initialChurch: initial,
             );
           },
+          routes: [
+            GoRoute(
+              path: 'announcements',
+              name: 'church_announcements',
+              builder: (context, state) {
+                final church = state.extra as Church;
+                return ChurchAnnouncementsScreen(church: church);
+              },
+            ),
+            GoRoute(
+              path: 'suggest-edit',
+              name: 'suggest_edit',
+              builder: (context, state) {
+                final church = state.extra as Church;
+                return SuggestEditScreen(church: church);
+              },
+            ),
+            GoRoute(
+              path: 'claim',
+              name: 'claim_church',
+              builder: (context, state) {
+                final church = state.extra as Church;
+                return ClaimChurchScreen(church: church);
+              },
+            ),
+          ],
         ),
       ],
     ),
@@ -219,6 +320,117 @@ final GoRouter appRouter = GoRouter(
           path: 'edit',
           name: 'edit_profile',
           builder: (context, state) => const EditProfileScreen(),
+        ),
+        GoRoute(
+          path: 'my-events',
+          name: 'my_events',
+          builder: (context, state) => const MyEventsScreen(),
+        ),
+        GoRoute(
+          path: 'saved-listings',
+          name: 'saved_listings',
+          builder: (context, state) => const SavedListingsScreen(),
+        ),
+        GoRoute(
+          path: 'sabbath-timer',
+          name: 'sabbath_timer',
+          builder: (context, state) => const SabbathTimerScreen(),
+        ),
+        GoRoute(
+          path: 'notifications',
+          name: 'notification_preferences',
+          builder: (context, state) =>
+              const NotificationPreferencesScreen(),
+        ),
+        GoRoute(
+          path: 'blocked',
+          name: 'blocked_users',
+          builder: (context, state) => const BlockedUsersScreen(),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/directory',
+      name: 'member_directory',
+      builder: (context, state) => const MemberDirectoryScreen(),
+      routes: [
+        GoRoute(
+          path: 'me',
+          name: 'my_directory_profile',
+          builder: (context, state) => const MyDirectoryProfileScreen(),
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/admin',
+      name: 'admin_login',
+      builder: (context, state) => const AdminLoginScreen(),
+      routes: [
+        GoRoute(
+          path: 'dashboard',
+          name: 'admin_dashboard',
+          builder: (context, state) {
+            final role = state.extra as ChurchAdminRole;
+            return AdminDashboardScreen(role: role);
+          },
+          routes: [
+            GoRoute(
+              path: 'approvals',
+              name: 'pending_approvals',
+              builder: (context, state) {
+                final role = state.extra as ChurchAdminRole;
+                return PendingApprovalsScreen(role: role);
+              },
+            ),
+          ],
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/offline',
+      name: 'offline',
+      builder: (context, state) => const OfflineScreen(),
+    ),
+    GoRoute(
+      path: '/report-submitted',
+      name: 'report_submitted',
+      builder: (context, state) => const ReportSubmittedScreen(),
+    ),
+    GoRoute(
+      path: '/seller-profile/:userId',
+      name: 'seller_profile',
+      builder: (context, state) {
+        final userId = state.pathParameters['userId'] ?? '';
+        final initial = state.extra is Seller ? state.extra as Seller : null;
+        return SellerProfileScreen(
+          authUserId: userId,
+          initialSeller: initial,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/seller',
+      name: 'seller_dashboard',
+      builder: (context, state) => const SellerDashboardScreen(),
+      routes: [
+        GoRoute(
+          path: 'setup',
+          name: 'setup_store',
+          builder: (context, state) => const SetupStoreScreen(),
+        ),
+        GoRoute(
+          path: 'edit',
+          name: 'edit_store',
+          builder: (context, state) {
+            final seller =
+                state.extra is Seller ? state.extra as Seller : null;
+            return EditStoreScreen(initialSeller: seller);
+          },
+        ),
+        GoRoute(
+          path: 'products',
+          name: 'manage_products',
+          builder: (context, state) => const ManageProductsScreen(),
         ),
       ],
     ),

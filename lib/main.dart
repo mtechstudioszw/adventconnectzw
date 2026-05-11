@@ -1,9 +1,6 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 import 'config/supabase_config.dart';
 import 'config/router_config.dart';
 import 'theme/app_theme.dart';
@@ -16,9 +13,14 @@ void main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  if (!kIsWeb && Platform.isAndroid) {
-    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
-  }
+  // Route password-recovery deep links straight to the reset screen.
+  // Supabase fires this event when the user opens the link from their
+  // recovery email, regardless of whether the app was already running.
+  Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    if (data.event == AuthChangeEvent.passwordRecovery) {
+      appRouter.goNamed('reset_password');
+    }
+  });
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

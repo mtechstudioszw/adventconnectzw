@@ -447,7 +447,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           _SettingsRow(
             icon: Icons.event_outlined,
             label: 'My events',
-            onTap: () => context.pushNamed('events'),
+            onTap: () => context.pushNamed('my_events'),
           ),
           const _Divider(),
           _SettingsRow(
@@ -472,6 +472,48 @@ class _ProfileScreenState extends State<ProfileScreen>
             icon: Icons.storefront_outlined,
             label: 'Marketplace',
             onTap: () => context.pushNamed('marketplace'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.store_mall_directory_outlined,
+            label: 'My seller dashboard',
+            onTap: () => context.pushNamed('seller_dashboard'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.favorite_outline,
+            label: 'Saved listings',
+            onTap: () => context.pushNamed('saved_listings'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.people_outline,
+            label: 'Member directory',
+            onTap: () => context.pushNamed('member_directory'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.brightness_3_outlined,
+            label: 'Sabbath timer',
+            onTap: () => context.pushNamed('sabbath_timer'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.notifications_outlined,
+            label: 'Notifications',
+            onTap: () => context.pushNamed('notification_preferences'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.block_outlined,
+            label: 'Blocked users',
+            onTap: () => context.pushNamed('blocked_users'),
+          ),
+          const _Divider(),
+          _SettingsRow(
+            icon: Icons.admin_panel_settings_outlined,
+            label: 'Church admin',
+            onTap: () => context.pushNamed('admin_login'),
           ),
           const _Divider(),
           _SettingsRow(

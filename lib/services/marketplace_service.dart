@@ -7,6 +7,78 @@ class MarketplaceService {
   static final SupabaseClient _client = Supabase.instance.client;
 
   static const _table = 'products';
+  static const _savedTable = 'saved_listings';
+
+  /// Returns the set of product ids the current user has saved. Used by
+  /// the marketplace heart icon and the My Saved Listings screen.
+  static Future<Set<String>> fetchSavedProductIds() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return <String>{};
+    final response = await _client
+        .from(_savedTable)
+        .select('product_id')
+        .eq('user_id', user.id);
+    return (response as List)
+        .map((row) => row['product_id'].toString())
+        .toSet();
+  }
+
+  static Future<bool> isSaved(String productId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return false;
+    final response = await _client
+        .from(_savedTable)
+        .select('product_id')
+        .eq('user_id', user.id)
+        .eq('product_id', productId)
+        .maybeSingle();
+    return response != null;
+  }
+
+  static Future<void> saveProduct(String productId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to save a listing.');
+    }
+    await _client.from(_savedTable).insert({
+      'user_id': user.id,
+      'product_id': productId,
+    });
+  }
+
+  static Future<void> unsaveProduct(String productId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    await _client
+        .from(_savedTable)
+        .delete()
+        .eq('user_id', user.id)
+        .eq('product_id', productId);
+  }
+
+  /// Returns the full Product rows for every listing the user saved.
+  /// Joins via product_id IN (...) instead of a foreign-key embed so
+  /// it works regardless of how the RLS view is set up.
+  static Future<List<Product>> fetchSavedProducts() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const [];
+    final saved = await _client
+        .from(_savedTable)
+        .select('product_id')
+        .eq('user_id', user.id);
+    final ids = (saved as List)
+        .map((row) => row['product_id'].toString())
+        .toList();
+    if (ids.isEmpty) return const [];
+    final response = await _client
+        .from(_table)
+        .select()
+        .inFilter('id', ids)
+        .order('created_at', ascending: false);
+    return (response as List)
+        .map((row) => Product.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
 
   static Future<List<Product>> fetchProducts({
     String? search,

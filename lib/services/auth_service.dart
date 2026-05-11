@@ -107,6 +107,7 @@ class AuthService {
     String? fullName,
     String? bio,
     String? churchId,
+    String? profilePhotoUrl,
   }) async {
     try {
       final user = currentUser;
@@ -119,6 +120,9 @@ class AuthService {
       if (fullName != null) next['full_name'] = fullName.trim();
       if (bio != null) next['bio'] = bio.trim();
       if (churchId != null) next['church_id'] = churchId;
+      if (profilePhotoUrl != null) {
+        next['profile_photo_url'] = profilePhotoUrl;
+      }
       final response = await _client.auth.updateUser(
         UserAttributes(data: next),
       );
@@ -129,6 +133,9 @@ class AuthService {
       if (churchId != null) {
         dbUpdates['church_id'] =
             churchId.isEmpty ? null : int.tryParse(churchId);
+      }
+      if (profilePhotoUrl != null) {
+        dbUpdates['profile_photo_url'] = profilePhotoUrl;
       }
       if (dbUpdates.isNotEmpty) {
         await _client

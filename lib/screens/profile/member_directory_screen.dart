@@ -1,0 +1,436 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../models/member_directory_model.dart';
+import '../../models/seller_model.dart';
+import '../../services/directory_service.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_text_styles.dart';
+import '../../widgets/screen_shell.dart';
+
+/// Browse other community members who opted into the directory.
+class MemberDirectoryScreen extends StatefulWidget {
+  const MemberDirectoryScreen({super.key});
+
+  @override
+  State<MemberDirectoryScreen> createState() => _MemberDirectoryScreenState();
+}
+
+class _MemberDirectoryScreenState extends State<MemberDirectoryScreen> {
+  final _searchController = TextEditingController();
+  Timer? _debounce;
+  List<MemberDirectoryEntry> _entries = const [];
+  bool _loading = true;
+  String? _error;
+  String? _province;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final list = await DirectoryService.fetchEntries(
+        search: _searchController.text,
+        province: _province,
+      );
+      if (!mounted) return;
+      setState(() {
+        _entries = list;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not load the directory. Pull to retry.';
+      });
+    }
+  }
+
+  void _onSearch(String _) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _load);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.lightGrey,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          await context.pushNamed('my_directory_profile');
+          if (mounted) _load();
+        },
+        backgroundColor: AppColors.primaryBlue,
+        foregroundColor: AppColors.white,
+        elevation: 6,
+        icon: const Icon(Icons.person_outline),
+        label: Text(
+          'My listing',
+          style: AppTextStyles.buttonText.copyWith(fontSize: 14),
+        ),
+      ),
+      body: RefreshIndicator(
+        color: AppColors.primaryBlue,
+        onRefresh: _load,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              const ScreenHero(
+                title: 'Member directory',
+                tagline: 'Find your community',
+                subtitle:
+                    'Doctors, teachers, builders, ministers — opt-in members across Zimbabwe.',
+                fallbackRoute: 'profile',
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _SearchField(
+                      controller: _searchController,
+                      onChanged: _onSearch,
+                    ),
+                    const SizedBox(height: 12),
+                    _ProvinceFilter(
+                      selected: _province,
+                      onChanged: (p) {
+                        setState(() => _province = p);
+                        _load();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _buildList(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 64),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primaryBlue),
+        ),
+      );
+    }
+    if (_error != null) return ErrorBanner(message: _error!);
+    if (_entries.isEmpty) {
+      return EmptyStateCard(
+        icon: Icons.people_outline,
+        title: 'No matches',
+        message:
+            'Adjust your search or province filter. Be the first to list yourself — tap "My listing" below.',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final e in _entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _DirectoryRow(entry: e),
+          ),
+      ],
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+        decoration: InputDecoration(
+          hintText: 'Search profession, skill or city',
+          hintStyle: AppTextStyles.bodyMedium.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.45),
+          ),
+          prefixIcon: const Padding(
+            padding: EdgeInsets.only(left: 14, right: 10),
+            child: Icon(
+              Icons.search,
+              color: AppColors.primaryBlue,
+              size: 20,
+            ),
+          ),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 44, minHeight: 44),
+          filled: true,
+          fillColor: AppColors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProvinceFilter extends StatelessWidget {
+  const _ProvinceFilter({required this.selected, required this.onChanged});
+
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        children: [
+          _Chip(
+            label: 'All',
+            active: selected == null,
+            onTap: () => onChanged(null),
+          ),
+          const SizedBox(width: 8),
+          for (final p in sellerProvinces) ...[
+            _Chip(
+              label: p,
+              active: selected == p,
+              onTap: () => onChanged(p),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            gradient: active ? AppColors.primaryGradient : null,
+            color: active ? null : AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: active
+                  ? AppColors.primaryBlue
+                  : const Color.fromRGBO(26, 26, 46, 0.08),
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: active ? AppColors.white : AppColors.textDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 12.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DirectoryRow extends StatelessWidget {
+  const _DirectoryRow({required this.entry});
+  final MemberDirectoryEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = _initials(entry.fullName ?? '');
+    final photo = entry.profilePhotoUrl;
+    final hasPhoto = photo != null && photo.isNotEmpty;
+    final location = [entry.city, entry.province]
+        .where((s) => s != null && s.isNotEmpty)
+        .join(', ');
+    return ScreenCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              gradient: hasPhoto ? null : AppColors.primaryGradient,
+              color: hasPhoto ? AppColors.lightGrey : null,
+              shape: BoxShape.circle,
+              image: hasPhoto
+                  ? DecorationImage(
+                      image: NetworkImage(photo),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: hasPhoto
+                ? null
+                : Text(
+                    initials,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.fullName ?? 'Member',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (entry.profession != null &&
+                    entry.profession!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    entry.profession!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                if (location.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.place_outlined,
+                        size: 12,
+                        color: Color.fromRGBO(26, 26, 46, 0.55),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: const Color.fromRGBO(26, 26, 46, 0.6),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (entry.skills != null &&
+                    entry.skills!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    entry.skills!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.7),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Send a message request',
+            icon: const Icon(
+              Icons.mail_outline,
+              color: AppColors.primaryBlue,
+              size: 22,
+            ),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Message requests open once you tap into their profile.',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: AppColors.white),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _initials(String name) {
+    final parts = name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
+  }
+}

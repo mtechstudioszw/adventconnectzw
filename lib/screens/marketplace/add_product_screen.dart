@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
@@ -30,7 +31,9 @@ class _AddProductScreenState extends State<AddProductScreen>
   String _condition = 'new';
   String? _province;
   bool _saving = false;
+  bool _uploadingPhotos = false;
   String? _error;
+  final List<String> _photoUrls = [];
 
   static const _categories = <String, String>{
     'books': 'Bibles & Books',
@@ -111,6 +114,7 @@ class _AddProductScreenState extends State<AddProductScreen>
         location: _locationController.text.isEmpty
             ? null
             : _locationController.text,
+        imageUrls: List.unmodifiable(_photoUrls),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -189,47 +193,92 @@ class _AddProductScreenState extends State<AddProductScreen>
     );
   }
 
+  Future<void> _pickPhotos() async {
+    if (_uploadingPhotos) return;
+    final remaining = 4 - _photoUrls.length;
+    if (remaining <= 0) return;
+    setState(() {
+      _uploadingPhotos = true;
+      _error = null;
+    });
+    try {
+      final urls = await StorageService.pickAndUploadProductPhotos(
+        max: remaining,
+      );
+      if (!mounted) return;
+      if (urls.isNotEmpty) {
+        setState(() => _photoUrls.addAll(urls));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload photos. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhotos = false);
+    }
+  }
+
+  void _removePhoto(int index) {
+    setState(() => _photoUrls.removeAt(index));
+  }
+
   Widget _buildPhotosCard() {
+    final canAddMore = _photoUrls.length < 4;
     return PostFormCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(16),
-              border:
-                  Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.20)),
-            ),
-            child: const Icon(
-              Icons.photo_library_outlined,
-              color: AppColors.primaryBlue,
-              size: 32,
+          Row(
+            children: [
+              Text(
+                'PHOTOS',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${_photoUrls.length}/4',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 96,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _photoUrls.length + (canAddMore ? 1 : 0),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (context, i) {
+                if (i < _photoUrls.length) {
+                  return _PhotoThumb(
+                    url: _photoUrls[i],
+                    onRemove: () => _removePhoto(i),
+                  );
+                }
+                return _AddPhotoTile(
+                  busy: _uploadingPhotos,
+                  onTap: _pickPhotos,
+                );
+              },
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Photos',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Photo upload coming soon — your listing will go live without one for now.',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
-                    height: 1.4,
-                  ),
-                ),
-              ],
+          if (_photoUrls.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Add at least one photo for the best results.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.55),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -401,6 +450,108 @@ class _AddProductScreenState extends State<AddProductScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PhotoThumb extends StatelessWidget {
+  const _PhotoThumb({required this.url, required this.onRemove});
+  final String url;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: AppColors.lightGrey,
+            image: DecorationImage(
+              image: NetworkImage(url),
+              fit: BoxFit.cover,
+            ),
+            border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+          ),
+        ),
+        Positioned(
+          top: -6,
+          right: -6,
+          child: Material(
+            color: AppColors.white,
+            shape: const CircleBorder(),
+            elevation: 2,
+            child: InkWell(
+              onTap: onRemove,
+              customBorder: const CircleBorder(),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.close, size: 14, color: AppColors.red),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddPhotoTile extends StatelessWidget {
+  const _AddPhotoTile({required this.busy, required this.onTap});
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: busy ? null : onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 96,
+          height: 96,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.3),
+              style: BorderStyle.solid,
+            ),
+          ),
+          child: busy
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColors.primaryBlue,
+                  ),
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.add_a_photo_outlined,
+                      color: AppColors.primaryBlue,
+                      size: 24,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Add',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }

@@ -1,0 +1,1282 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../models/seller_model.dart';
+import '../../services/seller_service.dart';
+import '../../services/storage_service.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_text_styles.dart';
+
+/// Post-approval edit screen. Pre-filled from the existing sellers row.
+/// Category is shown but not editable — switching category requires
+/// admin re-review and is intentionally outside this flow.
+class EditStoreScreen extends StatefulWidget {
+  const EditStoreScreen({super.key, this.initialSeller});
+
+  /// Optional pre-fetched seller, passed via `extra` from the dashboard
+  /// to skip a round-trip. The screen still refetches if it's null.
+  final Seller? initialSeller;
+
+  @override
+  State<EditStoreScreen> createState() => _EditStoreScreenState();
+}
+
+class _EditStoreScreenState extends State<EditStoreScreen>
+    with SingleTickerProviderStateMixin {
+  final _formKey = GlobalKey<FormState>();
+
+  final _businessNameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _contactNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _whatsappController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _suburbController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _paymentMethodsController = TextEditingController();
+  final _deliveryAreaController = TextEditingController();
+  final _deliveryFeeController = TextEditingController();
+  final _sabbathNoticeController = TextEditingController();
+
+  late final AnimationController _entrance;
+  late final Animation<double> _fade;
+  late final Animation<double> _slide;
+
+  Seller? _seller;
+  String? _selectedProvince;
+  String? _photoUrl;
+  bool _offersDelivery = false;
+  bool _observesSabbath = false;
+  bool _isActive = true;
+  bool _loading = true;
+  bool _uploading = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _entrance = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..forward();
+    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
+    _slide = Tween<double>(begin: 12, end: 0).animate(
+      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
+    );
+    _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _entrance.dispose();
+    _businessNameController.dispose();
+    _descriptionController.dispose();
+    _contactNameController.dispose();
+    _phoneController.dispose();
+    _whatsappController.dispose();
+    _cityController.dispose();
+    _suburbController.dispose();
+    _addressController.dispose();
+    _paymentMethodsController.dispose();
+    _deliveryAreaController.dispose();
+    _deliveryFeeController.dispose();
+    _sabbathNoticeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _bootstrap() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final seller =
+          widget.initialSeller ?? await SellerService.fetchMySellerProfile();
+      if (seller == null) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = 'You haven\'t set up a store yet.';
+        });
+        return;
+      }
+      _seller = seller;
+      _businessNameController.text = seller.businessName;
+      _descriptionController.text = seller.description ?? '';
+      _contactNameController.text = seller.contactName ?? '';
+      _phoneController.text = seller.phone;
+      _whatsappController.text = seller.whatsapp ?? '';
+      _cityController.text = seller.city ?? '';
+      _suburbController.text = seller.suburb ?? '';
+      _addressController.text = seller.address ?? '';
+      _paymentMethodsController.text = seller.paymentMethods ?? '';
+      _deliveryAreaController.text = seller.deliveryArea ?? '';
+      _deliveryFeeController.text = seller.deliveryFee ?? '';
+      _sabbathNoticeController.text = seller.sabbathNoticeText ??
+          '🕊️ This seller observes the Sabbath. Response times may be slower Friday sundown to Saturday sundown.';
+      _selectedProvince = seller.province;
+      _photoUrl = seller.profilePhotoUrl;
+      _offersDelivery = seller.offersDelivery;
+      _observesSabbath = seller.observesSabbath;
+      _isActive = seller.isActive;
+      if (!mounted) return;
+      setState(() => _loading = false);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not load your store. Pull to retry.';
+      });
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    if (_uploading) return;
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      final url = await StorageService.pickAndUploadProfilePhoto();
+      if (!mounted) return;
+      if (url != null) setState(() => _photoUrl = url);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload photo. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() => _error = null);
+    if (_seller == null) return;
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedProvince == null) {
+      setState(() => _error = 'Pick a province.');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await SellerService.updateMySellerProfile(
+        sellerId: _seller!.id,
+        businessName: _businessNameController.text,
+        description: _descriptionController.text,
+        province: _selectedProvince,
+        city: _cityController.text,
+        suburb: _suburbController.text,
+        address: _addressController.text,
+        phone: _phoneController.text,
+        whatsapp: _whatsappController.text,
+        contactName: _contactNameController.text,
+        profilePhotoUrl: _photoUrl,
+        paymentMethods: _paymentMethodsController.text,
+        offersDelivery: _offersDelivery,
+        deliveryArea: _offersDelivery ? _deliveryAreaController.text : '',
+        deliveryFee: _offersDelivery ? _deliveryFeeController.text : '',
+        observesSabbath: _observesSabbath,
+        sabbathNoticeText:
+            _observesSabbath ? _sabbathNoticeController.text : '',
+        isActive: _isActive,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Store updated.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String? _validateName(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Business name is required';
+    if (v.trim().length < 2) return 'Enter a real business name';
+    return null;
+  }
+
+  String? _validateDescription(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Tell buyers what you sell';
+    if (v.trim().length < 20) return 'At least 20 characters';
+    if (v.length > 600) return 'Keep it under 600 characters';
+    return null;
+  }
+
+  String? _validatePhone(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Phone number is required';
+    final digits = v.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 9) return 'Enter a valid phone number';
+    return null;
+  }
+
+  String? _validateRequired(String? v, String field) {
+    if (v == null || v.trim().isEmpty) return '$field is required';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.lightGrey,
+      body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          children: [
+            _buildHero(),
+            AnimatedBuilder(
+              animation: _entrance,
+              builder: (context, child) => Opacity(
+                opacity: _fade.value,
+                child: Transform.translate(
+                  offset: Offset(0, _slide.value),
+                  child: child,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: _buildContent(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 80),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primaryBlue),
+        ),
+      );
+    }
+    if (_seller == null) {
+      return _ErrorCard(message: _error ?? 'Store not found.');
+    }
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _CategoryReadonly(category: _seller!.category),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Business profile',
+            subtitle: 'How buyers recognise you on the marketplace.',
+            child: Column(
+              children: [
+                _PhotoTile(
+                  photoUrl: _photoUrl,
+                  uploading: _uploading,
+                  onTap: _pickPhoto,
+                ),
+                const SizedBox(height: 18),
+                _LabeledField(
+                  label: 'Business name',
+                  child: _Input(
+                    controller: _businessNameController,
+                    hint: 'Tendai Crafts',
+                    icon: Icons.storefront_outlined,
+                    validator: _validateName,
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _LabeledField(
+                  label: 'Description',
+                  helper: '${_descriptionController.text.length}/600',
+                  child: TextFormField(
+                    controller: _descriptionController,
+                    validator: _validateDescription,
+                    maxLength: 600,
+                    maxLines: 4,
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) => setState(() {}),
+                    style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                    decoration: _filledDecoration(
+                      icon: Icons.notes_outlined,
+                      hint: 'What you sell and why people buy from you.',
+                    ).copyWith(counterText: ''),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Location',
+            subtitle: 'Buyers see your province + city on listings.',
+            child: Column(
+              children: [
+                _LabeledField(
+                  label: 'Province',
+                  child: _ProvincePicker(
+                    selected: _selectedProvince,
+                    onChanged: (v) => setState(() => _selectedProvince = v),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _LabeledField(
+                  label: 'City / town',
+                  child: _Input(
+                    controller: _cityController,
+                    hint: 'Harare',
+                    icon: Icons.location_city_outlined,
+                    validator: (v) => _validateRequired(v, 'City'),
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _LabeledField(
+                  label: 'Suburb (optional)',
+                  child: _Input(
+                    controller: _suburbController,
+                    hint: 'Avondale',
+                    icon: Icons.place_outlined,
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _LabeledField(
+                  label: 'Physical address (optional)',
+                  child: _Input(
+                    controller: _addressController,
+                    hint: 'Shop number, street',
+                    icon: Icons.home_outlined,
+                    textCapitalization: TextCapitalization.sentences,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Contact',
+            subtitle: 'How buyers reach you.',
+            child: Column(
+              children: [
+                _LabeledField(
+                  label: 'Contact name (optional)',
+                  child: _Input(
+                    controller: _contactNameController,
+                    hint: 'Tendai Moyo',
+                    icon: Icons.person_outline,
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _LabeledField(
+                  label: 'Phone number',
+                  child: _Input(
+                    controller: _phoneController,
+                    hint: '+263 77 123 4567',
+                    icon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                    validator: _validatePhone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'[0-9+\s\-]'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _LabeledField(
+                  label: 'WhatsApp number (optional)',
+                  child: _Input(
+                    controller: _whatsappController,
+                    hint: '+263 77 123 4567',
+                    icon: Icons.chat_bubble_outline,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'[0-9+\s\-]'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _LabeledField(
+                  label: 'Payment methods (optional)',
+                  child: _Input(
+                    controller: _paymentMethodsController,
+                    hint: 'EcoCash, bank transfer, cash',
+                    icon: Icons.payments_outlined,
+                    textCapitalization: TextCapitalization.sentences,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Delivery',
+            subtitle: 'Tell buyers if you deliver.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ToggleRow(
+                  value: _offersDelivery,
+                  onChanged: (v) => setState(() => _offersDelivery = v),
+                  title: 'I offer delivery',
+                  subtitle: 'Adds a delivery badge to your listings.',
+                  icon: Icons.local_shipping_outlined,
+                ),
+                if (_offersDelivery) ...[
+                  const SizedBox(height: 18),
+                  _LabeledField(
+                    label: 'Delivery area',
+                    child: _Input(
+                      controller: _deliveryAreaController,
+                      hint: 'Greater Harare',
+                      icon: Icons.map_outlined,
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  _LabeledField(
+                    label: 'Delivery fee',
+                    child: _Input(
+                      controller: _deliveryFeeController,
+                      hint: r'$5 within CBD, $10 suburbs',
+                      icon: Icons.attach_money_outlined,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Sabbath observance',
+            subtitle: 'Adds a gentle badge that explains your hours.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ToggleRow(
+                  value: _observesSabbath,
+                  onChanged: (v) => setState(() => _observesSabbath = v),
+                  title: 'I observe the Sabbath',
+                  subtitle: 'Friday sundown to Saturday sundown.',
+                  icon: Icons.brightness_3_outlined,
+                ),
+                if (_observesSabbath) ...[
+                  const SizedBox(height: 18),
+                  _LabeledField(
+                    label: 'Sabbath notice',
+                    child: TextFormField(
+                      controller: _sabbathNoticeController,
+                      maxLines: 3,
+                      maxLength: 200,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                      decoration: _filledDecoration(
+                        icon: Icons.info_outline,
+                        hint: 'Shown alongside your listings.',
+                      ).copyWith(counterText: ''),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Store visibility',
+            subtitle: 'Pause your store without deleting it.',
+            child: _ToggleRow(
+              value: _isActive,
+              onChanged: (v) => setState(() => _isActive = v),
+              title: _isActive ? 'Store is active' : 'Store is paused',
+              subtitle: _isActive
+                  ? 'Your listings are visible on the marketplace.'
+                  : 'Buyers see your products as unavailable.',
+              icon: _isActive
+                  ? Icons.toggle_on_outlined
+                  : Icons.toggle_off_outlined,
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            _ErrorBanner(message: _error!),
+          ],
+          const SizedBox(height: 24),
+          _GradientButton(
+            label: _saving ? 'Saving...' : 'Save changes',
+            busy: _saving,
+            onTap: _saving ? null : _save,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHero() {
+    return ClipPath(
+      clipper: _HeroClipper(),
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 36),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _CircleIconButton(
+                      icon: Icons.arrow_back_ios_new,
+                      onTap: () => context.canPop()
+                          ? context.pop()
+                          : context.goNamed('seller_dashboard'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'STORE SETTINGS',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.white.withValues(alpha: 0.55),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Edit your storefront',
+                        style: AppTextStyles.displayMedium.copyWith(
+                          color: AppColors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Update business profile, contact, delivery and Sabbath hours.',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _filledDecoration({
+    required IconData icon,
+    required String hint,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      prefixIcon: Padding(
+        padding: const EdgeInsets.only(left: 14, right: 10),
+        child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+      ),
+      prefixIconConstraints:
+          const BoxConstraints(minWidth: 44, minHeight: 44),
+      filled: true,
+      fillColor: AppColors.lightGrey,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide:
+            const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.red, width: 1.5),
+      ),
+    );
+  }
+}
+
+class _CategoryReadonly extends StatelessWidget {
+  const _CategoryReadonly({required this.category});
+  final String category;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = SellerCategory.labelFor(category);
+    final icon = SellerCategory.all
+        .firstWhere(
+          (c) => c.id == category,
+          orElse: () => const SellerCategory(
+            id: 'other',
+            label: 'Other',
+            icon: '✨',
+          ),
+        )
+        .icon;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(icon, style: const TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'STORE CATEGORY',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Contact support to change category.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.lock_outline,
+            color: Color.fromRGBO(26, 26, 46, 0.4),
+            size: 18,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 28);
+    path.quadraticBezierTo(
+      size.width / 2,
+      size.height,
+      size.width,
+      size.height - 28,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.white.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+          ),
+          child: Icon(icon, color: AppColors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: AppTextStyles.titleMedium.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.6),
+            ),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _LabeledField extends StatelessWidget {
+  const _LabeledField({
+    required this.label,
+    required this.child,
+    this.helper,
+  });
+
+  final String label;
+  final Widget child;
+  final String? helper;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: AppTextStyles.labelSmall.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const Spacer(),
+            if (helper != null)
+              Text(
+                helper!,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  fontSize: 11,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
+class _Input extends StatelessWidget {
+  const _Input({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.keyboardType,
+    this.validator,
+    this.inputFormatters,
+    this.textCapitalization = TextCapitalization.none,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final TextInputType? keyboardType;
+  final String? Function(String?)? validator;
+  final List<TextInputFormatter>? inputFormatters;
+  final TextCapitalization textCapitalization;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      validator: validator,
+      inputFormatters: inputFormatters,
+      textCapitalization: textCapitalization,
+      style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: 14, right: 10),
+          child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+        ),
+        prefixIconConstraints:
+            const BoxConstraints(minWidth: 44, minHeight: 44),
+        filled: true,
+        fillColor: AppColors.lightGrey,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.red),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.red, width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProvincePicker extends StatelessWidget {
+  const _ProvincePicker({required this.selected, required this.onChanged});
+
+  final String? selected;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String?>(
+      initialValue: selected,
+      isExpanded: true,
+      icon: const Icon(
+        Icons.expand_more,
+        color: Color.fromRGBO(26, 26, 46, 0.5),
+      ),
+      style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+      decoration: InputDecoration(
+        prefixIcon: const Padding(
+          padding: EdgeInsets.only(left: 14, right: 10),
+          child: Icon(
+            Icons.map_outlined,
+            color: AppColors.primaryBlue,
+            size: 20,
+          ),
+        ),
+        prefixIconConstraints:
+            const BoxConstraints(minWidth: 44, minHeight: 44),
+        filled: true,
+        fillColor: AppColors.lightGrey,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+        ),
+      ),
+      hint: Text(
+        'Choose a province',
+        style: AppTextStyles.bodyLarge.copyWith(
+          color: const Color.fromRGBO(26, 26, 46, 0.5),
+          fontSize: 15,
+        ),
+      ),
+      items: [
+        for (final p in sellerProvinces)
+          DropdownMenuItem<String?>(value: p, child: Text(p)),
+      ],
+      onChanged: onChanged,
+    );
+  }
+}
+
+class _PhotoTile extends StatelessWidget {
+  const _PhotoTile({
+    required this.photoUrl,
+    required this.uploading,
+    required this.onTap,
+  });
+
+  final String? photoUrl;
+  final bool uploading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = photoUrl != null && photoUrl!.isNotEmpty;
+    return Row(
+      children: [
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            gradient: hasPhoto ? null : AppColors.primaryGradient,
+            color: hasPhoto ? AppColors.lightGrey : null,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            image: hasPhoto
+                ? DecorationImage(
+                    image: NetworkImage(photoUrl!),
+                    fit: BoxFit.cover,
+                  )
+                : null,
+          ),
+          child: hasPhoto
+              ? null
+              : const Icon(
+                  Icons.storefront,
+                  color: AppColors.white,
+                  size: 32,
+                ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Store logo / photo',
+                style: AppTextStyles.titleSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                hasPhoto
+                    ? 'Looks great. Tap change to swap it.'
+                    : 'Optional — a logo or shopfront photo.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: uploading ? null : onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.4),
+                ),
+              ),
+              child: uploading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primaryBlue,
+                      ),
+                    )
+                  : Text(
+                      hasPhoto ? 'Change' : 'Upload',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.value,
+    required this.onChanged,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.titleSmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: AppColors.primaryBlue,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GradientButton extends StatelessWidget {
+  const _GradientButton({
+    required this.label,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onTap == null && !busy ? 0.6 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withValues(alpha: 0.30),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Center(
+                child: busy
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: AppColors.white,
+                        ),
+                      )
+                    : Text(
+                        label,
+                        style: AppTextStyles.buttonText.copyWith(
+                          fontSize: 15,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.cloud_off_outlined,
+            size: 48,
+            color: Color.fromRGBO(26, 26, 46, 0.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.red.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: AppColors.red, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.red,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

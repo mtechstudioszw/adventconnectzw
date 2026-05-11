@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/event_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/main_bottom_nav.dart';
@@ -30,6 +31,11 @@ class _HomeScreenState extends State<HomeScreen>
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
   int _unreadNotifications = 0;
+  UrgentBanner? _banner;
+  // Banners dismissed in this session — kept in memory only so the
+  // user sees fresh banners on relaunch but isn't pestered after they
+  // already swiped one away.
+  final Set<String> _dismissedBannerIds = <String>{};
   bool _loading = true;
   StreamSubscription<AuthState>? _authSub;
 
@@ -68,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen>
         ChurchService.fetchUserFollowedChurchIds(),
         EventService.fetchUserRsvpedEventIds(),
         NotificationService.unreadCount(),
+        UrgentBannerService.fetchActive(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -76,6 +83,7 @@ class _HomeScreenState extends State<HomeScreen>
         _followedChurchIds = results[2] as Set<String>;
         _rsvpedEventIds = results[3] as Set<String>;
         _unreadNotifications = results[4] as int;
+        _banner = results[5] as UrgentBanner?;
         _loading = false;
       });
     } catch (_) {
@@ -137,6 +145,19 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
+                if (_banner != null &&
+                    !_dismissedBannerIds.contains(_banner!.id)) ...[
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _UrgentBannerCard(
+                      banner: _banner!,
+                      onDismiss: () => setState(
+                        () => _dismissedBannerIds.add(_banner!.id),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 _buildSectionHeader('Quick stats', null),
                 const SizedBox(height: 12),
@@ -480,6 +501,98 @@ class _HeaderClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+class _UrgentBannerCard extends StatelessWidget {
+  const _UrgentBannerCard({required this.banner, required this.onDismiss});
+
+  final UrgentBanner banner;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
+      decoration: BoxDecoration(
+        color: AppColors.red.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.red,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        banner.title,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: AppColors.red,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (banner.conference?.isNotEmpty == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.red.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          banner.conference!.toUpperCase(),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.red,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  banner.body,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.85),
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            color: AppColors.red.withValues(alpha: 0.7),
+            visualDensity: VisualDensity.compact,
+            onPressed: onDismiss,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _NotificationBell extends StatelessWidget {

@@ -4,10 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/seller_rating_service.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/product_card.dart';
+import '../../widgets/rate_seller_sheet.dart';
 
 /// Public storefront view. Buyers reach this from product_details → tap
 /// seller, or from any future "Featured sellers" surface. Shows store
@@ -42,8 +45,19 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
 
   Seller? _seller;
   List<Product> _products = const [];
+  List<SellerRating> _reviews = const [];
+  SellerRating? _myReview;
   bool _loading = true;
   String? _error;
+
+  /// True when the signed-in user is a different person from this
+  /// seller — only then do we show the "Rate this seller" CTA.
+  bool get _canRate {
+    final me = AuthService.currentUser;
+    final seller = _seller;
+    if (me == null || seller == null) return false;
+    return seller.authUserId.isNotEmpty && me.id != seller.authUserId;
+  }
 
   @override
   void initState() {
@@ -77,17 +91,73 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         SellerService.fetchPublicProductsByAuthUserId(widget.authUserId),
       ]);
       if (!mounted) return;
+      final seller = (results[0] as Seller?) ?? _seller;
       setState(() {
-        _seller = (results[0] as Seller?) ?? _seller;
+        _seller = seller;
         _products = results[1] as List<Product>;
         _loading = false;
       });
+      // Ratings depend on the seller row's BIGSERIAL id, so they
+      // happen in a second pass once the seller has loaded.
+      if (seller != null) _loadRatings(seller.id);
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = 'Could not load this seller. Pull to retry.';
       });
+    }
+  }
+
+  Future<void> _loadRatings(String sellerId) async {
+    try {
+      final results = await Future.wait([
+        SellerRatingService.fetchForSeller(sellerId),
+        SellerRatingService.fetchMine(sellerId),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _reviews = results[0] as List<SellerRating>;
+        _myReview = results[1] as SellerRating?;
+      });
+    } catch (_) {
+      // Reviews are non-essential — fail silently rather than blocking
+      // the profile screen from rendering.
+    }
+  }
+
+  Future<void> _openRateSheet() async {
+    final seller = _seller;
+    if (seller == null) return;
+    final result = await showModalBottomSheet<SellerRating?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => RateSellerSheet(
+        sellerId: seller.id,
+        sellerName: seller.businessName,
+        existing: _myReview,
+      ),
+    );
+    if (!mounted) return;
+    // result==null can mean two things: the sheet was dismissed
+    // without saving, OR the user removed their review. We can tell
+    // them apart by comparing to _myReview's previous state, but
+    // either way a refresh keeps the UI honest.
+    await _bootstrap();
+    if (result != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Thanks — your review is live.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
     }
   }
 
@@ -246,6 +316,15 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                       pathParameters: {'id': p.id},
                       extra: p,
                     ),
+                  ),
+                  const SizedBox(height: 20),
+                  _ReviewsSection(
+                    reviews: _reviews,
+                    average: seller.rating,
+                    totalCount: seller.ratingCount,
+                    myReview: _myReview,
+                    canRate: _canRate,
+                    onRate: _openRateSheet,
                   ),
                   const SizedBox(height: 20),
                   _ReportButton(onTap: _showReport),
@@ -1189,6 +1268,311 @@ class _ReportSheetState extends State<_ReportSheet> {
         ),
       ),
     );
+  }
+}
+
+class _ReviewsSection extends StatelessWidget {
+  const _ReviewsSection({
+    required this.reviews,
+    required this.average,
+    required this.totalCount,
+    required this.myReview,
+    required this.canRate,
+    required this.onRate,
+  });
+
+  final List<SellerRating> reviews;
+  final double average;
+  final int totalCount;
+  final SellerRating? myReview;
+  final bool canRate;
+  final VoidCallback onRate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Text(
+                'REVIEWS',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const Spacer(),
+              if (totalCount > 0)
+                Text(
+                  '$totalCount',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _RatingSummary(average: average, totalCount: totalCount),
+              if (canRate) ...[
+                const SizedBox(height: 14),
+                _RateCta(
+                  isEditing: myReview != null,
+                  myStars: myReview?.rating ?? 0,
+                  onTap: onRate,
+                ),
+              ],
+              if (reviews.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                const Divider(height: 1, color: Color(0x14000000)),
+                const SizedBox(height: 12),
+                for (final r in reviews) ...[
+                  _ReviewRow(review: r),
+                  if (r != reviews.last)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(
+                        height: 1,
+                        color: Color(0x10000000),
+                      ),
+                    ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RatingSummary extends StatelessWidget {
+  const _RatingSummary({required this.average, required this.totalCount});
+
+  final double average;
+  final int totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasRatings = totalCount > 0;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          hasRatings ? average.toStringAsFixed(1) : '—',
+          style: AppTextStyles.displayMedium.copyWith(
+            color: AppColors.primaryBlue,
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            height: 1,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _StarStrip(value: average),
+              const SizedBox(height: 4),
+              Text(
+                hasRatings
+                    ? '$totalCount ${totalCount == 1 ? 'review' : 'reviews'}'
+                    : 'No reviews yet — be the first.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StarStrip extends StatelessWidget {
+  const _StarStrip({required this.value, this.size = 18});
+
+  final double value;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(5, (i) {
+        final filled = value >= i + 1;
+        final half = !filled && value > i && value < i + 1;
+        return Padding(
+          padding: const EdgeInsets.only(right: 2),
+          child: Icon(
+            half
+                ? Icons.star_half_rounded
+                : (filled
+                    ? Icons.star_rounded
+                    : Icons.star_outline_rounded),
+            size: size,
+            color: filled || half
+                ? AppColors.goldAccent
+                : const Color.fromRGBO(26, 26, 46, 0.3),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _RateCta extends StatelessWidget {
+  const _RateCta({
+    required this.isEditing,
+    required this.myStars,
+    required this.onTap,
+  });
+
+  final bool isEditing;
+  final int myStars;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: AppColors.primaryBlue.withValues(alpha: 0.06),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.25),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.rate_review_outlined,
+                color: AppColors.primaryBlue,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isEditing
+                          ? 'Update your review'
+                          : 'Rate this seller',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (isEditing) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            'You gave them',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: const Color.fromRGBO(26, 26, 46, 0.6),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _StarStrip(
+                            value: myStars.toDouble(),
+                            size: 13,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                color: AppColors.primaryBlue,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewRow extends StatelessWidget {
+  const _ReviewRow({required this.review});
+
+  final SellerRating review;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _StarStrip(value: review.rating.toDouble(), size: 15),
+            const Spacer(),
+            Text(
+              _relative(review.createdAt),
+              style: AppTextStyles.labelSmall.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.55),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+        if (review.review != null && review.review!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            review.review!,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.8),
+              height: 1.45,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _relative(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inDays >= 30) {
+      final months = (diff.inDays / 30).floor();
+      return '${months}mo ago';
+    }
+    if (diff.inDays >= 1) return '${diff.inDays}d ago';
+    if (diff.inHours >= 1) return '${diff.inHours}h ago';
+    if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
+    return 'just now';
   }
 }
 

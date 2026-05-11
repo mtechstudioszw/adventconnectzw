@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/messaging_service.dart';
@@ -32,6 +33,14 @@ class _ChatScreenState extends State<ChatScreen>
   bool _sending = false;
   String? _error;
 
+  // Typing indicator state.
+  RealtimeChannel? _typingChannel;
+  Timer? _typingExpiry;
+  Timer? _typingThrottle;
+  bool _otherTyping = false;
+  DateTime _lastTypingBroadcast =
+      DateTime.fromMillisecondsSinceEpoch(0);
+
   late final AnimationController _entrance;
   late final Animation<double> _fade;
   late final Animation<double> _slide;
@@ -53,6 +62,12 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     _stream?.cancel();
+    _typingExpiry?.cancel();
+    _typingThrottle?.cancel();
+    final ch = _typingChannel;
+    if (ch != null) {
+      Supabase.instance.client.removeChannel(ch);
+    }
     _inputController.dispose();
     _scrollController.dispose();
     _entrance.dispose();
@@ -69,12 +84,36 @@ class _ChatScreenState extends State<ChatScreen>
         _loading = false;
       });
       _scrollToBottom();
+      // Mark anything they sent us as read — best-effort, fire and forget.
+      unawaited(MessagingService.markConversationRead(widget.conversationId));
       _stream =
           MessagingService.streamMessages(widget.conversationId).listen((list) {
         if (!mounted) return;
         setState(() => _messages = list);
         _scrollToBottom();
+        // Any new inbound rows? Mark them read so the sender sees the
+        // double-tick in near-real time.
+        final me = AuthService.currentUser?.id;
+        if (me != null &&
+            list.any((m) => m.senderId != me && !m.read)) {
+          unawaited(
+            MessagingService.markConversationRead(widget.conversationId),
+          );
+        }
       });
+      _typingChannel = MessagingService.subscribeTyping(
+        conversationId: widget.conversationId,
+        onTyping: (_) {
+          if (!mounted) return;
+          setState(() => _otherTyping = true);
+          // Auto-clear if no follow-up ping arrives — sender is debouncing
+          // at 2s so 4s of silence means they stopped.
+          _typingExpiry?.cancel();
+          _typingExpiry = Timer(const Duration(seconds: 4), () {
+            if (mounted) setState(() => _otherTyping = false);
+          });
+        },
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -82,6 +121,20 @@ class _ChatScreenState extends State<ChatScreen>
         _loading = false;
       });
     }
+  }
+
+  /// Called from the text field on every keystroke. Throttled to one
+  /// broadcast every 1.8s so we don't flood the channel.
+  void _onInputChanged(String _) {
+    final channel = _typingChannel;
+    if (channel == null) return;
+    final now = DateTime.now();
+    if (now.difference(_lastTypingBroadcast) <
+        const Duration(milliseconds: 1800)) {
+      return;
+    }
+    _lastTypingBroadcast = now;
+    MessagingService.broadcastTyping(channel);
   }
 
   void _scrollToBottom() {
@@ -171,13 +224,29 @@ class _ChatScreenState extends State<ChatScreen>
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        'Active member',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.7),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        child: _otherTyping
+                            ? Text(
+                                'typing…',
+                                key: const ValueKey('typing'),
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.white,
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              )
+                            : Text(
+                                'Active member',
+                                key: const ValueKey('idle'),
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color:
+                                      AppColors.white.withValues(alpha: 0.7),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                       ),
                     ],
                   ),
@@ -293,12 +362,27 @@ class _ChatScreenState extends State<ChatScreen>
                       isMine ? 8 : 0,
                       6,
                     ),
-                    child: Text(
-                      _stamp(m.createdAt),
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.45),
-                        fontSize: 10.5,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _stamp(m.createdAt),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: const Color.fromRGBO(26, 26, 46, 0.45),
+                            fontSize: 10.5,
+                          ),
+                        ),
+                        if (isMine) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            m.read ? Icons.done_all : Icons.done,
+                            size: 13,
+                            color: m.read
+                                ? AppColors.primaryBlue
+                                : const Color.fromRGBO(26, 26, 46, 0.45),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
               ],
@@ -355,6 +439,7 @@ class _ChatScreenState extends State<ChatScreen>
                         vertical: 12,
                       ),
                     ),
+                    onChanged: _onInputChanged,
                     onSubmitted: (_) => _send(),
                   ),
                 ),

@@ -76,6 +76,11 @@ class Message {
     required this.senderName,
     required this.content,
     required this.createdAt,
+    this.read = false,
+    this.readAt,
+    this.messageType = 'text',
+    this.mediaUrl,
+    this.mediaDurationSeconds,
   });
 
   final String id;
@@ -84,6 +89,11 @@ class Message {
   final String senderName;
   final String content;
   final DateTime createdAt;
+  final bool read;
+  final DateTime? readAt;
+  final String messageType;
+  final String? mediaUrl;
+  final int? mediaDurationSeconds;
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
@@ -94,6 +104,13 @@ class Message {
       content: (json['content'] ?? '') as String,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      read: json['read'] == true,
+      readAt: json['read_at'] == null
+          ? null
+          : DateTime.tryParse(json['read_at'].toString()),
+      messageType: (json['message_type'] ?? 'text') as String,
+      mediaUrl: json['media_url'] as String?,
+      mediaDurationSeconds: (json['media_duration_seconds'] as num?)?.toInt(),
     );
   }
 }

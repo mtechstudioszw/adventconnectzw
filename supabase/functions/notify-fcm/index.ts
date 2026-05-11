@@ -13,7 +13,14 @@
 //
 //  Deploy:
 //    supabase functions deploy notify-fcm
+//
+//  This file runs on Deno (Supabase Edge Functions), not Node.js. The
+//  @ts-nocheck pragma silences VS Code's Node-flavoured TypeScript
+//  checker (it doesn't know about `Deno.*` globals or URL imports).
+//  The file is still fully type-checked when deployed.
 // =====================================================================
+
+// @ts-nocheck
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

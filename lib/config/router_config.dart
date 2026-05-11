@@ -46,6 +46,7 @@ import '../screens/legal/guidelines_screen.dart';
 import '../screens/legal/privacy_screen.dart';
 import '../screens/legal/terms_screen.dart';
 import '../screens/marketplace/add_product_screen.dart';
+import '../screens/marketplace/category_screen.dart';
 import '../screens/marketplace/marketplace_screen.dart';
 import '../screens/marketplace/product_details_screen.dart';
 import '../screens/messaging/chat_screen.dart';
@@ -56,6 +57,7 @@ import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
+import '../screens/profile/notification_centre_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/seller/edit_store_screen.dart';
 import '../screens/seller/manage_products_screen.dart';
@@ -139,6 +141,11 @@ final GoRouter appRouter = GoRouter(
           path: 'post-notice',
           name: 'post_notice',
           builder: (context, state) => const PostNoticeScreen(),
+        ),
+        GoRoute(
+          path: 'notifications',
+          name: 'notification_centre',
+          builder: (context, state) => const NotificationCentreScreen(),
         ),
       ],
     ),
@@ -250,6 +257,20 @@ final GoRouter appRouter = GoRouter(
           path: 'add',
           name: 'add_product',
           builder: (context, state) => const AddProductScreen(),
+        ),
+        GoRoute(
+          path: 'categories',
+          name: 'categories',
+          builder: (context, state) => const CategoryScreen(),
+          routes: [
+            GoRoute(
+              path: ':id',
+              name: 'category',
+              builder: (context, state) => CategoryScreen(
+                categoryId: state.pathParameters['id'],
+              ),
+            ),
+          ],
         ),
         GoRoute(
           path: ':id',

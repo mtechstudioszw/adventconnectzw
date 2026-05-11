@@ -7,6 +7,7 @@ import '../../models/event_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/event_service.dart';
+import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/main_bottom_nav.dart';
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Church> _churches = [];
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
+  int _unreadNotifications = 0;
   bool _loading = true;
   StreamSubscription<AuthState>? _authSub;
 
@@ -65,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen>
         ChurchService.fetchChurches(),
         ChurchService.fetchUserFollowedChurchIds(),
         EventService.fetchUserRsvpedEventIds(),
+        NotificationService.unreadCount(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -72,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen>
         _churches = (results[1] as List<Church>).take(6).toList();
         _followedChurchIds = results[2] as Set<String>;
         _rsvpedEventIds = results[3] as Set<String>;
+        _unreadNotifications = results[4] as int;
         _loading = false;
       });
     } catch (_) {
@@ -239,8 +243,11 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                           ),
                           _NotificationBell(
-                            unread: 0,
-                            onTap: () {},
+                            unread: _unreadNotifications,
+                            onTap: () async {
+                              await context.pushNamed('notification_centre');
+                              if (mounted) _bootstrap();
+                            },
                           ),
                         ],
                       ),

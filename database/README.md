@@ -4,8 +4,12 @@ Production-ready SQL for the **Advent Connect ZW** Supabase project.
 
 | File | Purpose |
 | --- | --- |
-| `schema.sql` | All 11 tables, indexes, triggers, and Row-Level-Security policies. **Required.** |
+| `schema.sql` | The 11 core tables, indexes, triggers, RLS policies. **Required.** Run first. |
+| `patch_001_auth_profile_trigger.sql` | Auto-creates a `public.profiles` row on signup. **Required.** |
+| `patch_002_v4_completion.sql` | Adds 14 more V4 tables (sellers, saved_listings, announcements, church_admins, church_edit_suggestions, church_suggestions, notices, member_directory, notification_preferences, blocked_users, reports, notifications, seller_ratings, urgent_banners), their RLS, storage buckets + policies, and the DB-driven in-app notification triggers. **Required.** |
 | `seed_data.sql` | Sample data for development / staging. **Optional.** |
+
+Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `seed_data.sql`.
 
 ## Tables created (11)
 
@@ -210,15 +214,32 @@ For production, manage incremental changes via Supabase migrations (`supabase mi
 
 ---
 
-## What is intentionally **not** in this schema
+## What patch_002 adds
 
-The full V4 reference defines 31 tables. The following are deferred:
+| # | Table | Used by |
+|---|---|---|
+| 12 | `sellers` | Seller flow (setup, dashboard, edit store, public storefront) |
+| 13 | `saved_listings` | Heart-icon saves + `saved_listings_screen` |
+| 14 | `church_admins` | `claim_church_screen`, `admin_login_screen`, admin gate |
+| 15 | `church_edit_suggestions` | `suggest_edit_screen`, `pending_approvals_screen` |
+| 16 | `church_suggestions` | `suggest_church_screen` |
+| 17 | `announcements` | `church_announcements_screen`, `admin_dashboard_screen` |
+| 18 | `notices` | `post_notice_screen` |
+| 19 | `member_directory` | `member_directory_screen`, `my_directory_profile_screen` |
+| 20 | `notification_preferences` | `notification_preferences_screen` |
+| 21 | `blocked_users` | `blocked_users_screen` |
+| 22 | `reports` | "Report this …" flows (seller, etc.) |
+| 23 | `notifications` | `notification_centre_screen` + future FCM push |
+| 24 | `seller_ratings` | Rating UI on the public seller profile (Stage 13) |
+| 25 | `urgent_banners` | Conference / super-admin alerts on home (future) |
 
-- `church_admins`, `church_edit_suggestions`, `announcements`, `church_suggestions`
-- `sellers`, `seller_ratings`, `saved_listings`
-- `contact_requests`, `member_connections`
-- `member_directory`, `notification_preferences`, `notifications`
-- `urgent_banners`, `reports`, `blocked_users`, `notices`
-- `image_uploads`, `rate_limits`, `conference_admins`, `admin_audit_log`
+Patch 002 also:
 
-They will land in a future schema migration once their corresponding UI surfaces are built out.
+- Creates **4 storage buckets** (`profile_photos`, `product_photos`, `event_flyers`, `church_photos`) with public read and per-folder write RLS (users can only upload into `<their uid>/`).
+- Wires **DB triggers** that insert into `notifications` whenever someone RSVPs your event, prays for your request, sends you a message, or your seller/church-admin application status changes.
+
+## Still deferred
+
+- `contact_requests`, `member_connections` — connection requests between members (Stage 15 v2)
+- `conference_admins`, `admin_audit_log` — super-admin / conference-admin web tooling
+- `image_uploads`, `rate_limits` — moderation infra

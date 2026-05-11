@@ -43,6 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
+**/.gradle/
 
 # Claude Code working directory (local agent state, not project source)
 .claude/

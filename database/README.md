@@ -7,9 +7,10 @@ Production-ready SQL for the **Advent Connect ZW** Supabase project.
 | `schema.sql` | The 11 core tables, indexes, triggers, RLS policies. **Required.** Run first. |
 | `patch_001_auth_profile_trigger.sql` | Auto-creates a `public.profiles` row on signup. **Required.** |
 | `patch_002_v4_completion.sql` | Adds 14 more V4 tables (sellers, saved_listings, announcements, church_admins, church_edit_suggestions, church_suggestions, notices, member_directory, notification_preferences, blocked_users, reports, notifications, seller_ratings, urgent_banners), their RLS, storage buckets + policies, and the DB-driven in-app notification triggers. **Required.** |
+| `patch_003_voice_notes.sql` | Adds the private `voice_notes` storage bucket with conversation-participant RLS so chat voice clips stay private. **Required for voice notes in chat.** |
 | `seed_data.sql` | Sample data for development / staging. **Optional.** |
 
-Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `seed_data.sql`.
+Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `patch_003_…` → `seed_data.sql`.
 
 ## Tables created (11)
 

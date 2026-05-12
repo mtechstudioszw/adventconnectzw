@@ -6,6 +6,26 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Advent Connect needs microphone access so you can record voice notes in your private chats.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Advent Connect ZW uses your camera to upload profile and product photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Advent Connect ZW accesses your photos to upload profile and product images.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Advent Connect ZW uses your location to find SDA churches near you.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Advent Connect ZW uses Face ID to securely unlock your account.</string>
+	<!-- AdMob App ID. Currently Google's sample id for test builds.
+	     Replace with the real id from the AdMob console before
+	     shipping. See Part 24 of the master reference. -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

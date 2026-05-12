@@ -13,6 +13,8 @@ class Church {
     this.contactEmail,
     this.isVerified = false,
     this.createdAt,
+    this.latitude,
+    this.longitude,
   });
 
   final String id;
@@ -28,6 +30,10 @@ class Church {
   final String? contactEmail;
   final bool isVerified;
   final DateTime? createdAt;
+  final double? latitude;
+  final double? longitude;
+
+  bool get hasLocation => latitude != null && longitude != null;
 
   factory Church.fromJson(Map<String, dynamic> json) {
     return Church(
@@ -48,6 +54,8 @@ class Church {
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
+      latitude: _readDouble(json['latitude']),
+      longitude: _readDouble(json['longitude']),
     );
   }
 
@@ -65,6 +73,8 @@ class Church {
         'contact_email': contactEmail,
         'is_verified': isVerified,
         'created_at': createdAt?.toIso8601String(),
+        'latitude': latitude,
+        'longitude': longitude,
       };
 
   Church copyWith({
@@ -92,5 +102,12 @@ class Church {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse('$value') ?? 0;
+  }
+
+  static double? _readDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value');
   }
 }

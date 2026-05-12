@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
+import '../../services/biometric_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -23,6 +24,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _notifyMarketplace = false;
   String _language = 'English';
   bool _darkTheme = false;
+  bool _biometricEnabled = false;
+  bool _biometricAvailable = false;
 
   @override
   void initState() {
@@ -35,6 +38,28 @@ class _SettingsScreenState extends State<SettingsScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    _loadBiometricState();
+  }
+
+  Future<void> _loadBiometricState() async {
+    final available = await BiometricService.isAvailable();
+    final enabled = await BiometricService.isEnabled();
+    if (!mounted) return;
+    setState(() {
+      _biometricAvailable = available;
+      _biometricEnabled = enabled;
+    });
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    final ok = await BiometricService.setEnabled(value);
+    if (!mounted) return;
+    setState(() => _biometricEnabled = ok && value);
+    if (!ok && value) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Biometric setup failed. Try again.')),
+      );
+    }
   }
 
   @override
@@ -174,6 +199,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                           label: 'Change password',
                           onTap: _showSoon,
                         ),
+                        if (_biometricAvailable) ...[
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.fingerprint,
+                            label: 'Biometric unlock',
+                            value: _biometricEnabled,
+                            onChanged: _toggleBiometric,
+                          ),
+                        ],
                         const _Divider(),
                         _NavRow(
                           icon: Icons.delete_outline,

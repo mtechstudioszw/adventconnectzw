@@ -5,6 +5,7 @@ import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ad_banner.dart';
 import '../../widgets/event_card.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/post_form_widgets.dart';
@@ -203,6 +204,7 @@ class _EventsScreenState extends State<EventsScreen>
                 ],
               ),
             ),
+            const AdBanner(),
           ],
         ),
       ),

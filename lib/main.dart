@@ -1,14 +1,31 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'config/router_config.dart';
+import 'services/ads_service.dart';
+import 'services/analytics_service.dart';
+import 'services/cache_service.dart';
+import 'services/connectivity_service.dart';
 import 'services/push_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/offline_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Offline cache + connectivity stream — must come up before any
+  // service that wants to read cached payloads on cold start.
+  await CacheService.initialize();
+  await ConnectivityService.initialize();
+
+  // AdMob — load the SDK early so the first banner request on the
+  // home screen has the SDK ready when the screen mounts.
+  await AdsService.initialize();
 
   await Supabase.initialize(
     url: SupabaseConfig.url,
@@ -21,6 +38,17 @@ void main() async {
   // just doesn't get push.
   try {
     await Firebase.initializeApp();
+
+    // Crashlytics — route Flutter framework + async errors here so a
+    // null check or RenderFlex overflow in the field shows up in the
+    // console instead of dying silently on a user's device.
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+
+    AnalyticsService.markReady();
     await PushService.initialize();
     // Push taps deep-link into the source content. The mapping mirrors
     // notification_centre_screen._routeFor.
@@ -65,10 +93,12 @@ void main() async {
   // Route password-recovery deep links straight to the reset screen.
   // Supabase fires this event when the user opens the link from their
   // recovery email, regardless of whether the app was already running.
+  // Also keeps Analytics + Crashlytics user identity in sync.
   Supabase.instance.client.auth.onAuthStateChange.listen((data) {
     if (data.event == AuthChangeEvent.passwordRecovery) {
       appRouter.goNamed('reset_password');
     }
+    AnalyticsService.setUserId(data.session?.user.id);
   });
 
   SystemChrome.setSystemUIOverlayStyle(
@@ -97,6 +127,8 @@ class AdventConnectApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: appRouter,
+      builder: (context, child) =>
+          OfflineBanner(child: child ?? const SizedBox.shrink()),
     );
   }
 }

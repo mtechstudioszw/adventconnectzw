@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
+import '../../services/analytics_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -86,6 +87,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
       return;
     }
     await Clipboard.setData(ClipboardData(text: phone));
+    AnalyticsService.marketplaceContact(int.tryParse(widget.productId) ?? 0);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

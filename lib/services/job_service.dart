@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/job_model.dart';
+import 'analytics_service.dart';
 
 class JobService {
   JobService._();
@@ -75,6 +76,7 @@ class JobService {
       'contact_phone': contactPhone?.trim(),
       'contact_email': contactEmail?.trim(),
     }).select('id').single();
+    AnalyticsService.jobPosted(category);
     return inserted['id'].toString();
   }
 }

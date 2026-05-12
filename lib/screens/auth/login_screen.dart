@@ -78,6 +78,22 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _serverError = null;
+      _loading = true;
+    });
+    final result = await AuthService.signInWithGoogle();
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (result.isSuccess) {
+      context.goNamed('home');
+    } else if (result.errorMessage != 'Sign in cancelled.') {
+      setState(() => _serverError = result.errorMessage);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -189,6 +205,10 @@ class _LoginScreenState extends State<LoginScreen>
                         label: _loading ? 'Signing in...' : 'Log in',
                         loading: _loading,
                         onPressed: _loading ? null : _submit,
+                      ),
+                      const SizedBox(height: 14),
+                      _GoogleButton(
+                        onPressed: _loading ? null : _signInWithGoogle,
                       ),
                       const SizedBox(height: 20),
                       Row(
@@ -354,6 +374,56 @@ class _ErrorBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onPressed == null ? 0.6 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color.fromRGBO(26, 26, 46, 0.12),
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.g_mobiledata,
+                    size: 28,
+                    color: AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Continue with Google',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.darkNavy,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

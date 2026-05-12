@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/prayer_model.dart';
+import 'analytics_service.dart';
 
 class PrayerService {
   PrayerService._();
@@ -138,6 +139,7 @@ class PrayerService {
         })
         .select('*, author:author_id(full_name)')
         .single();
+    AnalyticsService.prayerPosted(visibility: visibility);
     return _hydratePrayer(inserted);
   }
 

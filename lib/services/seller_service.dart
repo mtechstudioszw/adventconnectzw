@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product_model.dart';
 import '../models/seller_model.dart';
+import 'analytics_service.dart';
 
 /// All seller-side reads/writes — the application row in `sellers`, plus
 /// product management for the currently-signed-in seller. Public reads
@@ -111,6 +112,7 @@ class SellerService {
         })
         .select()
         .single();
+    AnalyticsService.sellerApplied();
     return Seller.fromJson(inserted);
   }
 

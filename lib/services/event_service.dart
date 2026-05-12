@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/event_model.dart';
+import 'analytics_service.dart';
 
 class EventService {
   EventService._();
@@ -131,6 +132,7 @@ class EventService {
       'user_id': user.id,
       'event_id': eventId,
     });
+    AnalyticsService.eventRsvp(int.tryParse(eventId) ?? 0, 'going');
   }
 
   static Future<void> cancelRsvp(String eventId) async {

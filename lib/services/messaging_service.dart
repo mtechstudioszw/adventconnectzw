@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
+import 'analytics_service.dart';
 
 class MessagingService {
   MessagingService._();
@@ -82,7 +83,7 @@ class MessagingService {
     if ((existingRows as List).isNotEmpty) {
       convoRow = (existingRows.first as Map).cast<String, dynamic>();
     } else {
-      convoRow = (await _client
+      final inserted = await _client
           .from(_conversationsTable)
           .insert({
             'participant_a_id': user.id,
@@ -94,7 +95,8 @@ class MessagingService {
             // request_status defaults to 'pending' (patch_005).
           })
           .select()
-          .single()) as Map;
+          .single();
+      convoRow = (inserted as Map).cast<String, dynamic>();
     }
 
     final conversationId = convoRow['id'].toString();
@@ -179,6 +181,7 @@ class MessagingService {
       'last_sender_id': user.id,
       'last_message_at': message.createdAt.toIso8601String(),
     }).eq('id', conversationId);
+    AnalyticsService.messageSent(source: 'text');
     return message;
   }
 
@@ -312,6 +315,7 @@ class MessagingService {
       'last_sender_id': user.id,
       'last_message_at': message.createdAt.toIso8601String(),
     }).eq('id', conversationId);
+    AnalyticsService.messageSent(source: 'voice');
     return message;
   }
 

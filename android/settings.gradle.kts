@@ -24,6 +24,9 @@ plugins {
     // Required so the Android Gradle plugin reads android/app/google-services.json
     // and stitches Firebase config into the generated R/manifest at build time.
     id("com.google.gms.google-services") version "4.4.2" apply false
+    // Uploads native + obfuscated symbols to Crashlytics on release builds
+    // so stack traces are readable in the console.
+    id("com.google.firebase.crashlytics") version "3.0.2" apply false
 }
 
 include(":app")

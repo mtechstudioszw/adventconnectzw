@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
 import '../../services/church_service.dart';
+import '../../services/location_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ad_banner.dart';
 import '../../widgets/church_card.dart';
 import '../widgets/main_scaffold.dart';
 
@@ -24,6 +27,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   String? _selectedCity;
   bool _loading = true;
   String? _error;
+  Position? _position;
 
   @override
   void initState() {
@@ -39,7 +43,43 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   }
 
   Future<void> _bootstrap() async {
+    // Kick off location lookup in parallel — it can take a few seconds
+    // on a cold start and we don't want to block the list rendering.
+    _resolveLocation();
     await Future.wait([_loadCities(), _loadChurches()]);
+  }
+
+  Future<void> _resolveLocation() async {
+    final pos = await LocationService.getCurrentPosition();
+    if (!mounted || pos == null) return;
+    setState(() {
+      _position = pos;
+      _sortByDistance();
+    });
+  }
+
+  void _sortByDistance() {
+    final pos = _position;
+    if (pos == null) return;
+    _churches.sort((a, b) {
+      final ad = a.hasLocation
+          ? LocationService.distanceMeters(
+              fromLat: pos.latitude,
+              fromLng: pos.longitude,
+              toLat: a.latitude!,
+              toLng: a.longitude!,
+            )
+          : double.infinity;
+      final bd = b.hasLocation
+          ? LocationService.distanceMeters(
+              fromLat: pos.latitude,
+              fromLng: pos.longitude,
+              toLat: b.latitude!,
+              toLng: b.longitude!,
+            )
+          : double.infinity;
+      return ad.compareTo(bd);
+    });
   }
 
   Future<void> _loadCities() async {
@@ -63,6 +103,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       setState(() {
         _churches = list;
         _loading = false;
+        _sortByDistance();
       });
     } catch (e) {
       if (!mounted) return;
@@ -93,6 +134,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           _buildSearchBar(),
           if (_cities.isNotEmpty) _buildCityFilters(),
           Expanded(child: _buildList()),
+          const AdBanner(),
         ],
       ),
     );

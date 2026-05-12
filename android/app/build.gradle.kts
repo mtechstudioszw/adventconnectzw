@@ -5,6 +5,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
     // Apply Firebase / Google services to consume android/app/google-services.json.
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {

@@ -1,3 +1,4 @@
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'secure_storage_service.dart';
 
@@ -84,6 +85,43 @@ class AuthService {
       return AuthResult.failure(e.message);
     } catch (_) {
       return AuthResult.failure('An unexpected error occurred.');
+    }
+  }
+
+  /// Sign in via Google. Hands the Google ID + access tokens to
+  /// Supabase so it can mint a session. Returns failure if the user
+  /// cancels the picker (no error message — that's a normal cancel).
+  ///
+  /// Requires `GoogleService-Info.plist` / `google-services.json` to
+  /// reference the right OAuth client IDs — see Supabase Auth → Google
+  /// provider settings.
+  static Future<AuthResult> signInWithGoogle() async {
+    try {
+      final google = GoogleSignIn();
+      final account = await google.signIn();
+      if (account == null) {
+        return AuthResult.failure('Sign in cancelled.');
+      }
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      final accessToken = auth.accessToken;
+      if (idToken == null) {
+        return AuthResult.failure('Google sign in did not return a token.');
+      }
+      final response = await _client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+      if (response.user == null) {
+        return AuthResult.failure('Could not sign in with Google.');
+      }
+      await _persistSession(response.session);
+      return AuthResult.success(response.user);
+    } on AuthException catch (e) {
+      return AuthResult.failure(e.message);
+    } catch (_) {
+      return AuthResult.failure('Google sign in failed. Try again.');
     }
   }
 

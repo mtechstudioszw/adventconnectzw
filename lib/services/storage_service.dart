@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -17,12 +18,16 @@ class StorageService {
 
   static final SupabaseClient _client = Supabase.instance.client;
   static final ImagePicker _picker = ImagePicker();
+  static final ImageCropper _cropper = ImageCropper();
 
   /// Profile-photo bucket. Square crop, 1024 max width, ~500KB target.
+  /// Profile photos go through the cropper so the user controls framing
+  /// (faces in particular benefit from this on tall portraits).
   static Future<String?> pickAndUploadProfilePhoto() => _pickAndUpload(
         bucket: 'profile_photos',
         maxWidth: 1024,
         imageQuality: 80,
+        squareCrop: true,
       );
 
   /// Product-photo bucket. Up to 1600 wide, ~600KB target.
@@ -41,11 +46,13 @@ class StorageService {
 
   /// Generic flow used by the three convenience methods above.
   /// Returns the public URL of the uploaded file, or null if the user
-  /// cancelled the picker.
+  /// cancelled the picker. `squareCrop: true` runs the source image
+  /// through image_cropper with a locked 1:1 ratio.
   static Future<String?> _pickAndUpload({
     required String bucket,
     required double maxWidth,
     required int imageQuality,
+    bool squareCrop = false,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -59,7 +66,32 @@ class StorageService {
     );
     if (picked == null) return null;
 
-    final bytes = await picked.readAsBytes();
+    String sourcePath = picked.path;
+    if (squareCrop) {
+      final cropped = await _cropper.cropImage(
+        sourcePath: picked.path,
+        compressQuality: imageQuality,
+        maxWidth: maxWidth.toInt(),
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop photo',
+            lockAspectRatio: true,
+            hideBottomControls: true,
+          ),
+          IOSUiSettings(
+            title: 'Crop photo',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+          ),
+        ],
+      );
+      if (cropped == null) return null;
+      sourcePath = cropped.path;
+    }
+
+    final croppedFile = XFile(sourcePath);
+    final bytes = await croppedFile.readAsBytes();
     final ext = _extensionOf(picked.name);
     final path = _buildPath(userId: user.id, ext: ext);
 

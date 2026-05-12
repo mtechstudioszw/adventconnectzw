@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/church_model.dart';
+import 'analytics_service.dart';
 
 class ChurchService {
   ChurchService._();
@@ -90,6 +91,7 @@ class ChurchService {
       'user_id': user.id,
       'church_id': churchId,
     });
+    AnalyticsService.churchFollowed(int.tryParse(churchId) ?? 0);
   }
 
   static Future<void> unfollow(String churchId) async {
@@ -166,6 +168,7 @@ class ChurchService {
       'appointment_letter_url': ?appointmentLetterUrl,
       'status': 'pending',
     }, onConflict: 'church_id,user_id');
+    AnalyticsService.churchClaimed(int.tryParse(churchId) ?? 0);
   }
 
   /// Fetch a church's announcements feed. Filters out expired rows.

@@ -11,6 +11,8 @@ import '../../services/notification_service.dart';
 import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ad_banner.dart';
+import '../../widgets/shimmer_loaders.dart';
 import '../widgets/main_bottom_nav.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -187,7 +189,9 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 const SizedBox(height: 12),
                 _buildChurchGrid(),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                const AdBanner(),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -389,11 +393,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildEventsRow() {
     if (_loading && _events.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+      return SizedBox(
+        height: 200,
+        child: ShimmerLoaders.cardList(count: 2),
       );
     }
     if (_events.isEmpty) {
@@ -434,11 +436,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildChurchGrid() {
     if (_loading && _churches.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+      return SizedBox(
+        height: 200,
+        child: ShimmerLoaders.cardList(count: 2),
       );
     }
     if (_churches.isEmpty) {

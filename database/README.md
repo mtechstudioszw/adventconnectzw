@@ -9,9 +9,10 @@ Production-ready SQL for the **Advent Connect ZW** Supabase project.
 | `patch_002_v4_completion.sql` | Adds 14 more V4 tables (sellers, saved_listings, announcements, church_admins, church_edit_suggestions, church_suggestions, notices, member_directory, notification_preferences, blocked_users, reports, notifications, seller_ratings, urgent_banners), their RLS, storage buckets + policies, and the DB-driven in-app notification triggers. **Required.** |
 | `patch_003_conversations_v4.sql` | Migrates `conversations` from the legacy `participant_ids UUID[]` array form to V4 scalar columns (`participant_a_id`, `participant_b_id`, `participant_a_name`, `participant_b_name`, `last_sender_id`), rewrites the RLS, and updates the patch_002 `notify_new_message` trigger to read the new columns. **Required — every later patch and the Flutter client assume the scalar shape.** |
 | `patch_004_voice_notes.sql` | Adds the private `voice_notes` storage bucket with conversation-participant RLS so chat voice clips stay private. **Required for voice notes in chat.** |
+| `patch_005_message_requests.sql` | Adds `request_status` + `initiator_id` to conversations so first messages from strangers land in a "Requests" inbox until accepted. Also grants participants DELETE on their own conversations (used by "decline"). **Required for the message-requests UI.** |
 | `seed_data.sql` | Sample data for development / staging. **Optional.** |
 
-Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `patch_003_…` → `patch_004_…` → `seed_data.sql`.
+Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `patch_003_…` → `patch_004_…` → `patch_005_…` → `seed_data.sql`.
 
 ## Tables created (11)
 

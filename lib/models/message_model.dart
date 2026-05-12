@@ -7,6 +7,8 @@ class Conversation {
     required this.lastMessageAt,
     this.unreadCount = 0,
     this.lastSenderId,
+    this.requestStatus = 'accepted',
+    this.initiatorId,
   });
 
   final String id;
@@ -16,6 +18,14 @@ class Conversation {
   final DateTime lastMessageAt;
   final int unreadCount;
   final String? lastSenderId;
+  final String requestStatus;
+  final String? initiatorId;
+
+  /// True when this conversation is a pending message request the
+  /// current viewer hasn't accepted yet *and* isn't the initiator of —
+  /// i.e. the row should live in the Requests inbox, not the main one.
+  bool isIncomingRequestFor(String currentUserId) =>
+      requestStatus == 'pending' && initiatorId != currentUserId;
 
   factory Conversation.fromJson(
     Map<String, dynamic> json, {
@@ -41,6 +51,8 @@ class Conversation {
           DateTime.now(),
       unreadCount: _readInt(json['unread_count']),
       lastSenderId: json['last_sender_id']?.toString(),
+      requestStatus: (json['request_status'] ?? 'accepted') as String,
+      initiatorId: json['initiator_id']?.toString(),
     );
   }
 
@@ -49,6 +61,8 @@ class Conversation {
     DateTime? lastMessageAt,
     int? unreadCount,
     String? lastSenderId,
+    String? requestStatus,
+    String? initiatorId,
   }) {
     return Conversation(
       id: id,
@@ -58,6 +72,8 @@ class Conversation {
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
       lastSenderId: lastSenderId ?? this.lastSenderId,
+      requestStatus: requestStatus ?? this.requestStatus,
+      initiatorId: initiatorId ?? this.initiatorId,
     );
   }
 

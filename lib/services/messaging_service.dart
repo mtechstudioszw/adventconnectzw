@@ -17,6 +17,9 @@ class MessagingService {
   static String _typingChannelName(String conversationId) =>
       'chat:$conversationId:typing';
 
+  /// Fetches every conversation the current user is a participant in,
+  /// including pending message requests. The UI splits the result into
+  /// the Inbox / Requests buckets via [Conversation.isIncomingRequestFor].
   static Future<List<Conversation>> fetchConversations() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
@@ -34,6 +37,107 @@ class MessagingService {
               currentUserId: user.id,
             ))
         .toList();
+  }
+
+  /// Creates a conversation (or returns an existing one between the
+  /// two users) and posts [firstMessage] into it. New conversations are
+  /// inserted with `request_status='pending'` so the recipient sees it
+  /// in their Requests inbox until they accept. If a conversation
+  /// already exists between the pair in either participant ordering,
+  /// it's reused and the message is appended — no duplicate row.
+  ///
+  /// Returns the conversation (post-insert / post-update) so the caller
+  /// can immediately navigate into the chat.
+  static Future<Conversation> createConversation({
+    required String otherUserId,
+    required String otherUserName,
+    required String firstMessage,
+    String source = 'direct',
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to send a message request.');
+    }
+    final body = firstMessage.trim();
+    if (body.isEmpty) {
+      throw ArgumentError('firstMessage cannot be empty.');
+    }
+    final meta = user.userMetadata ?? const {};
+    final myName = ((meta['full_name'] as String?)?.trim().isNotEmpty == true)
+        ? (meta['full_name'] as String).trim()
+        : 'Member';
+
+    // Reuse an existing conversation between us if one already exists,
+    // regardless of which side seeded it (a/b ordering).
+    final existingRows = await _client
+        .from(_conversationsTable)
+        .select()
+        .or(
+          'and(participant_a_id.eq.${user.id},participant_b_id.eq.$otherUserId),'
+          'and(participant_a_id.eq.$otherUserId,participant_b_id.eq.${user.id})',
+        )
+        .limit(1);
+
+    Map<String, dynamic> convoRow;
+    if ((existingRows as List).isNotEmpty) {
+      convoRow = (existingRows.first as Map).cast<String, dynamic>();
+    } else {
+      convoRow = (await _client
+          .from(_conversationsTable)
+          .insert({
+            'participant_a_id': user.id,
+            'participant_b_id': otherUserId,
+            'participant_a_name': myName,
+            'participant_b_name': otherUserName,
+            'initiator_id': user.id,
+            'conversation_source': source,
+            // request_status defaults to 'pending' (patch_005).
+          })
+          .select()
+          .single()) as Map;
+    }
+
+    final conversationId = convoRow['id'].toString();
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _client.from(_messagesTable).insert({
+      'conversation_id': conversationId,
+      'sender_id': user.id,
+      'sender_name': myName,
+      'content': body,
+    });
+    await _client.from(_conversationsTable).update({
+      'last_message': body,
+      'last_sender_id': user.id,
+      'last_message_at': now,
+    }).eq('id', conversationId);
+
+    return Conversation.fromJson(
+      {
+        ...convoRow,
+        'last_message': body,
+        'last_sender_id': user.id,
+        'last_message_at': now,
+      },
+      currentUserId: user.id,
+    );
+  }
+
+  /// Promotes a pending request to a normal conversation. Idempotent.
+  static Future<void> acceptRequest(String conversationId) async {
+    await _client
+        .from(_conversationsTable)
+        .update({'request_status': 'accepted'})
+        .eq('id', conversationId);
+  }
+
+  /// Declines a pending request by deleting the conversation row.
+  /// Messages cascade away. RLS (patch_005) permits this only for
+  /// participants.
+  static Future<void> declineRequest(String conversationId) async {
+    await _client
+        .from(_conversationsTable)
+        .delete()
+        .eq('id', conversationId);
   }
 
   static Future<List<Message>> fetchMessages(String conversationId) async {

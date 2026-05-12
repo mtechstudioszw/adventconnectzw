@@ -150,6 +150,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                           : context.goNamed('home'),
                     ),
                     const Spacer(),
+                    _CircleIconButton(
+                      icon: Icons.grid_view_rounded,
+                      onTap: () => context.pushNamed('categories'),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),

@@ -1,5 +1,5 @@
 -- =====================================================================
---  PATCH 003 — Voice-notes storage bucket
+--  PATCH 004 — Voice-notes storage bucket
 --
 --  WHY:  Adds a private `voice_notes` bucket so chats can attach short
 --        audio clips. Public buckets in patch_002 are fine for product /
@@ -12,8 +12,10 @@
 --  RLS therefore needs to know:
 --   - which conversation the file belongs to (foldername index 1)
 --   - whether the calling user is a participant in that conversation
+--     (read via the scalar participant_a_id / participant_b_id columns
+--      added in patch_003).
 --
---  PREREQUISITES: schema.sql + patch_001 + patch_002 already run.
+--  PREREQUISITES: schema.sql + patch_001 + patch_002 + patch_003 run.
 --  IDEMPOTENT:    yes — `IF NOT EXISTS`, re-creatable policies.
 -- =====================================================================
 

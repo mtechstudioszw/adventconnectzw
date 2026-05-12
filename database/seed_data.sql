@@ -331,8 +331,20 @@ BEGIN
      '+263 71 444 8888', NULL, 'open');
 
   -- ---- A sample conversation thread ----
-  INSERT INTO public.conversations (participant_ids, conversation_source)
-  VALUES (ARRAY[user_a, user_c]::UUID[], 'marketplace')
+  -- Note: assumes patch_003_conversations_v4 has been applied (scalar
+  -- columns + denormalised names). Names are pulled from profiles so
+  -- the seed survives a re-import.
+  INSERT INTO public.conversations (
+    participant_a_id, participant_b_id,
+    participant_a_name, participant_b_name,
+    conversation_source
+  )
+  VALUES (
+    user_a, user_c,
+    (SELECT full_name FROM public.profiles WHERE id = user_a),
+    (SELECT full_name FROM public.profiles WHERE id = user_c),
+    'marketplace'
+  )
   RETURNING id INTO conversation_id;
 
   INSERT INTO public.messages (conversation_id, sender_id, content, read) VALUES

@@ -1,6 +1,12 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:record/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
@@ -41,6 +47,16 @@ class _ChatScreenState extends State<ChatScreen>
   DateTime _lastTypingBroadcast =
       DateTime.fromMillisecondsSinceEpoch(0);
 
+  // Voice-note recording state. We use a single AudioRecorder per
+  // chat screen and tear it down in dispose().
+  final AudioRecorder _recorder = AudioRecorder();
+  bool _recording = false;
+  String? _activeRecordingPath;
+  DateTime? _recordingStartedAt;
+  Timer? _recordingTimer;
+  Duration _recordingElapsed = Duration.zero;
+  bool _hasText = false;
+
   late final AnimationController _entrance;
   late final Animation<double> _fade;
   late final Animation<double> _slide;
@@ -56,6 +72,7 @@ class _ChatScreenState extends State<ChatScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    _enableScreenshotBlock();
     _bootstrap();
   }
 
@@ -64,6 +81,10 @@ class _ChatScreenState extends State<ChatScreen>
     _stream?.cancel();
     _typingExpiry?.cancel();
     _typingThrottle?.cancel();
+    _recordingTimer?.cancel();
+    // Best-effort stop in case user leaves the screen mid-record.
+    unawaited(_recorder.stop().catchError((_) => null));
+    unawaited(_recorder.dispose());
     final ch = _typingChannel;
     if (ch != null) {
       Supabase.instance.client.removeChannel(ch);
@@ -71,7 +92,28 @@ class _ChatScreenState extends State<ChatScreen>
     _inputController.dispose();
     _scrollController.dispose();
     _entrance.dispose();
+    _disableScreenshotBlock();
     super.dispose();
+  }
+
+  // FLAG_SECURE blocks screenshots and hides the chat from the
+  // recent-apps thumbnail while the screen is in the foreground.
+  // Android-only — iOS does not allow apps to programmatically
+  // prevent screenshots, so this is a no-op there.
+  void _enableScreenshotBlock() {
+    if (!Platform.isAndroid) return;
+    unawaited(
+      FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE)
+          .catchError((_) => true),
+    );
+  }
+
+  void _disableScreenshotBlock() {
+    if (!Platform.isAndroid) return;
+    unawaited(
+      FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE)
+          .catchError((_) => true),
+    );
   }
 
   Future<void> _bootstrap() async {
@@ -125,7 +167,11 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// Called from the text field on every keystroke. Throttled to one
   /// broadcast every 1.8s so we don't flood the channel.
-  void _onInputChanged(String _) {
+  void _onInputChanged(String value) {
+    final nowHasText = value.trim().isNotEmpty;
+    if (nowHasText != _hasText) {
+      setState(() => _hasText = nowHasText);
+    }
     final channel = _typingChannel;
     if (channel == null) return;
     final now = DateTime.now();
@@ -135,6 +181,135 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _lastTypingBroadcast = now;
     MessagingService.broadcastTyping(channel);
+  }
+
+  // ---------- Voice notes ----------
+
+  Future<bool> _ensureMicPermission() async {
+    final status = await Permission.microphone.request();
+    return status.isGranted;
+  }
+
+  Future<void> _startRecording() async {
+    if (_recording || _sending) return;
+    final granted = await _ensureMicPermission();
+    if (!granted) {
+      if (mounted) {
+        _toast('Microphone permission is required to send voice notes.');
+      }
+      return;
+    }
+    try {
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 64000,
+          sampleRate: 22050,
+          numChannels: 1,
+        ),
+        path: path,
+      );
+      if (!mounted) return;
+      setState(() {
+        _recording = true;
+        _activeRecordingPath = path;
+        _recordingStartedAt = DateTime.now();
+        _recordingElapsed = Duration.zero;
+      });
+      _recordingTimer =
+          Timer.periodic(const Duration(milliseconds: 200), (_) {
+        if (!mounted || _recordingStartedAt == null) return;
+        setState(() => _recordingElapsed =
+            DateTime.now().difference(_recordingStartedAt!));
+      });
+    } catch (_) {
+      if (mounted) _toast('Could not start recording.');
+      await _cancelRecording();
+    }
+  }
+
+  Future<void> _cancelRecording() async {
+    _recordingTimer?.cancel();
+    try {
+      await _recorder.stop();
+    } catch (_) {
+      // Already stopped or never started — ignore.
+    }
+    final path = _activeRecordingPath;
+    if (path != null) {
+      try {
+        await File(path).delete();
+      } catch (_) {
+        // File may not exist if start failed — ignore.
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _recording = false;
+      _activeRecordingPath = null;
+      _recordingStartedAt = null;
+      _recordingElapsed = Duration.zero;
+    });
+  }
+
+  Future<void> _stopAndSendRecording() async {
+    if (!_recording) return;
+    _recordingTimer?.cancel();
+    final duration = _recordingElapsed.inSeconds;
+    String? path;
+    try {
+      path = await _recorder.stop();
+    } catch (_) {
+      await _cancelRecording();
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _recording = false;
+      _recordingStartedAt = null;
+      _recordingElapsed = Duration.zero;
+    });
+    if (path == null || duration < 1) {
+      // Too short to be useful — discard.
+      if (path != null) {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
+      if (mounted) _toast('Hold longer to record a voice note.');
+      _activeRecordingPath = null;
+      return;
+    }
+    setState(() => _sending = true);
+    try {
+      await MessagingService.sendVoiceNote(
+        conversationId: widget.conversationId,
+        localFilePath: path,
+        durationSeconds: duration,
+      );
+    } catch (_) {
+      if (mounted) _toast('Could not send voice note. Please try again.');
+    } finally {
+      try {
+        await File(path).delete();
+      } catch (_) {}
+      if (mounted) setState(() => _sending = false);
+      _activeRecordingPath = null;
+    }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -409,47 +584,103 @@ class _ChatScreenState extends State<ChatScreen>
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.lightGrey,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: const Color.fromRGBO(26, 26, 46, 0.06),
-                    ),
-                  ),
-                  child: TextField(
-                    controller: _inputController,
-                    minLines: 1,
-                    maxLines: 5,
-                    textCapitalization: TextCapitalization.sentences,
-                    style: AppTextStyles.bodyMedium.copyWith(fontSize: 14.5),
-                    decoration: InputDecoration(
-                      hintText: 'Write a message',
-                      hintStyle: AppTextStyles.bodyMedium.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.5),
-                        fontSize: 14.5,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    onChanged: _onInputChanged,
-                    onSubmitted: (_) => _send(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _SendButton(busy: _sending, onTap: _send),
-            ],
-          ),
+          child: _recording ? _buildRecordingBar() : _buildComposeBar(),
         ),
       ),
+    );
+  }
+
+  Widget _buildComposeBar() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.lightGrey,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: const Color.fromRGBO(26, 26, 46, 0.06),
+              ),
+            ),
+            child: TextField(
+              controller: _inputController,
+              minLines: 1,
+              maxLines: 5,
+              textCapitalization: TextCapitalization.sentences,
+              style: AppTextStyles.bodyMedium.copyWith(fontSize: 14.5),
+              decoration: InputDecoration(
+                hintText: 'Write a message',
+                hintStyle: AppTextStyles.bodyMedium.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.5),
+                  fontSize: 14.5,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              onChanged: _onInputChanged,
+              onSubmitted: (_) => _send(),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        if (_hasText)
+          _SendButton(busy: _sending, onTap: _send)
+        else
+          _MicButton(busy: _sending, onTap: _startRecording),
+      ],
+    );
+  }
+
+  Widget _buildRecordingBar() {
+    final mm = _recordingElapsed.inMinutes.toString().padLeft(2, '0');
+    final ss = (_recordingElapsed.inSeconds % 60).toString().padLeft(2, '0');
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppColors.red.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              children: [
+                _BlinkingDot(),
+                const SizedBox(width: 10),
+                Text(
+                  'Recording',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.red,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '$mm:$ss',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textDark,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _CancelRecordingButton(onTap: _cancelRecording),
+        const SizedBox(width: 6),
+        _SendButton(busy: _sending, onTap: _stopAndSendRecording),
+      ],
     );
   }
 
@@ -467,6 +698,10 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.messageType == 'voice' &&
+        (message.mediaUrl ?? '').isNotEmpty) {
+      return _VoiceBubble(message: message, isMine: isMine);
+    }
     final maxWidth = MediaQuery.of(context).size.width * 0.74;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -498,6 +733,313 @@ class _MessageBubble extends StatelessWidget {
             fontSize: 14.5,
             height: 1.35,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VoiceBubble extends StatefulWidget {
+  const _VoiceBubble({required this.message, required this.isMine});
+  final Message message;
+  final bool isMine;
+
+  @override
+  State<_VoiceBubble> createState() => _VoiceBubbleState();
+}
+
+class _VoiceBubbleState extends State<_VoiceBubble> {
+  final AudioPlayer _player = AudioPlayer();
+  StreamSubscription<PlayerState>? _stateSub;
+  StreamSubscription<Duration>? _posSub;
+
+  bool _loading = false;
+  bool _playing = false;
+  String? _signedUrl;
+  Duration _position = Duration.zero;
+  Duration? _total;
+
+  @override
+  void initState() {
+    super.initState();
+    final declared = widget.message.mediaDurationSeconds;
+    if (declared != null && declared > 0) {
+      _total = Duration(seconds: declared);
+    }
+    _stateSub = _player.onPlayerStateChanged.listen((s) {
+      if (!mounted) return;
+      setState(() => _playing = s == PlayerState.playing);
+      if (s == PlayerState.completed) {
+        setState(() => _position = Duration.zero);
+      }
+    });
+    _posSub = _player.onPositionChanged.listen((p) {
+      if (!mounted) return;
+      setState(() => _position = p);
+    });
+  }
+
+  @override
+  void dispose() {
+    _stateSub?.cancel();
+    _posSub?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    try {
+      if (_playing) {
+        await _player.pause();
+        return;
+      }
+      if (_signedUrl == null) {
+        setState(() => _loading = true);
+        final url = await MessagingService.signedVoiceUrl(
+          widget.message.mediaUrl!,
+        );
+        if (!mounted) return;
+        _signedUrl = url;
+      }
+      await _player.play(UrlSource(_signedUrl!));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not play this voice note.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _fmt(Duration d) {
+    final mm = d.inMinutes.toString().padLeft(2, '0');
+    final ss = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMine = widget.isMine;
+    final maxWidth = MediaQuery.of(context).size.width * 0.74;
+    final fg = isMine ? AppColors.white : AppColors.textDark;
+    final muted = isMine
+        ? AppColors.white.withValues(alpha: 0.7)
+        : const Color.fromRGBO(26, 26, 46, 0.55);
+    final trackBg = isMine
+        ? AppColors.white.withValues(alpha: 0.25)
+        : const Color.fromRGBO(26, 26, 46, 0.10);
+    final total = _total ?? const Duration(seconds: 1);
+    final progress = total.inMilliseconds == 0
+        ? 0.0
+        : (_position.inMilliseconds / total.inMilliseconds)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth, minWidth: 220),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: isMine ? AppColors.primaryGradient : null,
+          color: isMine ? null : AppColors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMine ? 18 : 4),
+            bottomRight: Radius.circular(isMine ? 4 : 18),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isMine
+                  ? AppColors.primaryBlue.withValues(alpha: 0.20)
+                  : Colors.black.withValues(alpha: 0.05),
+              blurRadius: isMine ? 12 : 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: _toggle,
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isMine
+                      ? AppColors.white.withValues(alpha: 0.20)
+                      : AppColors.primaryBlue.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: _loading
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: isMine ? AppColors.white : AppColors.primaryBlue,
+                        ),
+                      )
+                    : Icon(
+                        _playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: isMine ? AppColors.white : AppColors.primaryBlue,
+                        size: 22,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 3,
+                      backgroundColor: trackBg,
+                      valueColor: AlwaysStoppedAnimation<Color>(fg),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _fmt(_playing || _position > Duration.zero
+                            ? _position
+                            : total),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: muted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Icon(Icons.mic_rounded, size: 14, color: muted),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MicButton extends StatelessWidget {
+  const _MicButton({required this.busy, required this.onTap});
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.lightGrey,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: const Color.fromRGBO(26, 26, 46, 0.08),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: busy ? null : onTap,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 46,
+            height: 46,
+            child: Icon(
+              Icons.mic_rounded,
+              color: busy
+                  ? const Color.fromRGBO(26, 26, 46, 0.4)
+                  : AppColors.primaryBlue,
+              size: 22,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CancelRecordingButton extends StatelessWidget {
+  const _CancelRecordingButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 42,
+          height: 42,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.red.withValues(alpha: 0.10),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.close_rounded,
+            color: AppColors.red,
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BlinkingDot extends StatefulWidget {
+  @override
+  State<_BlinkingDot> createState() => _BlinkingDotState();
+}
+
+class _BlinkingDotState extends State<_BlinkingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.3, end: 1.0).animate(_c),
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: const BoxDecoration(
+          color: AppColors.red,
+          shape: BoxShape.circle,
         ),
       ),
     );

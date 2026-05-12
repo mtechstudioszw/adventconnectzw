@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
 
@@ -9,6 +10,7 @@ class MessagingService {
 
   static const _conversationsTable = 'conversations';
   static const _messagesTable = 'messages';
+  static const _voiceBucket = 'voice_notes';
 
   /// Realtime Broadcast channel name for the typing indicator. Keeping
   /// the format here so subscribers and senders stay in sync.
@@ -149,5 +151,75 @@ class MessagingService {
     } catch (_) {
       // No-op: typing pings are decorative.
     }
+  }
+
+  /// Uploads a recorded voice clip and inserts a `message_type='voice'`
+  /// row. The bucket is private, so [Message.mediaUrl] stores the
+  /// storage path — playback resolves a signed URL on demand via
+  /// [signedVoiceUrl]. RLS in patch_003 ensures only conversation
+  /// participants can read/write.
+  ///
+  /// Path layout: `{conversation_id}/{sender_id}/{timestamp}.m4a` —
+  /// matches the foldername-based policies in
+  /// `database/patch_003_voice_notes.sql`.
+  static Future<Message> sendVoiceNote({
+    required String conversationId,
+    required String localFilePath,
+    required int durationSeconds,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to send voice notes.');
+    }
+    final file = File(localFilePath);
+    if (!await file.exists()) {
+      throw const StorageException('Recording not found on disk.');
+    }
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final storagePath = '$conversationId/${user.id}/$ts.m4a';
+    await _client.storage.from(_voiceBucket).upload(
+          storagePath,
+          file,
+          fileOptions: const FileOptions(
+            contentType: 'audio/aac',
+            upsert: false,
+          ),
+        );
+
+    final meta = user.userMetadata ?? const {};
+    final senderName = (meta['full_name'] as String?)?.trim();
+    final response = await _client
+        .from(_messagesTable)
+        .insert({
+          'conversation_id': conversationId,
+          'sender_id': user.id,
+          'sender_name':
+              senderName?.isNotEmpty == true ? senderName : 'Member',
+          'content': '🎙️ Voice note',
+          'message_type': 'voice',
+          'media_url': storagePath,
+          'media_duration_seconds': durationSeconds,
+        })
+        .select()
+        .single();
+    final message = Message.fromJson(response);
+    await _client.from(_conversationsTable).update({
+      'last_message': '🎙️ Voice note',
+      'last_sender_id': user.id,
+      'last_message_at': message.createdAt.toIso8601String(),
+    }).eq('id', conversationId);
+    return message;
+  }
+
+  /// Returns a signed playback URL for a voice-note storage path
+  /// (valid for [ttlSeconds]). The bucket is private — direct URLs
+  /// won't work. Caller is responsible for caching during a session.
+  static Future<String> signedVoiceUrl(
+    String storagePath, {
+    int ttlSeconds = 3600,
+  }) async {
+    return _client.storage
+        .from(_voiceBucket)
+        .createSignedUrl(storagePath, ttlSeconds);
   }
 }

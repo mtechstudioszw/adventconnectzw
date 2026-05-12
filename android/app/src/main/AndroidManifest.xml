@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Voice notes: chat audio recording (record package). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Required for playing voice notes streamed from Supabase storage. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="advent_connect_zw"
         android:name="${applicationName}"

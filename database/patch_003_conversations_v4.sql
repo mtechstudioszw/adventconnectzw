@@ -19,20 +19,25 @@
 --        last_sender_id     uuid → profiles
 --   2. Backfills the new columns from `participant_ids` + `profiles`
 --      and from `last_message_by`.
---   3. Drops the legacy array column, its constraint, and its GIN index.
---   4. Replaces conversations RLS with scalar-column policies (still
---      gated by user_is_active()).
---   5. Replaces patch_002's notify_new_message() trigger so it reads
+--   3. Drops every policy that references the legacy array column
+--      (three on conversations + two on messages) so the array column
+--      can actually be dropped.
+--   4. Drops the legacy array column, its constraint, and its GIN index.
+--   5. Re-creates all five policies against the new scalar columns,
+--      gated by user_is_active() where the schema originals were.
+--   6. Replaces patch_002's notify_new_message() trigger so it reads
 --      the new columns.
---   6. Adds (participant_x_id, last_message_at DESC) indexes for the
+--   7. Adds (participant_x_id, last_message_at DESC) indexes for the
 --      common "my conversations, newest first" query.
 --
 --  PREREQUISITES:    schema.sql + patch_001 + patch_002 already run.
 --  RUN BEFORE:       patch_004_voice_notes.sql (it depends on the new
 --                    scalar columns existing in its storage RLS).
 --  IDEMPOTENT:       yes — every step uses IF NOT EXISTS / DROP IF
---                    EXISTS, and the backfill is guarded so re-running
---                    after the legacy array column is gone is a no-op.
+--                    EXISTS, the backfills are guarded so they no-op
+--                    once the legacy columns are gone, and re-creating
+--                    NOT NULL on an already-NOT-NULL column is a no-op.
+--                    Safe to re-run from any partial state.
 -- =====================================================================
 
 
@@ -91,7 +96,18 @@ BEGIN
 END $$;
 
 
--- ----- 5. Drop legacy array column, its constraint and its index ----
+-- ----- 5. Drop every policy that references the legacy array --------
+-- Postgres tracks column dependencies for policies (not for function
+-- bodies), so the column drop in step 6 will fail unless these are
+-- gone first. We re-create them in step 7 against the scalar columns.
+DROP POLICY IF EXISTS "conversations_select_participant" ON public.conversations;
+DROP POLICY IF EXISTS "conversations_insert_participant" ON public.conversations;
+DROP POLICY IF EXISTS "conversations_update_participant" ON public.conversations;
+DROP POLICY IF EXISTS "messages_select_participant"      ON public.messages;
+DROP POLICY IF EXISTS "messages_insert_sender"           ON public.messages;
+
+
+-- ----- 6. Drop legacy array column, its constraint and its index ----
 DROP INDEX IF EXISTS public.idx_conversations_participants;
 ALTER TABLE public.conversations
   DROP CONSTRAINT IF EXISTS conversations_participants_chk;
@@ -99,18 +115,7 @@ ALTER TABLE public.conversations DROP COLUMN IF EXISTS participant_ids;
 ALTER TABLE public.conversations DROP COLUMN IF EXISTS last_message_by;
 
 
--- ----- 6. Lock down the new ID columns ------------------------------
--- Safe: any row that survived backfill has both IDs populated.
-ALTER TABLE public.conversations
-  ALTER COLUMN participant_a_id SET NOT NULL,
-  ALTER COLUMN participant_b_id SET NOT NULL;
-
-
--- ----- 7. Replace conversations RLS ---------------------------------
-DROP POLICY IF EXISTS "conversations_select_participant" ON public.conversations;
-DROP POLICY IF EXISTS "conversations_insert_participant" ON public.conversations;
-DROP POLICY IF EXISTS "conversations_update_participant" ON public.conversations;
-
+-- ----- 7. Re-create RLS against the new scalar columns --------------
 CREATE POLICY "conversations_select_participant" ON public.conversations
   FOR SELECT USING (
     auth.uid() = participant_a_id OR auth.uid() = participant_b_id
@@ -131,15 +136,45 @@ CREATE POLICY "conversations_update_participant" ON public.conversations
     AND public.user_is_active()
   );
 
+CREATE POLICY "messages_select_participant" ON public.messages
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.conversations c
+      WHERE c.id = messages.conversation_id
+        AND (auth.uid() = c.participant_a_id
+             OR auth.uid() = c.participant_b_id)
+    )
+  );
 
--- ----- 8. Indexes ----------------------------------------------------
+CREATE POLICY "messages_insert_sender" ON public.messages
+  FOR INSERT WITH CHECK (
+    auth.uid() = sender_id
+    AND public.user_is_active()
+    AND EXISTS (
+      SELECT 1 FROM public.conversations c
+      WHERE c.id = messages.conversation_id
+        AND (auth.uid() = c.participant_a_id
+             OR auth.uid() = c.participant_b_id)
+    )
+  );
+
+
+-- ----- 8. Lock down the new ID columns ------------------------------
+-- Safe: any row that survived backfill has both IDs populated.
+-- ALTER ... SET NOT NULL is a no-op if the column already is NOT NULL.
+ALTER TABLE public.conversations
+  ALTER COLUMN participant_a_id SET NOT NULL,
+  ALTER COLUMN participant_b_id SET NOT NULL;
+
+
+-- ----- 9. Indexes ----------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_conversations_participant_a
   ON public.conversations (participant_a_id, last_message_at DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_conversations_participant_b
   ON public.conversations (participant_b_id, last_message_at DESC NULLS LAST);
 
 
--- ----- 9. Replace patch_002's new-message notification trigger ------
+-- ----- 10. Replace patch_002's new-message notification trigger -----
 -- The old version reads participant_ids; rewrite it to read the new
 -- scalar columns so notifications keep firing after this migration.
 CREATE OR REPLACE FUNCTION public.notify_new_message()

@@ -1,0 +1,15 @@
+# Copy this file to android/key.properties and fill in your real values.
+# DO NOT commit android/key.properties — it's gitignored.
+#
+# storeFile      — absolute path to your upload keystore (.jks).
+# storePassword  — keystore password chosen at `keytool -genkey` time.
+# keyAlias       — alias used at `keytool -genkey` (e.g. "upload").
+# keyPassword    — key password (usually same as storePassword).
+# admobAndroidAppId — real AdMob app ID from the AdMob console
+#                    (looks like ca-app-pub-1234567890~9876543210).
+
+storeFile=C:/Users/YOUR_NAME/keystores/advent-connect-upload.jks
+storePassword=changeme
+keyAlias=upload
+keyPassword=changeme
+admobAndroidAppId=ca-app-pub-0000000000000000~0000000000

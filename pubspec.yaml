@@ -56,6 +56,22 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Generates Android + iOS launcher icons from a single source PNG.
+  # Run `dart run flutter_launcher_icons` after dropping a 1024x1024
+  # icon at assets/icon/app_icon.png to regenerate.
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icon/app_icon.png"
+  # Adaptive icon background matches the dark navy from CLAUDE.md.
+  adaptive_icon_background: "#0D1B3E"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  min_sdk_android: 21

@@ -49,6 +49,13 @@ app.*.map.json
 # Claude Code working directory (local agent state, not project source)
 .claude/
 
+# Release signing material — keystores and the props file that points
+# at them, including the AdMob app id. android/key.properties.example
+# is checked in as the template.
+android/key.properties
+*.jks
+*.keystore
+
 # Loose screenshots and diagnostic captures dropped into the repo root
 Screenshot*.png
 Screenshot*.jpg

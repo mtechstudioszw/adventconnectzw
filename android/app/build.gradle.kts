@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -7,6 +10,21 @@ plugins {
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
 }
+
+// Release signing + AdMob app ID come from android/key.properties at
+// build time. If the file is missing (typical local dev), we sign
+// the release build with the debug key and use Google's sample AdMob
+// app ID so `flutter run --release` still works.
+//
+// See android/key.properties.example for the expected keys.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+val admobAppId: String = (keystoreProperties["admobAndroidAppId"] as String?)
+    ?: "ca-app-pub-3940256099942544~3347511713"
 
 android {
     namespace = "io.supabase.adventconnectzw.advent_connect_zw"
@@ -31,13 +49,31 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Injected into AndroidManifest.xml via ${admobAppId}.
+        manifestPlaceholders["admobAppId"] = admobAppId
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                // Falls back to the debug key so dev builds still work.
+                // Play Store will reject an upload signed this way — the
+                // release script enforces that key.properties exists.
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

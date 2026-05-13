@@ -110,14 +110,9 @@ class _PrayerScreenState extends State<PrayerScreen>
     }
   }
 
-  Future<void> _openPostSheet() async {
-    final posted = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _PostPrayerSheet(),
-    );
-    if (posted == true) await _bootstrap();
+  Future<void> _openPostScreen() async {
+    await context.pushNamed('post_prayer');
+    if (mounted) await _bootstrap();
   }
 
   @override
@@ -133,29 +128,20 @@ class _PrayerScreenState extends State<PrayerScreen>
         tooltip: 'Share a prayer',
         icon: Icons.volunteer_activism,
       ),
-      body: Stack(
-        children: [
-          RefreshIndicator(
-            color: AppColors.primaryBlue,
-            onRefresh: _bootstrap,
-            child: AnimatedBuilder(
-              animation: _entrance,
-              builder: (context, child) => Opacity(
-                opacity: _fade.value,
-                child: Transform.translate(
-                  offset: Offset(0, _slide.value),
-                  child: child,
-                ),
-              ),
-              child: _buildList(),
+      body: RefreshIndicator(
+        color: AppColors.primaryBlue,
+        onRefresh: _bootstrap,
+        child: AnimatedBuilder(
+          animation: _entrance,
+          builder: (context, child) => Opacity(
+            opacity: _fade.value,
+            child: Transform.translate(
+              offset: Offset(0, _slide.value),
+              child: child,
             ),
           ),
-          Positioned(
-            right: 20,
-            bottom: 20,
-            child: _ShareFab(onTap: _openPostSheet),
-          ),
-        ],
+          child: _buildList(),
+        ),
       ),
     );
   }
@@ -208,7 +194,7 @@ class _PrayerScreenState extends State<PrayerScreen>
                 const SizedBox(height: 24),
                 _GradientButton(
                   label: 'Share a prayer',
-                  onTap: _openPostSheet,
+                  onTap: _openPostScreen,
                 ),
               ],
             ),
@@ -242,206 +228,18 @@ class _PrayerScreenState extends State<PrayerScreen>
   }
 }
 
-class _ShareFab extends StatelessWidget {
-  const _ShareFab({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.4),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(28),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.add, color: AppColors.white, size: 20),
-                const SizedBox(width: 6),
-                Text(
-                  'Share prayer',
-                  style: AppTextStyles.buttonText.copyWith(fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PostPrayerSheet extends StatefulWidget {
-  const _PostPrayerSheet();
-
-  @override
-  State<_PostPrayerSheet> createState() => _PostPrayerSheetState();
-}
-
-class _PostPrayerSheetState extends State<_PostPrayerSheet> {
-  final _controller = TextEditingController();
-  bool _busy = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final text = _controller.text.trim();
-    if (text.length < 8) {
-      setState(() => _error = 'Please write at least a few words.');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await PrayerService.postPrayer(text);
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = 'Could not post your prayer. Please try again.';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color.fromRGBO(26, 26, 46, 0.15),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Share a prayer request',
-                  style: AppTextStyles.headlineSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Your community is here to pray with you.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.65),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  minLines: 4,
-                  maxLines: 8,
-                  maxLength: 800,
-                  textCapitalization: TextCapitalization.sentences,
-                  style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
-                  decoration: InputDecoration(
-                    hintText: 'What would you like prayer for?',
-                    filled: true,
-                    fillColor: AppColors.lightGrey,
-                    contentPadding: const EdgeInsets.all(14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: Color.fromRGBO(26, 26, 46, 0.06),
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: Color.fromRGBO(26, 26, 46, 0.06),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: AppColors.primaryBlue,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _error!,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.red,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                _GradientButton(
-                  label: _busy ? 'Posting...' : 'Post prayer',
-                  onTap: _busy ? null : _submit,
-                  busy: _busy,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _GradientButton extends StatelessWidget {
   const _GradientButton({
     required this.label,
     required this.onTap,
-    this.busy = false,
   });
   final String label;
   final VoidCallback? onTap;
-  final bool busy;
 
   @override
   Widget build(BuildContext context) {
     return Opacity(
-      opacity: onTap == null && !busy ? 0.6 : 1,
+      opacity: onTap == null ? 0.6 : 1,
       child: Container(
         decoration: BoxDecoration(
           gradient: AppColors.primaryGradient,
@@ -462,22 +260,13 @@ class _GradientButton extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Center(
-                child: busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: AppColors.white,
-                          strokeWidth: 2.4,
-                        ),
-                      )
-                    : Text(
-                        label,
-                        style: AppTextStyles.buttonText.copyWith(
-                          fontSize: 15,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
+                child: Text(
+                  label,
+                  style: AppTextStyles.buttonText.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 0.4,
+                  ),
+                ),
               ),
             ),
           ),

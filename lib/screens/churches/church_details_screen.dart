@@ -154,8 +154,9 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   Widget _buildHero(Church church) {
     return Stack(
       children: [
-        AspectRatio(
-          aspectRatio: 1,
+        SizedBox(
+          width: double.infinity,
+          height: 180,
           child: church.coverPhotoUrl == null || church.coverPhotoUrl!.isEmpty
               ? Container(
                   decoration: const BoxDecoration(
@@ -164,7 +165,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                   child: const Center(
                     child: Icon(
                       Icons.church,
-                      size: 96,
+                      size: 56,
                       color: AppColors.white,
                     ),
                   ),
@@ -176,7 +177,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                     color: AppColors.lightGrey,
                     child: const Icon(
                       Icons.broken_image_outlined,
-                      size: 64,
+                      size: 56,
                       color: Color.fromRGBO(26, 26, 46, 0.3),
                     ),
                   ),

@@ -512,9 +512,9 @@ class _HomeScreenState extends State<HomeScreen>
         itemCount: _churches.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.82,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.3,
         ),
         itemBuilder: (context, i) {
           final c = _churches[i];

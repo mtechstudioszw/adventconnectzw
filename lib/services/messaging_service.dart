@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
 import 'analytics_service.dart';
+import 'connectivity_service.dart';
 
 class MessagingService {
   MessagingService._();
@@ -12,6 +16,93 @@ class MessagingService {
   static const _conversationsTable = 'conversations';
   static const _messagesTable = 'messages';
   static const _voiceBucket = 'voice_notes';
+  static const _outboxBoxName = 'message_outbox_v1';
+  static Box<String>? _outbox;
+  static StreamSubscription<bool>? _outboxFlushSub;
+  static bool _flushInFlight = false;
+
+  /// Open the outbox and subscribe to connectivity transitions so
+  /// queued messages flush automatically when the device comes back
+  /// online. Safe to call multiple times. Hive must already be inited.
+  static Future<void> startOutboxFlusher() async {
+    if (_outboxFlushSub != null) return;
+    try {
+      await Hive.initFlutter();
+      _outbox = await Hive.openBox<String>(_outboxBoxName);
+    } catch (e, st) {
+      debugPrint('MessagingService: outbox open failed: $e\n$st');
+      return;
+    }
+    _outboxFlushSub = ConnectivityService.onChanged.listen((online) {
+      if (online) unawaited(flushOutbox());
+    });
+    // Try once on boot in case we never went offline but the previous
+    // session shut down with queued items still present.
+    if (ConnectivityService.isOnline) {
+      unawaited(flushOutbox());
+    }
+  }
+
+  /// True when at least one message is queued. Cheap synchronous check.
+  static bool get hasPendingOutbox => (_outbox?.isNotEmpty ?? false);
+
+  /// Drains the outbox. Each row is removed only if its insert succeeds —
+  /// transient failures keep the row for a future retry. Returns the
+  /// number of rows successfully sent.
+  static Future<int> flushOutbox() async {
+    final box = _outbox;
+    if (box == null || box.isEmpty || _flushInFlight) return 0;
+    _flushInFlight = true;
+    var flushed = 0;
+    try {
+      for (final key in box.keys.toList()) {
+        final raw = box.get(key);
+        if (raw == null) continue;
+        Map<String, dynamic> payload;
+        try {
+          payload = jsonDecode(raw) as Map<String, dynamic>;
+        } catch (_) {
+          await box.delete(key);
+          continue;
+        }
+        try {
+          final inserted = await _client
+              .from(_messagesTable)
+              .insert(payload)
+              .select()
+              .single();
+          await _client.from(_conversationsTable).update({
+            'last_message': payload['content'],
+            'last_sender_id': payload['sender_id'],
+            'last_message_at':
+                (inserted['created_at'] ?? DateTime.now().toUtc().toIso8601String())
+                    .toString(),
+          }).eq('id', payload['conversation_id']);
+          AnalyticsService.messageSent(source: 'text_outbox');
+          await box.delete(key);
+          flushed += 1;
+        } catch (e, st) {
+          debugPrint('MessagingService: outbox flush row failed: $e\n$st');
+          // Leave the row in the box; we'll retry on the next online
+          // transition. Bail to avoid a hot loop if the backend is sick.
+          break;
+        }
+      }
+    } finally {
+      _flushInFlight = false;
+    }
+    return flushed;
+  }
+
+  static Future<void> _enqueueOutbox(Map<String, dynamic> payload) async {
+    final box = _outbox;
+    if (box == null) return;
+    try {
+      await box.add(jsonEncode(payload));
+    } catch (e, st) {
+      debugPrint('MessagingService: enqueue failed: $e\n$st');
+    }
+  }
 
   /// Realtime Broadcast channel name for the typing indicator. Keeping
   /// the format here so subscribers and senders stay in sync.
@@ -164,25 +255,47 @@ class MessagingService {
     }
     final meta = user.userMetadata ?? const {};
     final senderName = (meta['full_name'] as String?)?.trim();
-    final response = await _client
-        .from(_messagesTable)
-        .insert({
-          'conversation_id': conversationId,
-          'sender_id': user.id,
-          'sender_name':
-              senderName?.isNotEmpty == true ? senderName : 'Member',
-          'content': content.trim(),
-        })
-        .select()
-        .single();
-    final message = Message.fromJson(response);
-    await _client.from(_conversationsTable).update({
-      'last_message': message.content,
-      'last_sender_id': user.id,
-      'last_message_at': message.createdAt.toIso8601String(),
-    }).eq('id', conversationId);
-    AnalyticsService.messageSent(source: 'text');
-    return message;
+    final resolvedName =
+        senderName?.isNotEmpty == true ? senderName! : 'Member';
+    final body = content.trim();
+    final payload = <String, dynamic>{
+      'conversation_id': conversationId,
+      'sender_id': user.id,
+      'sender_name': resolvedName,
+      'content': body,
+    };
+
+    // Offline path — queue and surface an OutboxQueuedException so the
+    // UI can show a "we'll send this when you reconnect" hint instead
+    // of the generic failure snackbar.
+    if (!ConnectivityService.isOnline) {
+      await _enqueueOutbox(payload);
+      throw const OutboxQueuedException();
+    }
+
+    try {
+      final response = await _client
+          .from(_messagesTable)
+          .insert(payload)
+          .select()
+          .single();
+      final message = Message.fromJson(response);
+      await _client.from(_conversationsTable).update({
+        'last_message': message.content,
+        'last_sender_id': user.id,
+        'last_message_at': message.createdAt.toIso8601String(),
+      }).eq('id', conversationId);
+      AnalyticsService.messageSent(source: 'text');
+      return message;
+    } catch (e) {
+      // If the network dropped between the connectivity check and the
+      // insert, fall back to the outbox.
+      if (!ConnectivityService.isOnline) {
+        await _enqueueOutbox(payload);
+        throw const OutboxQueuedException();
+      }
+      rethrow;
+    }
   }
 
   static Stream<List<Message>> streamMessages(String conversationId) {
@@ -330,4 +443,14 @@ class MessagingService {
         .from(_voiceBucket)
         .createSignedUrl(storagePath, ttlSeconds);
   }
+}
+
+/// Thrown by [MessagingService.sendMessage] when the device is offline
+/// and the payload has been queued in the local outbox. Callers should
+/// treat this as a soft success and show a "queued for sending" hint.
+class OutboxQueuedException implements Exception {
+  const OutboxQueuedException();
+
+  @override
+  String toString() => 'Message queued — will send when you reconnect.';
 }

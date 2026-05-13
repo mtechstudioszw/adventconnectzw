@@ -62,8 +62,10 @@ class AnalyticsService {
   static Future<void> churchFollowed(int churchId) =>
       logEvent('church_followed', parameters: {'church_id': churchId});
 
-  static Future<void> messageSent({String? source}) =>
-      logEvent('message_sent', parameters: {?'source': source});
+  static Future<void> messageSent({String? source}) => logEvent(
+        'message_sent',
+        parameters: {'source': ?source},
+      );
 
   static Future<void> prayerPosted({required String visibility}) =>
       logEvent('prayer_posted', parameters: {'visibility': visibility});

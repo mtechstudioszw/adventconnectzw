@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/event_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/urgent_banner_service.dart';
@@ -69,6 +72,14 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _bootstrap() async {
+    // On a cold-start, if we're already offline and we have a cached
+    // payload, hydrate from it first so the user sees real content
+    // instead of empty tiles. Network calls happen anyway and will
+    // overwrite when they finish (or be skipped silently if offline).
+    if (_loading && !ConnectivityService.isOnline) {
+      _hydrateFromCache();
+    }
+
     try {
       final results = await Future.wait([
         EventService.fetchEvents(upcomingOnly: true),
@@ -79,18 +90,60 @@ class _HomeScreenState extends State<HomeScreen>
         UrgentBannerService.fetchActive(),
       ]);
       if (!mounted) return;
+      final events = (results[0] as List<Event>).take(8).toList();
+      final churches = (results[1] as List<Church>).take(6).toList();
       setState(() {
-        _events = (results[0] as List<Event>).take(8).toList();
-        _churches = (results[1] as List<Church>).take(6).toList();
+        _events = events;
+        _churches = churches;
         _followedChurchIds = results[2] as Set<String>;
         _rsvpedEventIds = results[3] as Set<String>;
         _unreadNotifications = results[4] as int;
         _banner = results[5] as UrgentBanner?;
         _loading = false;
       });
+      // Best-effort cache write — failures here must never surface.
+      unawaited(_writeCache(events, churches));
     } catch (_) {
       if (!mounted) return;
+      // Network failed. If we haven't hydrated from cache yet (e.g.
+      // because we were online when _bootstrap started), try now.
+      if (_events.isEmpty && _churches.isEmpty) {
+        _hydrateFromCache();
+      }
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _writeCache(List<Event> events, List<Church> churches) async {
+    try {
+      final payload = jsonEncode({
+        'events': events.map((e) => e.toJson()).toList(),
+        'churches': churches.map((c) => c.toJson()).toList(),
+      });
+      await CacheService.writeString('home_feed', payload);
+    } catch (_) {
+      // Cache is decorative — never block.
+    }
+  }
+
+  void _hydrateFromCache() {
+    try {
+      final raw = CacheService.readString('home_feed');
+      if (raw == null) return;
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final events = ((decoded['events'] as List?) ?? const [])
+          .map((e) => Event.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final churches = ((decoded['churches'] as List?) ?? const [])
+          .map((c) => Church.fromJson(c as Map<String, dynamic>))
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        if (_events.isEmpty) _events = events;
+        if (_churches.isEmpty) _churches = churches;
+      });
+    } catch (_) {
+      // ignore — corrupt cache is just a missed-paint, not an error.
     }
   }
 

@@ -95,6 +95,8 @@ class Church {
       contactEmail: contactEmail,
       isVerified: isVerified ?? this.isVerified,
       createdAt: createdAt,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 

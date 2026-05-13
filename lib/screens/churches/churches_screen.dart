@@ -82,6 +82,18 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     });
   }
 
+  String? _distanceLabelFor(Church c) {
+    final pos = _position;
+    if (pos == null || !c.hasLocation) return null;
+    final m = LocationService.distanceMeters(
+      fromLat: pos.latitude,
+      fromLng: pos.longitude,
+      toLat: c.latitude!,
+      toLng: c.longitude!,
+    );
+    return LocationService.formatDistance(m);
+  }
+
   Future<void> _loadCities() async {
     try {
       final cities = await ChurchService.fetchAvailableCities();
@@ -292,6 +304,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         final c = _churches[i];
         return ChurchCard(
           church: c,
+          distanceLabel: _distanceLabelFor(c),
           onTap: () => context.pushNamed(
             'church_details',
             pathParameters: {'id': c.id},

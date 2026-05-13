@@ -11,6 +11,7 @@ import 'services/ads_service.dart';
 import 'services/analytics_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
+import 'services/messaging_service.dart';
 import 'services/push_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
@@ -22,6 +23,10 @@ void main() async {
   // service that wants to read cached payloads on cold start.
   await CacheService.initialize();
   await ConnectivityService.initialize();
+  // Drain any messages queued from the previous session and watch for
+  // online transitions to retry. Outbox uses Hive, so this must come
+  // after CacheService.initialize() (which runs Hive.initFlutter()).
+  await MessagingService.startOutboxFlusher();
 
   // AdMob — load the SDK early so the first banner request on the
   // home screen has the SDK ready when the screen mounts.

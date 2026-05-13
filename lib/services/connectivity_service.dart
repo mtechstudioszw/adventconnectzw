@@ -14,6 +14,10 @@ class ConnectivityService {
   static final Connectivity _connectivity = Connectivity();
   static final StreamController<bool> _onlineController =
       StreamController<bool>.broadcast();
+  // Kept on the static class so the subscription survives the app
+  // lifetime — never read, but its presence prevents Dart from GCing
+  // the underlying stream listener.
+  // ignore: unused_field
   static StreamSubscription<List<ConnectivityResult>>? _sub;
   static bool _lastOnline = true;
   static bool _initialized = false;

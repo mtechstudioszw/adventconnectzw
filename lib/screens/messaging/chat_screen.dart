@@ -333,6 +333,17 @@ class _ChatScreenState extends State<ChatScreen>
         content: text,
       );
       _inputController.clear();
+    } on OutboxQueuedException {
+      if (!mounted) return;
+      _inputController.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You\'re offline. We\'ll send this when you reconnect.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

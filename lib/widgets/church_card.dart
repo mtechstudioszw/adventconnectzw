@@ -8,10 +8,12 @@ class ChurchCard extends StatelessWidget {
     super.key,
     required this.church,
     required this.onTap,
+    this.distanceLabel,
   });
 
   final Church church;
   final VoidCallback onTap;
+  final String? distanceLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +106,38 @@ class ChurchCard extends StatelessWidget {
                             color: const Color.fromRGBO(26, 26, 46, 0.6),
                           ),
                         ),
+                        if (distanceLabel != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.near_me_outlined,
+                                  size: 11,
+                                  color: AppColors.primaryBlue,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  distanceLabel!,
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.primaryBlue,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

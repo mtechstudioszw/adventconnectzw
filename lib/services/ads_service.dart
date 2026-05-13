@@ -68,7 +68,14 @@ class AdsService {
         params,
         () async {
           try {
-            await ConsentForm.loadAndShowConsentFormIfRequired();
+            await ConsentForm.loadAndShowConsentFormIfRequired((formError) {
+              if (formError != null) {
+                debugPrint(
+                  'AdsService: consent form dismissed with error: '
+                  '${formError.message}',
+                );
+              }
+            });
           } catch (e, st) {
             debugPrint('AdsService: consent form failed: $e\n$st');
           } finally {

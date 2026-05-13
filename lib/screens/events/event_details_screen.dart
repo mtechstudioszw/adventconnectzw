@@ -214,8 +214,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   Widget _buildHero(Event event) {
     return Stack(
       children: [
-        AspectRatio(
-          aspectRatio: 1,
+        SizedBox(
+          width: double.infinity,
+          height: 260,
           child: _CoverImage(url: event.coverPhotoUrl),
         ),
         Positioned.fill(

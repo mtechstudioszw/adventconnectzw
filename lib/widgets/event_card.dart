@@ -27,147 +27,105 @@ class EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _CompactThumbnail(
+                url: event.coverPhotoUrl,
+                date: event.eventDate,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                            ),
+                          ),
+                        ),
+                        if (isGoing) ...[
+                          const SizedBox(width: 6),
+                          const _GoingChip(),
+                        ] else if (event.isFull) ...[
+                          const SizedBox(width: 6),
+                          const _FullChip(),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    _InfoRow(
+                      icon: Icons.schedule,
+                      text:
+                          '${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])} • ${_formatTime(event.eventTime)}',
+                    ),
+                    if (event.location != null && event.location!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      _InfoRow(
+                        icon: Icons.place_outlined,
+                        text: event.location!,
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.people_outline,
+                          size: 13,
+                          color: AppColors.primaryBlue,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${event.rsvpCount}',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        Text(
+                          event.capacity != null
+                              ? ' / ${event.capacity} going'
+                              : ' going',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: const Color.fromRGBO(26, 26, 46, 0.6),
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                color: Color.fromRGBO(26, 26, 46, 0.3),
               ),
             ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildCover(),
-                _buildBody(),
-              ],
-            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCover() {
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          _CoverImage(url: event.coverPhotoUrl),
-          IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.4),
-                  ],
-                  stops: const [0.55, 1.0],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 12,
-            left: 12,
-            child: _DateBadge(date: event.eventDate),
-          ),
-          if (isGoing)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: _GoingPill(),
-            ),
-          if (event.isFull && !isGoing)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: _FullPill(),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            event.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.titleLarge.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-              height: 1.25,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _InfoRow(
-            icon: Icons.calendar_today_outlined,
-            text:
-                '${_weekdays[event.eventDate.weekday - 1]}, ${event.eventDate.day} ${_months[event.eventDate.month - 1].toLowerCase()[0].toUpperCase()}${_months[event.eventDate.month - 1].toLowerCase().substring(1)}  •  ${_formatTime(event.eventTime)}',
-          ),
-          if (event.location != null && event.location!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            _InfoRow(
-              icon: Icons.place_outlined,
-              text: event.location!,
-            ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(
-                Icons.people_outline,
-                size: 14,
-                color: AppColors.primaryBlue,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '${event.rsvpCount}',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.primaryBlue,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                event.capacity != null
-                    ? ' / ${event.capacity} going'
-                    : ' going',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
-                ),
-              ),
-              const Spacer(),
-              const Icon(
-                Icons.arrow_forward,
-                size: 16,
-                color: AppColors.primaryBlue,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  String _titleCase(String upper) =>
+      upper.substring(0, 1) + upper.substring(1).toLowerCase();
 
   String _formatTime(String time) {
     final parts = time.split(':');
@@ -180,106 +138,140 @@ class EventCard extends StatelessWidget {
   }
 }
 
-class _DateBadge extends StatelessWidget {
-  const _DateBadge({required this.date});
+/// Square thumbnail with a small date badge in the corner. Replaces the
+/// full-width 16:9 cover hero — cuts each card from ~320 to ~120 tall.
+class _CompactThumbnail extends StatelessWidget {
+  const _CompactThumbnail({required this.url, required this.date});
+
+  final String? url;
   final DateTime date;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.white,
+    return SizedBox(
+      width: 76,
+      height: 76,
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            EventCard._months[date.month - 1],
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.primaryBlue,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.4,
-              height: 1,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (url == null || url!.isEmpty)
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: AppColors.appBarGradient,
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.event,
+                    color: AppColors.white.withValues(alpha: 0.55),
+                    size: 28,
+                  ),
+                ),
+              )
+            else
+              Image.network(
+                url!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: AppColors.lightGrey,
+                  child: const Icon(
+                    Icons.broken_image_outlined,
+                    color: Color.fromRGBO(26, 26, 46, 0.3),
+                    size: 28,
+                  ),
+                ),
+              ),
+            // Bottom-left date pill so the day is glanceable without
+            // having to read the body row.
+            Positioned(
+              left: 4,
+              right: 4,
+              bottom: 4,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${date.day}',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.darkNavy,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      EventCard._months[date.month - 1],
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 9,
+                        letterSpacing: 0.6,
+                        height: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            date.day.toString(),
-            style: AppTextStyles.headlineMedium.copyWith(
-              color: AppColors.darkNavy,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              height: 1.1,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _GoingPill extends StatelessWidget {
+class _GoingChip extends StatelessWidget {
+  const _GoingChip();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: AppColors.successGreen,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.successGreen.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.check_circle, color: AppColors.white, size: 12),
-          const SizedBox(width: 4),
-          Text(
-            'GOING',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
-            ),
-          ),
-        ],
+      child: Text(
+        'GOING',
+        style: AppTextStyles.labelSmall.copyWith(
+          color: AppColors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+        ),
       ),
     );
   }
 }
 
-class _FullPill extends StatelessWidget {
+class _FullChip extends StatelessWidget {
+  const _FullChip();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
         color: AppColors.red,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         'FULL',
         style: AppTextStyles.labelSmall.copyWith(
           color: AppColors.white,
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: FontWeight.w800,
-          letterSpacing: 1.2,
+          letterSpacing: 1.1,
         ),
       ),
     );
@@ -297,10 +289,10 @@ class _InfoRow extends StatelessWidget {
       children: [
         Icon(
           icon,
-          size: 14,
+          size: 12,
           color: const Color.fromRGBO(26, 26, 46, 0.55),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
         Expanded(
           child: Text(
             text,
@@ -308,58 +300,11 @@ class _InfoRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.bodySmall.copyWith(
               color: const Color.fromRGBO(26, 26, 46, 0.7),
-              fontSize: 12.5,
+              fontSize: 11.5,
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _CoverImage extends StatelessWidget {
-  const _CoverImage({this.url});
-  final String? url;
-
-  @override
-  Widget build(BuildContext context) {
-    if (url == null || url!.isEmpty) {
-      return Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: Center(
-          child: Icon(
-            Icons.event,
-            color: AppColors.white.withValues(alpha: 0.45),
-            size: 48,
-          ),
-        ),
-      );
-    }
-    return Image.network(
-      url!,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: AppColors.white.withValues(alpha: 0.45),
-            size: 40,
-          ),
-        ),
-      ),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          color: AppColors.lightGrey,
-          alignment: Alignment.center,
-          child: const SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        );
-      },
     );
   }
 }

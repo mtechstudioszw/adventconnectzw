@@ -490,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildChurchGrid() {
     if (_loading && _churches.isEmpty) {
       return SizedBox(
-        height: 200,
+        height: 160,
         child: ShimmerLoaders.cardList(count: 2),
       );
     }
@@ -504,31 +504,33 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
+    // Horizontal scroller — matches the Events row's pattern and cuts
+    // the section's vertical footprint roughly in half versus the
+    // previous 2-column grid. User can flick through more churches
+    // without taking over the home screen.
+    return SizedBox(
+      height: 160,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: _churches.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.3,
-        ),
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
           final c = _churches[i];
-          return _HomeChurchTile(
-            church: c,
-            isFollowed: _followedChurchIds.contains(c.id),
-            onTap: () async {
-              await context.pushNamed(
-                'church_details',
-                pathParameters: {'id': c.id},
-                extra: c,
-              );
-              if (mounted) _bootstrap();
-            },
+          return SizedBox(
+            width: 150,
+            child: _HomeChurchTile(
+              church: c,
+              isFollowed: _followedChurchIds.contains(c.id),
+              onTap: () async {
+                await context.pushNamed(
+                  'church_details',
+                  pathParameters: {'id': c.id},
+                  extra: c,
+                );
+                if (mounted) _bootstrap();
+              },
+            ),
           );
         },
       ),

@@ -40,6 +40,21 @@ class AdsService {
   // wasn't passed, so a malformed release build still gets a fill.
   static bool get _useTest => kDebugMode;
 
+  /// True only on platforms google_mobile_ads actually supports. The
+  /// package has no web / desktop implementation, so calling its
+  /// platform-channel methods there throws MissingPluginException
+  /// asynchronously — which a try/catch around a void-returning
+  /// method can't intercept. Easier to short-circuit upfront.
+  static bool get _isAdMobSupported {
+    if (kIsWeb) return false;
+    try {
+      return Platform.isAndroid || Platform.isIOS;
+    } catch (_) {
+      // Platform getters throw on unsupported runtimes.
+      return false;
+    }
+  }
+
   /// One-shot init. Safe to call multiple times. Gates initialisation
   /// of the Mobile Ads SDK behind UMP consent so we comply with
   /// GDPR / Play Store ad policy. Failures here never propagate —
@@ -47,6 +62,10 @@ class AdsService {
   static Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
+    if (!_isAdMobSupported) {
+      debugPrint('AdsService: AdMob unsupported on this platform — skipping.');
+      return;
+    }
     try {
       await _requestConsentIfRequired();
       await MobileAds.instance.initialize();
@@ -98,6 +117,7 @@ class AdsService {
   /// Banner unit ID for the current platform. Returns null on
   /// unsupported platforms (desktop/web) so callers can skip rendering.
   static String? bannerUnitId() {
+    if (!_isAdMobSupported) return null;
     if (Platform.isAndroid) {
       return _useTest ? _testAndroidBanner : _prodAndroidBanner;
     }

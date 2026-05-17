@@ -207,6 +207,13 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _HomeSearchBar(
+                    onTap: () => context.pushNamed('search'),
+                  ),
+                ),
                 if (_banner != null &&
                     !_dismissedBannerIds.contains(_banner!.id)) ...[
                   const SizedBox(height: 16),
@@ -1649,6 +1656,104 @@ class _PrayersEmpty extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HomeSearchBar extends StatelessWidget {
+  const _HomeSearchBar({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.06),
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color.fromRGBO(13, 27, 62, 0.08),
+                blurRadius: 14,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                ),
+                child: const Icon(
+                  Icons.search_rounded,
+                  color: AppColors.primaryBlue,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Find people, churches, events…',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Search anything in the community',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.goldAccent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.goldAccent.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Text(
+                  'NEW',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.goldAccent,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

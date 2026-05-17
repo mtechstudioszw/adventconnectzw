@@ -6,14 +6,17 @@ import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../models/job_model.dart';
+import '../../models/member_directory_model.dart';
 import '../../models/product_model.dart';
 import '../../services/church_service.dart';
+import '../../services/directory_service.dart';
 import '../../services/event_service.dart';
 import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/start_conversation_sheet.dart';
 
 /// Cross-content search. Hits churches, events, products and jobs in
 /// parallel — small per-list limit each so the UI stays snappy.
@@ -35,6 +38,7 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Event> _events = const [];
   List<Product> _products = const [];
   List<Job> _jobs = const [];
+  List<MemberDirectoryEntry> _people = const [];
 
   @override
   void initState() {
@@ -66,6 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _events = const [];
         _products = const [];
         _jobs = const [];
+        _people = const [];
       });
       return;
     }
@@ -75,6 +80,7 @@ class _SearchScreenState extends State<SearchScreen> {
     });
     try {
       final results = await Future.wait([
+        _searchPeople(query),
         ChurchService.fetchChurches(search: query),
         EventService.fetchEvents(search: query),
         MarketplaceService.fetchProducts(search: query),
@@ -82,10 +88,11 @@ class _SearchScreenState extends State<SearchScreen> {
       ]);
       if (!mounted) return;
       setState(() {
-        _churches = (results[0] as List<Church>).take(8).toList();
-        _events = (results[1] as List<Event>).take(8).toList();
-        _products = (results[2] as List<Product>).take(8).toList();
-        _jobs = (results[3] as List<Job>).take(8).toList();
+        _people = (results[0] as List<MemberDirectoryEntry>).take(8).toList();
+        _churches = (results[1] as List<Church>).take(8).toList();
+        _events = (results[2] as List<Event>).take(8).toList();
+        _products = (results[3] as List<Product>).take(8).toList();
+        _jobs = (results[4] as List<Job>).take(8).toList();
         _searching = false;
       });
     } catch (_) {
@@ -94,9 +101,39 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  /// People search: combines the server-side directory query (profession,
+  /// skills, city, bio) with a client-side name filter against the recent
+  /// directory entries. That way "Tendai" still matches even though name
+  /// lives on the joined profiles row.
+  Future<List<MemberDirectoryEntry>> _searchPeople(String query) async {
+    final lower = query.toLowerCase();
+    final results = await Future.wait([
+      DirectoryService.fetchEntries(search: query),
+      DirectoryService.fetchSuggestedMembers(limit: 60),
+    ]);
+    final byProfession = results[0];
+    final recent = results[1];
+
+    final seen = <String>{};
+    final merged = <MemberDirectoryEntry>[];
+    for (final e in byProfession) {
+      if (seen.add(e.id)) merged.add(e);
+    }
+    for (final e in recent) {
+      if (seen.contains(e.id)) continue;
+      final name = (e.fullName ?? '').toLowerCase();
+      if (name.contains(lower)) {
+        seen.add(e.id);
+        merged.add(e);
+      }
+    }
+    return merged;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hasResults = _churches.isNotEmpty ||
+    final hasResults = _people.isNotEmpty ||
+        _churches.isNotEmpty ||
         _events.isNotEmpty ||
         _products.isNotEmpty ||
         _jobs.isNotEmpty;
@@ -178,7 +215,8 @@ class _SearchScreenState extends State<SearchScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Churches, events, products and jobs in one place.',
+                        'People, churches, events, products and jobs — '
+                        'all in one place.',
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: AppColors.white.withValues(alpha: 0.7),
                         ),
@@ -212,6 +250,7 @@ class _SearchScreenState extends State<SearchScreen> {
           spacing: 8,
           runSpacing: 8,
           children: const [
+            _SuggestionChip('Tendai'),
             _SuggestionChip('Harare central'),
             _SuggestionChip('Camp meeting'),
             _SuggestionChip('Plumber'),
@@ -240,6 +279,23 @@ class _SearchScreenState extends State<SearchScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
       children: [
+        if (_people.isNotEmpty)
+          _Section(
+            label: 'PEOPLE',
+            count: _people.length,
+            children: [
+              for (final p in _people)
+                _PersonRow(
+                  person: p,
+                  onTap: () => showStartConversationSheet(
+                    context,
+                    otherUserId: p.userId,
+                    otherUserName: p.fullName ?? 'a member',
+                    source: 'search',
+                  ),
+                ),
+            ],
+          ),
         if (_churches.isNotEmpty)
           _Section(
             label: 'CHURCHES',
@@ -360,6 +416,117 @@ class _Section extends StatelessWidget {
         for (final c in children) ...[c, const SizedBox(height: 10)],
         const SizedBox(height: 6),
       ],
+    );
+  }
+}
+
+class _PersonRow extends StatelessWidget {
+  const _PersonRow({required this.person, required this.onTap});
+  final MemberDirectoryEntry person;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (person.fullName ?? '').trim().isEmpty
+        ? 'Member'
+        : person.fullName!.trim();
+    final parts = <String>[
+      if ((person.profession ?? '').trim().isNotEmpty) person.profession!.trim(),
+      if ((person.city ?? '').trim().isNotEmpty) person.city!.trim(),
+      if ((person.churchName ?? '').trim().isNotEmpty) person.churchName!.trim(),
+    ];
+    final subtitle = parts.isEmpty ? 'On Advent Connect' : parts.join('  ·  ');
+    return ScreenCard(
+      padding: const EdgeInsets.all(14),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Row(
+            children: [
+              _PersonAvatar(
+                photoUrl: person.profilePhotoUrl,
+                fullName: name,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: AppColors.primaryBlue,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PersonAvatar extends StatelessWidget {
+  const _PersonAvatar({required this.photoUrl, required this.fullName});
+  final String? photoUrl;
+  final String fullName;
+
+  String get _initials {
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+    return (parts.first.characters.first + parts.last.characters.first)
+        .toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.primaryBlue.withValues(alpha: 0.10),
+        image: hasPhoto
+            ? DecorationImage(
+                image: NetworkImage(photoUrl!),
+                fit: BoxFit.cover,
+              )
+            : null,
+      ),
+      alignment: Alignment.center,
+      child: hasPhoto
+          ? null
+          : Text(
+              _initials,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
     );
   }
 }

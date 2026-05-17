@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/seller_model.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -34,6 +36,9 @@ class _AddProductScreenState extends State<AddProductScreen>
   bool _uploadingPhotos = false;
   String? _error;
   final List<String> _photoUrls = [];
+
+  bool _loadingSeller = true;
+  Seller? _seller;
 
   static const _categories = <String, String>{
     'books': 'Bibles & Books',
@@ -79,6 +84,21 @@ class _AddProductScreenState extends State<AddProductScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    _loadSeller();
+  }
+
+  Future<void> _loadSeller() async {
+    try {
+      final seller = await SellerService.fetchMySellerProfile();
+      if (!mounted) return;
+      setState(() {
+        _seller = seller;
+        _loadingSeller = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingSeller = false);
+    }
   }
 
   @override
@@ -149,44 +169,60 @@ class _AddProductScreenState extends State<AddProductScreen>
               subtitle: 'Sell within the trusted SDA community.',
               fallbackRouteName: 'marketplace',
             ),
-            AnimatedBuilder(
-              animation: _entrance,
-              builder: (context, child) => Opacity(
-                opacity: _fade.value,
-                child: Transform.translate(
-                  offset: Offset(0, _slide.value),
-                  child: child,
+            if (_loadingSeller)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 40, 20, 40),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColors.primaryBlue,
+                  ),
                 ),
-              ),
-              child: Padding(
+              )
+            else if (_seller == null || !_seller!.isApproved)
+              Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildPhotosCard(),
-                      const SizedBox(height: 16),
-                      _buildBasicsCard(),
-                      const SizedBox(height: 16),
-                      _buildPricingCard(),
-                      const SizedBox(height: 16),
-                      _buildDetailsCard(),
-                      if (_error != null) ...[
+                child: _SellerGate(seller: _seller),
+              )
+            else
+              AnimatedBuilder(
+                animation: _entrance,
+                builder: (context, child) => Opacity(
+                  opacity: _fade.value,
+                  child: Transform.translate(
+                    offset: Offset(0, _slide.value),
+                    child: child,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildPhotosCard(),
                         const SizedBox(height: 16),
-                        PostFormErrorBanner(message: _error!),
+                        _buildBasicsCard(),
+                        const SizedBox(height: 16),
+                        _buildPricingCard(),
+                        const SizedBox(height: 16),
+                        _buildDetailsCard(),
+                        if (_error != null) ...[
+                          const SizedBox(height: 16),
+                          PostFormErrorBanner(message: _error!),
+                        ],
+                        const SizedBox(height: 24),
+                        PostFormSaveButton(
+                          label: 'List product',
+                          busy: _saving,
+                          onTap: _saving ? null : _save,
+                        ),
                       ],
-                      const SizedBox(height: 24),
-                      PostFormSaveButton(
-                        label: 'List product',
-                        busy: _saving,
-                        onTap: _saving ? null : _save,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -592,6 +628,183 @@ class _Dropdown<T> extends StatelessWidget {
       ),
       items: items,
       onChanged: onChanged,
+    );
+  }
+}
+
+class _SellerGate extends StatelessWidget {
+  const _SellerGate({required this.seller});
+  final Seller? seller;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = seller != null && seller!.isPending;
+    final rejected = seller != null && seller!.isRejected;
+
+    final (String kicker, String title, String body, String cta, IconData icon) =
+        pending
+            ? (
+                'AWAITING APPROVAL',
+                'Your store is in review',
+                'Our team is reviewing your seller application. You\'ll be '
+                    'able to list products as soon as it\'s approved — '
+                    'usually within a day or two.',
+                'View seller dashboard',
+                Icons.hourglass_top_rounded,
+              )
+            : rejected
+                ? (
+                    'NEEDS ATTENTION',
+                    'Your application was declined',
+                    seller!.rejectionReason?.trim().isNotEmpty == true
+                        ? seller!.rejectionReason!.trim()
+                        : 'Please review your details and reapply.',
+                    'Update & reapply',
+                    Icons.error_outline_rounded,
+                  )
+                : (
+                    'SELLER ACCOUNT REQUIRED',
+                    'Set up your store first',
+                    'Only verified sellers can list products on Advent '
+                        'Connect. Set up a free store profile to start '
+                        'selling within the trusted SDA community.',
+                    'Set up my store',
+                    Icons.storefront_rounded,
+                  );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color.fromRGBO(26, 26, 46, 0.06),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(13, 27, 62, 0.06),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.darkNavy, Color(0xFF1A2F5A)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: AppColors.goldAccent, size: 30),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            kicker,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.goldAccent,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.headlineMedium.copyWith(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 20,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.70),
+              fontSize: 14,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Container(
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  if (pending) {
+                    context.goNamed('seller_dashboard');
+                  } else {
+                    context.goNamed('setup_store');
+                  }
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        cta,
+                        style: AppTextStyles.buttonText.copyWith(
+                          color: AppColors.white,
+                          fontSize: 15,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.arrow_forward_rounded,
+                        color: AppColors.white,
+                        size: 18,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => context.pop(),
+            child: Text(
+              'Not now',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

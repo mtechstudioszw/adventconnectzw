@@ -60,4 +60,31 @@ class CacheService {
   static Future<void> clear() async {
     await _box?.clear();
   }
+
+  // ---------- Long-term preferences (no TTL) -------------------------
+  //
+  // The TTL-tracking writeString/readString above are right for cached
+  // network payloads — anything older than 24h should refetch. User
+  // preferences (Sabbath countdown opt-in, etc.) need to survive
+  // forever, so they get their own methods that skip the timestamp
+  // dance.
+
+  /// Write a long-term preference. Use a `pref:` prefixed key so it's
+  /// easy to spot vs cached payload keys.
+  static Future<void> writePref(String key, String value) async {
+    final box = _box;
+    if (box == null) return;
+    await box.put(key, value);
+  }
+
+  /// Read a long-term preference. Returns null if absent.
+  static String? readPref(String key) {
+    final box = _box;
+    if (box == null) return null;
+    return box.get(key);
+  }
+
+  static Future<void> deletePref(String key) async {
+    await _box?.delete(key);
+  }
 }

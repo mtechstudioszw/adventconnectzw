@@ -24,6 +24,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   bool _loading = true;
   bool _isFollowing = false;
   bool _followBusy = false;
+  bool _hasAdmin = true; // optimistic — gate only flips when we confirm
   String? _error;
 
   @override
@@ -39,11 +40,13 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
       final results = await Future.wait([
         ChurchService.fetchChurchById(widget.churchId),
         ChurchService.isFollowing(widget.churchId),
+        ChurchService.hasApprovedAdmin(widget.churchId),
       ]);
       if (!mounted) return;
       setState(() {
         _church = (results[0] as Church?) ?? _church;
         _isFollowing = results[1] as bool;
+        _hasAdmin = results[2] as bool;
         _loading = false;
       });
     } catch (_) {
@@ -267,6 +270,13 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
 
   Widget _buildFollowButton() {
     final following = _isFollowing;
+    // Unclaimed churches can't post announcements, so following them
+    // would just collect dead silence. Push the viewer toward the
+    // claim flow instead — unless they're already following from
+    // before the gate existed, in which case let them unfollow.
+    if (!_hasAdmin && !following) {
+      return _buildClaimCta();
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: SizedBox(
@@ -345,6 +355,113 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                   ),
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildClaimCta() {
+    final church = _church;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.goldAccent.withValues(alpha: 0.35),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.goldAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.verified_outlined,
+                    color: AppColors.goldAccent,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'This church isn\'t claimed yet',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Until a pastor or elder claims it, no one can post announcements here — following would be quiet. If you\'re an admin, claim it to start posting.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.7),
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: church == null
+                        ? null
+                        : () => context.pushNamed(
+                              'claim_church',
+                              pathParameters: {'id': church.id},
+                              extra: church,
+                            ),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.verified_user_outlined,
+                              color: AppColors.white,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Claim this church',
+                              style: AppTextStyles.buttonText,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

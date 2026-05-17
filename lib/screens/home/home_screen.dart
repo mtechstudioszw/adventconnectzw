@@ -5,17 +5,21 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
+import '../../models/member_directory_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
+import '../../services/directory_service.dart';
 import '../../services/event_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/sabbath_service.dart';
 import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/shimmer_loaders.dart';
+import '../../widgets/start_conversation_sheet.dart';
 import '../widgets/main_bottom_nav.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -33,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   List<Event> _events = [];
   List<Church> _churches = [];
+  List<MemberDirectoryEntry> _suggestedMembers = [];
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
   int _unreadNotifications = 0;
@@ -88,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen>
         EventService.fetchUserRsvpedEventIds(),
         NotificationService.unreadCount(),
         UrgentBannerService.fetchActive(),
+        DirectoryService.fetchSuggestedMembers(),
       ]);
       if (!mounted) return;
       final events = (results[0] as List<Event>).take(8).toList();
@@ -99,6 +105,7 @@ class _HomeScreenState extends State<HomeScreen>
         _rsvpedEventIds = results[3] as Set<String>;
         _unreadNotifications = results[4] as int;
         _banner = results[5] as UrgentBanner?;
+        _suggestedMembers = results[6] as List<MemberDirectoryEntry>;
         _loading = false;
       });
       // Best-effort cache write — failures here must never surface.
@@ -242,6 +249,16 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 const SizedBox(height: 12),
                 _buildChurchGrid(),
+                if (_suggestedMembers.isNotEmpty) ...[
+                  const SizedBox(height: 28),
+                  _buildSectionHeader(
+                    'People to meet',
+                    'Browse all',
+                    onAction: () => context.pushNamed('member_directory'),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSuggestedMembersRow(),
+                ],
                 const SizedBox(height: 24),
                 const AdBanner(),
                 const SizedBox(height: 16),
@@ -317,6 +334,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
+                                const _SabbathChip(),
                               ],
                             ),
                           ),
@@ -536,6 +554,33 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
+  Widget _buildSuggestedMembersRow() {
+    return SizedBox(
+      height: 188,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: _suggestedMembers.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (context, i) {
+          final m = _suggestedMembers[i];
+          return SizedBox(
+            width: 140,
+            child: _SuggestedMemberTile(
+              entry: m,
+              onTap: () => showStartConversationSheet(
+                context,
+                otherUserId: m.userId,
+                otherUserName: m.fullName ?? 'Member',
+                source: 'home_suggestion',
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _HeaderClipper extends CustomClipper<Path> {
@@ -556,6 +601,253 @@ class _HeaderClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+/// Compact countdown to next Friday sundown. Hidden unless the user
+/// has opted in (Settings → Sabbath countdown) AND we're within 7
+/// days of the next sundown (always true at any given moment, but
+/// kept as a guard in case the calculation falls through).
+class _SabbathChip extends StatefulWidget {
+  const _SabbathChip();
+
+  @override
+  State<_SabbathChip> createState() => _SabbathChipState();
+}
+
+class _SabbathChipState extends State<_SabbathChip> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-render once a minute so the countdown stays current. Cheap —
+    // the widget is tiny and the rest of the header stays untouched.
+    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!SabbathService.isEnabled()) return const SizedBox.shrink();
+    final next = SabbathService.nextSabbathStart();
+    if (next == null) return const SizedBox.shrink();
+    final remaining = next.difference(DateTime.now().toUtc());
+    if (remaining.isNegative) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.goldAccent.withValues(alpha: 0.20),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.goldAccent.withValues(alpha: 0.45),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.brightness_3,
+              size: 13,
+              color: AppColors.goldAccent,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Sabbath in ${_format(remaining)}',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.white,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _format(Duration d) {
+    if (d.inDays >= 1) {
+      return '${d.inDays}d ${d.inHours.remainder(24)}h';
+    }
+    if (d.inHours >= 1) {
+      return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
+    }
+    return '${d.inMinutes}m';
+  }
+}
+
+class _SuggestedMemberTile extends StatelessWidget {
+  const _SuggestedMemberTile({required this.entry, required this.onTap});
+
+  final MemberDirectoryEntry entry;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = entry.fullName ?? 'Member';
+    final subtitle = entry.profession?.trim().isNotEmpty == true
+        ? entry.profession!.trim()
+        : (entry.city?.trim().isNotEmpty == true
+            ? entry.city!.trim()
+            : 'Adventist member');
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(18),
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _MemberAvatar(
+                photoUrl: entry.profilePhotoUrl,
+                name: name,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  fontSize: 11.5,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.chat_bubble_outline,
+                      size: 13,
+                      color: AppColors.primaryBlue,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Say hi',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MemberAvatar extends StatelessWidget {
+  const _MemberAvatar({required this.photoUrl, required this.name});
+
+  final String? photoUrl;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = _initialsFrom(name);
+    final radius = BorderRadius.circular(28);
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return Container(
+        width: 56,
+        height: 56,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(
+            color: AppColors.primaryBlue.withValues(alpha: 0.2),
+            width: 2,
+          ),
+        ),
+        child: Image.network(
+          photoUrl!,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _initialsBox(initials),
+        ),
+      );
+    }
+    return _initialsBox(initials);
+  }
+
+  Widget _initialsBox(String initials) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: AppTextStyles.titleMedium.copyWith(
+          color: AppColors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 18,
+        ),
+      ),
+    );
+  }
+
+  String _initialsFrom(String name) {
+    final parts =
+        name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
+  }
 }
 
 class _UrgentBannerCard extends StatelessWidget {

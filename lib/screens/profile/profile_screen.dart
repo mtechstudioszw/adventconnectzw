@@ -525,18 +525,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           _SettingsRow(
             icon: Icons.help_outline,
             label: 'Help & support',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Help center coming soon.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.white,
-                    ),
-                  ),
-                ),
-              );
-            },
+            onTap: () => context.pushNamed('feedback'),
           ),
           const _Divider(),
           _SettingsRow(

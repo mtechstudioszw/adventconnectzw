@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
+import '../../services/sabbath_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -26,6 +27,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _darkTheme = false;
   bool _biometricEnabled = false;
   bool _biometricAvailable = false;
+  bool _sabbathEnabled = SabbathService.isEnabled();
+  String _sabbathProvince = SabbathService.province() ?? 'Harare';
 
   @override
   void initState() {
@@ -151,6 +154,125 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  Future<void> _changePassword() async {
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool busy = false;
+    String? error;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setLocal) {
+          return AlertDialog(
+            backgroundColor: AppColors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              'Change password',
+              style: AppTextStyles.headlineSmall,
+            ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: newCtrl,
+                    obscureText: true,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'New password',
+                      hintText: 'Min 8 characters',
+                    ),
+                    validator: (v) {
+                      if ((v ?? '').length < 8) return 'At least 8 characters';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: confirmCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Confirm new password',
+                    ),
+                    validator: (v) {
+                      if (v != newCtrl.text) return 'Passwords do not match';
+                      return null;
+                    },
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      error!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.red,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: busy ? null : () => Navigator.pop(ctx, false),
+                child: Text(
+                  'Cancel',
+                  style:
+                      AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+                ),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                ),
+                onPressed: busy
+                    ? null
+                    : () async {
+                        if (!formKey.currentState!.validate()) return;
+                        setLocal(() {
+                          busy = true;
+                          error = null;
+                        });
+                        final r =
+                            await AuthService.changePassword(newCtrl.text);
+                        if (!r.isSuccess) {
+                          setLocal(() {
+                            busy = false;
+                            error = r.errorMessage;
+                          });
+                          return;
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      },
+                child: Text(
+                  busy ? 'Saving…' : 'Save',
+                  style: AppTextStyles.labelLarge,
+                ),
+              ),
+            ],
+          );
+        });
+      },
+    );
+
+    newCtrl.dispose();
+    confirmCtrl.dispose();
+    if (ok == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Password updated.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _pickLanguage() async {
     final picked = await showModalBottomSheet<String>(
       context: context,
@@ -159,6 +281,18 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
     if (picked != null && mounted) {
       setState(() => _language = picked);
+    }
+  }
+
+  Future<void> _pickSabbathProvince() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ProvinceSheet(selected: _sabbathProvince),
+    );
+    if (picked != null && mounted) {
+      await SabbathService.setProvince(picked);
+      setState(() => _sabbathProvince = picked);
     }
   }
 
@@ -197,7 +331,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         _NavRow(
                           icon: Icons.lock_outline,
                           label: 'Change password',
-                          onTap: _showSoon,
+                          onTap: _changePassword,
                         ),
                         if (_biometricAvailable) ...[
                           const _Divider(),
@@ -261,6 +395,27 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ),
                         const _Divider(),
                         _ToggleRow(
+                          icon: Icons.brightness_3,
+                          label: 'Sabbath countdown',
+                          value: _sabbathEnabled,
+                          onChanged: (v) async {
+                            await SabbathService.setEnabled(v);
+                            if (mounted) {
+                              setState(() => _sabbathEnabled = v);
+                            }
+                          },
+                        ),
+                        if (_sabbathEnabled) ...[
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.place_outlined,
+                            label: 'Sabbath province',
+                            trailing: _sabbathProvince,
+                            onTap: _pickSabbathProvince,
+                          ),
+                        ],
+                        const _Divider(),
+                        _ToggleRow(
                           icon: Icons.dark_mode_outlined,
                           label: 'Dark theme',
                           value: _darkTheme,
@@ -299,21 +454,27 @@ class _SettingsScreenState extends State<SettingsScreen>
                       title: 'Support',
                       children: [
                         _NavRow(
+                          icon: Icons.feedback_outlined,
+                          label: 'Send feedback',
+                          onTap: () => context.pushNamed('feedback'),
+                        ),
+                        const _Divider(),
+                        _NavRow(
                           icon: Icons.help_outline,
                           label: 'Help center',
-                          onTap: _showSoon,
+                          onTap: () => context.pushNamed('feedback'),
                         ),
                         const _Divider(),
                         _NavRow(
                           icon: Icons.flag_outlined,
                           label: 'Report a problem',
-                          onTap: _showSoon,
+                          onTap: () => context.pushNamed('feedback'),
                         ),
                         const _Divider(),
                         _NavRow(
                           icon: Icons.mail_outline,
                           label: 'Contact us',
-                          onTap: _showSoon,
+                          onTap: () => context.pushNamed('feedback'),
                         ),
                       ],
                     ),
@@ -655,6 +816,93 @@ class _CircleIconButton extends StatelessWidget {
             border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
           ),
           child: Icon(icon, color: AppColors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProvinceSheet extends StatelessWidget {
+  const _ProvinceSheet({required this.selected});
+  final String selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = SabbathService.provinces;
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(26, 26, 46, 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Choose your province',
+                style: AppTextStyles.headlineSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Used to compute Friday sundown.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final opt in options)
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context, opt),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            opt == selected
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                            color: opt == selected
+                                ? AppColors.primaryBlue
+                                : const Color.fromRGBO(26, 26, 46, 0.4),
+                            size: 22,
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              opt,
+                              style: AppTextStyles.titleMedium.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

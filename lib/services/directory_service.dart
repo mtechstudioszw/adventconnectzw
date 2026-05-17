@@ -39,6 +39,34 @@ class DirectoryService {
         .toList();
   }
 
+  /// Suggested members for the home-screen "People to meet" row.
+  /// Visible directory entries, excluding the current user. Newest
+  /// first so the row stays fresh as new people opt in. Best-effort —
+  /// returns an empty list on error (the home screen treats the row
+  /// as optional UI).
+  static Future<List<MemberDirectoryEntry>> fetchSuggestedMembers({
+    int limit = 8,
+  }) async {
+    try {
+      final user = _client.auth.currentUser;
+      var query = _client
+          .from(_table)
+          .select('*, profiles(full_name, profile_photo_url), churches(name)')
+          .eq('is_visible', true);
+      if (user != null) {
+        query = query.neq('user_id', user.id);
+      }
+      final response =
+          await query.order('created_at', ascending: false).limit(limit);
+      return (response as List)
+          .map((row) =>
+              MemberDirectoryEntry.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Returns the current user's directory entry, or null if they
   /// haven't opted in yet.
   static Future<MemberDirectoryEntry?> fetchMyEntry() async {

@@ -13,9 +13,11 @@ Production-ready SQL for the **Advent Connect ZW** Supabase project.
 | `patch_006_notification_triggers.sql` | Closes six Part 23 notification gaps in one shot: new announcement (with obituary override on the `none` preference), urgent banner fan-out, event-approved, prayer-answered, and message-request received. **Required for the full notification matrix.** |
 | `patch_007_job_filled_notify.sql` | Trigger on `jobs` UPDATE OF status that fires when a job moves into `'filled'` and notifies the poster. Pairs with `JobService.markAsFilled()` + the poster-only button on `job_details_screen`. **Required for the job-filled success notification.** |
 | `patch_008_pgcron_scheduled_notifications.sql` | Enables `pg_cron` and registers two scheduled jobs: `enqueue_event_reminders` (every 30 min, notifies RSVPd members ~24h before an event) and `enqueue_job_expiry_warnings` (daily 09:00 UTC, notifies poster when a job expires in 3 days). NOT EXISTS dedupe keeps re-runs safe. **Required for the time-based Part 23 notifications.** |
+| `patch_009_feedback.sql` | In-app beta feedback table. Submitters INSERT into `public.feedback` from the "Send feedback" screen; the team triages by reading the table in Supabase Studio. **Required for the in-app feedback form.** |
+| `patch_010_church_admin_application_fields.sql` | Adds `applicant_name` + `applicant_phone` to `church_admins` so the reviewer has WhatsApp contact info for verification. `claim_church_screen` was already collecting these; this just persists them. |
 | `seed_data.sql` | Sample data for development / staging. **Optional.** |
 
-Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `patch_003_…` → `patch_004_…` → `patch_005_…` → `patch_006_…` → `patch_007_…` → `patch_008_…` → `seed_data.sql`.
+Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `patch_003_…` → `patch_004_…` → `patch_005_…` → `patch_006_…` → `patch_007_…` → `patch_008_…` → `patch_009_…` → `patch_010_…` → `seed_data.sql`.
 
 ## Tables created (11)
 

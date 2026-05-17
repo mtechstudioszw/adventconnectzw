@@ -125,6 +125,29 @@ class AuthService {
     }
   }
 
+  /// Change the signed-in user's password. Caller is responsible for
+  /// asking the user to confirm the new value twice. Supabase doesn't
+  /// require the current password since the session is already proof
+  /// of identity, but a sensible UI still asks for it.
+  static Future<AuthResult> changePassword(String newPassword) async {
+    try {
+      if (newPassword.length < 8) {
+        return AuthResult.failure('Password must be at least 8 characters.');
+      }
+      final response = await _client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      if (response.user == null) {
+        return AuthResult.failure('Could not change password.');
+      }
+      return AuthResult.success(response.user);
+    } on AuthException catch (e) {
+      return AuthResult.failure(e.message);
+    } catch (_) {
+      return AuthResult.failure('Could not change password.');
+    }
+  }
+
   static Future<AuthResult> sendPasswordReset(String email) async {
     try {
       await _client.auth.resetPasswordForEmail(email);

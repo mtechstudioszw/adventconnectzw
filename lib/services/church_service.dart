@@ -104,6 +104,20 @@ class ChurchService {
         .eq('church_id', churchId);
   }
 
+  /// True when at least one approved church_admins row exists for the
+  /// given church. Used to gate the follow button on church_details so
+  /// unclaimed churches push the viewer toward the claim flow instead
+  /// of accumulating followers no one can post to.
+  static Future<bool> hasApprovedAdmin(String churchId) async {
+    final response = await _client
+        .from('church_admins')
+        .select('id')
+        .eq('church_id', churchId)
+        .eq('status', 'approved')
+        .limit(1);
+    return (response as List).isNotEmpty;
+  }
+
   /// Insert a row into `church_edit_suggestions`. Status defaults to
   /// pending and an admin reviews it from the web dashboard.
   static Future<void> suggestEdit({
@@ -156,6 +170,8 @@ class ChurchService {
     required String churchId,
     required String role,
     String? appointmentLetterUrl,
+    String? applicantName,
+    String? applicantPhone,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -166,6 +182,8 @@ class ChurchService {
       'user_id': user.id,
       'role': role,
       'appointment_letter_url': ?appointmentLetterUrl,
+      'applicant_name': ?applicantName?.trim(),
+      'applicant_phone': ?applicantPhone?.trim(),
       'status': 'pending',
     }, onConflict: 'church_id,user_id');
     AnalyticsService.churchClaimed(int.tryParse(churchId) ?? 0);

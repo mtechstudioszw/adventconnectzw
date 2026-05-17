@@ -57,6 +57,7 @@ import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
+import '../screens/profile/feedback_screen.dart';
 import '../screens/profile/notification_centre_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/seller/edit_store_screen.dart';
@@ -367,6 +368,11 @@ final GoRouter appRouter = GoRouter(
           path: 'blocked',
           name: 'blocked_users',
           builder: (context, state) => const BlockedUsersScreen(),
+        ),
+        GoRoute(
+          path: 'feedback',
+          name: 'feedback',
+          builder: (context, state) => const FeedbackScreen(),
         ),
       ],
     ),

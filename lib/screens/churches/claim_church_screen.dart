@@ -69,6 +69,8 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
         churchId: widget.church.id,
         role: _role,
         appointmentLetterUrl: _letterUrl,
+        applicantName: _nameController.text,
+        applicantPhone: _phoneController.text,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -151,19 +151,22 @@ class MapsLauncher {
   /// Uses Google Maps universal URLs which fall back to the web on
   /// devices without a Maps app installed.
   static Future<bool> openLocation({required Church church}) async {
-    final url = _viewUrl(church);
+    final url = viewUrl(church);
     if (url == null) return false;
     return _launch(url);
   }
 
   /// Opens turn-by-turn directions to the church.
   static Future<bool> openDirections({required Church church}) async {
-    final url = _directionsUrl(church);
+    final url = directionsUrl(church);
     if (url == null) return false;
     return _launch(url);
   }
 
-  static Uri? _viewUrl(Church church) {
+  /// Public for testability — returns the Google Maps "view this place"
+  /// URL the launcher will hand to the OS, or null if the church has
+  /// neither coordinates nor a usable address.
+  static Uri? viewUrl(Church church) {
     if (church.hasLocation) {
       return Uri.parse(
         'https://www.google.com/maps/search/?api=1'
@@ -178,7 +181,9 @@ class MapsLauncher {
     );
   }
 
-  static Uri? _directionsUrl(Church church) {
+  /// Public for testability — same as [viewUrl] but builds the
+  /// turn-by-turn directions URL instead.
+  static Uri? directionsUrl(Church church) {
     if (church.hasLocation) {
       return Uri.parse(
         'https://www.google.com/maps/dir/?api=1'

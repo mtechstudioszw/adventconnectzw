@@ -26,14 +26,15 @@ dependencies:
   flutter_local_notifications: ^17.2.3
 
   # Voice notes in chat
-  record: ^5.1.2
+  record: ^5.2.0
   audioplayers: ^6.1.0
   permission_handler: ^11.3.1
   path_provider: ^2.1.4
 
-  # Chat screenshot prevention (Android FLAG_SECURE). Android-only;
-  # all call sites must be wrapped in Platform.isAndroid.
-  flutter_windowmanager: ^0.2.0
+  # TODO: Re-add a chat screenshot-prevention package (Android FLAG_SECURE).
+  # flutter_windowmanager is abandoned (uses v1 Android embedding) and
+  # flutter_windowmanager_plus 1.0.1 forces an old AGP 7.3.0 download that
+  # fails on slow networks. Consider `screen_protector` when revisiting.
 
   # Stage 20 — AdMob banner ads
   google_mobile_ads: ^5.3.1
@@ -51,6 +52,12 @@ dependencies:
   google_sign_in: ^6.2.2
   local_auth: ^2.3.0
   geolocator: ^13.0.2
+
+# Force a newer record_linux that matches the record_platform_interface API.
+# The transitive record_linux 0.7.2 is missing startStream() and has a stale
+# hasPermission signature, which breaks compilation even for Android builds.
+dependency_overrides:
+  record_linux: ^1.3.0
 
 dev_dependencies:
   flutter_test:

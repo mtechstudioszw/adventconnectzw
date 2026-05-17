@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -96,24 +95,15 @@ class _ChatScreenState extends State<ChatScreen>
     super.dispose();
   }
 
-  // FLAG_SECURE blocks screenshots and hides the chat from the
-  // recent-apps thumbnail while the screen is in the foreground.
-  // Android-only — iOS does not allow apps to programmatically
-  // prevent screenshots, so this is a no-op there.
+  // TODO: Re-wire screenshot blocking once a working FLAG_SECURE package
+  // is back in pubspec.yaml. Stubbed out for now so the build doesn't
+  // pull AGP 7.3.0 over a slow network.
   void _enableScreenshotBlock() {
     if (!Platform.isAndroid) return;
-    unawaited(
-      FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE)
-          .catchError((_) => true),
-    );
   }
 
   void _disableScreenshotBlock() {
     if (!Platform.isAndroid) return;
-    unawaited(
-      FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE)
-          .catchError((_) => true),
-    );
   }
 
   Future<void> _bootstrap() async {

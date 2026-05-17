@@ -4,6 +4,7 @@ import '../../models/church_model.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/church_map.dart';
 
 class ChurchDetailsScreen extends StatefulWidget {
   const ChurchDetailsScreen({
@@ -148,6 +149,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         SliverToBoxAdapter(child: _buildHeader(church)),
         SliverToBoxAdapter(child: _buildFollowSection()),
         SliverToBoxAdapter(child: _buildAbout(church)),
+        SliverToBoxAdapter(child: _buildLocation(church)),
         SliverToBoxAdapter(child: _buildContact(church)),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
@@ -454,6 +456,115 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     );
   }
 
+  Widget _buildLocation(Church church) {
+    final hasCoords = church.hasLocation;
+    final addressLine = _addressLine(church);
+    // Skip the section entirely if we have nothing to show.
+    if (!hasCoords && addressLine.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (hasCoords)
+              ChurchMapPreview(church: church)
+            else
+              _AddressOnlyHeader(
+                church: church,
+                onTap: () => MapsLauncher.openLocation(church: church),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.place_outlined,
+                        size: 18,
+                        color: AppColors.primaryBlue,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Location',
+                        style: AppTextStyles.titleLarge,
+                      ),
+                    ],
+                  ),
+                  if (addressLine.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      addressLine,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.75),
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _LocationActionButton(
+                          icon: Icons.map_outlined,
+                          label: 'Open in Maps',
+                          filled: false,
+                          onTap: () =>
+                              _onOpenMaps(MapsLauncher.openLocation, church),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _LocationActionButton(
+                          icon: Icons.directions_rounded,
+                          label: 'Directions',
+                          filled: true,
+                          onTap: () => _onOpenMaps(
+                            MapsLauncher.openDirections,
+                            church,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _addressLine(Church church) {
+    final parts = <String>[
+      if ((church.address ?? '').trim().isNotEmpty) church.address!.trim(),
+      if (church.city.trim().isNotEmpty) church.city.trim(),
+    ];
+    return parts.join(', ');
+  }
+
+  Future<void> _onOpenMaps(
+    Future<bool> Function({required Church church}) launcher,
+    Church church,
+  ) async {
+    final ok = await launcher(church: church);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open Maps on this device.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildAbout(Church church) {
     if (church.description == null || church.description!.isEmpty) {
       return const SizedBox.shrink();
@@ -486,9 +597,6 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     final rows = <Widget>[];
     if (church.pastorName != null && church.pastorName!.isNotEmpty) {
       rows.add(_infoRow(Icons.person_outline, 'Pastor', church.pastorName!));
-    }
-    if (church.address != null && church.address!.isNotEmpty) {
-      rows.add(_infoRow(Icons.place_outlined, 'Address', church.address!));
     }
     if (church.contactPhone != null && church.contactPhone!.isNotEmpty) {
       rows.add(_infoRow(Icons.phone_outlined, 'Phone', church.contactPhone!));
@@ -556,6 +664,137 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AddressOnlyHeader extends StatelessWidget {
+  const _AddressOnlyHeader({required this.church, required this.onTap});
+  final Church church;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 120,
+          width: double.infinity,
+          decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(0, -0.2),
+                        radius: 1.2,
+                        colors: [
+                          AppColors.white.withValues(alpha: 0.10),
+                          AppColors.white.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.map_outlined,
+                      size: 36,
+                      color: AppColors.goldAccent,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Tap to view on the map',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationActionButton extends StatelessWidget {
+  const _LocationActionButton({
+    required this.icon,
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: filled ? AppColors.primaryGradient : null,
+        color: filled ? null : AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: filled
+            ? null
+            : Border.all(
+                color: AppColors.primaryBlue.withValues(alpha: 0.35),
+              ),
+        boxShadow: filled
+            ? [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: filled ? AppColors.white : AppColors.primaryBlue,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: filled ? AppColors.white : AppColors.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

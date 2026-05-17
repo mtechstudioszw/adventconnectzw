@@ -9,7 +9,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/church_card.dart';
-import '../../widgets/church_map.dart';
 import '../widgets/main_scaffold.dart';
 
 class ChurchesScreen extends StatefulWidget {
@@ -29,7 +28,6 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   bool _loading = true;
   String? _error;
   Position? _position;
-  bool _mapView = false;
 
   @override
   void initState() {
@@ -146,225 +144,11 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       body: Column(
         children: [
           _buildSearchBar(),
-          _buildViewToggle(),
-          if (_cities.isNotEmpty && !_mapView) _buildCityFilters(),
-          Expanded(
-            child: _mapView ? _buildMap() : _buildList(),
-          ),
+          if (_cities.isNotEmpty) _buildCityFilters(),
+          Expanded(child: _buildList()),
           const AdBanner(),
         ],
       ),
-    );
-  }
-
-  Widget _buildViewToggle() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: const Color.fromRGBO(26, 26, 46, 0.06),
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _ToggleSegment(
-                icon: Icons.view_list_rounded,
-                label: 'List',
-                selected: !_mapView,
-                onTap: () => setState(() => _mapView = false),
-              ),
-            ),
-            Expanded(
-              child: _ToggleSegment(
-                icon: Icons.map_rounded,
-                label: 'Map',
-                selected: _mapView,
-                onTap: () => setState(() => _mapView = true),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMap() {
-    final located =
-        _churches.where((c) => c.hasLocation).toList(growable: false);
-    if (located.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.map_outlined,
-                size: 56,
-                color: Color.fromRGBO(26, 26, 46, 0.3),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'No churches with coordinates yet',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.7),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Pins appear here as churches add their location.',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.55),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: ChurchesMapView(
-          churches: located,
-          userLatitude: _position?.latitude,
-          userLongitude: _position?.longitude,
-          onTapChurch: _showChurchSheet,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showChurchSheet(Church church) async {
-    final distance = _distanceLabelFor(church);
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.18),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppColors.primaryGradient,
-                    ),
-                    child: const Icon(
-                      Icons.church_rounded,
-                      color: AppColors.white,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                church.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.titleLarge.copyWith(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            if (church.isVerified) ...[
-                              const SizedBox(width: 4),
-                              const Icon(
-                                Icons.verified,
-                                size: 16,
-                                color: AppColors.goldAccent,
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          [
-                            church.city,
-                            if (distance != null) distance,
-                          ].where((s) => s.isNotEmpty).join('  ·  '),
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color:
-                                const Color.fromRGBO(26, 26, 46, 0.65),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        MapsLauncher.openDirections(church: church);
-                      },
-                      icon: const Icon(Icons.directions_rounded, size: 18),
-                      label: const Text('Directions'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        context.pushNamed(
-                          'church_details',
-                          pathParameters: {'id': church.id},
-                          extra: church,
-                        );
-                      },
-                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                      label: const Text('View details'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -528,72 +312,6 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-class _ToggleSegment extends StatelessWidget {
-  const _ToggleSegment({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            gradient: selected ? AppColors.primaryGradient : null,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.22),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 17,
-                color: selected
-                    ? AppColors.white
-                    : const Color.fromRGBO(26, 26, 46, 0.55),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: selected
-                      ? AppColors.white
-                      : const Color.fromRGBO(26, 26, 46, 0.65),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

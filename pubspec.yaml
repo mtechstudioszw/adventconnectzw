@@ -53,10 +53,10 @@ dependencies:
   local_auth: ^2.3.0
   geolocator: ^13.0.2
 
-  # Maps — flutter_map renders OpenStreetMap tiles (no API key, no native
-  # config). url_launcher opens the device's Maps app for directions.
-  flutter_map: ^7.0.2
-  latlong2: ^0.9.1
+  # Maps — open the device's Maps app for view + directions. We avoid
+  # embedding an in-app map for now because the flutter_map dependency
+  # tree is currently broken on Dart 3 (proj4dart pulls wkt_parser 2.0.0
+  # which is pinned to Dart 2). Revisit once upstream republishes.
   url_launcher: ^6.3.1
 
 # Force a newer record_linux that matches the record_platform_interface API.

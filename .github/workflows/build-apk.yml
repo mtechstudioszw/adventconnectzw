@@ -1,0 +1,70 @@
+# Builds a debug APK on every push to main and on manual trigger.
+# The APK is uploaded as a GitHub Actions artifact you can download
+# straight to your phone. Frees you from having to download ~400 MB
+# of Android build deps over a slow connection — GitHub does the
+# heavy lifting on their servers, you only download the finished
+# ~50 MB APK.
+#
+# How to grab the APK:
+#   1. Open https://github.com/mtechstudioszw/adventconnectzw/actions
+#   2. Click the latest "Build APK" run
+#   3. Scroll to "Artifacts" → tap "advent-connect-debug-apk" to download
+#   4. Open the .zip on your phone, extract the .apk, install.
+#
+# To trigger a manual build without a code push:
+#   Actions tab → "Build APK" → "Run workflow" → pick main → Run.
+
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Debug APK (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show toolchain versions
+        run: |
+          flutter --version
+          dart --version
+          java -version
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: advent-connect-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30

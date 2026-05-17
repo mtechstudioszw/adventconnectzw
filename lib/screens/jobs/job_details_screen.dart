@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/job_model.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
@@ -25,6 +26,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   Job? _job;
   bool _loading = true;
   String? _error;
+  bool _markingFilled = false;
 
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -66,6 +68,104 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         _error = 'Could not load job.';
         _loading = false;
       });
+    }
+  }
+
+  bool get _isPoster {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    return uid != null && _job?.posterId == uid;
+  }
+
+  Future<void> _confirmMarkFilled() async {
+    final job = _job;
+    if (job == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Mark as filled?',
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'This hides "${job.title}" from new applicants. You can\'t reopen it from the app.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.buttonText.copyWith(
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Mark as filled'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _markingFilled = true);
+    try {
+      await JobService.markAsFilled(job.id);
+      if (!mounted) return;
+      setState(() {
+        _markingFilled = false;
+        _job = Job(
+          id: job.id,
+          posterId: job.posterId,
+          posterName: job.posterName,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          type: job.type,
+          salaryMin: job.salaryMin,
+          salaryMax: job.salaryMax,
+          currency: job.currency,
+          description: job.description,
+          requirements: job.requirements,
+          category: job.category,
+          contactPhone: job.contactPhone,
+          companyLogoUrl: job.companyLogoUrl,
+          isActive: job.isActive,
+          status: 'filled',
+          createdAt: job.createdAt,
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Marked as filled.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _markingFilled = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not update the job. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
     }
   }
 
@@ -341,6 +441,21 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   }
 
   Widget _buildApplyButton() {
+    final job = _job!;
+    if (job.isFilled) {
+      return _StatusPill(
+        icon: Icons.check_circle_outline,
+        label: 'Position filled',
+        background: AppColors.successGreen.withValues(alpha: 0.12),
+        foreground: AppColors.successGreen,
+      );
+    }
+    if (_isPoster) {
+      return _MarkFilledButton(
+        loading: _markingFilled,
+        onTap: _confirmMarkFilled,
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         gradient: AppColors.primaryGradient,
@@ -576,6 +691,104 @@ class _CircleIconButton extends StatelessWidget {
             border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
           ),
           child: Icon(icon, color: AppColors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({
+    required this.icon,
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: foreground.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: foreground, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: AppTextStyles.buttonText.copyWith(
+              color: foreground,
+              fontSize: 15,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarkFilledButton extends StatelessWidget {
+  const _MarkFilledButton({required this.loading, required this.onTap});
+
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primaryBlue, width: 1.5),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: loading ? null : onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (loading)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primaryBlue,
+                    ),
+                  )
+                else
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: AppColors.primaryBlue,
+                    size: 18,
+                  ),
+                const SizedBox(width: 8),
+                Text(
+                  loading ? 'Marking…' : 'Mark as filled',
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontSize: 15,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -10,9 +10,12 @@ Production-ready SQL for the **Advent Connect ZW** Supabase project.
 | `patch_003_conversations_v4.sql` | Migrates `conversations` from the legacy `participant_ids UUID[]` array form to V4 scalar columns (`participant_a_id`, `participant_b_id`, `participant_a_name`, `participant_b_name`, `last_sender_id`), rewrites the RLS, and updates the patch_002 `notify_new_message` trigger to read the new columns. **Required — every later patch and the Flutter client assume the scalar shape.** |
 | `patch_004_voice_notes.sql` | Adds the private `voice_notes` storage bucket with conversation-participant RLS so chat voice clips stay private. **Required for voice notes in chat.** |
 | `patch_005_message_requests.sql` | Adds `request_status` + `initiator_id` to conversations so first messages from strangers land in a "Requests" inbox until accepted. Also grants participants DELETE on their own conversations (used by "decline"). **Required for the message-requests UI.** |
+| `patch_006_notification_triggers.sql` | Closes six Part 23 notification gaps in one shot: new announcement (with obituary override on the `none` preference), urgent banner fan-out, event-approved, prayer-answered, and message-request received. **Required for the full notification matrix.** |
+| `patch_007_job_filled_notify.sql` | Trigger on `jobs` UPDATE OF status that fires when a job moves into `'filled'` and notifies the poster. Pairs with `JobService.markAsFilled()` + the poster-only button on `job_details_screen`. **Required for the job-filled success notification.** |
+| `patch_008_pgcron_scheduled_notifications.sql` | Enables `pg_cron` and registers two scheduled jobs: `enqueue_event_reminders` (every 30 min, notifies RSVPd members ~24h before an event) and `enqueue_job_expiry_warnings` (daily 09:00 UTC, notifies poster when a job expires in 3 days). NOT EXISTS dedupe keeps re-runs safe. **Required for the time-based Part 23 notifications.** |
 | `seed_data.sql` | Sample data for development / staging. **Optional.** |
 
-Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `patch_003_…` → `patch_004_…` → `patch_005_…` → `seed_data.sql`.
+Run in this order: `schema.sql` → `patch_001_…` → `patch_002_…` → `patch_003_…` → `patch_004_…` → `patch_005_…` → `patch_006_…` → `patch_007_…` → `patch_008_…` → `seed_data.sql`.
 
 ## Tables created (11)
 

@@ -17,6 +17,7 @@ class Job {
     this.contactPhone,
     this.companyLogoUrl,
     this.isActive = true,
+    this.status = 'open',
   });
 
   final String id;
@@ -35,7 +36,11 @@ class Job {
   final String? contactPhone;
   final String? companyLogoUrl;
   final bool isActive;
+  final String status;
   final DateTime createdAt;
+
+  bool get isFilled => status == 'filled';
+  bool get isOpen => status == 'open';
 
   factory Job.fromJson(Map<String, dynamic> json) {
     final raw = json['requirements'];
@@ -59,6 +64,7 @@ class Job {
       contactPhone: json['contact_phone'] as String?,
       companyLogoUrl: json['company_logo_url'] as String?,
       isActive: json['is_active'] != false,
+      status: (json['status'] ?? 'open') as String,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );

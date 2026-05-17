@@ -79,4 +79,19 @@ class JobService {
     AnalyticsService.jobPosted(category);
     return inserted['id'].toString();
   }
+
+  /// Flip an open job to 'filled'. RLS already restricts this to the
+  /// poster. Server-side trigger `notify_job_filled` then drops a
+  /// success notification for the poster (patch_007).
+  static Future<void> markAsFilled(String jobId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to update a job.');
+    }
+    await _client
+        .from(_table)
+        .update({'status': 'filled'})
+        .eq('id', jobId)
+        .eq('poster_id', user.id);
+  }
 }

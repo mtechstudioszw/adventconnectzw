@@ -127,6 +127,35 @@ class _SignupScreenState extends State<SignupScreen>
     }
   }
 
+  Future<void> _signUpWithGoogle() async {
+    // Age gate before launching the Google picker — Google sign-up skips
+    // the email/password form so we can't infer DOB from anything else.
+    if (_birthDate == null) {
+      setState(() => _serverError = 'Please verify your age first.');
+      return;
+    }
+    if (!AuthService.meetsMinimumAge(_birthDate!)) {
+      setState(() => _serverError = 'You must be at least 13 to sign up.');
+      return;
+    }
+
+    setState(() {
+      _serverError = null;
+      _loading = true;
+    });
+    final result = await AuthService.signInWithGoogle();
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (result.isSuccess) {
+      await AuthService.markAgeVerified(_birthDate!);
+      if (!mounted) return;
+      context.goNamed('home');
+    } else if (result.errorMessage != 'Sign in cancelled.') {
+      setState(() => _serverError = result.errorMessage);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -253,6 +282,10 @@ class _SignupScreenState extends State<SignupScreen>
                         label: _loading ? 'Creating account...' : 'Create account',
                         loading: _loading,
                         onPressed: _loading ? null : _submit,
+                      ),
+                      const SizedBox(height: 12),
+                      _GoogleButton(
+                        onPressed: _loading ? null : _signUpWithGoogle,
                       ),
                       const SizedBox(height: 14),
                       Text(
@@ -476,6 +509,56 @@ class _AgeBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onPressed == null ? 0.6 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color.fromRGBO(26, 26, 46, 0.12),
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.g_mobiledata,
+                    size: 28,
+                    color: AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Sign up with Google',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.darkNavy,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

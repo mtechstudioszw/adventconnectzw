@@ -55,6 +55,7 @@ app.*.map.json
 android/key.properties
 *.jks
 *.keystore
+ios/Flutter/AdMob.xcconfig
 
 # Loose screenshots and diagnostic captures dropped into the repo root
 Screenshot*.png

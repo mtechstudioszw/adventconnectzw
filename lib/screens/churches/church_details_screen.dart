@@ -146,7 +146,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
       slivers: [
         SliverToBoxAdapter(child: _buildHero(church)),
         SliverToBoxAdapter(child: _buildHeader(church)),
-        SliverToBoxAdapter(child: _buildFollowButton()),
+        SliverToBoxAdapter(child: _buildFollowSection()),
         SliverToBoxAdapter(child: _buildAbout(church)),
         SliverToBoxAdapter(child: _buildContact(church)),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
@@ -268,15 +268,27 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     );
   }
 
+  Widget _buildFollowSection() {
+    // Unclaimed churches can't post yet, but we let the viewer follow
+    // anyway — newly-claiming admins inherit those pre-followers as
+    // a built-in audience for their first announcement. Just warn
+    // first so expectations are calibrated, and surface the claim
+    // flow inline so the right person can take it over.
+    if (_hasAdmin) {
+      return _buildFollowButton();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildUnclaimedNotice(),
+        _buildFollowButton(),
+        _buildClaimLink(),
+      ],
+    );
+  }
+
   Widget _buildFollowButton() {
     final following = _isFollowing;
-    // Unclaimed churches can't post announcements, so following them
-    // would just collect dead silence. Push the viewer toward the
-    // claim flow instead — unless they're already following from
-    // before the gate existed, in which case let them unfollow.
-    if (!_hasAdmin && !following) {
-      return _buildClaimCta();
-    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: SizedBox(
@@ -359,108 +371,84 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     );
   }
 
-  Widget _buildClaimCta() {
-    final church = _church;
+  Widget _buildUnclaimedNotice() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: AppColors.goldAccent.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: AppColors.goldAccent.withValues(alpha: 0.35),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.info_outline,
+              color: AppColors.goldAccent,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'This church isn\'t claimed yet',
+                    style: AppTextStyles.titleSmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'You can follow, but don\'t expect announcements until a pastor or elder claims it.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.72),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.goldAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.verified_outlined,
-                    color: AppColors.goldAccent,
-                    size: 20,
-                  ),
+      ),
+    );
+  }
+
+  Widget _buildClaimLink() {
+    final church = _church;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+      child: TextButton.icon(
+        onPressed: church == null
+            ? null
+            : () => context.pushNamed(
+                  'claim_church',
+                  pathParameters: {'id': church.id},
+                  extra: church,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'This church isn\'t claimed yet',
-                    style: AppTextStyles.titleMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Until a pastor or elder claims it, no one can post announcements here — following would be quiet. If you\'re an admin, claim it to start posting.',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.7),
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: church == null
-                        ? null
-                        : () => context.pushNamed(
-                              'claim_church',
-                              pathParameters: {'id': church.id},
-                              extra: church,
-                            ),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.verified_user_outlined,
-                              color: AppColors.white,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Claim this church',
-                              style: AppTextStyles.buttonText,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        icon: const Icon(
+          Icons.verified_user_outlined,
+          size: 16,
+          color: AppColors.primaryBlue,
+        ),
+        label: Text(
+          'Is this your church? Claim it',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.primaryBlue,
+            fontWeight: FontWeight.w700,
+            fontSize: 13.5,
+          ),
+        ),
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),
     );

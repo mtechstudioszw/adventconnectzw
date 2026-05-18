@@ -105,6 +105,16 @@ class _ProfileSetupChurchScreenState extends State<ProfileSetupChurchScreen>
     setState(() => _saving = false);
 
     if (result.isSuccess) {
+      // Auto-follow the home church so the home-screen "Churches you
+      // follow" stat reflects the user's pick. Best-effort — if the
+      // user is already following it, the unique constraint trips and
+      // we just continue.
+      try {
+        await ChurchService.follow(_selectedChurchId!);
+      } catch (_) {
+        // Already following or follow blocked — not fatal.
+      }
+      if (!mounted) return;
       context.goNamed('home');
     } else {
       setState(() => _error = result.errorMessage);

@@ -74,6 +74,19 @@ class _LoginScreenState extends State<LoginScreen>
     if (result.isSuccess) {
       context.goNamed('home');
     } else {
+      // If Supabase rejected the sign-in because the email hasn't been
+      // confirmed yet, route the user to the OTP screen so they can
+      // resume verification instead of being stuck on an error string.
+      final message = (result.errorMessage ?? '').toLowerCase();
+      if (message.contains('email') && message.contains('confirm')) {
+        if (mounted) {
+          context.goNamed(
+            'email_verification',
+            extra: _emailController.text.trim(),
+          );
+        }
+        return;
+      }
       setState(() => _serverError = result.errorMessage);
     }
   }

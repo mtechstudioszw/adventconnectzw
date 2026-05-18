@@ -46,15 +46,29 @@ class JobCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      job.company,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.7),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            job.company.isEmpty
+                                ? (job.isSeeking
+                                    ? 'Looking for work'
+                                    : 'Member')
+                                : job.company,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: const Color.fromRGBO(26, 26, 46, 0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (job.isSeeking) ...[
+                          const SizedBox(width: 6),
+                          _SeekingPill(),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -134,6 +148,28 @@ class JobCard extends StatelessWidget {
     if (diff.inHours < 24) return 'Posted ${diff.inHours}h ago';
     if (diff.inDays < 7) return 'Posted ${diff.inDays}d ago';
     return 'Posted ${(diff.inDays / 7).floor()}w ago';
+  }
+}
+
+class _SeekingPill extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        'SEEKING',
+        style: AppTextStyles.labelSmall.copyWith(
+          color: AppColors.primaryBlue,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
   }
 }
 

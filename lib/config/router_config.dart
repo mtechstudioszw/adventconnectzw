@@ -211,6 +211,15 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const PostEventScreen(),
         ),
         GoRoute(
+          path: 'edit',
+          name: 'edit_event',
+          builder: (context, state) {
+            final existing =
+                state.extra is Event ? state.extra as Event : null;
+            return PostEventScreen(existing: existing);
+          },
+        ),
+        GoRoute(
           path: ':id',
           name: 'event_details',
           builder: (context, state) {
@@ -233,6 +242,15 @@ final GoRouter appRouter = GoRouter(
           path: 'post',
           name: 'post_prayer',
           builder: (context, state) => const PostPrayerScreen(),
+        ),
+        GoRoute(
+          path: 'edit',
+          name: 'edit_prayer',
+          builder: (context, state) {
+            final existing =
+                state.extra is Prayer ? state.extra as Prayer : null;
+            return PostPrayerScreen(existing: existing);
+          },
         ),
         GoRoute(
           path: ':id',

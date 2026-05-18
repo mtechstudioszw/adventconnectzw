@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
@@ -61,6 +62,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     _ticker?.cancel();
     _entrance.dispose();
     super.dispose();
+  }
+
+  bool _isOrganizer(Event event) {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    return uid != null && event.organizerId == uid;
   }
 
   void _updateTimeRemaining() {
@@ -250,6 +256,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                       : context.goNamed('events'),
                 ),
                 const Spacer(),
+                if (_isOrganizer(event)) ...[
+                  _CircleIconButton(
+                    icon: Icons.edit_outlined,
+                    onTap: () async {
+                      final updated = await context.pushNamed<bool>(
+                        'edit_event',
+                        extra: event,
+                      );
+                      if (updated == true) _bootstrap();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 _CircleIconButton(
                   icon: Icons.share_outlined,
                   onTap: () {},

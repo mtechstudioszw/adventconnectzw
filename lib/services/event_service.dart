@@ -123,6 +123,43 @@ class EventService {
     return inserted['id'].toString();
   }
 
+  /// Update an event the current user posted. Server-side RLS enforces
+  /// that organizer_id == auth.uid().
+  static Future<void> updateEvent({
+    required String eventId,
+    required String title,
+    required DateTime startDate,
+    required String startTime,
+    String? description,
+    String? venue,
+    String? city,
+    String? province,
+    String? category,
+    int? capacity,
+    String? contactName,
+    String? contactPhone,
+    String? coverPhotoUrl,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to edit your event.');
+    }
+    await _client.from(_table).update({
+      'title': title.trim(),
+      'description': description?.trim(),
+      'start_date': _formatDate(_dateOnly(startDate)),
+      'start_time': startTime,
+      'venue': venue?.trim(),
+      'city': city?.trim(),
+      'province': province?.trim(),
+      'category': category,
+      'capacity': capacity,
+      'contact_name': contactName?.trim(),
+      'contact_phone': contactPhone?.trim(),
+      'cover_photo_url': coverPhotoUrl?.trim(),
+    }).eq('id', eventId).eq('organizer_id', user.id);
+  }
+
   static Future<void> rsvpToEvent(String eventId) async {
     final user = _client.auth.currentUser;
     if (user == null) {

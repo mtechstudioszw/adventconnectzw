@@ -22,6 +22,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _bioController = TextEditingController();
 
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -48,19 +49,27 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     // never re-type what they already provided.
     final meta = AuthService.currentUser?.userMetadata ?? const {};
     _nameController.text = (meta['full_name'] as String?) ?? '';
+    _bioController.text = (meta['bio'] as String?) ?? '';
     _profilePhotoUrl = meta['profile_photo_url'] as String?;
+    _bioController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _entrance.dispose();
     _nameController.dispose();
+    _bioController.dispose();
     super.dispose();
   }
 
   String? _validateName(String? v) {
     if (v == null || v.trim().isEmpty) return 'Name is required';
     if (v.trim().length < 2) return 'Enter your full name';
+    return null;
+  }
+
+  String? _validateBio(String? v) {
+    if (v != null && v.length > 280) return 'Bio must be 280 characters or fewer';
     return null;
   }
 
@@ -90,6 +99,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
 
     final result = await AuthService.updateProfile(
       fullName: _nameController.text.trim(),
+      bio: _bioController.text.trim(),
       profilePhotoUrl: _profilePhotoUrl,
     );
     if (!mounted) return;
@@ -141,6 +151,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                       _NameCard(
                         controller: _nameController,
                         validator: _validateName,
+                      ),
+                      const SizedBox(height: 18),
+                      _BioCard(
+                        controller: _bioController,
+                        validator: _validateBio,
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 16),
@@ -468,6 +483,113 @@ class _NameCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'This is what others will see across the app.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.55),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BioCard extends StatelessWidget {
+  const _BioCard({required this.controller, required this.validator});
+
+  final TextEditingController controller;
+  final String? Function(String?) validator;
+
+  @override
+  Widget build(BuildContext context) {
+    final length = controller.text.length;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'A SHORT BIO',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$length/280',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: controller,
+            validator: validator,
+            maxLength: 280,
+            maxLines: 3,
+            textCapitalization: TextCapitalization.sentences,
+            style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+            decoration: InputDecoration(
+              hintText: 'A line about you (optional)',
+              prefixIcon: const Padding(
+                padding: EdgeInsets.only(left: 14, right: 10),
+                child: Icon(
+                  Icons.notes_outlined,
+                  color: AppColors.primaryBlue,
+                  size: 20,
+                ),
+              ),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 44, minHeight: 44),
+              filled: true,
+              fillColor: AppColors.lightGrey,
+              counterText: '',
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide:
+                    const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide:
+                    const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                  color: AppColors.primaryBlue,
+                  width: 1.5,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.red),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Shown on your profile — keep it friendly.',
             style: AppTextStyles.bodySmall.copyWith(
               color: const Color.fromRGBO(26, 26, 46, 0.55),
             ),

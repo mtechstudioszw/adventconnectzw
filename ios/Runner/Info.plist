@@ -49,6 +49,22 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Custom URL scheme for Supabase password-recovery deep links.
+	     Mirrors the AndroidManifest intent-filter; AuthService routes
+	     the link to /reset-password on the passwordRecovery event. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>io.supabase.adventconnect</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.supabase.adventconnect</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

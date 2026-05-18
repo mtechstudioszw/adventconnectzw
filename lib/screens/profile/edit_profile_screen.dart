@@ -88,6 +88,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    final previousChurchId =
+        AuthService.currentUser?.userMetadata?['church_id'] as String?;
     final result = await AuthService.updateProfile(
       fullName: _nameController.text.trim(),
       bio: _bioController.text.trim(),
@@ -97,6 +99,22 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     if (!mounted) return;
     setState(() => _saving = false);
     if (result.isSuccess) {
+      // Mirror the home-church choice into church_followers so the home
+      // screen actually reflects the user's pick. Unfollow the previous
+      // church only if it changed — best-effort, network failures here
+      // don't block the save.
+      if (_selectedChurchId != previousChurchId) {
+        if (previousChurchId != null && previousChurchId.isNotEmpty) {
+          try {
+            await ChurchService.unfollow(previousChurchId);
+          } catch (_) {}
+        }
+        if (_selectedChurchId != null && _selectedChurchId!.isNotEmpty) {
+          try {
+            await ChurchService.follow(_selectedChurchId!);
+          } catch (_) {}
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

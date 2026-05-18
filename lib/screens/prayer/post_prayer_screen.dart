@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/prayer_model.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
 
 class PostPrayerScreen extends StatefulWidget {
-  const PostPrayerScreen({super.key});
+  const PostPrayerScreen({super.key, this.existing});
+
+  /// When non-null, edits the existing prayer instead of creating a new
+  /// one. The form pre-fills with the prayer's content/title.
+  final Prayer? existing;
+
+  bool get isEditing => existing != null;
 
   @override
   State<PostPrayerScreen> createState() => _PostPrayerScreenState();
@@ -39,6 +46,11 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _contentController.addListener(() => setState(() {}));
+
+    final existing = widget.existing;
+    if (existing != null) {
+      _contentController.text = existing.content;
+    }
   }
 
   @override
@@ -54,17 +66,29 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await PrayerService.postPrayer(
-        _contentController.text,
-        visibility: _visibility,
-        isUrgent: _isUrgent,
-        title: _titleController.text,
-      );
+      if (widget.isEditing) {
+        await PrayerService.updatePrayer(
+          prayerId: widget.existing!.id,
+          content: _contentController.text,
+          visibility: _visibility,
+          isUrgent: _isUrgent,
+          title: _titleController.text,
+        );
+      } else {
+        await PrayerService.postPrayer(
+          _contentController.text,
+          visibility: _visibility,
+          isUrgent: _isUrgent,
+          title: _titleController.text,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Prayer shared with the community.',
+            widget.isEditing
+                ? 'Prayer updated.'
+                : 'Prayer shared with the community.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -74,7 +98,9 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Could not share your prayer. Please try again.';
+          _error = widget.isEditing
+              ? 'Could not update your prayer. Please try again.'
+              : 'Could not share your prayer. Please try again.';
         });
       }
     }
@@ -88,10 +114,14 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
       body: SingleChildScrollView(
         child: Column(
           children: [
-            const PostFormHero(
-              kicker: 'PRAYER REQUEST',
-              title: 'Lift it to the community',
-              subtitle: 'Share what you need prayer for. Members will pray with you.',
+            PostFormHero(
+              kicker: widget.isEditing ? 'EDIT PRAYER' : 'PRAYER REQUEST',
+              title: widget.isEditing
+                  ? 'Update your prayer'
+                  : 'Lift it to the community',
+              subtitle: widget.isEditing
+                  ? 'Edit your prayer and save your changes.'
+                  : 'Share what you need prayer for. Members will pray with you.',
               fallbackRouteName: 'prayer',
             ),
             AnimatedBuilder(
@@ -166,7 +196,9 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
                       ],
                       const SizedBox(height: 24),
                       PostFormSaveButton(
-                        label: 'Share prayer',
+                        label: widget.isEditing
+                            ? 'Save changes'
+                            : 'Share prayer',
                         busy: _saving,
                         onTap: _saving ? null : _save,
                       ),

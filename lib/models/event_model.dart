@@ -44,15 +44,20 @@ class Event {
   bool get isFull => capacity != null && rsvpCount >= capacity!;
 
   factory Event.fromJson(Map<String, dynamic> json) {
-    final rawDate = json['event_date'];
+    // DB columns are `start_date` / `start_time`. We keep the legacy
+    // `event_date` / `event_time` keys as a fallback so cached payloads
+    // written by older builds still hydrate correctly.
+    final rawDate = json['start_date'] ?? json['event_date'];
     DateTime eventDate;
     if (rawDate is DateTime) {
       eventDate = rawDate;
-    } else {
+    } else if (rawDate != null) {
       eventDate = DateTime.tryParse('$rawDate') ?? DateTime.now();
+    } else {
+      eventDate = DateTime.now();
     }
 
-    final rawTime = json['event_time'];
+    final rawTime = json['start_time'] ?? json['event_time'];
     String eventTime;
     if (rawTime == null) {
       eventTime = '00:00';
@@ -63,13 +68,30 @@ class Event {
       }
     }
 
+    // Service inserts `venue` + `city`; model surfaces a single `location`
+    // string. Prefer an explicit `location`; otherwise compose one from
+    // venue/city so events posted through the form still show a location.
+    final explicitLocation = json['location'] as String?;
+    String? resolvedLocation = explicitLocation;
+    if (resolvedLocation == null || resolvedLocation.isEmpty) {
+      final venue = (json['venue'] as String?)?.trim() ?? '';
+      final city = (json['city'] as String?)?.trim() ?? '';
+      if (venue.isNotEmpty && city.isNotEmpty) {
+        resolvedLocation = '$venue, $city';
+      } else if (venue.isNotEmpty) {
+        resolvedLocation = venue;
+      } else if (city.isNotEmpty) {
+        resolvedLocation = city;
+      }
+    }
+
     return Event(
       id: json['id'].toString(),
       title: (json['title'] ?? '') as String,
       description: json['description'] as String?,
       eventDate: eventDate,
       eventTime: eventTime,
-      location: json['location'] as String?,
+      location: resolvedLocation,
       churchId: json['church_id']?.toString(),
       organizerId: json['organizer_id']?.toString(),
       capacity: _readNullableInt(json['capacity']),
@@ -85,9 +107,9 @@ class Event {
         'id': id,
         'title': title,
         'description': description,
-        'event_date':
+        'start_date':
             '${eventDate.year.toString().padLeft(4, '0')}-${eventDate.month.toString().padLeft(2, '0')}-${eventDate.day.toString().padLeft(2, '0')}',
-        'event_time': eventTime,
+        'start_time': eventTime,
         'location': location,
         'church_id': churchId,
         'organizer_id': organizerId,

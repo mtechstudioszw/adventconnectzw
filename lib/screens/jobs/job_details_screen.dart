@@ -170,12 +170,15 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   }
 
   Future<void> _apply() async {
-    final phone = _job?.contactPhone?.trim() ?? '';
+    final job = _job;
+    final phone = job?.contactPhone?.trim() ?? '';
     if (phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Recruiter hasn\'t shared a contact number.',
+            job?.isSeeking == true
+                ? 'No contact number shared yet.'
+                : 'Recruiter hasn\'t shared a contact number.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -485,7 +488,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Apply via WhatsApp',
+                  _job!.isSeeking
+                      ? 'Contact via WhatsApp'
+                      : 'Apply via WhatsApp',
                   style: AppTextStyles.buttonText.copyWith(
                     fontSize: 15,
                     letterSpacing: 0.4,
@@ -626,7 +631,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'POSTED BY',
+                  job.isSeeking ? 'POSTED BY JOB SEEKER' : 'POSTED BY RECRUITER',
                   style: AppTextStyles.labelSmall.copyWith(
                     color: const Color.fromRGBO(26, 26, 46, 0.5),
                     fontSize: 10,

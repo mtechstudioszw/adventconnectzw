@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/prayer_model.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
@@ -58,6 +59,11 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     _entrance.dispose();
     _commentController.dispose();
     super.dispose();
+  }
+
+  bool _isAuthor(Prayer prayer) {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    return uid != null && prayer.authorId == uid;
   }
 
   Future<void> _bootstrap() async {
@@ -173,6 +179,20 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
           'Prayer request',
           style: AppTextStyles.appBarTitle,
         ),
+        actions: [
+          if (_prayer != null && _isAuthor(_prayer!))
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: AppColors.white),
+              tooltip: 'Edit prayer',
+              onPressed: () async {
+                final updated = await context.pushNamed<bool>(
+                  'edit_prayer',
+                  extra: _prayer,
+                );
+                if (updated == true) _bootstrap();
+              },
+            ),
+        ],
       ),
       body: SafeArea(
         top: false,

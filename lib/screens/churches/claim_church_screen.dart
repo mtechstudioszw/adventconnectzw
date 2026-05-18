@@ -24,6 +24,7 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _addressController = TextEditingController();
 
   String _role = 'standard';
   String? _letterUrl;
@@ -32,9 +33,16 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _addressController.text = widget.church.address ?? '';
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -72,6 +80,25 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
         applicantName: _nameController.text,
         applicantPhone: _phoneController.text,
       );
+      // Also push the physical address through the church_edit_suggestions
+      // queue so an admin can apply it to the church row. We do this on
+      // every claim — addresses are the single most useful field for
+      // distance sorting and directions, so we want it captured at
+      // claim time even if the church already has one in the DB.
+      final newAddress = _addressController.text.trim();
+      if (newAddress.isNotEmpty &&
+          newAddress != (widget.church.address ?? '').trim()) {
+        try {
+          await ChurchService.suggestEdit(
+            churchId: widget.church.id,
+            fieldName: 'address',
+            currentValue: widget.church.address ?? '',
+            suggestedValue: newAddress,
+          );
+        } catch (_) {
+          // Best-effort — don't block the claim if this fails.
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -166,6 +193,35 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                             decoration: _decoration(
                               hint: '+263 77 123 4567',
                               icon: Icons.phone_outlined,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _Label(text: 'Physical address of the church'),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _addressController,
+                            textCapitalization: TextCapitalization.words,
+                            minLines: 1,
+                            maxLines: 2,
+                            validator: (v) {
+                              if (v == null || v.trim().length < 6) {
+                                return 'Enter a real street address';
+                              }
+                              return null;
+                            },
+                            style: AppTextStyles.bodyLarge
+                                .copyWith(fontSize: 15),
+                            decoration: _decoration(
+                              hint: 'e.g. 5 Samora Machel Ave, Harare',
+                              icon: Icons.place_outlined,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Used to show the church on the map and sort by distance for nearby members.',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: const Color.fromRGBO(26, 26, 46, 0.6),
+                              height: 1.45,
                             ),
                           ),
                           const SizedBox(height: 18),

@@ -50,7 +50,23 @@ class AuthService {
         return AuthResult.failure('Sign up failed. Please try again.');
       }
 
-      await _persistSession(response.session);
+      // If Supabase auto-confirm is OFF, response.session is null and
+      // the user must verify via OTP (handled in
+      // EmailVerificationScreen). If auto-confirm is ON, Supabase
+      // hands us a session immediately — that's the bug the user
+      // reported (any email gets in), so sign out to force the OTP
+      // flow regardless of dashboard config.
+      if (response.session != null) {
+        try {
+          await _client.auth.signOut();
+        } catch (_) {
+          // ignore — best-effort
+        }
+      }
+
+      // Age verification persists regardless of email verification,
+      // because the age gate happens BEFORE signUp and the value is
+      // about the device, not the auth user.
       await SecureStorageService.write(
         _birthDateKey,
         birthDate.toIso8601String(),
@@ -62,6 +78,32 @@ class AuthService {
       return AuthResult.failure(e.message);
     } catch (_) {
       return AuthResult.failure('An unexpected error occurred.');
+    }
+  }
+
+  /// Verify a signup using the 6-digit code Supabase emails to the
+  /// user. On success, mints a real session and returns it. Caller
+  /// should then route the user into profile setup.
+  static Future<AuthResult> verifySignupOtp({
+    required String email,
+    required String token,
+  }) async {
+    try {
+      final response = await _client.auth.verifyOTP(
+        type: OtpType.signup,
+        email: email,
+        token: token.trim(),
+      );
+      final user = response.user;
+      if (user == null) {
+        return AuthResult.failure('Verification failed. Try again.');
+      }
+      await _persistSession(response.session);
+      return AuthResult.success(user);
+    } on AuthException catch (e) {
+      return AuthResult.failure(e.message);
+    } catch (_) {
+      return AuthResult.failure('Could not verify the code.');
     }
   }
 
@@ -106,7 +148,14 @@ class AuthService {
       final idToken = auth.idToken;
       final accessToken = auth.accessToken;
       if (idToken == null) {
-        return AuthResult.failure('Google sign in did not return a token.');
+        // Almost always means the Web client ID is missing from the
+        // GoogleSignIn configuration. Without it Google's native SDK
+        // returns an access token but no ID token — Supabase needs the
+        // ID token to mint a session.
+        return AuthResult.failure(
+          'Google didn\'t return an ID token. The app may be missing a '
+          'Web OAuth client ID — contact support.',
+        );
       }
       final response = await _client.auth.signInWithIdToken(
         provider: OAuthProvider.google,
@@ -120,8 +169,11 @@ class AuthService {
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
       return AuthResult.failure(e.message);
-    } catch (_) {
-      return AuthResult.failure('Google sign in failed. Try again.');
+    } catch (e) {
+      // Surface the underlying message rather than a generic string so
+      // misconfiguration (e.g. PlatformException: sign_in_failed, code
+      // 10 / DEVELOPER_ERROR) is visible to the user and to support.
+      return AuthResult.failure('Google sign in failed: $e');
     }
   }
 
@@ -148,15 +200,85 @@ class AuthService {
     }
   }
 
+  /// Custom URL scheme our app intercepts via AndroidManifest /
+  /// CFBundleURLTypes. Supabase will replace the default Site URL with
+  /// this in the recovery email; tapping it relaunches the app and
+  /// fires AuthChangeEvent.passwordRecovery so main.dart can route to
+  /// the reset screen.
+  ///
+  /// You must also add this URL to the Supabase dashboard at
+  /// Auth → URL Configuration → Redirect URLs, otherwise the link will
+  /// still resolve to the Site URL (defaults to localhost in dev).
+  static const _passwordResetRedirectUrl =
+      'io.supabase.adventconnect://login-callback';
+
   static Future<AuthResult> sendPasswordReset(String email) async {
     try {
-      await _client.auth.resetPasswordForEmail(email);
+      await _client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: _passwordResetRedirectUrl,
+      );
       return AuthResult.success(null);
     } on AuthException catch (e) {
       return AuthResult.failure(e.message);
     } catch (_) {
       return AuthResult.failure('Could not send reset email.');
     }
+  }
+
+  /// Best-effort delete of the current account. Tries a server-side
+  /// `delete_my_account` RPC first (which can call auth.admin.deleteUser
+  /// from a SECURITY DEFINER function); if that's not provisioned yet,
+  /// falls back to wiping the user's own `profiles` row. Either way the
+  /// user is signed out at the end so the device no longer has a session.
+  ///
+  /// Recommended server-side RPC (run once in SQL editor):
+  /// ```
+  /// create or replace function public.delete_my_account()
+  /// returns void
+  /// language plpgsql security definer set search_path = public, auth
+  /// as $$
+  /// begin
+  ///   delete from profiles where id = auth.uid();
+  ///   delete from auth.users where id = auth.uid();
+  /// end;
+  /// $$;
+  /// grant execute on function public.delete_my_account() to authenticated;
+  /// ```
+  static Future<AuthResult> deleteAccount() async {
+    final user = currentUser;
+    if (user == null) {
+      return AuthResult.failure('Sign in to delete your account.');
+    }
+    Object? rpcError;
+    try {
+      await _client.rpc('delete_my_account');
+    } catch (e) {
+      rpcError = e;
+    }
+    // Even if the RPC succeeded, clear the local profile row defensively;
+    // if it failed (e.g. function not yet created), this gives us at
+    // least client-driven data removal.
+    try {
+      await _client.from('profiles').delete().eq('id', user.id);
+    } catch (_) {
+      // ignore — RLS may reject if RPC already removed the row
+    }
+    try {
+      await _client.auth.signOut();
+    } catch (_) {
+      // ignore
+    }
+    await SecureStorageService.clearAll();
+    if (rpcError != null) {
+      // RPC missing — surface a soft warning so the caller can tell the
+      // user that auth-level removal is still pending.
+      return AuthResult.failure(
+        'Your profile data has been removed. Full account removal is '
+        'pending — contact support if you log back in.',
+      );
+    }
+    return AuthResult.success(null);
   }
 
   static Future<void> signOut() async {

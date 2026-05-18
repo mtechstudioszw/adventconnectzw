@@ -24,7 +24,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _notifyMessages = true;
   bool _notifyMarketplace = false;
   String _language = 'English';
-  bool _darkTheme = false;
   bool _biometricEnabled = false;
   bool _biometricAvailable = false;
   bool _sabbathEnabled = SabbathService.isEnabled();
@@ -128,12 +127,17 @@ class _SettingsScreenState extends State<SettingsScreen>
         confirmLabel: 'Delete',
         confirmColor: AppColors.red,
         action: () async {
-          await AuthService.signOut();
+          final result = await AuthService.deleteAccount();
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
+              backgroundColor: result.isSuccess
+                  ? AppColors.successGreen
+                  : AppColors.darkNavy,
               content: Text(
-                'Account deletion request received.',
+                result.isSuccess
+                    ? 'Account deleted.'
+                    : (result.errorMessage ?? 'Deletion failed.'),
                 style:
                     AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
               ),
@@ -142,17 +146,6 @@ class _SettingsScreenState extends State<SettingsScreen>
           context.goNamed('age_verification');
         },
       );
-
-  void _showSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Coming soon.',
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-        ),
-      ),
-    );
-  }
 
   Future<void> _changePassword() async {
     final newCtrl = TextEditingController();
@@ -414,16 +407,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                             onTap: _pickSabbathProvince,
                           ),
                         ],
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.dark_mode_outlined,
-                          label: 'Dark theme',
-                          value: _darkTheme,
-                          onChanged: (v) {
-                            setState(() => _darkTheme = v);
-                            _showSoon();
-                          },
-                        ),
                       ],
                     ),
                     const SizedBox(height: 18),

@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
+import '../../models/seller_model.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
@@ -30,6 +32,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   String _selectedCategory = 'all';
   bool _loading = true;
   String? _error;
+  Seller? _mySeller;
 
   @override
   void initState() {
@@ -43,6 +46,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _loadProducts();
+    _loadMySeller();
+  }
+
+  Future<void> _loadMySeller() async {
+    try {
+      final seller = await SellerService.fetchMySellerProfile();
+      if (mounted) setState(() => _mySeller = seller);
+    } catch (_) {
+      // Banner is decorative — failures must never block the marketplace.
+    }
   }
 
   @override
@@ -104,6 +117,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
             children: [
               _buildHero(),
               _buildSearchBar(),
+              if (_mySeller != null) _SellerStatusBanner(seller: _mySeller!),
               const _ShopJobsSegment(active: _Section.shop),
               _buildCategoryStrip(),
               Expanded(
@@ -395,6 +409,106 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           ),
         );
       },
+    );
+  }
+}
+
+/// Status pill rendered at the top of the marketplace tab when the
+/// current user has a `sellers` row. It mirrors the same states as the
+/// seller-gate dialog inside add_product, but keeps them visible from
+/// the storefront list without having to attempt a listing first.
+class _SellerStatusBanner extends StatelessWidget {
+  const _SellerStatusBanner({required this.seller});
+
+  final Seller seller;
+
+  @override
+  Widget build(BuildContext context) {
+    final (IconData icon, Color tint, String label, String hint) = seller
+            .isApproved
+        ? (
+            Icons.storefront_rounded,
+            AppColors.successGreen,
+            'Seller mode',
+            'Tap to open your seller dashboard.',
+          )
+        : seller.isPending
+            ? (
+                Icons.hourglass_top_rounded,
+                AppColors.goldAccent,
+                'Store under review',
+                'Tap to check approval status.',
+              )
+            : (
+                Icons.error_outline_rounded,
+                AppColors.red,
+                'Application needs attention',
+                'Tap to review and resubmit.',
+              );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.pushNamed('seller_dashboard'),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: tint.withValues(alpha: 0.30)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: tint.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: tint, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: tint,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        hint,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: const Color.fromRGBO(26, 26, 46, 0.65),
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: tint.withValues(alpha: 0.7),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

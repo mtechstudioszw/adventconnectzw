@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -59,39 +60,62 @@ class StorageService {
       throw const AuthException('Sign in to upload a photo.');
     }
 
-    final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: maxWidth,
-      imageQuality: imageQuality,
-    );
+    final XFile? picked;
+    try {
+      picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: maxWidth,
+        imageQuality: imageQuality,
+      );
+    } catch (e, st) {
+      debugPrint('StorageService.pickImage failed: $e\n$st');
+      return null;
+    }
     if (picked == null) return null;
 
     String sourcePath = picked.path;
     if (squareCrop) {
-      final cropped = await _cropper.cropImage(
-        sourcePath: picked.path,
-        compressQuality: imageQuality,
-        maxWidth: maxWidth.toInt(),
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Crop photo',
-            lockAspectRatio: true,
-            hideBottomControls: true,
-          ),
-          IOSUiSettings(
-            title: 'Crop photo',
-            aspectRatioLockEnabled: true,
-            resetAspectRatioEnabled: false,
-          ),
-        ],
-      );
-      if (cropped == null) return null;
-      sourcePath = cropped.path;
+      // The cropper has crashed on some Android builds (native OOM
+      // during cropping). Wrap in try/catch and fall back to the
+      // uncropped image so the upload still succeeds — the picker
+      // already enforces maxWidth/quality so the file isn't huge.
+      try {
+        final cropped = await _cropper.cropImage(
+          sourcePath: picked.path,
+          compressQuality: imageQuality,
+          maxWidth: maxWidth.toInt(),
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: 'Crop photo',
+              lockAspectRatio: true,
+              hideBottomControls: true,
+            ),
+            IOSUiSettings(
+              title: 'Crop photo',
+              aspectRatioLockEnabled: true,
+              resetAspectRatioEnabled: false,
+            ),
+          ],
+        );
+        // null means the user cancelled the cropper — respect that.
+        if (cropped == null) return null;
+        sourcePath = cropped.path;
+      } catch (e, st) {
+        debugPrint(
+          'StorageService.cropImage failed, using uncropped: $e\n$st',
+        );
+      }
     }
 
-    final croppedFile = XFile(sourcePath);
-    final bytes = await croppedFile.readAsBytes();
+    final Uint8List bytes;
+    try {
+      final croppedFile = XFile(sourcePath);
+      bytes = await croppedFile.readAsBytes();
+    } catch (e, st) {
+      debugPrint('StorageService.readAsBytes failed: $e\n$st');
+      return null;
+    }
     final ext = _extensionOf(picked.name);
     final path = _buildPath(userId: user.id, ext: ext);
 
@@ -119,28 +143,40 @@ class StorageService {
       throw const AuthException('Sign in to upload photos.');
     }
 
-    final picked = await _picker.pickMultiImage(
-      maxWidth: 1600,
-      imageQuality: 80,
-      limit: max,
-    );
+    final List<XFile> picked;
+    try {
+      picked = await _picker.pickMultiImage(
+        maxWidth: 1600,
+        imageQuality: 80,
+        limit: max,
+      );
+    } catch (e, st) {
+      debugPrint('StorageService.pickMultiImage failed: $e\n$st');
+      return const [];
+    }
     if (picked.isEmpty) return const [];
 
     final urls = <String>[];
     for (final file in picked.take(max)) {
-      final bytes = await file.readAsBytes();
-      final ext = _extensionOf(file.name);
-      final path = _buildPath(userId: user.id, ext: ext);
-      await _client.storage.from('product_photos').uploadBinary(
-            path,
-            bytes,
-            fileOptions: FileOptions(
-              cacheControl: '3600',
-              contentType: _mimeFor(ext),
-              upsert: false,
-            ),
-          );
-      urls.add(_client.storage.from('product_photos').getPublicUrl(path));
+      try {
+        final bytes = await file.readAsBytes();
+        final ext = _extensionOf(file.name);
+        final path = _buildPath(userId: user.id, ext: ext);
+        await _client.storage.from('product_photos').uploadBinary(
+              path,
+              bytes,
+              fileOptions: FileOptions(
+                cacheControl: '3600',
+                contentType: _mimeFor(ext),
+                upsert: false,
+              ),
+            );
+        urls.add(_client.storage.from('product_photos').getPublicUrl(path));
+      } catch (e, st) {
+        // Skip a bad file rather than aborting the whole batch — at
+        // least the user keeps the photos that did upload.
+        debugPrint('StorageService: skipping product photo: $e\n$st');
+      }
     }
     return urls;
   }

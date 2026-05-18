@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'widgets/auth_hero.dart';
@@ -35,6 +37,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   int _cooldown = 0;
   String? _info;
   String? _error;
+  final _otpController = TextEditingController();
 
   @override
   void initState() {
@@ -64,6 +67,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     _entrance.dispose();
     _authSub?.cancel();
     _cooldownTimer?.cancel();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -113,42 +117,36 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     });
   }
 
-  Future<void> _checkVerified() async {
+  /// Verify the 6-digit code Supabase emailed to the user. This is the
+  /// only path through verification — the older "tap the link" flow is
+  /// kept for users who really do click the email link (the auth state
+  /// listener picks that up), but the primary surface now is the OTP
+  /// input below.
+  Future<void> _verifyCode() async {
     if (_checking) return;
+    final token = _otpController.text.trim();
+    if (token.length < 6) {
+      setState(() => _error = 'Enter the 6-digit code from your email.');
+      return;
+    }
     setState(() {
       _checking = true;
       _info = null;
       _error = null;
     });
-    try {
-      // Refresh pulls the latest user record from Supabase so we can
-      // see emailConfirmedAt without forcing the user to sign in again.
-      final refreshed =
-          await Supabase.instance.client.auth.refreshSession();
-      final confirmedAt = refreshed.user?.emailConfirmedAt;
-      if (!mounted) return;
-      if (confirmedAt != null) {
-        context.goNamed('profile_setup');
-        return;
-      }
-      setState(() {
-        _checking = false;
-        _error =
-            'Still waiting for confirmation. Tap the link in your email, then try again.';
-      });
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _checking = false;
-        _error = e.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _checking = false;
-        _error = 'Could not check verification status.';
-      });
+    final result = await AuthService.verifySignupOtp(
+      email: widget.email,
+      token: token,
+    );
+    if (!mounted) return;
+    if (result.isSuccess) {
+      context.goNamed('profile_setup');
+      return;
     }
+    setState(() {
+      _checking = false;
+      _error = result.errorMessage ?? 'Could not verify the code.';
+    });
   }
 
   @override
@@ -182,7 +180,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                   children: [
                     _EnvelopeCard(email: widget.email),
                     const SizedBox(height: 18),
-                    _InstructionsCard(),
+                    _OtpCard(
+                      controller: _otpController,
+                      onSubmit: _verifyCode,
+                    ),
                     if (_info != null) ...[
                       const SizedBox(height: 16),
                       _InfoBanner(message: _info!),
@@ -193,11 +194,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     ],
                     const SizedBox(height: 24),
                     _GradientButton(
-                      label: _checking
-                          ? 'Checking...'
-                          : "I've verified my email",
+                      label: _checking ? 'Verifying...' : 'Verify code',
                       busy: _checking,
-                      onTap: _checking ? null : _checkVerified,
+                      onTap: _checking ? null : _verifyCode,
                     ),
                     const SizedBox(height: 12),
                     _OutlineButton(
@@ -281,7 +280,12 @@ class _EnvelopeCard extends StatelessWidget {
   }
 }
 
-class _InstructionsCard extends StatelessWidget {
+class _OtpCard extends StatelessWidget {
+  const _OtpCard({required this.controller, required this.onSubmit});
+
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
+
   @override
   Widget build(BuildContext context) {
     final muted = const Color.fromRGBO(26, 26, 46, 0.7);
@@ -294,75 +298,71 @@ class _InstructionsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Step(
-              number: '1',
-              text: 'Open the email from Advent Connect ZW.',
-              muted: muted,
+            Text(
+              'Open the email from Advent Connect ZW and enter the 6-digit code below.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: muted,
+                height: 1.45,
+              ),
             ),
-            const SizedBox(height: 12),
-            _Step(
-              number: '2',
-              text: 'Tap the confirmation link inside it.',
-              muted: muted,
+            const SizedBox(height: 14),
+            Text(
+              '6-DIGIT CODE',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
             ),
-            const SizedBox(height: 12),
-            _Step(
-              number: '3',
-              text: 'Come back here — we will take you to set up your profile.',
-              muted: muted,
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              autofocus: true,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onSubmitted: (_) => onSubmit(),
+              style: AppTextStyles.headlineSmall.copyWith(
+                letterSpacing: 8,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+              decoration: InputDecoration(
+                hintText: '••••••',
+                hintStyle: AppTextStyles.headlineSmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.25),
+                  letterSpacing: 8,
+                  fontWeight: FontWeight.w700,
+                ),
+                filled: true,
+                fillColor: AppColors.lightGrey,
+                counterText: '',
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide:
+                      const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(
+                    color: AppColors.primaryBlue,
+                    width: 1.5,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _Step extends StatelessWidget {
-  const _Step({
-    required this.number,
-    required this.text,
-    required this.muted,
-  });
-  final String number;
-  final String text;
-  final Color muted;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.primaryBlue.withValues(alpha: 0.10),
-            shape: BoxShape.circle,
-          ),
-          child: Text(
-            number,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.primaryBlue,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              text,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: muted,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

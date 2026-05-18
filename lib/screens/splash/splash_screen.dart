@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
+import '../../services/biometric_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -78,6 +79,23 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (AuthService.isSignedIn) {
+      // If the user opted into biometric quick-unlock from Settings,
+      // gate access to the app behind a fingerprint/Face ID prompt.
+      // Failure to authenticate signs them out so the next person on
+      // the device can't see their data.
+      final biometricEnabled = await BiometricService.isEnabled();
+      if (biometricEnabled) {
+        final ok = await BiometricService.authenticate(
+          reason: 'Unlock Advent Connect ZW',
+        );
+        if (!mounted) return;
+        if (!ok) {
+          await AuthService.signOut();
+          if (!mounted) return;
+          context.goNamed('login');
+          return;
+        }
+      }
       final ageVerified = await AuthService.isAgeVerified();
       if (!mounted) return;
       context.goNamed(ageVerified ? 'home' : 'age_verification');

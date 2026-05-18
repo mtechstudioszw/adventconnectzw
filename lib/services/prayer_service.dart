@@ -143,6 +143,27 @@ class PrayerService {
     return _hydratePrayer(inserted);
   }
 
+  /// Edit a prayer the current user posted. Server-side RLS enforces
+  /// that author_id == auth.uid().
+  static Future<void> updatePrayer({
+    required String prayerId,
+    required String content,
+    String visibility = 'public',
+    bool isUrgent = false,
+    String? title,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to edit your prayer.');
+    }
+    await _client.from(_writeTable).update({
+      'content': content.trim(),
+      'visibility': visibility,
+      'is_urgent': isUrgent,
+      'title': title?.trim().isNotEmpty == true ? title!.trim() : null,
+    }).eq('id', prayerId).eq('author_id', user.id);
+  }
+
   static Future<List<PrayerComment>> fetchComments(String prayerId) async {
     final response = await _client
         .from(_responsesTable)

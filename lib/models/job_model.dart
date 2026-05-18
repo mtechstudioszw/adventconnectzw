@@ -5,7 +5,7 @@ class Job {
     required this.title,
     required this.company,
     required this.createdAt,
-    this.posterName = 'Recruiter',
+    this.posterName = 'Member',
     this.location,
     this.type,
     this.salaryMin,
@@ -18,6 +18,7 @@ class Job {
     this.companyLogoUrl,
     this.isActive = true,
     this.status = 'open',
+    this.postType = 'hiring',
   });
 
   final String id;
@@ -37,24 +38,33 @@ class Job {
   final String? companyLogoUrl;
   final bool isActive;
   final String status;
+  /// 'hiring' (employer offering a role) or 'seeking' (member looking
+  /// for work). Drives whether the card labels the poster as a
+  /// recruiter or as the candidate.
+  final String postType;
   final DateTime createdAt;
 
   bool get isFilled => status == 'filled';
   bool get isOpen => status == 'open';
+  bool get isHiring => postType == 'hiring';
+  bool get isSeeking => postType == 'seeking';
 
   factory Job.fromJson(Map<String, dynamic> json) {
     final raw = json['requirements'];
     final reqs = raw is List
         ? raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
         : <String>[];
+    final postType = (json['post_type'] ?? 'hiring').toString();
     return Job(
       id: json['id'].toString(),
       posterId: (json['poster_id'] ?? '').toString(),
-      posterName: (json['poster_name'] ?? 'Recruiter') as String,
+      posterName: (json['poster_name'] ??
+          (postType == 'seeking' ? 'Job seeker' : 'Recruiter')) as String,
       title: (json['title'] ?? '') as String,
       company: (json['company'] ?? '') as String,
       location: json['location'] as String?,
-      type: json['type'] as String?,
+      // DB uses `job_type`; old payloads sometimes used `type`. Accept both.
+      type: (json['job_type'] ?? json['type']) as String?,
       salaryMin: _readNullableDouble(json['salary_min']),
       salaryMax: _readNullableDouble(json['salary_max']),
       currency: (json['currency'] ?? 'USD') as String,
@@ -65,6 +75,7 @@ class Job {
       companyLogoUrl: json['company_logo_url'] as String?,
       isActive: json['is_active'] != false,
       status: (json['status'] ?? 'open') as String,
+      postType: postType,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );

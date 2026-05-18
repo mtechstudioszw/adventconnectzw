@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
@@ -7,7 +8,14 @@ import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
 
 class PostEventScreen extends StatefulWidget {
-  const PostEventScreen({super.key});
+  const PostEventScreen({super.key, this.existing});
+
+  /// When non-null, the screen runs in edit mode: title/labels switch
+  /// to "Update event", the form is pre-filled, and submission calls
+  /// `EventService.updateEvent` instead of `postEvent`.
+  final Event? existing;
+
+  bool get isEditing => existing != null;
 
   @override
   State<PostEventScreen> createState() => _PostEventScreenState();
@@ -72,6 +80,22 @@ class _PostEventScreenState extends State<PostEventScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+
+    final existing = widget.existing;
+    if (existing != null) {
+      _titleController.text = existing.title;
+      _descriptionController.text = existing.description ?? '';
+      _venueController.text = existing.location ?? '';
+      _capacityController.text = existing.capacity?.toString() ?? '';
+      _coverPhotoUrl = existing.coverPhotoUrl;
+      _startDate = existing.eventDate;
+      final parts = existing.eventTime.split(':');
+      if (parts.length >= 2) {
+        final h = int.tryParse(parts[0]) ?? 0;
+        final m = int.tryParse(parts[1]) ?? 0;
+        _startTime = TimeOfDay(hour: h, minute: m);
+      }
+    }
   }
 
   @override
@@ -133,31 +157,57 @@ class _PostEventScreenState extends State<PostEventScreen>
     try {
       final hh = _startTime!.hour.toString().padLeft(2, '0');
       final mm = _startTime!.minute.toString().padLeft(2, '0');
-      await EventService.postEvent(
-        title: _titleController.text,
-        startDate: _startDate!,
-        startTime: '$hh:$mm',
-        description: _descriptionController.text.isEmpty
-            ? null
-            : _descriptionController.text,
-        venue: _venueController.text.isEmpty ? null : _venueController.text,
-        province: _province,
-        city: _cityController.text.isEmpty ? null : _cityController.text,
-        category: _category,
-        capacity: int.tryParse(_capacityController.text),
-        contactName: _contactNameController.text.isEmpty
-            ? null
-            : _contactNameController.text,
-        contactPhone: _contactPhoneController.text.isEmpty
-            ? null
-            : _contactPhoneController.text,
-        coverPhotoUrl: _coverPhotoUrl,
-      );
+      if (widget.isEditing) {
+        await EventService.updateEvent(
+          eventId: widget.existing!.id,
+          title: _titleController.text,
+          startDate: _startDate!,
+          startTime: '$hh:$mm',
+          description: _descriptionController.text.isEmpty
+              ? null
+              : _descriptionController.text,
+          venue: _venueController.text.isEmpty ? null : _venueController.text,
+          province: _province,
+          city: _cityController.text.isEmpty ? null : _cityController.text,
+          category: _category,
+          capacity: int.tryParse(_capacityController.text),
+          contactName: _contactNameController.text.isEmpty
+              ? null
+              : _contactNameController.text,
+          contactPhone: _contactPhoneController.text.isEmpty
+              ? null
+              : _contactPhoneController.text,
+          coverPhotoUrl: _coverPhotoUrl,
+        );
+      } else {
+        await EventService.postEvent(
+          title: _titleController.text,
+          startDate: _startDate!,
+          startTime: '$hh:$mm',
+          description: _descriptionController.text.isEmpty
+              ? null
+              : _descriptionController.text,
+          venue: _venueController.text.isEmpty ? null : _venueController.text,
+          province: _province,
+          city: _cityController.text.isEmpty ? null : _cityController.text,
+          category: _category,
+          capacity: int.tryParse(_capacityController.text),
+          contactName: _contactNameController.text.isEmpty
+              ? null
+              : _contactNameController.text,
+          contactPhone: _contactPhoneController.text.isEmpty
+              ? null
+              : _contactPhoneController.text,
+          coverPhotoUrl: _coverPhotoUrl,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Event submitted. Awaiting approval.',
+            widget.isEditing
+                ? 'Event updated.'
+                : 'Event submitted. Awaiting approval.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -167,7 +217,9 @@ class _PostEventScreenState extends State<PostEventScreen>
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Could not post the event. Please try again.';
+          _error = widget.isEditing
+              ? 'Could not update the event. Please try again.'
+              : 'Could not post the event. Please try again.';
         });
       }
     }
@@ -180,10 +232,14 @@ class _PostEventScreenState extends State<PostEventScreen>
       body: SingleChildScrollView(
         child: Column(
           children: [
-            const PostFormHero(
-              kicker: 'NEW EVENT',
-              title: 'Tell us what\'s happening',
-              subtitle: 'Submit camp meetings, youth rallies, or concerts.',
+            PostFormHero(
+              kicker: widget.isEditing ? 'EDIT EVENT' : 'NEW EVENT',
+              title: widget.isEditing
+                  ? 'Update your event'
+                  : 'Tell us what\'s happening',
+              subtitle: widget.isEditing
+                  ? 'Edit the details and save your changes.'
+                  : 'Submit camp meetings, youth rallies, or concerts.',
               fallbackRouteName: 'events',
             ),
             AnimatedBuilder(
@@ -217,7 +273,9 @@ class _PostEventScreenState extends State<PostEventScreen>
                       ],
                       const SizedBox(height: 24),
                       PostFormSaveButton(
-                        label: 'Submit event',
+                        label: widget.isEditing
+                            ? 'Save changes'
+                            : 'Submit event',
                         busy: _saving,
                         onTap: _saving ? null : _save,
                       ),

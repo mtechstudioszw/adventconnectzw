@@ -137,9 +137,20 @@ class AuthService {
   /// Requires `GoogleService-Info.plist` / `google-services.json` to
   /// reference the right OAuth client IDs — see Supabase Auth → Google
   /// provider settings.
+  /// Web OAuth client ID from Google Cloud Console → APIs & Services
+  /// → Credentials. Must be the **Web** client (not Android/iOS) — the
+  /// google_sign_in plugin uses it as the audience for the ID token so
+  /// Supabase can verify it via signInWithIdToken.
+  ///
+  /// Leave as the placeholder for builds where Google sign-in is not
+  /// expected to work; the catch-all error in this method will surface
+  /// the misconfig clearly to the user.
+  static const _googleWebClientId =
+      'REPLACE_WITH_WEB_CLIENT_ID.apps.googleusercontent.com';
+
   static Future<AuthResult> signInWithGoogle() async {
     try {
-      final google = GoogleSignIn();
+      final google = GoogleSignIn(serverClientId: _googleWebClientId);
       final account = await google.signIn();
       if (account == null) {
         return AuthResult.failure('Sign in cancelled.');

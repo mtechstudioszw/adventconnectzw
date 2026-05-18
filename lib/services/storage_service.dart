@@ -60,7 +60,7 @@ class StorageService {
       throw const AuthException('Sign in to upload a photo.');
     }
 
-    final XFile? picked;
+    XFile? picked;
     try {
       picked = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -108,7 +108,7 @@ class StorageService {
       }
     }
 
-    final Uint8List bytes;
+    Uint8List bytes;
     try {
       final croppedFile = XFile(sourcePath);
       bytes = await croppedFile.readAsBytes();
@@ -143,7 +143,7 @@ class StorageService {
       throw const AuthException('Sign in to upload photos.');
     }
 
-    final List<XFile> picked;
+    List<XFile> picked;
     try {
       picked = await _picker.pickMultiImage(
         maxWidth: 1600,

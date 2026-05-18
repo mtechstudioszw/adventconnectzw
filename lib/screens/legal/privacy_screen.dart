@@ -66,7 +66,7 @@ class PrivacyScreen extends StatelessWidget {
         LegalSection(
           title: 'Children\'s Privacy',
           body:
-              'Advent Connect ZW is for members aged 13 and older. We do not knowingly collect personal information from children under 13. If you believe a child has registered, please contact us so we can remove the account. Members aged 13–17 are encouraged to use the app with the involvement of a parent or guardian.',
+              'Advent Connect ZW is for members aged 16 and older. We do not knowingly collect personal information from anyone under 16. If you believe a younger person has registered, please contact us so we can remove the account. Members aged 16–17 are encouraged to use the app with the involvement of a parent or guardian.',
         ),
         LegalSection(
           title: 'Zimbabwe Data Protection Act Compliance',

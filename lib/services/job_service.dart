@@ -94,4 +94,18 @@ class JobService {
         .eq('id', jobId)
         .eq('poster_id', user.id);
   }
+
+  /// Flip a filled job back to 'open' so applicants can see it again.
+  /// RLS restricts this to the poster.
+  static Future<void> reopen(String jobId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to update a job.');
+    }
+    await _client
+        .from(_table)
+        .update({'status': 'open'})
+        .eq('id', jobId)
+        .eq('poster_id', user.id);
+  }
 }

@@ -378,7 +378,7 @@ class AuthService {
     return DateTime.tryParse(stored);
   }
 
-  static bool meetsMinimumAge(DateTime birthDate, {int minimumAge = 13}) {
+  static bool meetsMinimumAge(DateTime birthDate, {int minimumAge = 16}) {
     final now = DateTime.now();
     int age = now.year - birthDate.year;
     final hasHadBirthday = now.month > birthDate.month ||

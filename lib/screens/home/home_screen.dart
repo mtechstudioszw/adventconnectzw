@@ -5,19 +5,30 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
+import '../../models/friendship_model.dart';
 import '../../models/member_directory_model.dart';
+import '../../models/post_model.dart';
+import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/directory_service.dart';
 import '../../services/event_service.dart';
+import '../../services/feed_service.dart';
+import '../../services/messaging_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/home/advent_chat_bubble.dart';
+import '../../widgets/home/comments_sheet.dart';
+import '../../widgets/home/composer_sheet.dart';
+import '../../widgets/home/post_card.dart';
+import '../../widgets/home/stories_rail.dart';
+import '../../widgets/home/story_viewer.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../../widgets/start_conversation_sheet.dart';
 import '../widgets/main_bottom_nav.dart';
@@ -41,6 +52,13 @@ class _HomeScreenState extends State<HomeScreen>
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
   int _unreadNotifications = 0;
+  List<Post> _posts = [];
+  List<Story> _stories = [];
+  // userId -> friendship row (if any) so the suggestion cards know
+  // whether to show "Add friend" / "Pending" / "Friends".
+  Map<String, Friendship> _friendshipsByUser = <String, Friendship>{};
+  int _unreadMessages = 0;
+  int _pendingFriendRequests = 0;
   UrgentBanner? _banner;
   // Banners dismissed in this session — kept in memory only so the
   // user sees fresh banners on relaunch but isn't pestered after they
@@ -94,10 +112,28 @@ class _HomeScreenState extends State<HomeScreen>
         NotificationService.unreadCount(),
         UrgentBannerService.fetchActive(),
         DirectoryService.fetchSuggestedMembers(),
+        FeedService.fetchFeed(),
+        FeedService.fetchStories(),
+        FeedService.fetchMyFriendships(),
+        FeedService.pendingRequestCount(),
+        MessagingService.fetchConversations(),
       ]);
       if (!mounted) return;
       final events = (results[0] as List<Event>).take(8).toList();
       final churches = (results[1] as List<Church>).take(6).toList();
+      final friendships = results[9] as List<Friendship>;
+      final viewerId = AuthService.currentUser?.id;
+      final friendsByUser = <String, Friendship>{};
+      if (viewerId != null) {
+        for (final f in friendships) {
+          friendsByUser[f.otherUserId(viewerId)] = f;
+        }
+      }
+      final conversations = results[11] as List;
+      int unreadMessages = 0;
+      for (final c in conversations) {
+        unreadMessages += (c.unreadCount as int);
+      }
       setState(() {
         _events = events;
         _churches = churches;
@@ -106,6 +142,11 @@ class _HomeScreenState extends State<HomeScreen>
         _unreadNotifications = results[4] as int;
         _banner = results[5] as UrgentBanner?;
         _suggestedMembers = results[6] as List<MemberDirectoryEntry>;
+        _posts = results[7] as List<Post>;
+        _stories = results[8] as List<Story>;
+        _friendshipsByUser = friendsByUser;
+        _pendingFriendRequests = results[10] as int;
+        _unreadMessages = unreadMessages;
         _loading = false;
       });
       // Best-effort cache write — failures here must never surface.
@@ -185,16 +226,185 @@ class _HomeScreenState extends State<HomeScreen>
         .toUpperCase();
   }
 
+  bool get _hasUnreadChat =>
+      _unreadMessages > 0 || _pendingFriendRequests > 0;
+
+  int? get _chatBadgeCount {
+    final total = _unreadMessages + _pendingFriendRequests;
+    return total > 0 ? total : null;
+  }
+
+  Future<void> _openComposer() async {
+    final result = await showComposerSheet(context);
+    if (!mounted || result == null) return;
+    setState(() {
+      if (result.isPost && result.post != null) {
+        _posts = [result.post!, ..._posts];
+      }
+      if (result.isStory && result.story != null) {
+        _stories = [result.story!, ..._stories];
+      }
+    });
+  }
+
+  Future<void> _openStoryViewer(List<Story> authorStories) {
+    // Newest-first comes from the server; the viewer plays oldest→newest
+    // like Facebook does, so flip the list before showing.
+    return StoryViewer.show(context, authorStories.reversed.toList());
+  }
+
+  Future<void> _toggleLike(Post post) async {
+    final newLiked = !post.viewerLiked;
+    final newCount = (post.likeCount + (newLiked ? 1 : -1)).clamp(0, 1 << 30);
+    setState(() {
+      _posts = _posts
+          .map((p) => p.id == post.id
+              ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+              : p)
+          .toList();
+    });
+    try {
+      if (newLiked) {
+        await FeedService.likePost(post.id);
+      } else {
+        await FeedService.unlikePost(post.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      // Revert on failure.
+      setState(() {
+        _posts = _posts
+            .map((p) => p.id == post.id
+                ? p.copyWith(
+                    viewerLiked: post.viewerLiked,
+                    likeCount: post.likeCount,
+                  )
+                : p)
+            .toList();
+      });
+    }
+  }
+
+  Future<void> _openComments(Post post) {
+    return showCommentsSheet(
+      context,
+      postId: post.id,
+      onCommentCountChanged: (newCount) {
+        if (!mounted) return;
+        setState(() {
+          _posts = _posts
+              .map((p) =>
+                  p.id == post.id ? p.copyWith(commentCount: newCount) : p)
+              .toList();
+        });
+      },
+    );
+  }
+
+  Future<void> _sendFriendRequest(MemberDirectoryEntry member) async {
+    try {
+      final f = await FeedService.sendRequest(member.userId);
+      if (!mounted) return;
+      setState(() => _friendshipsByUser[member.userId] = f);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Friend request sent to ${member.fullName ?? "Member"}.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not send request. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
+  }
+
+  String? _viewerPhotoUrl() {
+    final user = AuthService.currentUser;
+    final meta = user?.userMetadata ?? const {};
+    final raw = (meta['profile_photo_url'] as String?)?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    return raw;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
-      body: RefreshIndicator(
-        color: AppColors.primaryBlue,
-        onRefresh: _bootstrap,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: AnimatedBuilder(
+      floatingActionButton: _buildPlusButton(),
+      body: Stack(
+        children: [
+          _buildScrollableContent(),
+          Positioned(
+            right: 16,
+            bottom: 88,
+            child: AdventChatBubble(
+              hasUnread: _hasUnreadChat,
+              unreadCount: _chatBadgeCount,
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: MainBottomNav(
+        currentIndex: 0,
+        badges: {
+          // Profile tab surfaces chat + friend-request badges because
+          // messaging lives inside the Profile menu.
+          if (_hasUnreadChat) 4: _unreadMessages + _pendingFriendRequests,
+        },
+      ),
+    );
+  }
+
+  Widget _buildPlusButton() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.40),
+            blurRadius: 18,
+            spreadRadius: 1,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _openComposer,
+          customBorder: const CircleBorder(),
+          child: const SizedBox(
+            width: 58,
+            height: 58,
+            child: Icon(
+              Icons.add,
+              color: AppColors.white,
+              size: 30,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScrollableContent() {
+    return RefreshIndicator(
+      color: AppColors.primaryBlue,
+      onRefresh: _bootstrap,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: AnimatedBuilder(
             animation: _entrance,
             builder: (context, child) => Opacity(
               opacity: _fade.value,
@@ -227,6 +437,21 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ],
+                const SizedBox(height: 22),
+                _buildSectionHeader('Stories', null),
+                const SizedBox(height: 10),
+                StoriesRail(
+                  stories: _stories,
+                  viewerId: AuthService.currentUser?.id ?? '',
+                  viewerName: _displayFullName(),
+                  viewerPhotoUrl: _viewerPhotoUrl(),
+                  onAddStory: _openComposer,
+                  onAuthorTapped: (_, list) => _openStoryViewer(list),
+                ),
+                const SizedBox(height: 18),
+                _buildSectionHeader('What\'s happening', null),
+                const SizedBox(height: 4),
+                _buildFeedList(),
                 const SizedBox(height: 24),
                 _buildSectionHeader('Quick stats', null),
                 const SizedBox(height: 12),
@@ -268,14 +493,14 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
                 const SizedBox(height: 24),
                 const AdBanner(),
-                const SizedBox(height: 16),
+                // Bottom padding so the floating chat bubble + plus FAB
+                // don't sit on top of the last bit of feed content.
+                const SizedBox(height: 96),
               ],
             ),
           ),
         ),
-      ),
-      bottomNavigationBar: const MainBottomNav(currentIndex: 0),
-    );
+      );
   }
 
   Widget _buildHeader() {
@@ -562,9 +787,94 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildFeedList() {
+    if (_loading && _posts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Column(
+          children: [
+            for (var i = 0; i < 2; i++) ...[
+              Container(
+                height: 240,
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    if (_posts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.edit_note,
+                  color: AppColors.white,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Be the first to share',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Tap the + button to post an update.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (final post in _posts)
+          PostCard(
+            post: post,
+            onLikeToggled: () => _toggleLike(post),
+            onCommentsTapped: () => _openComments(post),
+          ),
+      ],
+    );
+  }
+
   Widget _buildSuggestedMembersRow() {
+    final viewerId = AuthService.currentUser?.id;
     return SizedBox(
-      height: 188,
+      height: 210,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -572,11 +882,35 @@ class _HomeScreenState extends State<HomeScreen>
         separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
           final m = _suggestedMembers[i];
+          final friendship = _friendshipsByUser[m.userId];
           return SizedBox(
-            width: 140,
+            width: 150,
             child: _SuggestedMemberTile(
               entry: m,
-              onTap: () => showStartConversationSheet(
+              friendship: friendship,
+              viewerId: viewerId,
+              onAddFriend: () => _sendFriendRequest(m),
+              onAcceptRequest: () async {
+                if (friendship == null) return;
+                try {
+                  await FeedService.acceptRequest(friendship.id);
+                  if (!mounted) return;
+                  setState(() {
+                    _friendshipsByUser[m.userId] = Friendship(
+                      id: friendship.id,
+                      requesterId: friendship.requesterId,
+                      addresseeId: friendship.addresseeId,
+                      status: FriendshipStatus.accepted,
+                      createdAt: friendship.createdAt,
+                    );
+                    _pendingFriendRequests =
+                        (_pendingFriendRequests - 1).clamp(0, 1 << 30);
+                  });
+                } catch (_) {
+                  // surface a quiet failure
+                }
+              },
+              onSayHi: () => showStartConversationSheet(
                 context,
                 otherUserId: m.userId,
                 otherUserName: m.fullName ?? 'Member',
@@ -695,10 +1029,21 @@ class _SabbathChipState extends State<_SabbathChip> {
 }
 
 class _SuggestedMemberTile extends StatelessWidget {
-  const _SuggestedMemberTile({required this.entry, required this.onTap});
+  const _SuggestedMemberTile({
+    required this.entry,
+    required this.friendship,
+    required this.viewerId,
+    required this.onAddFriend,
+    required this.onAcceptRequest,
+    required this.onSayHi,
+  });
 
   final MemberDirectoryEntry entry;
-  final VoidCallback onTap;
+  final Friendship? friendship;
+  final String? viewerId;
+  final VoidCallback onAddFriend;
+  final VoidCallback onAcceptRequest;
+  final VoidCallback onSayHi;
 
   @override
   Widget build(BuildContext context) {
@@ -713,7 +1058,7 @@ class _SuggestedMemberTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       elevation: 0,
       child: InkWell(
-        onTap: onTap,
+        onTap: onSayHi,
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           decoration: BoxDecoration(
@@ -760,31 +1105,152 @@ class _SuggestedMemberTile extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.chat_bubble_outline,
-                      size: 13,
+              _friendButton(),
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: onSayHi,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Say hi',
+                    style: AppTextStyles.labelMedium.copyWith(
                       color: AppColors.primaryBlue,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Say hi',
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _friendButton() {
+    final f = friendship;
+    // No relationship yet → primary "Add friend" CTA.
+    if (f == null) {
+      return _GradientPill(
+        icon: Icons.person_add_alt_1,
+        label: 'Add friend',
+        onTap: onAddFriend,
+      );
+    }
+    // Accepted → static "Friends" badge.
+    if (f.isAccepted) {
+      return _OutlinePill(
+        icon: Icons.check_circle_outline,
+        label: 'Friends',
+        color: AppColors.successGreen,
+        onTap: null,
+      );
+    }
+    // Pending: differs by direction.
+    if (viewerId != null && f.isIncomingPendingFor(viewerId!)) {
+      return _GradientPill(
+        icon: Icons.check_rounded,
+        label: 'Accept',
+        onTap: onAcceptRequest,
+      );
+    }
+    return _OutlinePill(
+      icon: Icons.hourglass_empty_rounded,
+      label: 'Pending',
+      color: AppColors.primaryBlue,
+      onTap: null,
+    );
+  }
+}
+
+class _GradientPill extends StatelessWidget {
+  const _GradientPill({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 13, color: AppColors.white),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OutlinePill extends StatelessWidget {
+  const _OutlinePill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],

@@ -22,7 +22,7 @@ class TermsScreen extends StatelessWidget {
         LegalSection(
           title: 'User Accounts & Eligibility',
           body:
-              'You must be at least 13 years old to create an account. You are responsible for keeping your sign-in details safe and for all activity that happens through your account. Provide accurate information when you sign up — false details may lead to suspension.',
+              'You must be at least 16 years old to create an account. You are responsible for keeping your sign-in details safe and for all activity that happens through your account. Provide accurate information when you sign up — false details may lead to suspension.',
         ),
         LegalSection(
           title: 'Community Guidelines',

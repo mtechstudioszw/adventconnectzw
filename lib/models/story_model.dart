@@ -1,0 +1,46 @@
+/// A 24-hour ephemeral story tile from the home feed. Mirrors
+/// public.stories (patch_011). Rows past their expires_at are filtered
+/// server-side via RLS, so anything we receive is still active.
+class Story {
+  const Story({
+    required this.id,
+    required this.authorId,
+    required this.authorName,
+    required this.mediaUrl,
+    required this.createdAt,
+    required this.expiresAt,
+    this.authorPhotoUrl,
+    this.caption,
+  });
+
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String? authorPhotoUrl;
+  final String mediaUrl;
+  final String? caption;
+  final DateTime createdAt;
+  final DateTime expiresAt;
+
+  /// Time remaining until expiry. Negative means stale (should never
+  /// reach the client because RLS filters expired rows out, but the
+  /// guard is cheap).
+  Duration get timeRemaining => expiresAt.difference(DateTime.now());
+
+  factory Story.fromJson(Map<String, dynamic> json) {
+    final author = json['profiles'];
+    final authorMap = author is Map<String, dynamic> ? author : null;
+    return Story(
+      id: json['id'].toString(),
+      authorId: (json['author_id'] ?? '').toString(),
+      authorName: (authorMap?['full_name'] as String?) ?? 'Member',
+      authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
+      mediaUrl: (json['media_url'] ?? '').toString(),
+      caption: json['caption'] as String?,
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+      expiresAt: DateTime.tryParse(json['expires_at']?.toString() ?? '') ??
+          DateTime.now().add(const Duration(hours: 24)),
+    );
+  }
+}

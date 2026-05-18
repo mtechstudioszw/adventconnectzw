@@ -20,7 +20,7 @@ class _AgeVerificationScreenState extends State<AgeVerificationScreen> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime(now.year - 18, now.month, now.day),
+      initialDate: DateTime(now.year - 20, now.month, now.day),
       firstDate: DateTime(1920),
       lastDate: now,
       helpText: 'Select your date of birth',
@@ -105,7 +105,7 @@ class _AgeVerificationScreenState extends State<AgeVerificationScreen> {
               Text('Age Verification', style: AppTextStyles.displayMedium),
               const SizedBox(height: 8),
               Text(
-                'You must be at least 13 years old to use Advent Connect ZW.',
+                'You must be at least 16 years old to use Advent Connect ZW.',
                 style: AppTextStyles.bodyLarge.copyWith(
                   color: const Color.fromRGBO(26, 26, 46, 0.7),
                 ),
@@ -226,7 +226,7 @@ class _AgeVerificationScreenState extends State<AgeVerificationScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Advent Connect ZW is only available to users aged 13 and over. Please come back when you\'re older.',
+                'Advent Connect ZW is only available to users aged 16 and over. Please come back when you\'re older.',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyLarge.copyWith(
                   color: const Color.fromRGBO(26, 26, 46, 0.7),

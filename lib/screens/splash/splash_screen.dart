@@ -16,8 +16,14 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
+  // Keep the loader visible for at least this long so the brand
+  // animation lands and the loading bar can run end-to-end. Must be
+  // >= the progress bar duration below.
+  static const Duration _minLoaderDuration = Duration(milliseconds: 3200);
+
   late final AnimationController _entrance;
   late final AnimationController _dots;
+  late final AnimationController _progress;
 
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
@@ -31,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _entrance = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 1800),
     )..forward();
 
     _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
@@ -64,6 +70,11 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1500),
     )..repeat();
 
+    _progress = AnimationController(
+      vsync: this,
+      duration: _minLoaderDuration,
+    )..forward();
+
     _navigate();
   }
 
@@ -71,11 +82,12 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _entrance.dispose();
     _dots.dispose();
+    _progress.dispose();
     super.dispose();
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(_minLoaderDuration);
     if (!mounted) return;
 
     if (AuthService.isSignedIn) {
@@ -147,6 +159,8 @@ class _SplashScreenState extends State<SplashScreen>
                     bottom: 24,
                     child: Column(
                       children: [
+                        _buildProgressBar(),
+                        const SizedBox(height: 14),
                         _buildDots(),
                         const SizedBox(height: 16),
                         Text(
@@ -271,6 +285,47 @@ class _SplashScreenState extends State<SplashScreen>
               fontSize: 12,
               fontWeight: FontWeight.w500,
               letterSpacing: 2.4,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProgressBar() {
+    return AnimatedBuilder(
+      animation: _progress,
+      builder: (context, _) {
+        return Center(
+          child: Container(
+            width: 140,
+            height: 3,
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: Curves.easeInOut.transform(_progress.value),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.goldAccent.withValues(alpha: 0.85),
+                        AppColors.white.withValues(alpha: 0.95),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.goldAccent.withValues(alpha: 0.45),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         );

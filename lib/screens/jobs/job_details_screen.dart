@@ -6,6 +6,7 @@ import '../../models/job_model.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/start_conversation_sheet.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   const JobDetailsScreen({
@@ -27,6 +28,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   bool _loading = true;
   String? _error;
   bool _markingFilled = false;
+  bool _reopening = false;
 
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -167,6 +169,110 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         ),
       );
     }
+  }
+
+  Future<void> _confirmReopen() async {
+    final job = _job;
+    if (job == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Reopen this listing?',
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          '"${job.title}" will show up again for applicants.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.buttonText.copyWith(
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Reopen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _reopening = true);
+    try {
+      await JobService.reopen(job.id);
+      if (!mounted) return;
+      setState(() {
+        _reopening = false;
+        _job = Job(
+          id: job.id,
+          posterId: job.posterId,
+          posterName: job.posterName,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          type: job.type,
+          salaryMin: job.salaryMin,
+          salaryMax: job.salaryMax,
+          currency: job.currency,
+          description: job.description,
+          requirements: job.requirements,
+          category: job.category,
+          contactPhone: job.contactPhone,
+          companyLogoUrl: job.companyLogoUrl,
+          isActive: job.isActive,
+          status: 'open',
+          createdAt: job.createdAt,
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Listing reopened.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _reopening = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not reopen the job. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _messagePoster() async {
+    final job = _job;
+    if (job == null) return;
+    await showStartConversationSheet(
+      context,
+      otherUserId: job.posterId,
+      otherUserName: job.posterName,
+      source: 'job_details',
+    );
   }
 
   Future<void> _apply() async {
@@ -445,62 +551,61 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
 
   Widget _buildApplyButton() {
     final job = _job!;
-    if (job.isFilled) {
-      return _StatusPill(
-        icon: Icons.check_circle_outline,
-        label: 'Position filled',
-        background: AppColors.successGreen.withValues(alpha: 0.12),
-        foreground: AppColors.successGreen,
-      );
-    }
+    final hasPhone = (job.contactPhone ?? '').trim().isNotEmpty;
+
     if (_isPoster) {
+      if (job.isFilled) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _StatusPill(
+              icon: Icons.check_circle_outline,
+              label: 'Position filled',
+              background: AppColors.successGreen.withValues(alpha: 0.12),
+              foreground: AppColors.successGreen,
+            ),
+            const SizedBox(height: 10),
+            _ReopenButton(
+              loading: _reopening,
+              onTap: _confirmReopen,
+            ),
+          ],
+        );
+      }
       return _MarkFilledButton(
         loading: _markingFilled,
         onTap: _confirmMarkFilled,
       );
     }
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.30),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (job.isFilled) ...[
+          _StatusPill(
+            icon: Icons.check_circle_outline,
+            label: 'Position filled',
+            background: AppColors.successGreen.withValues(alpha: 0.12),
+            foreground: AppColors.successGreen,
+          ),
+          const SizedBox(height: 10),
+        ],
+        _PrimaryActionButton(
+          icon: Icons.chat_bubble_outline,
+          label: 'Message poster',
+          onTap: _messagePoster,
+        ),
+        if (!job.isFilled && hasPhone) ...[
+          const SizedBox(height: 10),
+          _SecondaryActionButton(
+            icon: Icons.send_outlined,
+            label: job.isSeeking
+                ? 'Contact via WhatsApp'
+                : 'Apply via WhatsApp',
+            onTap: _apply,
           ),
         ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _apply,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.send_outlined,
-                  color: AppColors.white,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _job!.isSeeking
-                      ? 'Contact via WhatsApp'
-                      : 'Apply via WhatsApp',
-                  style: AppTextStyles.buttonText.copyWith(
-                    fontSize: 15,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      ],
     );
   }
 
@@ -785,6 +890,164 @@ class _MarkFilledButton extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   loading ? 'Marking…' : 'Mark as filled',
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontSize: 15,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrimaryActionButton extends StatelessWidget {
+  const _PrimaryActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.30),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: AppColors.white, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTextStyles.buttonText.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondaryActionButton extends StatelessWidget {
+  const _SecondaryActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primaryBlue, width: 1.5),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: AppColors.primaryBlue, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontSize: 15,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReopenButton extends StatelessWidget {
+  const _ReopenButton({required this.loading, required this.onTap});
+
+  final bool loading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primaryBlue, width: 1.5),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: loading ? null : onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (loading)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primaryBlue,
+                    ),
+                  )
+                else
+                  const Icon(
+                    Icons.refresh,
+                    color: AppColors.primaryBlue,
+                    size: 18,
+                  ),
+                const SizedBox(width: 8),
+                Text(
+                  loading ? 'Reopening…' : 'Reopen position',
                   style: AppTextStyles.buttonText.copyWith(
                     color: AppColors.primaryBlue,
                     fontSize: 15,

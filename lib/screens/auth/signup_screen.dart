@@ -102,7 +102,7 @@ class _SignupScreenState extends State<SignupScreen>
     }
 
     if (!AuthService.meetsMinimumAge(_birthDate!)) {
-      setState(() => _serverError = 'You must be at least 13 to sign up.');
+      setState(() => _serverError = 'You must be at least 16 to sign up.');
       return;
     }
 
@@ -135,7 +135,7 @@ class _SignupScreenState extends State<SignupScreen>
       return;
     }
     if (!AuthService.meetsMinimumAge(_birthDate!)) {
-      setState(() => _serverError = 'You must be at least 13 to sign up.');
+      setState(() => _serverError = 'You must be at least 16 to sign up.');
       return;
     }
 
@@ -499,7 +499,7 @@ class _AgeBadge extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   verified
-                      ? 'You meet the 13+ minimum.'
+                      ? 'You meet the 16+ minimum.'
                       : 'Please verify your date of birth before continuing.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: const Color.fromRGBO(26, 26, 46, 0.7),

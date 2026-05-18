@@ -43,6 +43,22 @@ class StorageService {
         imageQuality: 85,
       );
 
+  /// Home-feed post photo. Free aspect, up to 1600 wide, ~600KB target.
+  static Future<String?> pickAndUploadPostPhoto() => _pickAndUpload(
+        bucket: 'post_photos',
+        maxWidth: 1600,
+        imageQuality: 80,
+      );
+
+  /// 24h story photo. Slightly larger ceiling to keep faces crisp on
+  /// full-screen viewers, but still capped so uploads stay quick on
+  /// patchy networks.
+  static Future<String?> pickAndUploadStoryPhoto() => _pickAndUpload(
+        bucket: 'story_photos',
+        maxWidth: 1600,
+        imageQuality: 82,
+      );
+
   /// Generic flow used by the three convenience methods above.
   /// Returns the public URL of the uploaded file, or null if the user
   /// cancelled the picker. `squareCrop: true` runs the source image

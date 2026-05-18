@@ -7,6 +7,7 @@ import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../models/friendship_model.dart';
 import '../../models/member_directory_model.dart';
+import '../../models/message_model.dart';
 import '../../models/post_model.dart';
 import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
@@ -129,10 +130,10 @@ class _HomeScreenState extends State<HomeScreen>
           friendsByUser[f.otherUserId(viewerId)] = f;
         }
       }
-      final conversations = results[11] as List;
+      final conversations = results[11] as List<Conversation>;
       int unreadMessages = 0;
       for (final c in conversations) {
-        unreadMessages += (c.unreadCount as int);
+        unreadMessages += c.unreadCount;
       }
       setState(() {
         _events = events;

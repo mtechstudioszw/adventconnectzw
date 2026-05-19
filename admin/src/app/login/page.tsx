@@ -1,14 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
 export default function LoginPage() {
+  const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<
     "idle" | "sending" | "sent" | "error"
   >("idle");
   const [errorMessage, setErrorMessage] = useState("");
+
+  // The auth callback redirects here with `?error=...` if the magic
+  // link couldn't be verified or the email isn't on the allowlist.
+  // Surface it so the failure isn't silent.
+  useEffect(() => {
+    const fromCallback = params.get("error");
+    if (fromCallback) {
+      setStatus("error");
+      setErrorMessage(fromCallback);
+    }
+  }, [params]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

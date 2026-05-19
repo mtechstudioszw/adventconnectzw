@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/business_application_model.dart';
+import '../../services/account_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/home/invite_friends_card.dart';
 import '../widgets/main_bottom_nav.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -24,6 +27,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   int _eventsGoing = 0;
   int _prayersPraying = 0;
   bool _loading = true;
+  AccountState? _accountState;
 
   @override
   void initState() {
@@ -50,18 +54,36 @@ class _ProfileScreenState extends State<ProfileScreen>
       final results = await Future.wait([
         ChurchService.fetchUserFollowedChurchIds(),
         EventService.fetchUserRsvpedEventIds(),
+        AccountService.fetchMyAccount(),
       ]);
       if (!mounted) return;
       setState(() {
-        _churchesFollowed = results[0].length;
-        _eventsGoing = results[1].length;
+        _churchesFollowed = (results[0] as Set).length;
+        _eventsGoing = (results[1] as Set).length;
         _prayersPraying = 0;
+        _accountState = results[2] as AccountState?;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _openApplyBusiness() async {
+    final result = await context.pushNamed<BusinessApplication>(
+      'apply_business',
+    );
+    if (!mounted || result == null) return;
+    // After a fresh application the latest row is `pending` — refresh
+    // local state so the badge updates without a manual reload.
+    setState(() {
+      _accountState = AccountState(
+        userId: _accountState?.userId ?? '',
+        isBusiness: _accountState?.isBusiness ?? false,
+        latestApplication: result,
+      );
+    });
   }
 
   String _displayName() {
@@ -161,6 +183,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: _buildBioCard(),
                 ),
+                const SizedBox(height: 16),
+                _buildAccountCard(),
+                const SizedBox(height: 16),
+                const InviteFriendsCard(),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -399,6 +425,157 @@ class _ProfileScreenState extends State<ProfileScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildAccountCard() {
+    final state = _accountState;
+    final isBusiness = state?.isBusiness ?? false;
+    final latest = state?.latestApplication;
+    final pending = latest != null && latest.isPending;
+    final rejected = !isBusiness && latest != null && latest.isRejected;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: isBusiness
+                        ? AppColors.primaryGradient
+                        : null,
+                    color: isBusiness
+                        ? null
+                        : AppColors.lightGrey,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    isBusiness ? Icons.business_center : Icons.person,
+                    color: isBusiness
+                        ? AppColors.white
+                        : AppColors.primaryBlue,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            isBusiness
+                                ? 'Business account'
+                                : 'Personal account',
+                            style: AppTextStyles.titleMedium.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                            ),
+                          ),
+                          if (isBusiness) ...[
+                            const SizedBox(width: 6),
+                            const Icon(
+                              Icons.verified,
+                              color: AppColors.goldAccent,
+                              size: 16,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _accountSubtitle(isBusiness, pending, rejected),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: const Color.fromRGBO(26, 26, 46, 0.6),
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (!isBusiness && !pending) ...[
+              const SizedBox(height: 14),
+              _ApplyBusinessButton(
+                rejected: rejected,
+                rejectionNote: rejected ? latest.reviewerNote : null,
+                onTap: _openApplyBusiness,
+              ),
+            ],
+            if (pending) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.goldAccent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.goldAccent.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.hourglass_empty_rounded,
+                      color: AppColors.goldAccent,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Your business application is under review.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.goldAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _accountSubtitle(bool isBusiness, bool pending, bool rejected) {
+    if (isBusiness) {
+      return 'You can sell in the marketplace and claim a church listing.';
+    }
+    if (pending) {
+      return 'We\'ll let you know in the app once your account is upgraded.';
+    }
+    if (rejected) {
+      return 'Your last application was declined. You can re-apply below.';
+    }
+    return 'Upgrade to a business account to sell or claim a church.';
   }
 
   Widget _buildActionButtons() {
@@ -763,6 +940,69 @@ class _Divider extends StatelessWidget {
         height: 1,
         color: Color.fromRGBO(26, 26, 46, 0.06),
       ),
+    );
+  }
+}
+
+class _ApplyBusinessButton extends StatelessWidget {
+  const _ApplyBusinessButton({
+    required this.rejected,
+    required this.rejectionNote,
+    required this.onTap,
+  });
+
+  final bool rejected;
+  final String? rejectionNote;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (rejected && (rejectionNote ?? "").isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.red.withValues(alpha: 0.30)),
+            ),
+            child: Text(
+              rejectionNote!,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.red,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                rejected ? "Re-apply for Business" : "Apply for Business",
+                style: AppTextStyles.buttonText.copyWith(
+                  color: AppColors.white,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

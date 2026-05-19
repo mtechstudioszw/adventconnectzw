@@ -50,6 +50,7 @@ class FeedService {
   static Future<Post> createPost({
     String? body,
     String? imageUrl,
+    PostVisibility visibility = PostVisibility.public,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -66,6 +67,9 @@ class FeedService {
           'author_id': user.id,
           if (cleanBody != null && cleanBody.isNotEmpty) 'body': cleanBody,
           if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
+          'visibility': visibility == PostVisibility.friendsOnly
+              ? 'friends_only'
+              : 'public',
         })
         .select(
           '*, '

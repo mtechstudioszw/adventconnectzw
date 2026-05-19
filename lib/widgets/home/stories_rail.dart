@@ -29,29 +29,35 @@ class StoriesRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Group by author so each member surfaces once even if they posted
-    // multiple stories in the last 24h. Preserves the
-    // newest-author-first order from the input.
+    // multiple stories in the last 24h.
     final byAuthor = <String, List<Story>>{};
     for (final story in stories) {
       byAuthor.putIfAbsent(story.authorId, () => []).add(story);
     }
-    final authorIds = byAuthor.keys.toList();
+    // Surface the viewer's own stories on the leading "Your story" tile
+    // (Facebook-style) — the rest of the rail is everyone else.
+    final ownStories = byAuthor.remove(viewerId);
+    final otherAuthors = byAuthor.keys.toList();
 
     return SizedBox(
       height: 108,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: authorIds.length + 1,
+        itemCount: otherAuthors.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return _AddStoryTile(
+            return _OwnStoryTile(
               viewerName: viewerName,
               viewerPhotoUrl: viewerPhotoUrl,
-              onTap: onAddStory,
+              ownStories: ownStories,
+              onAdd: onAddStory,
+              onView: ownStories == null
+                  ? null
+                  : () => onAuthorTapped(viewerId, ownStories),
             );
           }
-          final authorId = authorIds[index - 1];
+          final authorId = otherAuthors[index - 1];
           final authorStories = byAuthor[authorId]!;
           final preview = authorStories.first;
           return _StoryTile(
@@ -64,79 +70,124 @@ class StoriesRail extends StatelessWidget {
   }
 }
 
-class _AddStoryTile extends StatelessWidget {
-  const _AddStoryTile({
+class _OwnStoryTile extends StatelessWidget {
+  const _OwnStoryTile({
     required this.viewerName,
     required this.viewerPhotoUrl,
-    required this.onTap,
+    required this.ownStories,
+    required this.onAdd,
+    required this.onView,
   });
 
   final String viewerName;
   final String? viewerPhotoUrl;
-  final VoidCallback onTap;
+  final List<Story>? ownStories;
+  final VoidCallback onAdd;
+  final VoidCallback? onView;
+
+  bool get _hasStory => ownStories != null && ownStories!.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: GestureDetector(
-        onTap: onTap,
-        child: SizedBox(
-          width: 72,
-          child: Column(
-            children: [
-              Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.lightGrey,
-                      border: Border.all(
-                        color: const Color.fromRGBO(26, 26, 46, 0.08),
-                        width: 1.5,
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          children: [
+            Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                GestureDetector(
+                  onTap: _hasStory ? onView : onAdd,
+                  child: _hasStory
+                      ? _ringedPreview(ownStories!.first.mediaUrl)
+                      : _bareAvatar(),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: GestureDetector(
+                    onTap: onAdd,
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: AppColors.white, width: 2.0),
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        size: 14,
+                        color: AppColors.white,
                       ),
                     ),
-                    child: viewerPhotoUrl == null || viewerPhotoUrl!.isEmpty
-                        ? _initialAvatar(viewerName)
-                        : Image.network(
-                            viewerPhotoUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                _initialAvatar(viewerName),
-                          ),
                   ),
-                  Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.white, width: 2.0),
-                    ),
-                    child: const Icon(
-                      Icons.add,
-                      size: 14,
-                      color: AppColors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Your story',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelSmall.copyWith(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textDark,
                 ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Your story',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.labelSmall.copyWith(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bareAvatar() {
+    return Container(
+      width: 64,
+      height: 64,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.lightGrey,
+        border: Border.all(
+          color: const Color.fromRGBO(26, 26, 46, 0.08),
+          width: 1.5,
+        ),
+      ),
+      child: viewerPhotoUrl == null || viewerPhotoUrl!.isEmpty
+          ? _initialAvatar(viewerName)
+          : Image.network(
+              viewerPhotoUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _initialAvatar(viewerName),
+            ),
+    );
+  }
+
+  Widget _ringedPreview(String mediaUrl) {
+    return Container(
+      width: 64,
+      height: 64,
+      padding: const EdgeInsets.all(2.5),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: AppColors.primaryGradient,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppColors.white,
+        ),
+        child: ClipOval(
+          child: Image.network(
+            mediaUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _bareAvatar(),
           ),
         ),
       ),

@@ -58,6 +58,7 @@ import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/feedback_screen.dart';
+import '../screens/profile/apply_business_screen.dart';
 import '../screens/profile/notification_centre_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/seller/edit_store_screen.dart';
@@ -391,6 +392,11 @@ final GoRouter appRouter = GoRouter(
           path: 'feedback',
           name: 'feedback',
           builder: (context, state) => const FeedbackScreen(),
+        ),
+        GoRoute(
+          path: 'apply-business',
+          name: 'apply_business',
+          builder: (context, state) => const ApplyBusinessScreen(),
         ),
       ],
     ),

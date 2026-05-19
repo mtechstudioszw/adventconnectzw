@@ -27,6 +27,7 @@ import '../../widgets/ad_banner.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_sheet.dart';
+import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
@@ -235,17 +236,16 @@ class _HomeScreenState extends State<HomeScreen>
     return total > 0 ? total : null;
   }
 
-  Future<void> _openComposer() async {
-    final result = await showComposerSheet(context);
-    if (!mounted || result == null) return;
-    setState(() {
-      if (result.isPost && result.post != null) {
-        _posts = [result.post!, ..._posts];
-      }
-      if (result.isStory && result.story != null) {
-        _stories = [result.story!, ..._stories];
-      }
-    });
+  Future<void> _openPostComposer() async {
+    final post = await showPostComposer(context);
+    if (!mounted || post == null) return;
+    setState(() => _posts = [post, ..._posts]);
+  }
+
+  Future<void> _openStoryComposer() async {
+    final story = await showStoryComposer(context);
+    if (!mounted || story == null) return;
+    setState(() => _stories = [story, ..._stories]);
   }
 
   Future<void> _openStoryViewer(List<Story> authorStories) {
@@ -341,13 +341,12 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
-      floatingActionButton: _buildPlusButton(),
       body: Stack(
         children: [
           _buildScrollableContent(),
           Positioned(
             right: 16,
-            bottom: 88,
+            bottom: 24,
             child: AdventChatBubble(
               hasUnread: _hasUnreadChat,
               unreadCount: _chatBadgeCount,
@@ -362,39 +361,6 @@ class _HomeScreenState extends State<HomeScreen>
           // messaging lives inside the Profile menu.
           if (_hasUnreadChat) 4: _unreadMessages + _pendingFriendRequests,
         },
-      ),
-    );
-  }
-
-  Widget _buildPlusButton() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.40),
-            blurRadius: 18,
-            spreadRadius: 1,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _openComposer,
-          customBorder: const CircleBorder(),
-          child: const SizedBox(
-            width: 58,
-            height: 58,
-            child: Icon(
-              Icons.add,
-              color: AppColors.white,
-              size: 30,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -418,13 +384,6 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
-                const SizedBox(height: 18),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _HomeSearchBar(
-                    onTap: () => context.pushNamed('search'),
-                  ),
-                ),
                 if (_banner != null &&
                     !_dismissedBannerIds.contains(_banner!.id)) ...[
                   const SizedBox(height: 16),
@@ -438,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ],
-                const SizedBox(height: 22),
+                const SizedBox(height: 18),
                 _buildSectionHeader('Stories', null),
                 const SizedBox(height: 10),
                 StoriesRail(
@@ -446,12 +405,19 @@ class _HomeScreenState extends State<HomeScreen>
                   viewerId: AuthService.currentUser?.id ?? '',
                   viewerName: _displayFullName(),
                   viewerPhotoUrl: _viewerPhotoUrl(),
-                  onAddStory: _openComposer,
+                  onAddStory: _openStoryComposer,
                   onAuthorTapped: (_, list) => _openStoryViewer(list),
                 ),
-                const SizedBox(height: 18),
-                _buildSectionHeader('What\'s happening', null),
-                const SizedBox(height: 4),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _ComposerEntry(
+                    photoUrl: _viewerPhotoUrl(),
+                    name: _displayFullName(),
+                    onTap: _openPostComposer,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 _buildFeedList(),
                 const SizedBox(height: 24),
                 _buildSectionHeader('Quick stats', null),
@@ -492,6 +458,8 @@ class _HomeScreenState extends State<HomeScreen>
                   const SizedBox(height: 12),
                   _buildSuggestedMembersRow(),
                 ],
+                const SizedBox(height: 22),
+                const InviteFriendsCard(),
                 const SizedBox(height: 24),
                 const AdBanner(),
                 // Bottom padding so the floating chat bubble + plus FAB
@@ -571,6 +539,11 @@ class _HomeScreenState extends State<HomeScreen>
                               ],
                             ),
                           ),
+                          _HeaderIconButton(
+                            icon: Icons.search,
+                            onTap: () => context.pushNamed('search'),
+                          ),
+                          const SizedBox(width: 8),
                           _NotificationBell(
                             unread: _unreadNotifications,
                             onTap: () async {
@@ -664,31 +637,35 @@ class _HomeScreenState extends State<HomeScreen>
     final upcomingForUser = _events
         .where((e) => _rsvpedEventIds.contains(e.id))
         .length;
-    return SizedBox(
-      height: 124,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
         children: [
-          _StatCard(
-            icon: Icons.church_outlined,
-            label: 'Churches you follow',
-            value: '${_followedChurchIds.length}',
-            tint: const Color(0xFF1565C0),
+          Expanded(
+            child: _CompactStatTile(
+              icon: Icons.church_outlined,
+              value: '${_followedChurchIds.length}',
+              label: 'Churches',
+              onTap: () => context.goNamed('churches'),
+            ),
           ),
-          const SizedBox(width: 12),
-          _StatCard(
-            icon: Icons.event_available_outlined,
-            label: 'Events going to',
-            value: '$upcomingForUser',
-            tint: const Color(0xFF0D47A1),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _CompactStatTile(
+              icon: Icons.event_available_outlined,
+              value: '$upcomingForUser',
+              label: 'Events',
+              onTap: () => context.goNamed('events'),
+            ),
           ),
-          const SizedBox(width: 12),
-          _StatCard(
-            icon: Icons.volunteer_activism_outlined,
-            label: 'Prayer requests',
-            value: '0',
-            tint: const Color(0xFF1976D2),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _CompactStatTile(
+              icon: Icons.volunteer_activism_outlined,
+              value: '0',
+              label: 'Prayers',
+              onTap: () => context.pushNamed('prayer'),
+            ),
           ),
         ],
       ),
@@ -713,7 +690,7 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
     return SizedBox(
-      height: 240,
+      height: 168,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -810,52 +787,17 @@ class _HomeScreenState extends State<HomeScreen>
     }
     if (_posts.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.edit_note,
-                  color: AppColors.white,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Be the first to share',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Tap the + button to post an update.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: GestureDetector(
+          onTap: _openPostComposer,
+          behavior: HitTestBehavior.opaque,
+          child: Text(
+            'No updates yet — tap to share something.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              fontStyle: FontStyle.italic,
+            ),
           ),
         ),
       );
@@ -1573,78 +1515,6 @@ class _WelcomeCard extends StatelessWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.tint,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color tint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 168,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [tint, Color.lerp(tint, Colors.black, 0.18)!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: tint.withValues(alpha: 0.3),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: AppColors.white, size: 18),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: AppTextStyles.displayLarge.copyWith(
-              color: AppColors.white,
-              fontSize: 30,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.white.withValues(alpha: 0.85),
-              fontSize: 11.5,
-              fontWeight: FontWeight.w500,
-              height: 1.3,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _HomeEventCard extends StatelessWidget {
   const _HomeEventCard({
     required this.event,
@@ -1664,33 +1534,33 @@ class _HomeEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 220,
+      width: 160,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Stack(
                     children: [
                       AspectRatio(
-                        aspectRatio: 16 / 11,
+                        aspectRatio: 16 / 9,
                         child: _CoverImage(
                           url: event.coverPhotoUrl,
                           fallbackIcon: Icons.event,
@@ -1797,30 +1667,30 @@ class _HomeEventCard extends StatelessWidget {
                     ],
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           event.title,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.titleMedium.copyWith(
-                            fontSize: 14,
+                            fontSize: 12.5,
                             fontWeight: FontWeight.w700,
-                            height: 1.3,
+                            height: 1.2,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 3),
                         Row(
                           children: [
                             const Icon(
                               Icons.place_outlined,
-                              size: 12,
+                              size: 11,
                               color: Color.fromRGBO(26, 26, 46, 0.6),
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 3),
                             Flexible(
                               child: Text(
                                 (event.location ?? '').isEmpty
@@ -1830,7 +1700,7 @@ class _HomeEventCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.bodySmall.copyWith(
                                   color: const Color.fromRGBO(26, 26, 46, 0.6),
-                                  fontSize: 11.5,
+                                  fontSize: 10.5,
                                 ),
                               ),
                             ),
@@ -2128,8 +1998,10 @@ class _PrayersEmpty extends StatelessWidget {
   }
 }
 
-class _HomeSearchBar extends StatelessWidget {
-  const _HomeSearchBar({required this.onTap});
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
@@ -2138,20 +2010,131 @@ class _HomeSearchBar extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        customBorder: const CircleBorder(),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppColors.white.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.white.withValues(alpha: 0.18),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: AppColors.white, size: 20),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactStatTile extends StatelessWidget {
+  const _CompactStatTile({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.06),
             ),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Color.fromRGBO(13, 27, 62, 0.08),
-                blurRadius: 14,
-                offset: Offset(0, 6),
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: AppColors.primaryBlue),
+              const SizedBox(width: 8),
+              Text(
+                value,
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textDark,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposerEntry extends StatelessWidget {
+  const _ComposerEntry({
+    required this.photoUrl,
+    required this.name,
+    required this.onTap,
+  });
+
+  final String? photoUrl;
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.trim().isEmpty
+        ? '?'
+        : name.trim().substring(0, 1).toUpperCase();
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(28),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.08),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -2160,62 +2143,54 @@ class _HomeSearchBar extends StatelessWidget {
               Container(
                 width: 36,
                 height: 36,
-                alignment: Alignment.center,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
                   shape: BoxShape.circle,
-                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
                 ),
-                child: const Icon(
-                  Icons.search_rounded,
-                  color: AppColors.primaryBlue,
-                  size: 20,
-                ),
+                alignment: Alignment.center,
+                child: photoUrl == null || photoUrl!.isEmpty
+                    ? Text(
+                        initial,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      )
+                    : Image.network(
+                        photoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Text(
+                          initial,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Find people, churches, events…',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textDark,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Search anything in the community',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.55),
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'What\'s on your mind?',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    fontSize: 14,
+                  ),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
+                padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: AppColors.goldAccent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.goldAccent.withValues(alpha: 0.35),
-                  ),
+                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
-                child: Text(
-                  'NEW',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.goldAccent,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  ),
+                child: const Icon(
+                  Icons.edit_outlined,
+                  size: 16,
+                  color: AppColors.primaryBlue,
                 ),
               ),
             ],

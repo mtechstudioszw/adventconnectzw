@@ -5,6 +5,7 @@ import '../../services/biometric_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/home/invite_friends_card.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -479,6 +480,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ),
                       ],
                     ),
+                    const SizedBox(height: 18),
+                    const InviteFriendsCard(horizontalMargin: 0),
                     const SizedBox(height: 24),
                     Center(
                       child: Text(

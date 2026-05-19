@@ -102,21 +102,31 @@ class _StoryViewerState extends State<StoryViewer>
                 ),
               ),
             ),
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _back,
+            Listener(
+              // Press anywhere → pause the progress bar. Release →
+              // resume. We layer the tap-left / tap-right gestures on
+              // top via GestureDetector. A short press + release reads
+              // as a tap (advance/back) AND a brief pause/resume — the
+              // cycle is invisible during the tap.
+              onPointerDown: (_) => _progress.stop(),
+              onPointerUp: (_) => _progress.forward(),
+              onPointerCancel: (_) => _progress.forward(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _back,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _advance,
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _advance,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             Positioned(
               top: 12,

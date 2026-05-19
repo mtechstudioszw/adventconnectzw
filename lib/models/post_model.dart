@@ -1,5 +1,7 @@
 /// A community post from the home feed. Permanent unless the author
-/// deletes it. Mirrors public.posts (patch_011).
+/// deletes it. Mirrors public.posts (patch_011 + patch_012 visibility).
+enum PostVisibility { public, friendsOnly }
+
 class Post {
   const Post({
     required this.id,
@@ -9,6 +11,7 @@ class Post {
     this.authorPhotoUrl,
     this.body,
     this.imageUrl,
+    this.visibility = PostVisibility.public,
     this.likeCount = 0,
     this.commentCount = 0,
     this.viewerLiked = false,
@@ -20,6 +23,7 @@ class Post {
   final String? authorPhotoUrl;
   final String? body;
   final String? imageUrl;
+  final PostVisibility visibility;
   final DateTime createdAt;
   final int likeCount;
   final int commentCount;
@@ -37,6 +41,7 @@ class Post {
       authorPhotoUrl: authorPhotoUrl,
       body: body,
       imageUrl: imageUrl,
+      visibility: visibility,
       createdAt: createdAt,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
@@ -77,6 +82,7 @@ class Post {
       commentCount = (commentsRaw['count'] as int?) ?? 0;
     }
 
+    final visibilityStr = (json['visibility'] ?? 'public').toString();
     return Post(
       id: json['id'].toString(),
       authorId: (json['author_id'] ?? '').toString(),
@@ -84,6 +90,9 @@ class Post {
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
       body: json['body'] as String?,
       imageUrl: json['image_url'] as String?,
+      visibility: visibilityStr == 'friends_only'
+          ? PostVisibility.friendsOnly
+          : PostVisibility.public,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
       likeCount: likeCount,

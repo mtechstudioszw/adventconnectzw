@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/church_model.dart';
+import '../../services/account_service.dart';
 import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
@@ -32,10 +33,28 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
   bool _saving = false;
   String? _error;
 
+  AccountState? _account;
+  bool _checkingAccount = true;
+
   @override
   void initState() {
     super.initState();
     _addressController.text = widget.church.address ?? '';
+    _checkAccount();
+  }
+
+  Future<void> _checkAccount() async {
+    try {
+      final state = await AccountService.fetchMyAccount();
+      if (!mounted) return;
+      setState(() {
+        _account = state;
+        _checkingAccount = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _checkingAccount = false);
+    }
   }
 
   @override
@@ -120,6 +139,36 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingAccount) {
+      return const Scaffold(
+        backgroundColor: AppColors.lightGrey,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primaryBlue),
+        ),
+      );
+    }
+    if (_account != null && !_account!.isBusiness) {
+      return Scaffold(
+        backgroundColor: AppColors.lightGrey,
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              ScreenHero(
+                title: 'Claim this church',
+                tagline: widget.church.name,
+                subtitle: 'Business account required.',
+                fallbackRoute: 'churches',
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: _ClaimBusinessGate(account: _account!),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
       body: SingleChildScrollView(
@@ -483,6 +532,136 @@ class _LetterPicker extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ClaimBusinessGate extends StatelessWidget {
+  const _ClaimBusinessGate({required this.account});
+
+  final AccountState account;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = account.hasPendingApplication;
+    final rejected = account.hasRejectedApplication;
+
+    final (String title, String body, String cta) =
+        pending
+            ? (
+                'Your business application is in review',
+                'Once your business account is approved, you\'ll be able '
+                    'to claim this church listing.',
+                'OK',
+              )
+            : rejected
+                ? (
+                    'Your last application was declined',
+                    account.latestApplication?.reviewerNote?.trim().isNotEmpty == true
+                        ? account.latestApplication!.reviewerNote!.trim()
+                        : 'Please review your details and reapply.',
+                    'Re-apply',
+                  )
+                : (
+                    'Business account required',
+                    'Claiming a church listing is only available to '
+                        'business accounts. Apply for one from your profile '
+                        'to get started.',
+                    'Apply for Business',
+                  );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color.fromRGBO(26, 26, 46, 0.06),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(13, 27, 62, 0.06),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.darkNavy, Color(0xFF1A2F5A)],
+              ),
+            ),
+            child: const Icon(
+              Icons.business_center,
+              color: AppColors.goldAccent,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.headlineMedium.copyWith(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 20,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.70),
+              fontSize: 14,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Container(
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  if (pending) {
+                    context.pop();
+                  } else {
+                    context.pushNamed('apply_business');
+                  }
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: Text(
+                      cta,
+                      style: AppTextStyles.buttonText.copyWith(
+                        color: AppColors.white,
+                        fontSize: 15,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

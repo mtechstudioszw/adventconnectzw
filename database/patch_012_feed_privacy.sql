@@ -32,6 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_posts_visibility
 -- the author + users in an accepted friendship with the author.
 -- ---------------------------------------------------------------------
 DROP POLICY IF EXISTS "posts_select_all" ON public.posts;
+DROP POLICY IF EXISTS "posts_select_visible" ON public.posts;
 
 CREATE POLICY "posts_select_visible" ON public.posts
   FOR SELECT USING (

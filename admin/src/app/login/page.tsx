@@ -1,56 +1,53 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
 export default function LoginPage() {
+  const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<
-    "idle" | "sending" | "sent" | "error"
-  >("idle");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // The auth callback redirects here with `?error=...` if the magic
-  // link couldn't be verified or the email isn't on the allowlist.
-  // Surface it so the failure isn't silent.
+  // If the callback bounced the user back here, show the reason.
   useEffect(() => {
     const fromCallback = params.get("error");
-    if (fromCallback) {
-      setStatus("error");
-      setErrorMessage(fromCallback);
-    }
+    if (fromCallback) setErrorMessage(fromCallback);
   }, [params]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setStatus("sending");
+    setSubmitting(true);
     setErrorMessage("");
 
     const supabase = getBrowserSupabase();
-    const redirectTo =
-      typeof window !== "undefined"
-        ? `${window.location.origin}/auth/callback`
-        : undefined;
-
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      options: {
-        // Do NOT create new users via the admin panel — anyone signing
-        // in must already exist in auth.users. The allowlist check
-        // happens server-side either way.
-        shouldCreateUser: false,
-        emailRedirectTo: redirectTo,
-      },
+      password,
     });
 
     if (error) {
-      setStatus("error");
+      setSubmitting(false);
       setErrorMessage(error.message);
       return;
     }
-    setStatus("sent");
+
+    // Re-check the email against the admin allowlist server-side
+    // before letting them into the dashboard. Banishes anyone whose
+    // address isn't in ADMIN_EMAILS even if Supabase issued a session.
+    const check = await fetch("/api/admin-check", { method: "POST" });
+    const checkBody = (await check.json()) as { allowed?: boolean };
+    if (!checkBody.allowed) {
+      await supabase.auth.signOut();
+      setSubmitting(false);
+      setErrorMessage("This email is not allowed in the admin panel.");
+      return;
+    }
+
+    router.replace("/");
   };
 
   return (
@@ -68,54 +65,60 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {status === "sent" ? (
-          <div className="space-y-3">
-            <p className="text-sm text-ink">
-              Magic link sent to <span className="font-semibold">{email}</span>.
-            </p>
-            <p className="text-xs text-ink/60">
-              Open the email on this device and tap the link to finish signing
-              in. Only allowlisted admins can access the panel — if you
-              don&apos;t see the email and your address isn&apos;t on the
-              list, nothing will arrive.
-            </p>
-          </div>
-        ) : (
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="space-y-1">
-              <label
-                htmlFor="email"
-                className="text-xs font-semibold text-ink/70"
-              >
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                autoFocus
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-ink/10 bg-canvas focus:bg-white focus:border-primary focus:outline-none text-sm"
-                placeholder="you@example.com"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={status === "sending"}
-              className="w-full bg-primary text-white rounded-xl py-2.5 text-sm font-semibold hover:opacity-95 disabled:opacity-60"
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-1">
+            <label
+              htmlFor="email"
+              className="text-xs font-semibold text-ink/70"
             >
-              {status === "sending" ? "Sending…" : "Send magic link"}
-            </button>
-            {errorMessage && (
-              <p className="text-xs text-warn">{errorMessage}</p>
-            )}
-            <p className="text-[11px] text-ink/50 leading-relaxed">
-              You&apos;ll receive a one-time link to this address. Sessions
-              expire on inactivity.
-            </p>
-          </form>
-        )}
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoFocus
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-ink/10 bg-canvas focus:bg-white focus:border-primary focus:outline-none text-sm"
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-1">
+            <label
+              htmlFor="password"
+              className="text-xs font-semibold text-ink/70"
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-ink/10 bg-canvas focus:bg-white focus:border-primary focus:outline-none text-sm"
+              placeholder="••••••••"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full bg-primary text-white rounded-xl py-2.5 text-sm font-semibold hover:opacity-95 disabled:opacity-60"
+          >
+            {submitting ? "Signing in…" : "Sign in"}
+          </button>
+          {errorMessage && (
+            <p className="text-xs text-warn">{errorMessage}</p>
+          )}
+          <p className="text-[11px] text-ink/50 leading-relaxed">
+            Set a password in Supabase Dashboard → Authentication → Users
+            → click your user → &ldquo;Reset/send password&rdquo; or use
+            the user-edit dialog.
+          </p>
+        </form>
       </div>
     </main>
   );

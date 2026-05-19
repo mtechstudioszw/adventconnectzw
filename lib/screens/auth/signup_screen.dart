@@ -288,13 +288,39 @@ class _SignupScreenState extends State<SignupScreen>
                         onPressed: _loading ? null : _signUpWithGoogle,
                       ),
                       const SizedBox(height: 14),
-                      Text(
-                        'By continuing you agree to our Terms and Privacy Policy.',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.55),
-                          height: 1.5,
-                        ),
+                      _LegalConsentText(),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 4,
+                        children: [
+                          _LegalLink(
+                            label: 'Terms of Service',
+                            onTap: () => context.pushNamed('terms'),
+                          ),
+                          Text(
+                            '·',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color:
+                                  const Color.fromRGBO(26, 26, 46, 0.45),
+                            ),
+                          ),
+                          _LegalLink(
+                            label: 'Privacy Policy',
+                            onTap: () => context.pushNamed('privacy'),
+                          ),
+                          Text(
+                            '·',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color:
+                                  const Color.fromRGBO(26, 26, 46, 0.45),
+                            ),
+                          ),
+                          _LegalLink(
+                            label: 'Community Guidelines',
+                            onTap: () => context.pushNamed('guidelines'),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       Row(
@@ -617,6 +643,41 @@ class _GradientButton extends StatelessWidget {
                     ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LegalConsentText extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'By creating an account you confirm you have read and agree to:',
+      textAlign: TextAlign.center,
+      style: AppTextStyles.bodySmall.copyWith(
+        color: const Color.fromRGBO(26, 26, 46, 0.55),
+        height: 1.5,
+      ),
+    );
+  }
+}
+
+class _LegalLink extends StatelessWidget {
+  const _LegalLink({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: AppTextStyles.bodySmall.copyWith(
+          color: AppColors.primaryBlue,
+          fontWeight: FontWeight.w700,
+          decoration: TextDecoration.underline,
         ),
       ),
     );

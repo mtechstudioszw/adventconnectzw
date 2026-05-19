@@ -40,28 +40,68 @@ class DirectoryService {
   }
 
   /// Suggested members for the home-screen "People to meet" row.
-  /// Visible directory entries, excluding the current user. Newest
-  /// first so the row stays fresh as new people opt in. Best-effort —
-  /// returns an empty list on error (the home screen treats the row
-  /// as optional UI).
+  /// Surfaces opted-in directory entries first, then tops the row up
+  /// with raw discoverable profiles so the section is never empty when
+  /// the directory hasn't seen much opt-in traffic yet. Best-effort —
+  /// returns an empty list on error.
   static Future<List<MemberDirectoryEntry>> fetchSuggestedMembers({
     int limit = 8,
   }) async {
     try {
       final user = _client.auth.currentUser;
-      var query = _client
+
+      // 1) Opt-in directory entries (richer profile data).
+      var dirQuery = _client
           .from(_table)
           .select('*, profiles(full_name, profile_photo_url), churches(name)')
           .eq('is_visible', true);
       if (user != null) {
-        query = query.neq('user_id', user.id);
+        dirQuery = dirQuery.neq('user_id', user.id);
       }
-      final response =
-          await query.order('created_at', ascending: false).limit(limit);
-      return (response as List)
+      final dirResponse =
+          await dirQuery.order('created_at', ascending: false).limit(limit);
+      final dirEntries = (dirResponse as List)
           .map((row) =>
               MemberDirectoryEntry.fromJson(row as Map<String, dynamic>))
           .toList();
+
+      if (dirEntries.length >= limit) return dirEntries;
+
+      // 2) Top up with discoverable profiles that aren't already in the
+      // directory result. Maps each profile into a MemberDirectoryEntry
+      // shape so the UI doesn't need a second model.
+      final coveredIds =
+          dirEntries.map((e) => e.userId).toSet();
+
+      var profilesQuery = _client
+          .from('profiles')
+          .select('id, full_name, profile_photo_url, province, city, bio')
+          .eq('is_discoverable', true)
+          .eq('is_banned', false);
+      if (user != null) {
+        profilesQuery = profilesQuery.neq('id', user.id);
+      }
+      final profilesResponse = await profilesQuery
+          .order('created_at', ascending: false)
+          .limit(limit * 3);
+      final profileEntries = (profilesResponse as List)
+          .map((row) => row as Map<String, dynamic>)
+          .where((row) => !coveredIds.contains(row['id']?.toString()))
+          .take(limit - dirEntries.length)
+          .map((row) => MemberDirectoryEntry(
+                // We don't have a directory row id, so reuse the user id.
+                id: row['id'].toString(),
+                userId: row['id'].toString(),
+                isVisible: true,
+                fullName: row['full_name'] as String?,
+                profilePhotoUrl: row['profile_photo_url'] as String?,
+                province: row['province'] as String?,
+                city: row['city'] as String?,
+                bio: row['bio'] as String?,
+              ))
+          .toList();
+
+      return [...dirEntries, ...profileEntries];
     } catch (_) {
       return const [];
     }

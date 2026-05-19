@@ -215,7 +215,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'MESSAGES',
+                        'ADVENT CHAT',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: AppColors.white.withValues(alpha: 0.55),
                           fontSize: 11,
@@ -225,7 +225,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Your conversations',
+                        'Your chats',
                         style: AppTextStyles.displayMedium.copyWith(
                           color: AppColors.white,
                           fontSize: 22,

@@ -341,7 +341,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                   Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      onTap: () => context.pushNamed('seller_dashboard'),
+                      onTap: () => _showSellerChooser(context),
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -409,6 +409,156 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           ),
         );
       },
+    );
+  }
+}
+
+/// Bottom-sheet chooser fired when the user taps "Become a seller".
+/// Asks whether they already have a store or want to set up a fresh
+/// one. The "+" button on the marketplace tab handles the same
+/// distinction implicitly via add_product's gate; this surfaces the
+/// choice explicitly for new users.
+Future<void> _showSellerChooser(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Selling on Advent Connect',
+              style: AppTextStyles.titleLarge.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Already running a store, or starting a new one?',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.65),
+              ),
+            ),
+            const SizedBox(height: 18),
+            _SellerChoiceTile(
+              icon: Icons.storefront_outlined,
+              title: 'I already have a store',
+              subtitle: 'Open my seller dashboard.',
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                context.pushNamed('seller_dashboard');
+              },
+            ),
+            const SizedBox(height: 10),
+            _SellerChoiceTile(
+              icon: Icons.add_business_outlined,
+              title: 'Set up a new store',
+              subtitle:
+                  'Apply to start selling within the SDA community.',
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                context.pushNamed('setup_store');
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _SellerChoiceTile extends StatelessWidget {
+  const _SellerChoiceTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.lightGrey,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.05),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: AppColors.white, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                        fontSize: 12.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                color: AppColors.primaryBlue,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

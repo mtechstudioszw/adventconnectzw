@@ -79,6 +79,7 @@ class AccountService {
     required String businessName,
     required String category,
     String? description,
+    String? whatsapp,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -92,6 +93,8 @@ class AccountService {
           'category': category.trim(),
           if (description != null && description.trim().isNotEmpty)
             'description': description.trim(),
+          if (whatsapp != null && whatsapp.trim().isNotEmpty)
+            'applicant_whatsapp': whatsapp.trim(),
         })
         .select()
         .single();

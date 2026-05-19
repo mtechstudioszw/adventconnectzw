@@ -14,6 +14,7 @@ type ApplicationRow = {
   business_name: string;
   category: string;
   description: string | null;
+  applicant_whatsapp: string | null;
   status: "pending" | "approved" | "rejected";
   created_at: string;
   reviewed_at: string | null;
@@ -23,6 +24,7 @@ type ApplicationRow = {
     full_name: string | null;
     profile_photo_url: string | null;
   } | null;
+  applicant_email?: string | null;
 };
 
 async function fetchApplications(filter: Filter): Promise<ApplicationRow[]> {
@@ -41,7 +43,23 @@ async function fetchApplications(filter: Filter): Promise<ApplicationRow[]> {
   if (error) {
     throw new Error(error.message);
   }
-  return (data ?? []) as ApplicationRow[];
+  const rows = (data ?? []) as ApplicationRow[];
+
+  // Top up each row with the applicant's auth.users email. We do this
+  // in one extra fetch because foreign tables can't be embedded via
+  // PostgREST. Returns null if the lookup fails — UI handles it.
+  if (rows.length > 0) {
+    const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
+    const emailMap = new Map<string, string>();
+    for (const id of userIds) {
+      const { data: u } = await supabase.auth.admin.getUserById(id);
+      if (u.user?.email) emailMap.set(id, u.user.email);
+    }
+    for (const row of rows) {
+      row.applicant_email = emailMap.get(row.user_id) ?? null;
+    }
+  }
+  return rows;
 }
 
 export default async function ApplicationsPage({
@@ -143,6 +161,26 @@ function ApplicationCard({ row }: { row: ApplicationRow }) {
               {row.category}
             </span>
             <StatusBadge status={row.status} />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {row.applicant_email && (
+              <a
+                href={`mailto:${row.applicant_email}?subject=${encodeURIComponent(`Re: ${row.business_name} business application`)}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary font-semibold hover:bg-primary/15"
+              >
+                ✉️ {row.applicant_email}
+              </a>
+            )}
+            {row.applicant_whatsapp && (
+              <a
+                href={`https://wa.me/${row.applicant_whatsapp.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hi ${row.profiles?.full_name ?? ""}, this is about your Advent Connect ZW business application for "${row.business_name}". `)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-ok/15 text-ok font-semibold hover:bg-ok/25"
+              >
+                💬 {row.applicant_whatsapp}
+              </a>
+            )}
           </div>
           {row.description && (
             <p className="text-sm text-ink/75 mt-3 whitespace-pre-line">

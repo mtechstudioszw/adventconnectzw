@@ -4,20 +4,32 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
 /// One card in the home feed. Stateless — the parent owns the Post and
-/// receives optimistic-update callbacks for like/comment taps.
+/// receives optimistic-update callbacks for like/comment/menu taps.
 class PostCard extends StatelessWidget {
   const PostCard({
     super.key,
     required this.post,
+    required this.viewerId,
     required this.onLikeToggled,
     required this.onCommentsTapped,
+    required this.onImageTapped,
     this.onAuthorTapped,
+    this.onEdit,
+    this.onDelete,
+    this.onToggleVisibility,
   });
 
   final Post post;
+  final String? viewerId;
   final VoidCallback onLikeToggled;
   final VoidCallback onCommentsTapped;
+  final VoidCallback onImageTapped;
   final VoidCallback? onAuthorTapped;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback? onToggleVisibility;
+
+  bool get _isOwner => viewerId != null && viewerId == post.authorId;
 
   @override
   Widget build(BuildContext context) {
@@ -68,12 +80,28 @@ class PostCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    post.authorName,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14.5,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          post.authorName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        post.visibility == PostVisibility.friendsOnly
+                            ? Icons.people_alt_outlined
+                            : Icons.public,
+                        size: 12,
+                        color: const Color.fromRGBO(26, 26, 46, 0.45),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -87,6 +115,12 @@ class PostCard extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+          if (_isOwner) _OwnerMenu(
+            isFriendsOnly: post.visibility == PostVisibility.friendsOnly,
+            onEdit: onEdit,
+            onDelete: onDelete,
+            onToggleVisibility: onToggleVisibility,
           ),
         ],
       ),
@@ -110,32 +144,38 @@ class PostCard extends StatelessWidget {
   Widget _buildImage() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: AspectRatio(
-          aspectRatio: 1.0,
-          child: Image.network(
-            post.imageUrl!,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Container(
-              color: AppColors.lightGrey,
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.broken_image_outlined,
-                color: AppColors.primaryBlue,
+      child: GestureDetector(
+        onTap: onImageTapped,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: AspectRatio(
+            aspectRatio: 1.0,
+            child: Hero(
+              tag: 'post_image_${post.id}',
+              child: Image.network(
+                post.imageUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: AppColors.lightGrey,
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.broken_image_outlined,
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+                loadingBuilder: (ctx, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    color: AppColors.lightGrey,
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(
+                      color: AppColors.primaryBlue,
+                      strokeWidth: 2,
+                    ),
+                  );
+                },
               ),
             ),
-            loadingBuilder: (ctx, child, progress) {
-              if (progress == null) return child;
-              return Container(
-                color: AppColors.lightGrey,
-                alignment: Alignment.center,
-                child: const CircularProgressIndicator(
-                  color: AppColors.primaryBlue,
-                  strokeWidth: 2,
-                ),
-              );
-            },
           ),
         ),
       ),
@@ -317,6 +357,88 @@ class _ActionButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _OwnerMenu extends StatelessWidget {
+  const _OwnerMenu({
+    required this.isFriendsOnly,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggleVisibility,
+  });
+
+  final bool isFriendsOnly;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback? onToggleVisibility;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(
+        Icons.more_horiz,
+        color: Color.fromRGBO(26, 26, 46, 0.55),
+        size: 20,
+      ),
+      tooltip: 'Manage post',
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            onEdit?.call();
+            break;
+          case 'visibility':
+            onToggleVisibility?.call();
+            break;
+          case 'delete':
+            onDelete?.call();
+            break;
+        }
+      },
+      itemBuilder: (ctx) => [
+        if (onEdit != null)
+          PopupMenuItem(
+            value: 'edit',
+            child: Row(
+              children: const [
+                Icon(Icons.edit_outlined, size: 18,
+                    color: AppColors.primaryBlue),
+                SizedBox(width: 10),
+                Text('Edit post'),
+              ],
+            ),
+          ),
+        if (onToggleVisibility != null)
+          PopupMenuItem(
+            value: 'visibility',
+            child: Row(
+              children: [
+                Icon(
+                  isFriendsOnly ? Icons.public : Icons.people_alt_outlined,
+                  size: 18,
+                  color: AppColors.primaryBlue,
+                ),
+                const SizedBox(width: 10),
+                Text(isFriendsOnly ? 'Make public' : 'Show friends only'),
+              ],
+            ),
+          ),
+        if (onDelete != null)
+          PopupMenuItem(
+            value: 'delete',
+            child: Row(
+              children: const [
+                Icon(Icons.delete_outline, size: 18, color: AppColors.red),
+                SizedBox(width: 10),
+                Text('Delete post', style: TextStyle(color: AppColors.red)),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

@@ -635,7 +635,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           const _Divider(),
           _SettingsRow(
             icon: Icons.chat_bubble_outline,
-            label: 'Messages',
+            label: 'Advent Chat',
             onTap: () => context.pushNamed('messages'),
           ),
           const _Divider(),

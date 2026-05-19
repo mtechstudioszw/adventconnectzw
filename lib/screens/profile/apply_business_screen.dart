@@ -19,6 +19,7 @@ class ApplyBusinessScreen extends StatefulWidget {
 class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _whatsappController = TextEditingController();
   final _descriptionController = TextEditingController();
   String _category = _categories.first;
   bool _submitting = false;
@@ -37,6 +38,7 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _whatsappController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -54,6 +56,9 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
         description: _descriptionController.text.trim().isEmpty
             ? null
             : _descriptionController.text,
+        whatsapp: _whatsappController.text.trim().isEmpty
+            ? null
+            : _whatsappController.text,
       );
       if (!mounted) return;
       Navigator.of(context).pop<BusinessApplication>(app);
@@ -106,6 +111,24 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
                     final v = value?.trim() ?? '';
                     if (v.length < 2) return 'Enter your business name.';
                     if (v.length > 80) return 'Keep it under 80 characters.';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                _Label('WhatsApp number (for review contact)'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _whatsappController,
+                  keyboardType: TextInputType.phone,
+                  decoration: _decoration(hint: '+263 77 123 4567'),
+                  validator: (value) {
+                    final v = value?.trim() ?? '';
+                    if (v.isEmpty) return null;
+                    // Allow +, digits, spaces, dashes. 7+ digits min.
+                    final digits = v.replaceAll(RegExp(r'[^0-9]'), '');
+                    if (digits.length < 7) {
+                      return 'Enter a valid phone number.';
+                    }
                     return null;
                   },
                 ),

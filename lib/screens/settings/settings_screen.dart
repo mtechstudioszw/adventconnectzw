@@ -149,111 +149,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       );
 
   Future<void> _changePassword() async {
-    final newCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    bool busy = false;
-    String? error;
-
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setLocal) {
-          return AlertDialog(
-            backgroundColor: AppColors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            title: Text(
-              'Change password',
-              style: AppTextStyles.headlineSmall,
-            ),
-            content: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: newCtrl,
-                    obscureText: true,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'New password',
-                      hintText: 'Min 8 characters',
-                    ),
-                    validator: (v) {
-                      if ((v ?? '').length < 8) return 'At least 8 characters';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: confirmCtrl,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Confirm new password',
-                    ),
-                    validator: (v) {
-                      if (v != newCtrl.text) return 'Passwords do not match';
-                      return null;
-                    },
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      error!,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.red,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: busy ? null : () => Navigator.pop(ctx, false),
-                child: Text(
-                  'Cancel',
-                  style:
-                      AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
-                ),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                ),
-                onPressed: busy
-                    ? null
-                    : () async {
-                        if (!formKey.currentState!.validate()) return;
-                        setLocal(() {
-                          busy = true;
-                          error = null;
-                        });
-                        final r =
-                            await AuthService.changePassword(newCtrl.text);
-                        if (!r.isSuccess) {
-                          setLocal(() {
-                            busy = false;
-                            error = r.errorMessage;
-                          });
-                          return;
-                        }
-                        if (ctx.mounted) Navigator.pop(ctx, true);
-                      },
-                child: Text(
-                  busy ? 'Saving…' : 'Save',
-                  style: AppTextStyles.labelLarge,
-                ),
-              ),
-            ],
-          );
-        });
-      },
+      builder: (ctx) => const _ChangePasswordDialog(),
     );
-
-    newCtrl.dispose();
-    confirmCtrl.dispose();
     if (ok == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -282,6 +181,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     final picked = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
+      // Without this the sheet caps at ~50% of screen and the bottom
+      // provinces in the list get clipped behind the system nav bar.
+      isScrollControlled: true,
       builder: (ctx) => _ProvinceSheet(selected: _sabbathProvince),
     );
     if (picked != null && mounted) {
@@ -815,82 +717,105 @@ class _ProvinceSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final options = SabbathService.provinces;
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.15),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Choose your province',
-                style: AppTextStyles.headlineSmall.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Used to compute Friday sundown.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
-                ),
-              ),
-              const SizedBox(height: 8),
-              for (final opt in options)
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => Navigator.pop(context, opt),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
-                      child: Row(
-                        children: [
-                          Icon(
-                            opt == selected
-                                ? Icons.radio_button_checked
-                                : Icons.radio_button_unchecked,
-                            color: opt == selected
-                                ? AppColors.primaryBlue
-                                : const Color.fromRGBO(26, 26, 46, 0.4),
-                            size: 22,
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              opt,
-                              style: AppTextStyles.titleMedium.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      minChildSize: 0.35,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (ctx, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color.fromRGBO(26, 26, 46, 0.15),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
-            ],
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Choose your province',
+                        style: AppTextStyles.headlineSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Used to compute Friday sundown.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: const Color.fromRGBO(26, 26, 46, 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                    itemCount: options.length,
+                    itemBuilder: (_, i) {
+                      final opt = options[i];
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => Navigator.pop(context, opt),
+                          borderRadius: BorderRadius.circular(14),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  opt == selected
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_unchecked,
+                                  color: opt == selected
+                                      ? AppColors.primaryBlue
+                                      : const Color.fromRGBO(26, 26, 46, 0.4),
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    opt,
+                                    style: AppTextStyles.titleMedium.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -971,6 +896,125 @@ class _LanguageSheet extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    // Owned by this State so dispose only fires after the dialog has
+    // fully unmounted. Avoids the "controller used after disposed"
+    // assertion that the old StatefulBuilder pattern hit on cancel.
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final r = await AuthService.changePassword(_newCtrl.text);
+      if (!mounted) return;
+      if (!r.isSuccess) {
+        setState(() {
+          _busy = false;
+          _error = r.errorMessage;
+        });
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'Something went wrong. Try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Change password', style: AppTextStyles.headlineSmall),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _newCtrl,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'New password',
+                hintText: 'Min 8 characters',
+              ),
+              validator: (v) {
+                if ((v ?? '').length < 8) return 'At least 8 characters';
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _confirmCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Confirm new password',
+              ),
+              validator: (v) {
+                if (v != _newCtrl.text) return 'Passwords do not match';
+                return null;
+              },
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: AppColors.red),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          child: Text(
+            'Cancel',
+            style: AppTextStyles.labelMedium
+                .copyWith(color: AppColors.textDark),
+          ),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+          onPressed: _busy ? null : _save,
+          child: Text(
+            _busy ? 'Saving…' : 'Save',
+            style: AppTextStyles.labelLarge,
+          ),
+        ),
+      ],
     );
   }
 }

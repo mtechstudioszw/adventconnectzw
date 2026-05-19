@@ -29,6 +29,7 @@ import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_sheet.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
+import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/shimmer_loaders.dart';
@@ -802,16 +803,177 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       );
     }
+    final viewerId = AuthService.currentUser?.id;
     return Column(
       children: [
         for (final post in _posts)
           PostCard(
             post: post,
+            viewerId: viewerId,
             onLikeToggled: () => _toggleLike(post),
             onCommentsTapped: () => _openComments(post),
+            onImageTapped: () => _openImageViewer(post),
+            onEdit: () => _editPost(post),
+            onDelete: () => _confirmDeletePost(post),
+            onToggleVisibility: () => _togglePostVisibility(post),
           ),
       ],
     );
+  }
+
+  Future<void> _openImageViewer(Post post) async {
+    final url = post.imageUrl;
+    if (url == null || url.isEmpty) return;
+    await PostImageViewer.show(
+      context,
+      imageUrl: url,
+      heroTag: 'post_image_${post.id}',
+    );
+  }
+
+  Future<void> _togglePostVisibility(Post post) async {
+    final newVisibility = post.visibility == PostVisibility.public
+        ? PostVisibility.friendsOnly
+        : PostVisibility.public;
+    try {
+      final updated =
+          await FeedService.updatePost(post.id, visibility: newVisibility);
+      if (!mounted) return;
+      setState(() {
+        _posts = _posts.map((p) => p.id == updated.id ? updated : p).toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newVisibility == PostVisibility.public
+                ? 'Post is now public.'
+                : 'Post is now visible to friends only.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not update post. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _editPost(Post post) async {
+    final controller = TextEditingController(text: post.body ?? '');
+    final newBody = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Edit post',
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 8,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.buttonText.copyWith(
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (newBody == null) return;
+    try {
+      final updated = await FeedService.updatePost(post.id, body: newBody);
+      if (!mounted) return;
+      setState(() {
+        _posts = _posts.map((p) => p.id == updated.id ? updated : p).toList();
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not save changes.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDeletePost(Post post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Delete post?',
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'This will remove the post for everyone. You can\'t undo it.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.buttonText.copyWith(
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await FeedService.deletePost(post.id);
+      if (!mounted) return;
+      setState(() {
+        _posts = _posts.where((p) => p.id != post.id).toList();
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not delete post.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildSuggestedMembersRow() {

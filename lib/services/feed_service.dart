@@ -85,6 +85,38 @@ class FeedService {
     await _client.from(_postsTable).delete().eq('id', postId);
   }
 
+  /// Update the body and/or visibility of a post the viewer owns.
+  /// RLS already restricts updates to the author so we don't have to
+  /// guard client-side. Returns the refreshed Post.
+  static Future<Post> updatePost(
+    String postId, {
+    String? body,
+    PostVisibility? visibility,
+  }) async {
+    final patch = <String, dynamic>{};
+    if (body != null) patch['body'] = body.trim().isEmpty ? null : body.trim();
+    if (visibility != null) {
+      patch['visibility'] = visibility == PostVisibility.friendsOnly
+          ? 'friends_only'
+          : 'public';
+    }
+    if (patch.isEmpty) {
+      throw ArgumentError('Nothing to update.');
+    }
+    final updated = await _client
+        .from(_postsTable)
+        .update(patch)
+        .eq('id', postId)
+        .select(
+          '*, '
+          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+          'post_likes(user_id), '
+          'post_comments(id)',
+        )
+        .single();
+    return Post.fromJson(updated, viewerId: _viewerId);
+  }
+
   // ---- Likes --------------------------------------------------------
 
   static Future<void> likePost(String postId) async {

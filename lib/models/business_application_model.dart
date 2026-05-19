@@ -13,6 +13,7 @@ class BusinessApplication {
     required this.status,
     required this.createdAt,
     this.description,
+    this.applicantWhatsapp,
     this.reviewedAt,
     this.reviewerNote,
   });
@@ -22,6 +23,7 @@ class BusinessApplication {
   final String businessName;
   final String category;
   final String? description;
+  final String? applicantWhatsapp;
   final BusinessApplicationStatus status;
   final DateTime createdAt;
   final DateTime? reviewedAt;
@@ -44,6 +46,7 @@ class BusinessApplication {
       businessName: (json['business_name'] ?? '') as String,
       category: (json['category'] ?? '') as String,
       description: json['description'] as String?,
+      applicantWhatsapp: json['applicant_whatsapp'] as String?,
       status: status,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),

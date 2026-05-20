@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -60,25 +62,42 @@ class _StartConversationSheetState extends State<_StartConversationSheet> {
     if (_sending) return;
     setState(() => _sending = true);
     final firstName = widget.otherUserName.split(' ').first;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final router = GoRouter.of(context);
     try {
+      // Hard timeout — without it, a stalled Supabase request (RLS
+      // edge case, flaky network, etc.) would leave the user staring
+      // at an indefinite spinner with no way out.
       final convo = await MessagingService.createConversation(
         otherUserId: widget.otherUserId,
         otherUserName: widget.otherUserName,
         firstMessage: widget.openerOverride ?? 'Hi $firstName 👋',
         source: widget.source,
         isBusiness: widget.isBusiness,
-      );
+      ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      Navigator.of(context).pop();
-      await context.pushNamed(
+      navigator.pop();
+      await router.pushNamed(
         'chat',
         pathParameters: {'id': convo.id},
         extra: convo,
       );
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Taking too long — check your connection and try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _sending = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             'Could not start chat. Try again.',

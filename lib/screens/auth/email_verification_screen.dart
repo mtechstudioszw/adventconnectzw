@@ -299,7 +299,10 @@ class _OtpCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Open the email from Advent Connect ZW and enter the 6-digit code below.',
+              'Open the email from Advent Connect ZW and enter the '
+              '6-digit code below. Delivery can take a few minutes — '
+              'check your Spam / Promotions folder if it hasn\'t '
+              'arrived. You can resend below.',
               style: AppTextStyles.bodyMedium.copyWith(
                 color: muted,
                 height: 1.45,

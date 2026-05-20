@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
@@ -514,9 +515,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  event.churchId != null
-                      ? 'Affiliated SDA church'
-                      : 'Advent Connect ZW',
+                  _organizerLabel(event),
                   style: AppTextStyles.titleMedium.copyWith(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
@@ -573,6 +572,47 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     );
   }
 
+  String _organizerLabel(Event event) {
+    final name = event.organizerName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    if (event.churchId != null) return 'Affiliated SDA church';
+    return 'Advent Connect ZW';
+  }
+
+  Future<void> _openMap(Event event) async {
+    final location = (event.location ?? '').trim();
+    if (location.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No location set for this event.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      return;
+    }
+    // Google Maps universal search URL — works on iOS/Android web view
+    // and the native Maps app via deep-link handling.
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeQueryComponent(location)}',
+    );
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('launch returned false');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open maps.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildLocation(Event event) {
     return Container(
       decoration: BoxDecoration(
@@ -591,59 +631,62 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Container(
-                color: AppColors.lightGrey,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CustomPaint(painter: _MapGridPainter()),
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryBlue,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primaryBlue
-                                  .withValues(alpha: 0.4),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.place,
-                          color: AppColors.white,
-                          size: 30,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color.fromRGBO(0, 0, 0, 0.55),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Map preview',
-                          style: AppTextStyles.labelSmall.copyWith(
+            GestureDetector(
+              onTap: () => _openMap(event),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  color: AppColors.lightGrey,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CustomPaint(painter: _MapGridPainter()),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryBlue,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryBlue
+                                    .withValues(alpha: 0.4),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.place,
                             color: AppColors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 10,
+                            size: 30,
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        bottom: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color.fromRGBO(0, 0, 0, 0.55),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Tap to open in Maps',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

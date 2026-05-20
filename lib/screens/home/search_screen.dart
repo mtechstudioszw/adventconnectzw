@@ -106,22 +106,30 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  /// People search: combines the server-side directory query (profession,
-  /// skills, city, bio) with a client-side name filter against the recent
-  /// directory entries. That way "Tendai" still matches even though name
-  /// lives on the joined profiles row.
+  /// People search: hits three sources in parallel so any account that
+  /// could appear on the home tab is also findable by name —
+  ///   1. Directory entries matched by profession / skills / city / bio
+  ///   2. Discoverable profiles matched by full_name directly
+  ///   3. The cached "suggested members" list, name-filtered locally as
+  ///      a final fallback when the user typed a name that doesn't index
+  ///      cleanly.
   Future<List<MemberDirectoryEntry>> _searchPeople(String query) async {
     final lower = query.toLowerCase();
     final results = await Future.wait([
       DirectoryService.fetchEntries(search: query),
+      DirectoryService.searchProfilesByName(query),
       DirectoryService.fetchSuggestedMembers(limit: 60),
     ]);
     final byProfession = results[0];
-    final recent = results[1];
+    final byName = results[1];
+    final recent = results[2];
 
     final seen = <String>{};
     final merged = <MemberDirectoryEntry>[];
     for (final e in byProfession) {
+      if (seen.add(e.id)) merged.add(e);
+    }
+    for (final e in byName) {
       if (seen.add(e.id)) merged.add(e);
     }
     for (final e in recent) {

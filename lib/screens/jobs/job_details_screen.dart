@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/job_model.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
@@ -291,16 +292,27 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       );
       return;
     }
-    await Clipboard.setData(ClipboardData(text: phone));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'WhatsApp number copied: $phone',
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+    // Try to deep-link into WhatsApp. If the device doesn't have
+    // WhatsApp installed we fall back to copying the number so the
+    // user can paste it into whichever messaging app they do have.
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final waUri = Uri.parse('https://wa.me/$digits');
+    try {
+      final launched =
+          await launchUrl(waUri, mode: LaunchMode.externalApplication);
+      if (!launched) throw Exception('launch returned false');
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: phone));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'WhatsApp number copied: $phone',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -592,7 +604,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         ],
         _PrimaryActionButton(
           icon: Icons.chat_bubble_outline,
-          label: 'Message poster',
+          label: 'Contact poster',
           onTap: _messagePoster,
         ),
         if (!job.isFilled && hasPhone) ...[

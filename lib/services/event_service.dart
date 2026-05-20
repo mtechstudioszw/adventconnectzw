@@ -18,7 +18,9 @@ class EventService {
   }) async {
     final today = _dateOnly(DateTime.now());
 
-    var query = _client.from(_table).select();
+    var query = _client
+        .from(_table)
+        .select('*, profiles!events_organizer_id_fkey(id, full_name)');
 
     if (upcomingOnly) {
       query = query.gte('start_date', _formatDate(today));
@@ -53,7 +55,7 @@ class EventService {
   static Future<Event?> fetchEventById(String id) async {
     final response = await _client
         .from(_table)
-        .select()
+        .select('*, profiles!events_organizer_id_fkey(id, full_name)')
         .eq('id', id)
         .maybeSingle();
     if (response == null) return null;

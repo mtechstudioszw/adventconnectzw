@@ -122,7 +122,15 @@ class _HomeScreenState extends State<HomeScreen>
         MessagingService.fetchConversations(),
       ]);
       if (!mounted) return;
-      final events = (results[0] as List<Event>).take(8).toList();
+      // Drop events whose start time is more than a few hours in the
+      // past — `upcomingOnly: true` filters by start_date (date-only),
+      // so today's already-ended events would otherwise still appear
+      // on the home screen until midnight rolls over.
+      final now = DateTime.now();
+      final stillUpcoming = (results[0] as List<Event>)
+          .where((e) => e.startsAt.isAfter(now.subtract(const Duration(hours: 6))))
+          .toList();
+      final events = stillUpcoming.take(8).toList();
       final churches = (results[1] as List<Church>).take(6).toList();
       final friendships = results[9] as List<Friendship>;
       final viewerId = AuthService.currentUser?.id;

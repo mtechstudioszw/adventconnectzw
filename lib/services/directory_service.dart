@@ -107,6 +107,44 @@ class DirectoryService {
     }
   }
 
+  /// Free-text search over discoverable profiles directly (not the
+  /// opt-in member_directory). The home tab's "See accounts" section
+  /// surfaces profiles even if they don't have a directory row, so
+  /// search had to gain a matching path or the user could see a name
+  /// on the home tab and then fail to find it in search.
+  static Future<List<MemberDirectoryEntry>> searchProfilesByName(
+    String query, {
+    int limit = 30,
+  }) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final user = _client.auth.currentUser;
+    var profilesQuery = _client
+        .from('profiles')
+        .select('id, full_name, profile_photo_url, province, city, bio')
+        .eq('is_discoverable', true)
+        .eq('is_banned', false)
+        .ilike('full_name', '%$term%');
+    if (user != null) {
+      profilesQuery = profilesQuery.neq('id', user.id);
+    }
+    final response =
+        await profilesQuery.order('created_at', ascending: false).limit(limit);
+    return (response as List)
+        .map((row) => row as Map<String, dynamic>)
+        .map((row) => MemberDirectoryEntry(
+              id: row['id'].toString(),
+              userId: row['id'].toString(),
+              isVisible: true,
+              fullName: row['full_name'] as String?,
+              profilePhotoUrl: row['profile_photo_url'] as String?,
+              province: row['province'] as String?,
+              city: row['city'] as String?,
+              bio: row['bio'] as String?,
+            ))
+        .toList();
+  }
+
   /// Returns the current user's directory entry, or null if they
   /// haven't opted in yet.
   static Future<MemberDirectoryEntry?> fetchMyEntry() async {

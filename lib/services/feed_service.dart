@@ -208,7 +208,7 @@ class FeedService {
           'post_id': postId,
           'author_id': user.id,
           'body': clean,
-          if (parentCommentId != null) 'parent_comment_id': parentCommentId,
+          'parent_comment_id': ?parentCommentId,
         })
         .select(
           '*, '
@@ -257,19 +257,24 @@ class FeedService {
   // STORIES
   // ===================================================================
 
-  /// All active stories (RLS filters expired rows). One row per story —
-  /// the UI groups by author when rendering the rail.
+  /// All active stories. RLS filters expired rows server-side, but we
+  /// add an explicit `expires_at > now()` filter + a client-side
+  /// dedupe so a misconfigured policy or an old row with a bogus
+  /// expires_at can't keep stale content on the rail.
   static Future<List<Story>> fetchStories() async {
+    final nowIso = DateTime.now().toUtc().toIso8601String();
     final response = await _client
         .from(_storiesTable)
         .select(
           '*, '
           'profiles!stories_author_id_fkey(id, full_name, profile_photo_url)',
         )
+        .gt('expires_at', nowIso)
         .order('created_at', ascending: false)
         .limit(200);
     return (response as List)
         .map((row) => Story.fromJson(row as Map<String, dynamic>))
+        .where((s) => !s.isExpired)
         .toList();
   }
 

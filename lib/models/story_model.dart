@@ -22,14 +22,26 @@ class Story {
   final DateTime createdAt;
   final DateTime expiresAt;
 
-  /// Time remaining until expiry. Negative means stale (should never
-  /// reach the client because RLS filters expired rows out, but the
-  /// guard is cheap).
+  /// Time remaining until expiry. Negative means stale — the home
+  /// screen drops anything where this is non-positive as a belt-and-
+  /// braces guard on top of the RLS filter.
   Duration get timeRemaining => expiresAt.difference(DateTime.now());
+
+  bool get isExpired => !timeRemaining.isNegative ? false : true;
 
   factory Story.fromJson(Map<String, dynamic> json) {
     final author = json['profiles'];
     final authorMap = author is Map<String, dynamic> ? author : null;
+    final createdAt =
+        DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+            DateTime.now();
+    // Default to createdAt + 24h (NOT now() + 24h) — defaulting to
+    // "now" would silently un-expire any row with a missing/invalid
+    // expires_at on the way in, so stale stories would appear fresh
+    // forever.
+    final expiresAt =
+        DateTime.tryParse(json['expires_at']?.toString() ?? '') ??
+            createdAt.add(const Duration(hours: 24));
     return Story(
       id: json['id'].toString(),
       authorId: (json['author_id'] ?? '').toString(),
@@ -37,10 +49,8 @@ class Story {
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
       mediaUrl: (json['media_url'] ?? '').toString(),
       caption: json['caption'] as String?,
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
-          DateTime.now(),
-      expiresAt: DateTime.tryParse(json['expires_at']?.toString() ?? '') ??
-          DateTime.now().add(const Duration(hours: 24)),
+      createdAt: createdAt,
+      expiresAt: expiresAt,
     );
   }
 }

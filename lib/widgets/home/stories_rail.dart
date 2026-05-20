@@ -103,86 +103,92 @@ class _YourStoryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           child: Material(
             color: AppColors.white,
-            child: Stack(
-              children: [
-                Column(
-                  children: [
-                    // Top: ~70% image / avatar.
-                    Expanded(
-                      flex: 7,
-                      child: GestureDetector(
-                        onTap: _hasStory ? onView : onAdd,
+            child: InkWell(
+              // Single tap region for the whole card. When the viewer
+              // hasn't posted yet the whole thing is "Create story";
+              // once they have one, tapping opens their viewer and a
+              // tiny "+" badge in the top-right adds another.
+              onTap: _hasStory ? onView : onAdd,
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      // Top: ~70% image / avatar.
+                      Expanded(
+                        flex: 7,
                         child: _hasStory
                             ? Image.network(
                                 ownStories!.first.mediaUrl,
                                 fit: BoxFit.cover,
                                 width: double.infinity,
-                                errorBuilder: (_, _, _) => _avatarBackground(),
+                                errorBuilder: (_, _, _) =>
+                                    _avatarBackground(),
                               )
                             : _avatarBackground(),
                       ),
-                    ),
-                    // Bottom: white banner.
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        color: AppColors.white,
-                        alignment: Alignment.bottomCenter,
-                        padding:
-                            const EdgeInsets.only(bottom: 12, left: 6, right: 6),
-                        child: Text(
-                          'Create story',
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: AppColors.textDark,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                // Blue + button on the seam (~70% of card height).
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: 60,
-                  child: Center(
-                    child: GestureDetector(
-                      onTap: onAdd,
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.white,
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primaryBlue
-                                  .withValues(alpha: 0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.add,
+                      // Bottom: white banner with label only — no overlay
+                      // button to avoid the double-tap target the old
+                      // layout had.
+                      Expanded(
+                        flex: 3,
+                        child: Container(
                           color: AppColors.white,
-                          size: 20,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Text(
+                            _hasStory ? 'Your story' : 'Create story',
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: AppColors.textDark,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // "+" affordance — when the viewer already has a story
+                  // we show a small badge in the corner so they can add
+                  // another. When they don't, the whole card acts as
+                  // "Create" so an overlay button is redundant.
+                  if (_hasStory)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: GestureDetector(
+                        onTap: onAdd,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.white,
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryBlue
+                                    .withValues(alpha: 0.35),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.add,
+                            color: AppColors.white,
+                            size: 16,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

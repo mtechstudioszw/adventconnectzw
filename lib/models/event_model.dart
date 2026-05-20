@@ -9,6 +9,7 @@ class Event {
     this.location,
     this.churchId,
     this.organizerId,
+    this.organizerName,
     this.capacity,
     this.coverPhotoUrl,
     this.createdAt,
@@ -22,6 +23,10 @@ class Event {
   final String? location;
   final String? churchId;
   final String? organizerId;
+  /// Display name of the user who posted this event. Populated from
+  /// the joined profile in EventService.fetchEvents / fetchEventById.
+  /// May be null on cached payloads written by older builds.
+  final String? organizerName;
   final int? capacity;
   final int rsvpCount;
   final String? coverPhotoUrl;
@@ -85,6 +90,11 @@ class Event {
       }
     }
 
+    final organizer = json['profiles'];
+    final organizerMap =
+        organizer is Map<String, dynamic> ? organizer : null;
+    final organizerName = (organizerMap?['full_name'] as String?)?.trim();
+
     return Event(
       id: json['id'].toString(),
       title: (json['title'] ?? '') as String,
@@ -94,6 +104,9 @@ class Event {
       location: resolvedLocation,
       churchId: json['church_id']?.toString(),
       organizerId: json['organizer_id']?.toString(),
+      organizerName: (organizerName == null || organizerName.isEmpty)
+          ? (json['contact_name'] as String?)?.trim()
+          : organizerName,
       capacity: _readNullableInt(json['capacity']),
       rsvpCount: _readInt(json['rsvp_count']),
       coverPhotoUrl: json['cover_photo_url'] as String?,
@@ -129,6 +142,7 @@ class Event {
       location: location,
       churchId: churchId,
       organizerId: organizerId,
+      organizerName: organizerName,
       capacity: capacity,
       rsvpCount: rsvpCount ?? this.rsvpCount,
       coverPhotoUrl: coverPhotoUrl,

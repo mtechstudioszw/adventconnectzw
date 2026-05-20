@@ -14,6 +14,7 @@ import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/messaging_service.dart';
 import 'services/push_service.dart';
+import 'services/secure_supabase_storage.dart';
 import 'services/theme_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
@@ -46,6 +47,13 @@ void main() async {
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
+    // Persist sessions in flutter_secure_storage (per CLAUDE.md) so a
+    // cold-start restores the user's session instead of bouncing them
+    // back to the login screen every time they reopen the app.
+    authOptions: FlutterAuthClientOptions(
+      localStorage: SecureLocalStorage(),
+      autoRefreshToken: true,
+    ),
   );
 
   // Firebase initialise. Wrapped in a try so a missing/broken

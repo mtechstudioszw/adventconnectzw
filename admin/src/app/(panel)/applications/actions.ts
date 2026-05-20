@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin";
+import { sendEmail } from "@/lib/notify/email";
+import { sendWhatsapp } from "@/lib/notify/whatsapp";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function pushAppNotification(
@@ -20,6 +22,61 @@ async function pushAppNotification(
   });
   if (error) {
     console.warn("notification insert failed", error.message);
+  }
+}
+
+/**
+ * Look up the applicant's email + WhatsApp so we can reach them
+ * outside the app. Email comes from auth.users (one extra round-trip
+ * because PostgREST can't join the auth schema); WhatsApp is on the
+ * application row itself (patch_015).
+ */
+async function fetchApplicantContact(
+  supabase: SupabaseClient,
+  args: { userId: string; applicationId: string },
+): Promise<{ email: string | null; whatsapp: string | null }> {
+  let email: string | null = null;
+  let whatsapp: string | null = null;
+  try {
+    const { data: user } = await supabase.auth.admin.getUserById(args.userId);
+    email = user.user?.email ?? null;
+  } catch (e) {
+    console.warn("[notify] getUserById failed:", e);
+  }
+  try {
+    const { data } = await supabase
+      .from("business_applications")
+      .select("applicant_whatsapp")
+      .eq("id", args.applicationId)
+      .single();
+    whatsapp = (data?.applicant_whatsapp as string | null) ?? null;
+  } catch (e) {
+    console.warn("[notify] applicant_whatsapp lookup failed:", e);
+  }
+  return { email, whatsapp };
+}
+
+/**
+ * Fire-and-forget email + WhatsApp to the applicant. Errors are
+ * swallowed — these are best-effort comms and must never roll back
+ * the approve / reject transaction.
+ */
+async function notifyApplicant(args: {
+  supabase: SupabaseClient;
+  userId: string;
+  applicationId: string;
+  subject: string;
+  message: string;
+}) {
+  const { email, whatsapp } = await fetchApplicantContact(args.supabase, {
+    userId: args.userId,
+    applicationId: args.applicationId,
+  });
+  if (email) {
+    await sendEmail({ to: email, subject: args.subject, text: args.message });
+  }
+  if (whatsapp) {
+    await sendWhatsapp({ to: whatsapp, message: args.message });
   }
 }
 
@@ -65,12 +122,24 @@ export async function approveApplicationAction(
     throw new Error(`Could not upgrade profile: ${profileError.message}`);
   }
 
+  const approvedBody =
+    `Your business account "${app.business_name}" is now active. ` +
+    `You can list products in the marketplace and claim a church ` +
+    `listing in the app. Open Advent Connect ZW to get started.`;
+
   await pushAppNotification(supabase, {
     userId: app.user_id,
     title: "Business account approved",
-    body: `Your business account "${app.business_name}" is now active. You can now list products in the marketplace and claim a church listing.`,
+    body: approvedBody,
     type: "business_approved",
     referenceId: app.id,
+  });
+  await notifyApplicant({
+    supabase,
+    userId: app.user_id,
+    applicationId: app.id,
+    subject: `Approved — ${app.business_name}`,
+    message: `Good news — your Advent Connect ZW business application was approved.\n\n${approvedBody}`,
   });
 
   void admin;
@@ -109,12 +178,24 @@ export async function rejectApplicationAction(
     throw new Error(`Could not update application: ${error.message}`);
   }
 
+  const rejectedBody =
+    `Your business application for "${app.business_name}" was declined.\n\n` +
+    `Reason: ${reviewerNote.trim()}\n\n` +
+    `You can edit your details and re-apply from your profile.`;
+
   await pushAppNotification(supabase, {
     userId: app.user_id,
     title: "Business application declined",
-    body: `Your business application for "${app.business_name}" was declined. Reason: ${reviewerNote.trim()} You can edit and re-apply from your profile.`,
+    body: rejectedBody,
     type: "business_rejected",
     referenceId: app.id,
+  });
+  await notifyApplicant({
+    supabase,
+    userId: app.user_id,
+    applicationId: app.id,
+    subject: `Declined — ${app.business_name}`,
+    message: rejectedBody,
   });
 
   revalidatePath("/applications");

@@ -9,6 +9,8 @@ class Conversation {
     this.lastSenderId,
     this.requestStatus = 'accepted',
     this.initiatorId,
+    this.isBusiness = false,
+    this.isSelfChat = false,
   });
 
   final String id;
@@ -20,6 +22,8 @@ class Conversation {
   final String? lastSenderId;
   final String requestStatus;
   final String? initiatorId;
+  final bool isBusiness;
+  final bool isSelfChat;
 
   /// True when this conversation is a pending message request the
   /// current viewer hasn't accepted yet *and* isn't the initiator of —
@@ -33,13 +37,19 @@ class Conversation {
   }) {
     final participantA = (json['participant_a_id'] ?? '').toString();
     final participantB = (json['participant_b_id'] ?? '').toString();
+    final selfChat =
+        participantA.isNotEmpty && participantA == participantB;
     final isCurrentA = participantA == currentUserId;
-    final otherId = isCurrentA ? participantB : participantA;
-    final otherName = (isCurrentA
-            ? json['participant_b_name']
-            : json['participant_a_name'])
-        ?.toString() ??
-        'Member';
+    final otherId = selfChat
+        ? currentUserId
+        : (isCurrentA ? participantB : participantA);
+    final otherName = selfChat
+        ? 'Notes to self'
+        : ((isCurrentA
+                    ? json['participant_b_name']
+                    : json['participant_a_name'])
+                ?.toString() ??
+            'Member');
     return Conversation(
       id: json['id'].toString(),
       otherUserId: otherId,
@@ -53,6 +63,8 @@ class Conversation {
       lastSenderId: json['last_sender_id']?.toString(),
       requestStatus: (json['request_status'] ?? 'accepted') as String,
       initiatorId: json['initiator_id']?.toString(),
+      isBusiness: json['is_business'] == true,
+      isSelfChat: selfChat,
     );
   }
 
@@ -63,6 +75,8 @@ class Conversation {
     String? lastSenderId,
     String? requestStatus,
     String? initiatorId,
+    bool? isBusiness,
+    bool? isSelfChat,
   }) {
     return Conversation(
       id: id,
@@ -74,6 +88,8 @@ class Conversation {
       lastSenderId: lastSenderId ?? this.lastSenderId,
       requestStatus: requestStatus ?? this.requestStatus,
       initiatorId: initiatorId ?? this.initiatorId,
+      isBusiness: isBusiness ?? this.isBusiness,
+      isSelfChat: isSelfChat ?? this.isSelfChat,
     );
   }
 

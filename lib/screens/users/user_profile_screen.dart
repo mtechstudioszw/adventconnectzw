@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
+import '../../widgets/home/report_sheet.dart';
 import '../../widgets/start_conversation_sheet.dart';
 
 /// Viewing another user's profile (not the logged-in user — that's the
@@ -196,6 +197,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  Future<void> _reportUser() async {
+    final sent = await showReportSheet(
+      context,
+      contentType: 'profile',
+      contentId: widget.userId,
+      contentLabel: 'this profile',
+    );
+    if (!mounted || sent != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.successGreen,
+        content: Text(
+          'Report sent. The admin team will review it.',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -280,6 +300,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ),
           ),
+          // Report (only when viewing someone else's profile).
+          if (!_isSelf)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: SafeArea(
+                child: CircleAvatar(
+                  backgroundColor: Colors.black.withValues(alpha: 0.35),
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.flag_outlined,
+                      color: AppColors.white,
+                    ),
+                    onPressed: _reportUser,
+                  ),
+                ),
+              ),
+            ),
           // Avatar overlapping the cover bottom.
           Positioned(
             bottom: 0,

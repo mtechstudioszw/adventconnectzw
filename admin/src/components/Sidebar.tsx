@@ -10,6 +10,8 @@ const items: Item[] = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/applications", label: "Business apps", icon: "💼" },
   { href: "/users", label: "Users", icon: "👥" },
+  { href: "/reports", label: "Reports", icon: "🛡️" },
+  { href: "/feedback", label: "Feedback", icon: "💬" },
   { href: "/announcements", label: "Announcements", icon: "📣" },
 ];
 

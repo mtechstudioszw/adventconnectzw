@@ -112,6 +112,10 @@ class MessagingService {
   /// Fetches every conversation the current user is a participant in,
   /// including pending message requests. The UI splits the result into
   /// the Inbox / Requests buckets via [Conversation.isIncomingRequestFor].
+  ///
+  /// "Notes to self" is always pinned to the top of the inbox regardless
+  /// of last_message_at — keeps the bookmark predictable even when the
+  /// user hasn't written anything for a while.
   static Future<List<Conversation>> fetchConversations() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
@@ -123,12 +127,64 @@ class MessagingService {
         )
         .order('last_message_at', ascending: false)
         .limit(100);
-    return (response as List)
+    final list = (response as List)
         .map((row) => Conversation.fromJson(
               row as Map<String, dynamic>,
               currentUserId: user.id,
             ))
         .toList();
+    list.sort((a, b) {
+      if (a.isSelfChat && !b.isSelfChat) return -1;
+      if (b.isSelfChat && !a.isSelfChat) return 1;
+      return b.lastMessageAt.compareTo(a.lastMessageAt);
+    });
+    return list;
+  }
+
+  /// Finds (or lazily creates) the signed-in user's "Notes to self"
+  /// conversation. Self-chats are stored as ordinary conversation rows
+  /// where both participant columns hold the same uuid; the
+  /// `request_status` is forced to 'accepted' so the row never lands in
+  /// the Requests inbox. The first time this runs the row is empty —
+  /// the chat screen handles `lastMessage == ''` already.
+  static Future<Conversation> openSelfChat() async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to open Notes to self.');
+    }
+    final existing = await _client
+        .from(_conversationsTable)
+        .select()
+        .eq('participant_a_id', user.id)
+        .eq('participant_b_id', user.id)
+        .limit(1);
+    if ((existing as List).isNotEmpty) {
+      return Conversation.fromJson(
+        (existing.first as Map).cast<String, dynamic>(),
+        currentUserId: user.id,
+      );
+    }
+    final meta = user.userMetadata ?? const {};
+    final myName = ((meta['full_name'] as String?)?.trim().isNotEmpty == true)
+        ? (meta['full_name'] as String).trim()
+        : 'Member';
+    final inserted = await _client
+        .from(_conversationsTable)
+        .insert({
+          'participant_a_id': user.id,
+          'participant_b_id': user.id,
+          'participant_a_name': myName,
+          'participant_b_name': myName,
+          'initiator_id': user.id,
+          'conversation_source': 'self',
+          'request_status': 'accepted',
+        })
+        .select()
+        .single();
+    return Conversation.fromJson(
+      (inserted as Map).cast<String, dynamic>(),
+      currentUserId: user.id,
+    );
   }
 
   /// Creates a conversation (or returns an existing one between the
@@ -145,6 +201,7 @@ class MessagingService {
     required String otherUserName,
     required String firstMessage,
     String source = 'direct',
+    bool isBusiness = false,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -173,6 +230,14 @@ class MessagingService {
     Map<String, dynamic> convoRow;
     if ((existingRows as List).isNotEmpty) {
       convoRow = (existingRows.first as Map).cast<String, dynamic>();
+      // Promote the existing thread to "business" once a marketplace
+      // contact happens — sticky for the badge.
+      if (isBusiness && convoRow['is_business'] != true) {
+        await _client
+            .from(_conversationsTable)
+            .update({'is_business': true}).eq('id', convoRow['id']);
+        convoRow['is_business'] = true;
+      }
     } else {
       final inserted = await _client
           .from(_conversationsTable)
@@ -183,6 +248,7 @@ class MessagingService {
             'participant_b_name': otherUserName,
             'initiator_id': user.id,
             'conversation_source': source,
+            'is_business': isBusiness,
             // request_status defaults to 'pending' (patch_005).
           })
           .select()

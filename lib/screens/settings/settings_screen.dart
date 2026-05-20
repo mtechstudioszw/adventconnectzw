@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/sabbath_service.dart';
+import '../../services/theme_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/invite_friends_card.dart';
@@ -29,6 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _biometricAvailable = false;
   bool _sabbathEnabled = SabbathService.isEnabled();
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
+  ThemeMode _themeMode = ThemeService.current;
 
   @override
   void initState() {
@@ -177,6 +179,29 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _pickTheme() async {
+    final picked = await showModalBottomSheet<ThemeMode>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ThemeSheet(selected: _themeMode),
+    );
+    if (picked != null && mounted) {
+      await ThemeService.setMode(picked);
+      setState(() => _themeMode = picked);
+    }
+  }
+
+  String _themeLabel(ThemeMode m) {
+    switch (m) {
+      case ThemeMode.dark:
+        return 'Dark';
+      case ThemeMode.light:
+        return 'Light';
+      case ThemeMode.system:
+        return 'System';
+    }
+  }
+
   Future<void> _pickSabbathProvince() async {
     final picked = await showModalBottomSheet<String>(
       context: context,
@@ -281,6 +306,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                           value: _notifyMarketplace,
                           onChanged: (v) =>
                               setState(() => _notifyMarketplace = v),
+                        ),
+                        const _Divider(),
+                        _NavRow(
+                          icon: Icons.dark_mode_outlined,
+                          label: 'Appearance',
+                          trailing: _themeLabel(_themeMode),
+                          onTap: _pickTheme,
                         ),
                         const _Divider(),
                         _NavRow(
@@ -816,6 +848,137 @@ class _ProvinceSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ThemeSheet extends StatelessWidget {
+  const _ThemeSheet({required this.selected});
+  final ThemeMode selected;
+
+  static const _options = <(ThemeMode, String, IconData, String)>[
+    (
+      ThemeMode.system,
+      'Match system',
+      Icons.brightness_auto_outlined,
+      'Use whichever theme your phone is on.',
+    ),
+    (
+      ThemeMode.light,
+      'Light',
+      Icons.light_mode_outlined,
+      'Bright surfaces — best in daylight.',
+    ),
+    (
+      ThemeMode.dark,
+      'Dark',
+      Icons.dark_mode_outlined,
+      'Dim surfaces — easier on the eyes at night.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(26, 26, 46, 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Appearance',
+                style: AppTextStyles.headlineSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Dark mode is still rolling out screen-by-screen — a few '
+                'pages may still appear light for now.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final (mode, label, icon, description) in _options) ...[
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context, mode),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            mode == selected
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                            color: mode == selected
+                                ? AppColors.primaryBlue
+                                : const Color.fromRGBO(26, 26, 46, 0.4),
+                            size: 22,
+                          ),
+                          const SizedBox(width: 14),
+                          Icon(
+                            icon,
+                            color: AppColors.textDark,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  label,
+                                  style: AppTextStyles.titleMedium.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  description,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: const Color.fromRGBO(
+                                        26, 26, 46, 0.6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

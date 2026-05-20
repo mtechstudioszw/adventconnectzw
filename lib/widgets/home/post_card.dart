@@ -17,6 +17,7 @@ class PostCard extends StatelessWidget {
     this.onEdit,
     this.onDelete,
     this.onToggleVisibility,
+    this.onReport,
   });
 
   final Post post;
@@ -28,6 +29,7 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleVisibility;
+  final VoidCallback? onReport;
 
   bool get _isOwner => viewerId != null && viewerId == post.authorId;
 
@@ -116,12 +118,15 @@ class PostCard extends StatelessWidget {
               ),
             ),
           ),
-          if (_isOwner) _OwnerMenu(
-            isFriendsOnly: post.visibility == PostVisibility.friendsOnly,
-            onEdit: onEdit,
-            onDelete: onDelete,
-            onToggleVisibility: onToggleVisibility,
-          ),
+          if (_isOwner)
+            _OwnerMenu(
+              isFriendsOnly: post.visibility == PostVisibility.friendsOnly,
+              onEdit: onEdit,
+              onDelete: onDelete,
+              onToggleVisibility: onToggleVisibility,
+            )
+          else if (onReport != null)
+            _ViewerMenu(onReport: onReport!),
         ],
       ),
     );
@@ -438,6 +443,41 @@ class _OwnerMenu extends StatelessWidget {
               ],
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _ViewerMenu extends StatelessWidget {
+  const _ViewerMenu({required this.onReport});
+
+  final VoidCallback onReport;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(
+        Icons.more_horiz,
+        color: Color.fromRGBO(26, 26, 46, 0.55),
+        size: 20,
+      ),
+      tooltip: 'More',
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      onSelected: (value) {
+        if (value == 'report') onReport();
+      },
+      itemBuilder: (ctx) => [
+        PopupMenuItem(
+          value: 'report',
+          child: Row(
+            children: const [
+              Icon(Icons.flag_outlined, size: 18, color: AppColors.red),
+              SizedBox(width: 10),
+              Text('Report post', style: TextStyle(color: AppColors.red)),
+            ],
+          ),
+        ),
       ],
     );
   }

@@ -11,6 +11,10 @@ class PrivacyScreen extends StatelessWidget {
       title: 'Privacy Policy',
       subtitle: 'What we collect, why we collect it, and how we look after it.',
       lastUpdated: '6 May 2026',
+      draftNotice:
+          'This text is a working draft. A qualified data-protection / '
+          'privacy lawyer must review it (Zimbabwe Data Protection Act '
+          'compliance + any app-store requirements) before publication.',
       intro:
           'Your privacy matters to us. This policy explains the personal information Advent Connect ZW collects when you use the app, how we use it, and the choices you have. We aim to keep this clear and honest — if anything is unclear please reach out and we\'ll explain.',
       sections: const [

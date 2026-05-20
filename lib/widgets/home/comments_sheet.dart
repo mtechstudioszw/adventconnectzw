@@ -5,9 +5,10 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Bottom sheet that opens when the user taps "Comment" on a feed post.
-/// Loads comments lazily and lets the viewer post a new one. The parent
-/// receives the final comment count via [onCommentAdded] so it can
-/// update its in-memory Post without a refetch.
+/// Loads comments lazily and lets the viewer post a new one, reply to
+/// an existing one, and react with like / dislike. The parent receives
+/// the total count (top-level + replies) via [onCommentCountChanged]
+/// so it can update its in-memory Post without a refetch.
 Future<void> showCommentsSheet(
   BuildContext context, {
   required String postId,
@@ -39,10 +40,18 @@ class _CommentsSheet extends StatefulWidget {
 
 class _CommentsSheetState extends State<_CommentsSheet> {
   final _controller = TextEditingController();
-  List<PostComment> _comments = [];
+  final _composerFocus = FocusNode();
+  List<PostComment> _flat = [];
+  List<PostComment> _tree = [];
   bool _loading = true;
   bool _sending = false;
   String? _error;
+
+  // When the viewer taps "Reply" on a comment, we stash the target
+  // here so the next send becomes a reply rather than a top-level
+  // comment. Cleared after a successful send or when the user taps
+  // the "X" in the reply chip.
+  PostComment? _replyTo;
 
   @override
   void initState() {
@@ -53,6 +62,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   @override
   void dispose() {
     _controller.dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -61,7 +71,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       final list = await FeedService.fetchComments(widget.postId);
       if (!mounted) return;
       setState(() {
-        _comments = list;
+        _flat = list;
+        _tree = PostComment.buildTree(list);
         _loading = false;
       });
     } catch (_) {
@@ -81,26 +92,78 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       final created = await FeedService.addComment(
         postId: widget.postId,
         body: body,
+        parentCommentId: _replyTo?.id,
       );
       if (!mounted) return;
+      final newFlat = [..._flat, created];
       setState(() {
-        _comments = [..._comments, created];
+        _flat = newFlat;
+        _tree = PostComment.buildTree(newFlat);
         _controller.clear();
+        _replyTo = null;
         _sending = false;
       });
-      widget.onCommentCountChanged(_comments.length);
+      widget.onCommentCountChanged(newFlat.length);
     } catch (_) {
       if (!mounted) return;
       setState(() => _sending = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Could not post comment. Try again.',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-          ),
-        ),
-      );
+      _toast('Could not post comment. Try again.');
     }
+  }
+
+  Future<void> _react(PostComment comment, int next) async {
+    // Tapping the same vote again withdraws it (Reddit-style toggle).
+    final value = comment.viewerVote == next ? 0 : next;
+    int likeDelta = 0;
+    int dislikeDelta = 0;
+    if (comment.viewerVote == 1) likeDelta -= 1;
+    if (comment.viewerVote == -1) dislikeDelta -= 1;
+    if (value == 1) likeDelta += 1;
+    if (value == -1) dislikeDelta += 1;
+
+    final updated = comment.copyWith(
+      viewerVote: value,
+      likeCount: (comment.likeCount + likeDelta).clamp(0, 1 << 30),
+      dislikeCount: (comment.dislikeCount + dislikeDelta).clamp(0, 1 << 30),
+    );
+    setState(() {
+      _flat = _flat.map((c) => c.id == comment.id ? updated : c).toList();
+      _tree = PostComment.buildTree(_flat);
+    });
+
+    try {
+      await FeedService.reactToComment(
+        commentId: comment.id,
+        value: value,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _flat = _flat.map((c) => c.id == comment.id ? comment : c).toList();
+        _tree = PostComment.buildTree(_flat);
+      });
+      _toast('Could not save your vote. Try again.');
+    }
+  }
+
+  void _startReply(PostComment target) {
+    setState(() => _replyTo = target);
+    _composerFocus.requestFocus();
+  }
+
+  void _cancelReply() {
+    setState(() => _replyTo = null);
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
   }
 
   @override
@@ -140,6 +203,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                 ),
                 const Divider(height: 24),
                 Expanded(child: _buildList(scrollController)),
+                if (_replyTo != null) _buildReplyBanner(),
                 const Divider(height: 1),
                 _buildComposer(),
               ],
@@ -164,7 +228,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
         ),
       );
     }
-    if (_comments.isEmpty) {
+    if (_tree.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -180,9 +244,80 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     return ListView.separated(
       controller: controller,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      itemCount: _comments.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (ctx, i) => _CommentRow(comment: _comments[i]),
+      itemCount: _tree.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 14),
+      itemBuilder: (ctx, i) {
+        final root = _tree[i];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CommentRow(
+              comment: root,
+              onReply: () => _startReply(root),
+              onLike: () => _react(root, 1),
+              onDislike: () => _react(root, -1),
+            ),
+            if (root.replies.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 30, top: 10),
+                child: Column(
+                  children: [
+                    for (final reply in root.replies) ...[
+                      _CommentRow(
+                        comment: reply,
+                        onReply: () => _startReply(root),
+                        onLike: () => _react(reply, 1),
+                        onDislike: () => _react(reply, -1),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildReplyBanner() {
+    final target = _replyTo!;
+    return Container(
+      color: AppColors.primaryBlue.withValues(alpha: 0.06),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.subdirectory_arrow_right,
+            size: 16,
+            color: AppColors.primaryBlue,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Replying to ${target.authorName}',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          GestureDetector(
+            onTap: _cancelReply,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(
+                Icons.close,
+                size: 16,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -205,12 +340,15 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                 ),
                 child: TextField(
                   controller: _controller,
+                  focusNode: _composerFocus,
                   minLines: 1,
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
                   style: AppTextStyles.bodyMedium.copyWith(fontSize: 14.5),
                   decoration: InputDecoration(
-                    hintText: 'Write a comment…',
+                    hintText: _replyTo == null
+                        ? 'Write a comment…'
+                        : 'Write a reply…',
                     hintStyle: AppTextStyles.bodyMedium.copyWith(
                       color: const Color.fromRGBO(26, 26, 46, 0.45),
                       fontSize: 14.5,
@@ -258,9 +396,17 @@ class _CommentsSheetState extends State<_CommentsSheet> {
 }
 
 class _CommentRow extends StatelessWidget {
-  const _CommentRow({required this.comment});
+  const _CommentRow({
+    required this.comment,
+    required this.onReply,
+    required this.onLike,
+    required this.onDislike,
+  });
 
   final PostComment comment;
+  final VoidCallback onReply;
+  final VoidCallback onLike;
+  final VoidCallback onDislike;
 
   @override
   Widget build(BuildContext context) {
@@ -272,8 +418,8 @@ class _CommentRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 36,
-          height: 36,
+          width: 32,
+          height: 32,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -286,7 +432,7 @@ class _CommentRow extends StatelessWidget {
                   style: AppTextStyles.titleMedium.copyWith(
                     color: AppColors.white,
                     fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                    fontSize: 13,
                   ),
                 )
               : Image.network(
@@ -297,42 +443,125 @@ class _CommentRow extends StatelessWidget {
                     style: AppTextStyles.titleMedium.copyWith(
                       color: AppColors.white,
                       fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      fontSize: 13,
                     ),
                   ),
                 ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.lightGrey,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  comment.authorName,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.lightGrey,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  comment.body,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      comment.authorName,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      comment.body,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 4),
+                child: Row(
+                  children: [
+                    _VoteButton(
+                      icon: comment.viewerVote == 1
+                          ? Icons.thumb_up
+                          : Icons.thumb_up_outlined,
+                      count: comment.likeCount,
+                      highlighted: comment.viewerVote == 1,
+                      onTap: onLike,
+                    ),
+                    const SizedBox(width: 14),
+                    _VoteButton(
+                      icon: comment.viewerVote == -1
+                          ? Icons.thumb_down
+                          : Icons.thumb_down_outlined,
+                      count: comment.dislikeCount,
+                      highlighted: comment.viewerVote == -1,
+                      onTap: onDislike,
+                    ),
+                    const SizedBox(width: 14),
+                    GestureDetector(
+                      onTap: onReply,
+                      child: Text(
+                        'Reply',
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: const Color.fromRGBO(26, 26, 46, 0.65),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _VoteButton extends StatelessWidget {
+  const _VoteButton({
+    required this.icon,
+    required this.count,
+    required this.highlighted,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final int count;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = highlighted
+        ? AppColors.primaryBlue
+        : const Color.fromRGBO(26, 26, 46, 0.55);
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          if (count > 0) ...[
+            const SizedBox(width: 4),
+            Text(
+              '$count',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 11.5,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -24,6 +24,7 @@ class LegalLayout extends StatefulWidget {
     required this.lastUpdated,
     required this.intro,
     required this.sections,
+    this.draftNotice,
   });
 
   final String kicker;
@@ -32,6 +33,12 @@ class LegalLayout extends StatefulWidget {
   final String lastUpdated;
   final String intro;
   final List<LegalSection> sections;
+
+  /// When non-null, a prominent gold "DRAFT" banner is rendered above
+  /// the intro card with this message. We use it to make it crystal
+  /// clear that the text on screen is placeholder pending a lawyer's
+  /// review and isn't a binding final document.
+  final String? draftNotice;
 
   @override
   State<LegalLayout> createState() => _LegalLayoutState();
@@ -86,6 +93,10 @@ class _LegalLayoutState extends State<LegalLayout>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildLastUpdated(),
+                    if (widget.draftNotice != null) ...[
+                      const SizedBox(height: 14),
+                      _buildDraftBanner(),
+                    ],
                     const SizedBox(height: 14),
                     _buildIntroCard(),
                     const SizedBox(height: 14),
@@ -198,6 +209,56 @@ class _LegalLayoutState extends State<LegalLayout>
               color: AppColors.primaryBlue,
               fontWeight: FontWeight.w700,
               fontSize: 12.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDraftBanner() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.goldAccent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.goldAccent.withValues(alpha: 0.55),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.gavel,
+            color: AppColors.goldAccent,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'DRAFT — pending legal review',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.goldAccent,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11.5,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.draftNotice!,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.78),
+                    height: 1.45,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

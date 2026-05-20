@@ -30,6 +30,7 @@ import '../../widgets/home/composer_sheet.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
+import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/shimmer_loaders.dart';
@@ -811,8 +812,28 @@ class _HomeScreenState extends State<HomeScreen>
             onEdit: () => _editPost(post),
             onDelete: () => _confirmDeletePost(post),
             onToggleVisibility: () => _togglePostVisibility(post),
+            onReport: () => _reportPost(post),
           ),
       ],
+    );
+  }
+
+  Future<void> _reportPost(Post post) async {
+    final sent = await showReportSheet(
+      context,
+      contentType: 'post',
+      contentId: post.id,
+      contentLabel: 'this post',
+    );
+    if (!mounted || sent != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.successGreen,
+        content: Text(
+          'Report sent. Thanks — the admin team will review it.',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
     );
   }
 

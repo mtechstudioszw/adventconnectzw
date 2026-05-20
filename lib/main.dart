@@ -14,6 +14,7 @@ import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/messaging_service.dart';
 import 'services/push_service.dart';
+import 'services/theme_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
 
@@ -37,6 +38,10 @@ void main() async {
   // disk read, must finish before the first widget builds because the
   // profile screen reads it synchronously.
   await AccountModeService.init();
+
+  // Same — load the chosen ThemeMode (system/light/dark) before the
+  // first build so we don't flash the wrong theme.
+  await ThemeService.init();
 
   await Supabase.initialize(
     url: SupabaseConfig.url,
@@ -133,13 +138,18 @@ class AdventConnectApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Advent Connect ZW',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      routerConfig: appRouter,
-      builder: (context, child) =>
-          OfflineBanner(child: child ?? const SizedBox.shrink()),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.notifier,
+      builder: (context, mode, _) => MaterialApp.router(
+        title: 'Advent Connect ZW',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: mode,
+        routerConfig: appRouter,
+        builder: (context, child) =>
+            OfflineBanner(child: child ?? const SizedBox.shrink()),
+      ),
     );
   }
 }

@@ -167,23 +167,32 @@ class FeedService {
 
   // ---- Comments -----------------------------------------------------
 
+  /// All comments on a post, flat, oldest first. The bottom sheet calls
+  /// [PostComment.buildTree] to nest replies under their parents before
+  /// rendering. Reactions are joined so we can compute like/dislike
+  /// counts + the viewer's own vote without a second round-trip.
   static Future<List<PostComment>> fetchComments(String postId) async {
     final response = await _client
         .from(_commentsTable)
         .select(
           '*, '
-          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)',
+          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url), '
+          'post_comment_reactions(user_id, value)',
         )
         .eq('post_id', postId)
         .order('created_at', ascending: true);
     return (response as List)
-        .map((row) => PostComment.fromJson(row as Map<String, dynamic>))
+        .map((row) => PostComment.fromJson(
+              row as Map<String, dynamic>,
+              viewerId: _viewerId,
+            ))
         .toList();
   }
 
   static Future<PostComment> addComment({
     required String postId,
     required String body,
+    String? parentCommentId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -199,13 +208,49 @@ class FeedService {
           'post_id': postId,
           'author_id': user.id,
           'body': clean,
+          if (parentCommentId != null) 'parent_comment_id': parentCommentId,
         })
         .select(
           '*, '
-          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url)',
+          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url), '
+          'post_comment_reactions(user_id, value)',
         )
         .single();
-    return PostComment.fromJson(inserted);
+    return PostComment.fromJson(inserted, viewerId: _viewerId);
+  }
+
+  /// Cast / change / clear the viewer's vote on a comment.
+  ///   value =  1 → like
+  ///   value = -1 → dislike
+  ///   value =  0 → withdraw any existing vote
+  /// Idempotent — re-sending the same value upserts the same row.
+  static Future<void> reactToComment({
+    required String commentId,
+    required int value,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to vote on comments.');
+    }
+    if (value == 0) {
+      await _client
+          .from('post_comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+      return;
+    }
+    if (value != 1 && value != -1) {
+      throw ArgumentError('value must be -1, 0 or 1');
+    }
+    await _client.from('post_comment_reactions').upsert(
+      {
+        'comment_id': commentId,
+        'user_id': user.id,
+        'value': value,
+      },
+      onConflict: 'comment_id,user_id',
+    );
   }
 
   // ===================================================================

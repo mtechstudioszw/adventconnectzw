@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../services/analytics_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/start_conversation_sheet.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({
@@ -99,6 +101,31 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
     );
   }
 
+  Future<void> _chatInApp() async {
+    final product = _product;
+    if (product == null || product.sellerId.isEmpty) return;
+    final viewer = AuthService.currentUser?.id;
+    if (viewer == product.sellerId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This is your own listing.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      return;
+    }
+    await showStartConversationSheet(
+      context,
+      otherUserId: product.sellerId,
+      otherUserName: product.sellerName,
+      source: 'marketplace',
+      isBusiness: true,
+      openerOverride: 'Hi, is "${product.title}" still available?',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,6 +191,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                   _buildSellerCard(product),
                   const SizedBox(height: 16),
                   _buildContactButton(),
+                  const SizedBox(height: 10),
+                  _buildInAppChatButton(),
                   const SizedBox(height: 20),
                   if (product.description != null &&
                       product.description!.isNotEmpty) ...[
@@ -462,6 +491,48 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                   style: AppTextStyles.buttonText.copyWith(
                     fontSize: 15,
                     letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInAppChatButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _chatInApp,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.30),
+              width: 1.5,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.forum_outlined,
+                  color: AppColors.primaryBlue,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Message in Advent Chat',
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontSize: 14.5,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ],

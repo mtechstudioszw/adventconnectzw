@@ -11,6 +11,10 @@ class TermsScreen extends StatelessWidget {
       title: 'Terms of Service',
       subtitle: 'The agreement that keeps our community safe and respectful.',
       lastUpdated: '6 May 2026',
+      draftNotice:
+          'This text is a working draft. A qualified lawyer must review '
+          'and sign off on the final wording before Advent Connect ZW is '
+          'published to the public.',
       intro:
           'Welcome to Advent Connect ZW. By creating an account or using our app you agree to these terms. Please take a moment to read them — they explain your rights, our responsibilities and the rules that keep this community a safe place for everyone.',
       sections: const [

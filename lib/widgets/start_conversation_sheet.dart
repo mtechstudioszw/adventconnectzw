@@ -16,6 +16,8 @@ Future<void> showStartConversationSheet(
   required String otherUserId,
   required String otherUserName,
   String source = 'direct',
+  bool isBusiness = false,
+  String? openerOverride,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -25,6 +27,8 @@ Future<void> showStartConversationSheet(
       otherUserId: otherUserId,
       otherUserName: otherUserName,
       source: source,
+      isBusiness: isBusiness,
+      openerOverride: openerOverride,
     ),
   );
 }
@@ -34,11 +38,15 @@ class _StartConversationSheet extends StatefulWidget {
     required this.otherUserId,
     required this.otherUserName,
     required this.source,
+    this.isBusiness = false,
+    this.openerOverride,
   });
 
   final String otherUserId;
   final String otherUserName;
   final String source;
+  final bool isBusiness;
+  final String? openerOverride;
 
   @override
   State<_StartConversationSheet> createState() =>
@@ -56,8 +64,9 @@ class _StartConversationSheetState extends State<_StartConversationSheet> {
       final convo = await MessagingService.createConversation(
         otherUserId: widget.otherUserId,
         otherUserName: widget.otherUserName,
-        firstMessage: 'Hi $firstName 👋',
+        firstMessage: widget.openerOverride ?? 'Hi $firstName 👋',
         source: widget.source,
+        isBusiness: widget.isBusiness,
       );
       if (!mounted) return;
       Navigator.of(context).pop();

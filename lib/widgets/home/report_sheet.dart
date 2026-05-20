@@ -1,0 +1,275 @@
+import 'package:flutter/material.dart';
+import '../../services/report_service.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_text_styles.dart';
+
+/// Bottom sheet for reporting a piece of content (a post, a user, a
+/// message, etc). User picks one of the canned reasons, optionally
+/// adds details, and submits. The submission lands in the `reports`
+/// table for admin review.
+///
+/// Returns `true` if the report was sent, `null` if cancelled.
+Future<bool?> showReportSheet(
+  BuildContext context, {
+  required String contentType,
+  required String contentId,
+  required String contentLabel,
+}) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => _ReportSheet(
+      contentType: contentType,
+      contentId: contentId,
+      contentLabel: contentLabel,
+    ),
+  );
+}
+
+const _reasons = <String>[
+  'Spam',
+  'Harassment / bullying',
+  'Hate speech',
+  'Inappropriate content',
+  'Misinformation',
+  'Scam / fraud',
+  'Off-topic',
+  'Other',
+];
+
+class _ReportSheet extends StatefulWidget {
+  const _ReportSheet({
+    required this.contentType,
+    required this.contentId,
+    required this.contentLabel,
+  });
+
+  final String contentType;
+  final String contentId;
+  final String contentLabel;
+
+  @override
+  State<_ReportSheet> createState() => _ReportSheetState();
+}
+
+class _ReportSheetState extends State<_ReportSheet> {
+  final _detailsController = TextEditingController();
+  String? _reason;
+  bool _submitting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _detailsController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_reason == null) {
+      setState(() => _error = 'Pick a reason.');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      await ReportService.submit(
+        contentType: widget.contentType,
+        contentId: widget.contentId,
+        reason: _reason!,
+        details: _detailsController.text.trim().isEmpty
+            ? null
+            : _detailsController.text,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = 'Could not send the report. Please try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Report ${widget.contentLabel}',
+                style: AppTextStyles.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Tell us what\'s wrong. The admin team reviews every '
+                'report and may take action.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final r in _reasons)
+                    _ReasonChip(
+                      label: r,
+                      selected: _reason == r,
+                      onTap: () => setState(() => _reason = r),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.lightGrey,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color.fromRGBO(26, 26, 46, 0.06),
+                  ),
+                ),
+                child: TextField(
+                  controller: _detailsController,
+                  minLines: 3,
+                  maxLines: 6,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 14.5),
+                  decoration: InputDecoration(
+                    hintText: 'Anything else we should know? (optional)',
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.45),
+                      fontSize: 14.5,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(14),
+                  ),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.red),
+                ),
+              ],
+              const SizedBox(height: 16),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: _submitting ? null : _submit,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              color: AppColors.white,
+                            ),
+                          )
+                        : Text(
+                            'Send report',
+                            style: AppTextStyles.buttonText.copyWith(
+                              color: AppColors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReasonChip extends StatelessWidget {
+  const _ReasonChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primaryBlue.withValues(alpha: 0.12)
+                : AppColors.lightGrey,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primaryBlue.withValues(alpha: 0.40)
+                  : const Color.fromRGBO(26, 26, 46, 0.08),
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTextStyles.labelMedium.copyWith(
+              color:
+                  selected ? AppColors.primaryBlue : AppColors.textDark,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

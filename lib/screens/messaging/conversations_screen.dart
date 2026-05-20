@@ -130,6 +130,22 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
   }
 
+  Future<void> _openSelfChat() async {
+    try {
+      final convo = await MessagingService.openSelfChat();
+      if (!mounted) return;
+      await context.pushNamed(
+        'chat',
+        pathParameters: {'id': convo.id},
+        extra: convo,
+      );
+      if (mounted) _bootstrap();
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not open Notes to self. Try again.');
+    }
+  }
+
   Future<void> _decline(Conversation c) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -249,6 +265,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                           : context.goNamed('home'),
                     ),
                     const Spacer(),
+                    _CircleIconButton(
+                      icon: Icons.bookmark_outline,
+                      onTap: _openSelfChat,
+                    ),
+                    const SizedBox(width: 8),
                     _CircleIconButton(
                       icon: Icons.search,
                       onTap: () {},
@@ -598,7 +619,10 @@ class _ConversationTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _Avatar(name: conversation.otherUserName),
+              _Avatar(
+                name: conversation.otherUserName,
+                isSelfChat: conversation.isSelfChat,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -618,6 +642,29 @@ class _ConversationTile extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (conversation.isBusiness) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBlue
+                                  .withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'BUSINESS',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.primaryBlue,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(width: 6),
                         Text(
                           _shortTime(conversation.lastMessageAt),
@@ -896,8 +943,9 @@ class _RequestTile extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name});
+  const _Avatar({required this.name, this.isSelfChat = false});
   final String name;
+  final bool isSelfChat;
 
   @override
   Widget build(BuildContext context) {
@@ -924,14 +972,20 @@ class _Avatar extends StatelessWidget {
           ),
         ],
       ),
-      child: Text(
-        initials,
-        style: AppTextStyles.titleMedium.copyWith(
-          color: AppColors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
-        ),
-      ),
+      child: isSelfChat
+          ? const Icon(
+              Icons.bookmark,
+              color: AppColors.white,
+              size: 22,
+            )
+          : Text(
+              initials,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
     );
   }
 }

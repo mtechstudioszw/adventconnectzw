@@ -11,6 +11,10 @@ class GuidelinesScreen extends StatelessWidget {
       title: 'Community Guidelines',
       subtitle: 'How we look out for one another in this space.',
       lastUpdated: '6 May 2026',
+      draftNotice:
+          'This text is a working draft. Final wording should be '
+          'reviewed by a lawyer (especially the moderation + '
+          'enforcement language) before the app is published.',
       intro:
           'Advent Connect ZW exists to bring the SDA community in Zimbabwe closer together. These guidelines help keep the app a welcoming, helpful and safe space. Read them, share them, and help us hold each other to them in love.',
       sections: const [

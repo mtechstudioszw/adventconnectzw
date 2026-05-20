@@ -7,16 +7,17 @@ import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../models/job_model.dart';
 import '../../models/member_directory_model.dart';
+import '../../models/post_model.dart';
 import '../../models/product_model.dart';
 import '../../services/church_service.dart';
 import '../../services/directory_service.dart';
 import '../../services/event_service.dart';
+import '../../services/feed_service.dart';
 import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
-import '../../widgets/start_conversation_sheet.dart';
 
 /// Cross-content search. Hits churches, events, products and jobs in
 /// parallel — small per-list limit each so the UI stays snappy.
@@ -39,6 +40,7 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Product> _products = const [];
   List<Job> _jobs = const [];
   List<MemberDirectoryEntry> _people = const [];
+  List<Post> _posts = const [];
 
   @override
   void initState() {
@@ -71,6 +73,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _products = const [];
         _jobs = const [];
         _people = const [];
+        _posts = const [];
       });
       return;
     }
@@ -85,6 +88,7 @@ class _SearchScreenState extends State<SearchScreen> {
         EventService.fetchEvents(search: query),
         MarketplaceService.fetchProducts(search: query),
         JobService.fetchJobs(search: query),
+        FeedService.searchPosts(query),
       ]);
       if (!mounted) return;
       setState(() {
@@ -93,6 +97,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _events = (results[2] as List<Event>).take(8).toList();
         _products = (results[3] as List<Product>).take(8).toList();
         _jobs = (results[4] as List<Job>).take(8).toList();
+        _posts = (results[5] as List<Post>).take(8).toList();
         _searching = false;
       });
     } catch (_) {
@@ -136,7 +141,8 @@ class _SearchScreenState extends State<SearchScreen> {
         _churches.isNotEmpty ||
         _events.isNotEmpty ||
         _products.isNotEmpty ||
-        _jobs.isNotEmpty;
+        _jobs.isNotEmpty ||
+        _posts.isNotEmpty;
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
       body: Column(
@@ -287,12 +293,22 @@ class _SearchScreenState extends State<SearchScreen> {
               for (final p in _people)
                 _PersonRow(
                   person: p,
-                  onTap: () => showStartConversationSheet(
-                    context,
-                    otherUserId: p.userId,
-                    otherUserName: p.fullName ?? 'a member',
-                    source: 'search',
+                  onTap: () => context.pushNamed(
+                    'user_profile',
+                    pathParameters: {'userId': p.userId},
                   ),
+                ),
+            ],
+          ),
+        if (_posts.isNotEmpty)
+          _Section(
+            label: 'POSTS',
+            count: _posts.length,
+            children: [
+              for (final post in _posts)
+                _PostRow(
+                  post: post,
+                  onTap: () => Navigator.pop(context),
                 ),
             ],
           ),
@@ -475,9 +491,80 @@ class _PersonRow extends StatelessWidget {
                 ),
               ),
               const Icon(
-                Icons.chat_bubble_outline_rounded,
+                Icons.chevron_right_rounded,
                 color: AppColors.primaryBlue,
-                size: 18,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostRow extends StatelessWidget {
+  const _PostRow({required this.post, required this.onTap});
+
+  final Post post;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = (post.body ?? '').trim();
+    final preview = body.isEmpty
+        ? '(photo post)'
+        : body.length > 140
+            ? '${body.substring(0, 140)}…'
+            : body;
+    return ScreenCard(
+      padding: const EdgeInsets.all(14),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.article_outlined,
+                  color: AppColors.white,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      post.authorName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      preview,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.7),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

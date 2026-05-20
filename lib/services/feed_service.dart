@@ -85,6 +85,30 @@ class FeedService {
     await _client.from(_postsTable).delete().eq('id', postId);
   }
 
+  /// Body-text search across the feed. Respects visibility via RLS so
+  /// friends-only posts are only returned to friends / the author.
+  static Future<List<Post>> searchPosts(String query, {int limit = 20}) async {
+    final term = query.trim();
+    if (term.isEmpty) return const [];
+    final response = await _client
+        .from(_postsTable)
+        .select(
+          '*, '
+          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+          'post_likes(user_id), '
+          'post_comments(id)',
+        )
+        .ilike('body', '%$term%')
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return (response as List)
+        .map((row) => Post.fromJson(
+              row as Map<String, dynamic>,
+              viewerId: _viewerId,
+            ))
+        .toList();
+  }
+
   /// Update the body and/or visibility of a post the viewer owns.
   /// RLS already restricts updates to the author so we don't have to
   /// guard client-side. Returns the refreshed Post.

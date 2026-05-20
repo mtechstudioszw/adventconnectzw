@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/message_model.dart';
+import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/feed_service.dart';
 import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/home/composer_sheet.dart';
+import '../../widgets/home/stories_rail.dart';
+import '../../widgets/home/story_viewer.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
@@ -22,6 +27,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   late final Animation<double> _slide;
 
   List<Conversation> _conversations = [];
+  List<Story> _stories = const [];
   bool _loading = true;
   String? _error;
   _ConversationsTab _tab = _ConversationsTab.inbox;
@@ -52,10 +58,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       _error = null;
     });
     try {
-      final list = await MessagingService.fetchConversations();
+      final results = await Future.wait([
+        MessagingService.fetchConversations(),
+        FeedService.fetchStories(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _conversations = list;
+        _conversations = results[0] as List<Conversation>;
+        _stories = results[1] as List<Story>;
         _loading = false;
       });
     } catch (_) {
@@ -65,6 +75,32 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _loading = false;
       });
     }
+  }
+
+  Future<void> _openStoryComposer() async {
+    final story = await showStoryComposer(context);
+    if (!mounted || story == null) return;
+    setState(() => _stories = [story, ..._stories]);
+  }
+
+  Future<void> _openStoryViewer(List<Story> stories) {
+    return StoryViewer.show(context, stories.reversed.toList());
+  }
+
+  String? _viewerPhotoUrl() {
+    final user = AuthService.currentUser;
+    final meta = user?.userMetadata ?? const {};
+    final raw = (meta['profile_photo_url'] as String?)?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    return raw;
+  }
+
+  String _viewerName() {
+    final user = AuthService.currentUser;
+    final meta = user?.userMetadata ?? const {};
+    final raw = (meta['full_name'] as String?)?.trim() ?? '';
+    if (raw.isEmpty) return user?.email ?? 'You';
+    return raw;
   }
 
   String get _currentUserId => AuthService.currentUser?.id ?? '';
@@ -158,6 +194,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       body: Column(
         children: [
           _buildHero(),
+          Container(
+            color: AppColors.white,
+            child: StoriesRail(
+              stories: _stories,
+              viewerId: _currentUserId,
+              viewerName: _viewerName(),
+              viewerPhotoUrl: _viewerPhotoUrl(),
+              onAddStory: _openStoryComposer,
+              onAuthorTapped: (_, list) => _openStoryViewer(list),
+            ),
+          ),
           _buildTabBar(),
           Expanded(
             child: RefreshIndicator(

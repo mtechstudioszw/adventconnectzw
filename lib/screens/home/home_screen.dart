@@ -33,7 +33,6 @@ import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/shimmer_loaders.dart';
-import '../../widgets/start_conversation_sheet.dart';
 import '../widgets/main_bottom_nav.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -451,11 +450,7 @@ class _HomeScreenState extends State<HomeScreen>
                 _buildChurchGrid(),
                 if (_suggestedMembers.isNotEmpty) ...[
                   const SizedBox(height: 28),
-                  _buildSectionHeader(
-                    'People to meet',
-                    'Browse all',
-                    onAction: () => context.pushNamed('member_directory'),
-                  ),
+                  _buildSectionHeader('People to meet', null),
                   const SizedBox(height: 12),
                   _buildSuggestedMembersRow(),
                 ],
@@ -1015,11 +1010,21 @@ class _HomeScreenState extends State<HomeScreen>
                   // surface a quiet failure
                 }
               },
-              onSayHi: () => showStartConversationSheet(
-                context,
-                otherUserId: m.userId,
-                otherUserName: m.fullName ?? 'Member',
-                source: 'home_suggestion',
+              onCancelOrUnfriend: () async {
+                if (friendship == null) return;
+                try {
+                  await FeedService.removeFriendship(friendship.id);
+                  if (!mounted) return;
+                  setState(() {
+                    _friendshipsByUser.remove(m.userId);
+                  });
+                } catch (_) {
+                  // ignore — next refresh corrects the state
+                }
+              },
+              onOpenProfile: () => context.pushNamed(
+                'user_profile',
+                pathParameters: {'userId': m.userId},
               ),
             ),
           );
@@ -1140,7 +1145,8 @@ class _SuggestedMemberTile extends StatelessWidget {
     required this.viewerId,
     required this.onAddFriend,
     required this.onAcceptRequest,
-    required this.onSayHi,
+    required this.onCancelOrUnfriend,
+    required this.onOpenProfile,
   });
 
   final MemberDirectoryEntry entry;
@@ -1148,7 +1154,8 @@ class _SuggestedMemberTile extends StatelessWidget {
   final String? viewerId;
   final VoidCallback onAddFriend;
   final VoidCallback onAcceptRequest;
-  final VoidCallback onSayHi;
+  final VoidCallback onCancelOrUnfriend;
+  final VoidCallback onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -1163,7 +1170,7 @@ class _SuggestedMemberTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       elevation: 0,
       child: InkWell(
-        onTap: onSayHi,
+        onTap: onOpenProfile,
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           decoration: BoxDecoration(
@@ -1211,15 +1218,15 @@ class _SuggestedMemberTile extends StatelessWidget {
               ),
               const Spacer(),
               _friendButton(),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               GestureDetector(
-                onTap: onSayHi,
+                onTap: onOpenProfile,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   alignment: Alignment.center,
                   child: Text(
-                    'Say hi',
+                    'View profile',
                     style: AppTextStyles.labelMedium.copyWith(
                       color: AppColors.primaryBlue,
                       fontSize: 11.5,
@@ -1245,13 +1252,13 @@ class _SuggestedMemberTile extends StatelessWidget {
         onTap: onAddFriend,
       );
     }
-    // Accepted → static "Friends" badge.
+    // Accepted → tap to unfriend.
     if (f.isAccepted) {
       return _OutlinePill(
         icon: Icons.check_circle_outline,
         label: 'Friends',
         color: AppColors.successGreen,
-        onTap: null,
+        onTap: onCancelOrUnfriend,
       );
     }
     // Pending: differs by direction.
@@ -1262,11 +1269,12 @@ class _SuggestedMemberTile extends StatelessWidget {
         onTap: onAcceptRequest,
       );
     }
+    // Outgoing pending → tap to cancel.
     return _OutlinePill(
       icon: Icons.hourglass_empty_rounded,
-      label: 'Pending',
+      label: 'Cancel',
       color: AppColors.primaryBlue,
-      onTap: null,
+      onTap: onCancelOrUnfriend,
     );
   }
 }

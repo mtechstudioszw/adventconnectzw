@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/seller_model.dart';
+import '../../services/account_mode_service.dart';
 import '../../services/account_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
@@ -184,6 +185,12 @@ class _AddProductScreenState extends State<AddProductScreen>
                     color: AppColors.primaryBlue,
                   ),
                 ),
+              )
+            else if (_account != null && _account!.isBusiness &&
+                !AccountModeService.inBusinessMode)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: _PersonalModeGate(),
               )
             else if (_account != null && !_account!.isBusiness)
               Padding(
@@ -950,6 +957,102 @@ class _BusinessGate extends StatelessWidget {
                         color: AppColors.white,
                         fontSize: 15,
                         letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when a user IS approved as a business but currently in
+/// personal view mode. Different from the BusinessGate above (which
+/// is for non-business users) — points back to the profile so they
+/// can flip the switch.
+class _PersonalModeGate extends StatelessWidget {
+  const _PersonalModeGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color.fromRGBO(26, 26, 46, 0.06),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(13, 27, 62, 0.06),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: AppColors.primaryGradient,
+            ),
+            child: const Icon(
+              Icons.swap_horiz,
+              color: AppColors.white,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'You\'re in Personal mode',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.headlineMedium.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 20,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Selling is only available in Business mode. Open your '
+            'profile and flip the Business / Personal switch to take '
+            'this action.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.70),
+              fontSize: 14,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Container(
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => context.goNamed('profile'),
+                borderRadius: BorderRadius.circular(14),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: Text(
+                      'Go to profile',
+                      style: TextStyle(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
                       ),
                     ),
                   ),

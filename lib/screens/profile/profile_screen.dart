@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/business_application_model.dart';
+import '../../models/church_model.dart';
+import '../../models/post_model.dart';
+import '../../services/account_mode_service.dart';
 import '../../services/account_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/event_service.dart';
+import '../../services/feed_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/invite_friends_card.dart';
+import '../../widgets/home/post_card.dart';
+import '../../widgets/home/post_image_viewer.dart';
 import '../widgets/main_bottom_nav.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -25,9 +31,10 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   int _churchesFollowed = 0;
   int _eventsGoing = 0;
-  int _prayersPraying = 0;
-  bool _loading = true;
   AccountState? _accountState;
+  List<Post> _myPosts = const [];
+  List<Church> _myChurches = const [];
+  int _tabIndex = 0;
 
   @override
   void initState() {
@@ -50,23 +57,32 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _bootstrap() async {
+    final viewerId = AuthService.currentUser?.id;
     try {
       final results = await Future.wait([
         ChurchService.fetchUserFollowedChurchIds(),
         EventService.fetchUserRsvpedEventIds(),
         AccountService.fetchMyAccount(),
+        FeedService.fetchFeed(limit: 120),
+        ChurchService.fetchChurches(),
       ]);
       if (!mounted) return;
+      final followed = results[0] as Set<String>;
+      final allPosts = results[3] as List<Post>;
+      final allChurches = results[4] as List<Church>;
       setState(() {
-        _churchesFollowed = (results[0] as Set).length;
+        _churchesFollowed = followed.length;
         _eventsGoing = (results[1] as Set).length;
-        _prayersPraying = 0;
         _accountState = results[2] as AccountState?;
-        _loading = false;
+        _myPosts = viewerId == null
+            ? const []
+            : allPosts.where((p) => p.authorId == viewerId).toList();
+        _myChurches = allChurches
+            .where((c) => followed.contains(c.id))
+            .toList();
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      // ignore — UI just keeps showing whatever it has.
     }
   }
 
@@ -173,30 +189,17 @@ class _ProfileScreenState extends State<ProfileScreen>
               children: [
                 _buildHeader(),
                 _buildIdentity(),
+                const SizedBox(height: 10),
+                _buildInlineStats(),
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildStats(),
+                  child: _buildActionToolbar(),
                 ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildBioCard(),
-                ),
-                const SizedBox(height: 16),
-                _buildAccountCard(),
-                const SizedBox(height: 16),
-                const InviteFriendsCard(),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildActionButtons(),
-                ),
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildSettingsList(),
-                ),
+                const SizedBox(height: 18),
+                _buildTabSelector(),
+                const SizedBox(height: 12),
+                _buildTabContent(),
                 const SizedBox(height: 32),
               ],
             ),
@@ -204,6 +207,354 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
       ),
       bottomNavigationBar: const MainBottomNav(currentIndex: 4),
+    );
+  }
+
+  Widget _buildInlineStats() {
+    final parts = <String>[
+      '$_churchesFollowed Church${_churchesFollowed == 1 ? '' : 'es'} followed',
+      '${_myPosts.length} Post${_myPosts.length == 1 ? '' : 's'}',
+      '$_eventsGoing Event${_eventsGoing == 1 ? '' : 's'}',
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Text(
+        parts.join('  ·  '),
+        textAlign: TextAlign.center,
+        style: AppTextStyles.bodySmall.copyWith(
+          color: const Color.fromRGBO(26, 26, 46, 0.6),
+          fontSize: 12.5,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionToolbar() {
+    return Row(
+      children: [
+        Expanded(
+          flex: 4,
+          child: _ToolbarButton(
+            icon: Icons.edit_outlined,
+            label: 'Edit profile',
+            primary: true,
+            onTap: () => context.pushNamed('edit_profile'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 1,
+          child: _ToolbarButton(
+            icon: Icons.more_horiz,
+            label: '',
+            primary: false,
+            onTap: _openMoreMenu,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openMoreMenu() async {
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _MoreMenuRow(
+                icon: Icons.settings_outlined,
+                label: 'Settings',
+                onTap: () => Navigator.pop(ctx, 'settings'),
+              ),
+              _MoreMenuRow(
+                icon: Icons.notifications_outlined,
+                label: 'Notifications',
+                onTap: () => Navigator.pop(ctx, 'notifications'),
+              ),
+              _MoreMenuRow(
+                icon: Icons.feedback_outlined,
+                label: 'Send feedback',
+                onTap: () => Navigator.pop(ctx, 'feedback'),
+              ),
+              _MoreMenuRow(
+                icon: Icons.brightness_3_outlined,
+                label: 'Sabbath timer',
+                onTap: () => Navigator.pop(ctx, 'sabbath_timer'),
+              ),
+              _MoreMenuRow(
+                icon: Icons.logout,
+                label: 'Sign out',
+                destructive: true,
+                onTap: () => Navigator.pop(ctx, 'sign_out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    switch (result) {
+      case 'settings':
+        context.pushNamed('settings');
+        break;
+      case 'notifications':
+        context.pushNamed('notification_preferences');
+        break;
+      case 'feedback':
+        context.pushNamed('feedback');
+        break;
+      case 'sabbath_timer':
+        context.pushNamed('sabbath_timer');
+        break;
+      case 'sign_out':
+        await _signOut();
+        break;
+    }
+  }
+
+  Widget _buildTabSelector() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          _TabPill(label: 'Posts', selected: _tabIndex == 0, onTap: () => setState(() => _tabIndex = 0)),
+          _TabPill(label: 'About', selected: _tabIndex == 1, onTap: () => setState(() => _tabIndex = 1)),
+          _TabPill(label: 'Photos', selected: _tabIndex == 2, onTap: () => setState(() => _tabIndex = 2)),
+          _TabPill(label: 'Churches', selected: _tabIndex == 3, onTap: () => setState(() => _tabIndex = 3)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabContent() {
+    switch (_tabIndex) {
+      case 0:
+        return _buildPostsTab();
+      case 1:
+        return _buildAboutTab();
+      case 2:
+        return _buildPhotosTab();
+      case 3:
+        return _buildChurchesTab();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildPostsTab() {
+    if (_myPosts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+        child: Text(
+          'You haven\'t posted anything yet.',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
+    final viewerId = AuthService.currentUser?.id;
+    return Column(
+      children: [
+        for (final post in _myPosts)
+          PostCard(
+            post: post,
+            viewerId: viewerId,
+            onLikeToggled: () {},
+            onCommentsTapped: () {},
+            onImageTapped: () async {
+              final url = post.imageUrl;
+              if (url == null || url.isEmpty) return;
+              await PostImageViewer.show(
+                context,
+                imageUrl: url,
+                heroTag: 'post_image_${post.id}',
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAboutTab() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildBioCard(),
+        ),
+        const SizedBox(height: 16),
+        _buildAccountCard(),
+        const SizedBox(height: 16),
+        const InviteFriendsCard(),
+      ],
+    );
+  }
+
+  Widget _buildPhotosTab() {
+    final withImages = _myPosts
+        .where((p) => (p.imageUrl ?? '').isNotEmpty)
+        .toList();
+    if (withImages.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+        child: Text(
+          'No photos yet — posts with images will show up here.',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        shrinkWrap: true,
+        itemCount: withImages.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 4,
+        ),
+        itemBuilder: (_, i) {
+          final post = withImages[i];
+          return GestureDetector(
+            onTap: () => PostImageViewer.show(
+              context,
+              imageUrl: post.imageUrl!,
+              heroTag: 'post_image_${post.id}',
+            ),
+            child: Hero(
+              tag: 'post_image_${post.id}',
+              child: Image.network(post.imageUrl!, fit: BoxFit.cover),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildChurchesTab() {
+    if (_myChurches.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+        child: Text(
+          'You haven\'t followed any churches yet.',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          for (final church in _myChurches)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color.fromRGBO(26, 26, 46, 0.06),
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => context.pushNamed(
+                    'church_details',
+                    pathParameters: {'id': church.id},
+                    extra: church,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.church,
+                            color: AppColors.white,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                church.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.titleMedium.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              if (church.city.isNotEmpty)
+                                Text(
+                                  church.city,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -345,49 +696,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildStats() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _StatTile(
-            value: _loading ? '…' : '$_churchesFollowed',
-            label: 'Churches',
-          ),
-          _verticalDivider(),
-          _StatTile(
-            value: _loading ? '…' : '$_eventsGoing',
-            label: 'Events',
-          ),
-          _verticalDivider(),
-          _StatTile(
-            value: _loading ? '…' : '$_prayersPraying',
-            label: 'Prayers',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _verticalDivider() {
-    return Container(
-      width: 1,
-      height: 40,
-      color: const Color.fromRGBO(26, 26, 46, 0.08),
-    );
-  }
-
   Widget _buildBioCard() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -515,6 +823,32 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ],
             ),
+            if (isBusiness) ...[
+              const SizedBox(height: 14),
+              ValueListenableBuilder<AppViewMode>(
+                valueListenable: AccountModeService.notifier,
+                builder: (ctx, mode, _) => _ModeSwitch(
+                  mode: mode,
+                  onChanged: (newMode) async {
+                    await AccountModeService.setMode(newMode);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppColors.primaryBlue,
+                        content: Text(
+                          newMode == AppViewMode.business
+                              ? 'Switched to Business view.'
+                              : 'Switched to Personal view. Business actions are hidden until you switch back.',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.white,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
             if (!isBusiness && !pending) ...[
               const SizedBox(height: 14),
               _ApplyBusinessButton(
@@ -578,143 +912,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     return 'Upgrade to a business account to sell or claim a church.';
   }
 
-  Widget _buildActionButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: _GradientButton(
-            label: 'Edit profile',
-            icon: Icons.edit_outlined,
-            onTap: () async {
-              await context.pushNamed('edit_profile');
-              if (mounted) setState(() {});
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        _IconButton(
-          icon: Icons.share_outlined,
-          onTap: () {},
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsList() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _SettingsRow(
-            icon: Icons.church_outlined,
-            label: 'My churches',
-            onTap: () => context.pushNamed('churches'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.event_outlined,
-            label: 'My events',
-            onTap: () => context.pushNamed('my_events'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.volunteer_activism_outlined,
-            label: 'My prayers',
-            onTap: () => context.pushNamed('prayer'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.chat_bubble_outline,
-            label: 'Advent Chat',
-            onTap: () => context.pushNamed('messages'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.work_outline,
-            label: 'Jobs',
-            onTap: () => context.pushNamed('jobs'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.storefront_outlined,
-            label: 'Marketplace',
-            onTap: () => context.pushNamed('marketplace'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.store_mall_directory_outlined,
-            label: 'My seller dashboard',
-            onTap: () => context.pushNamed('seller_dashboard'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.favorite_outline,
-            label: 'Saved listings',
-            onTap: () => context.pushNamed('saved_listings'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.people_outline,
-            label: 'Member directory',
-            onTap: () => context.pushNamed('member_directory'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.brightness_3_outlined,
-            label: 'Sabbath timer',
-            onTap: () => context.pushNamed('sabbath_timer'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.notifications_outlined,
-            label: 'Notifications',
-            onTap: () => context.pushNamed('notification_preferences'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.block_outlined,
-            label: 'Blocked users',
-            onTap: () => context.pushNamed('blocked_users'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.admin_panel_settings_outlined,
-            label: 'Church admin',
-            onTap: () => context.pushNamed('admin_login'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.shield_outlined,
-            label: 'Privacy & security',
-            onTap: () => context.pushNamed('settings'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.help_outline,
-            label: 'Help & support',
-            onTap: () => context.pushNamed('feedback'),
-          ),
-          const _Divider(),
-          _SettingsRow(
-            icon: Icons.logout,
-            label: 'Sign out',
-            destructive: true,
-            onTap: _signOut,
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _CoverClipper extends CustomClipper<Path> {
@@ -758,187 +955,6 @@ class _CircleIconButton extends StatelessWidget {
           ),
           child: Icon(icon, color: AppColors.white, size: 22),
         ),
-      ),
-    );
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.value, required this.label});
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: AppTextStyles.headlineMedium.copyWith(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primaryBlue,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label.toUpperCase(),
-            style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GradientButton extends StatelessWidget {
-  const _GradientButton({
-    required this.label,
-    required this.onTap,
-    this.icon,
-  });
-  final String label;
-  final IconData? icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.30),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, color: AppColors.white, size: 18),
-                  const SizedBox(width: 8),
-                ],
-                Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    fontSize: 14,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IconButton extends StatelessWidget {
-  const _IconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: 50,
-          height: 48,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.1),
-            ),
-          ),
-          child: Icon(icon, color: AppColors.textDark, size: 20),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = destructive ? AppColors.red : AppColors.textDark;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14.5,
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: color.withValues(alpha: 0.4),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18),
-      child: Divider(
-        height: 1,
-        color: Color.fromRGBO(26, 26, 46, 0.06),
       ),
     );
   }
@@ -1003,6 +1019,249 @@ class _ApplyBusinessButton extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({required this.mode, required this.onChanged});
+
+  final AppViewMode mode;
+  final ValueChanged<AppViewMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.lightGrey,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ModeSegment(
+              label: 'Personal',
+              icon: Icons.person,
+              selected: mode == AppViewMode.personal,
+              onTap: () => onChanged(AppViewMode.personal),
+            ),
+          ),
+          Expanded(
+            child: _ModeSegment(
+              label: 'Business',
+              icon: Icons.business_center,
+              selected: mode == AppViewMode.business,
+              onTap: () => onChanged(AppViewMode.business),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModeSegment extends StatelessWidget {
+  const _ModeSegment({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+          decoration: BoxDecoration(
+            gradient: selected ? AppColors.primaryGradient : null,
+            color: selected ? null : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: selected ? AppColors.white : AppColors.primaryBlue,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: selected ? AppColors.white : AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolbarButton extends StatelessWidget {
+  const _ToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.primary,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool primary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            gradient: primary ? AppColors.primaryGradient : null,
+            color: primary ? null : AppColors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: primary
+                ? null
+                : Border.all(color: const Color.fromRGBO(26, 26, 46, 0.10)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: primary ? 16 : 20,
+                color: primary ? AppColors.white : AppColors.primaryBlue,
+              ),
+              if (label.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: primary ? AppColors.white : AppColors.primaryBlue,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TabPill extends StatelessWidget {
+  const _TabPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: selected ? AppColors.primaryGradient : null,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: selected ? AppColors.white : AppColors.textDark,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreMenuRow extends StatelessWidget {
+  const _MoreMenuRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? AppColors.red : AppColors.textDark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 14),
+              Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

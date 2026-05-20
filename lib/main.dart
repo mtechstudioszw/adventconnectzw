@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'config/router_config.dart';
+import 'services/account_mode_service.dart';
 import 'services/ads_service.dart';
 import 'services/analytics_service.dart';
 import 'services/cache_service.dart';
@@ -31,6 +32,11 @@ void main() async {
   // AdMob — load the SDK early so the first banner request on the
   // home screen has the SDK ready when the screen mounts.
   await AdsService.initialize();
+
+  // Read the user's last chosen view mode (personal / business). Cheap
+  // disk read, must finish before the first widget builds because the
+  // profile screen reads it synchronously.
+  await AccountModeService.init();
 
   await Supabase.initialize(
     url: SupabaseConfig.url,

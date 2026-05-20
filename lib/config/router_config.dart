@@ -61,6 +61,7 @@ import '../screens/profile/feedback_screen.dart';
 import '../screens/profile/apply_business_screen.dart';
 import '../screens/profile/notification_centre_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/users/user_profile_screen.dart';
 import '../screens/seller/edit_store_screen.dart';
 import '../screens/seller/manage_products_screen.dart';
 import '../screens/seller/seller_dashboard_screen.dart';
@@ -399,6 +400,13 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const ApplyBusinessScreen(),
         ),
       ],
+    ),
+    GoRoute(
+      path: '/users/:userId',
+      name: 'user_profile',
+      builder: (context, state) => UserProfileScreen(
+        userId: state.pathParameters['userId'] ?? '',
+      ),
     ),
     GoRoute(
       path: '/directory',

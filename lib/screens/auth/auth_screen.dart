@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -121,14 +122,27 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _checking = true);
     final exists = await AuthService.emailExists(email);
     if (!mounted) return;
+    // Detection rules:
+    //   true  -> account confirmed -> login stage
+    //   false -> no account        -> signup stage
+    //   null  -> RPC missing       -> default to SIGNUP so we don't
+    //                                 dead-end a new user on a password
+    //                                 prompt for an account they don't
+    //                                 have. If they actually had an
+    //                                 account, Supabase will reject the
+    //                                 signup with "already registered"
+    //                                 and _onSignup auto-swaps to login.
+    final next = switch (exists) {
+      true => _Stage.login,
+      false => _Stage.signup,
+      null => _Stage.signup,
+    };
     setState(() {
       _checking = false;
       _detectionAmbiguous = exists == null;
-      _stage = exists == false ? _Stage.signup : _Stage.login;
+      _stage = next;
     });
     HapticFeedback.selectionClick();
-    // Focus the right next field — name when signing up, password when
-    // logging in.
     Future.delayed(const Duration(milliseconds: 280), () {
       if (!mounted) return;
       if (_stage == _Stage.signup) {
@@ -199,6 +213,26 @@ class _AuthScreenState extends State<AuthScreen>
         'email_verification',
         extra: _emailController.text.trim(),
       );
+      return;
+    }
+    // If Supabase tells us the email is already registered, flip the
+    // screen to the login stage so the user can just sign in instead
+    // of seeing a generic error.
+    final message = (result.errorMessage ?? '').toLowerCase();
+    if (message.contains('already exists') ||
+        message.contains('already registered') ||
+        message.contains('try logging in')) {
+      setState(() {
+        _stage = _Stage.login;
+        _passwordController.clear();
+        _confirmController.clear();
+        _error =
+            'Looks like you already have an account — enter your password '
+            'to log in.';
+      });
+      Future.delayed(const Duration(milliseconds: 280), () {
+        if (mounted) _passwordFocus.requestFocus();
+      });
       return;
     }
     setState(() => _error = result.errorMessage);
@@ -483,7 +517,10 @@ class _AuthScreenState extends State<AuthScreen>
       key: const ValueKey('stage-login'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _EmailRow(email: _emailController.text.trim()),
+        _EmailRow(
+          email: _emailController.text.trim(),
+          onEdit: _changeEmail,
+        ),
         const SizedBox(height: 14),
         _GlowField(
           controller: _passwordController,
@@ -535,7 +572,10 @@ class _AuthScreenState extends State<AuthScreen>
       key: const ValueKey('stage-signup'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _EmailRow(email: _emailController.text.trim()),
+        _EmailRow(
+          email: _emailController.text.trim(),
+          onEdit: _changeEmail,
+        ),
         const SizedBox(height: 14),
         _GlowField(
           controller: _nameController,
@@ -899,124 +939,166 @@ class _GlowFieldState extends State<_GlowField> {
 }
 
 class _EmailRow extends StatelessWidget {
-  const _EmailRow({required this.email});
+  const _EmailRow({required this.email, required this.onEdit});
   final String email;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: AppColors.primaryBlue.withValues(alpha: 0.18),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.check_circle,
-            color: AppColors.primaryBlue,
-            size: 20,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              email,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.darkNavy,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TermsCheckbox extends StatelessWidget {
-  const _TermsCheckbox({required this.value, required this.onChanged});
-  final bool value;
-  final ValueChanged<bool?> onChanged;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(26, 26, 46, 0.03),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.10),
+            ),
+          ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: value ? AppColors.primaryBlue : AppColors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: value
-                        ? AppColors.primaryBlue
-                        : const Color.fromRGBO(26, 26, 46, 0.25),
-                    width: 1.5,
+              const Icon(
+                Icons.alternate_email,
+                color: Color.fromRGBO(26, 26, 46, 0.55),
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.darkNavy,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                alignment: Alignment.center,
-                child: value
-                    ? const Icon(
-                        Icons.check,
-                        size: 14,
-                        color: AppColors.white,
-                      )
-                    : null,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 1),
-                  child: Text.rich(
-                    TextSpan(
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.7),
-                        fontSize: 13,
-                        height: 1.45,
-                      ),
-                      children: [
-                        const TextSpan(text: 'I agree to the '),
-                        TextSpan(
-                          text: 'Terms & Conditions',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const TextSpan(text: ' and '),
-                        TextSpan(
-                          text: 'Privacy Policy',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const TextSpan(text: '.'),
-                      ],
-                    ),
-                  ),
+              Text(
+                'Change',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TermsCheckbox extends StatefulWidget {
+  const _TermsCheckbox({required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  State<_TermsCheckbox> createState() => _TermsCheckboxState();
+}
+
+class _TermsCheckboxState extends State<_TermsCheckbox> {
+  late final TapGestureRecognizer _termsTap;
+  late final TapGestureRecognizer _privacyTap;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsTap = TapGestureRecognizer()
+      ..onTap = () => context.pushNamed('terms');
+    _privacyTap = TapGestureRecognizer()
+      ..onTap = () => context.pushNamed('privacy');
+  }
+
+  @override
+  void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final linkStyle = AppTextStyles.bodySmall.copyWith(
+      color: AppColors.primaryBlue,
+      fontWeight: FontWeight.w700,
+      fontSize: 13,
+      decoration: TextDecoration.underline,
+      decorationColor: AppColors.primaryBlue.withValues(alpha: 0.4),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () => widget.onChanged(!widget.value),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color:
+                    widget.value ? AppColors.primaryBlue : AppColors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: widget.value
+                      ? AppColors.primaryBlue
+                      : const Color.fromRGBO(26, 26, 46, 0.25),
+                  width: 1.5,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: widget.value
+                  ? const Icon(
+                      Icons.check,
+                      size: 14,
+                      color: AppColors.white,
+                    )
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Text.rich(
+                TextSpan(
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.7),
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: 'I agree to the ',
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = () => widget.onChanged(!widget.value),
+                    ),
+                    TextSpan(
+                      text: 'Terms & Conditions',
+                      style: linkStyle,
+                      recognizer: _termsTap,
+                    ),
+                    const TextSpan(text: ' and '),
+                    TextSpan(
+                      text: 'Privacy Policy',
+                      style: linkStyle,
+                      recognizer: _privacyTap,
+                    ),
+                    const TextSpan(text: '.'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1119,21 +1201,67 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-class _LegalLine extends StatelessWidget {
+class _LegalLine extends StatefulWidget {
+  @override
+  State<_LegalLine> createState() => _LegalLineState();
+}
+
+class _LegalLineState extends State<_LegalLine> {
+  late final TapGestureRecognizer _termsTap;
+  late final TapGestureRecognizer _privacyTap;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsTap = TapGestureRecognizer()
+      ..onTap = () => context.pushNamed('terms');
+    _privacyTap = TapGestureRecognizer()
+      ..onTap = () => context.pushNamed('privacy');
+  }
+
+  @override
+  void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final base = AppTextStyles.labelSmall.copyWith(
+      color: const Color.fromRGBO(26, 26, 46, 0.5),
+      fontSize: 11,
+      height: 1.45,
+    );
+    final link = base.copyWith(
+      color: AppColors.primaryBlue,
+      fontWeight: FontWeight.w700,
+      decoration: TextDecoration.underline,
+      decorationColor: AppColors.primaryBlue.withValues(alpha: 0.4),
+    );
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Text(
-          'By continuing you agree to the Advent Connect ZW Terms & '
-          'Conditions and Privacy Policy.',
-          textAlign: TextAlign.center,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.5),
-            fontSize: 11,
-            height: 1.45,
+        child: Text.rich(
+          TextSpan(
+            style: base,
+            children: [
+              const TextSpan(text: 'By continuing you agree to the '),
+              TextSpan(
+                text: 'Terms & Conditions',
+                style: link,
+                recognizer: _termsTap,
+              ),
+              const TextSpan(text: ' and '),
+              TextSpan(
+                text: 'Privacy Policy',
+                style: link,
+                recognizer: _privacyTap,
+              ),
+              const TextSpan(text: '.'),
+            ],
           ),
+          textAlign: TextAlign.center,
         ),
       ),
     );

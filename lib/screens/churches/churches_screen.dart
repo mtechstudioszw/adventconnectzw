@@ -26,8 +26,12 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   List<String> _cities = [];
   String? _selectedCity;
   bool _loading = true;
+  bool _locating = false;
+  bool _nearMode = false;
   String? _error;
+  String? _locationError;
   Position? _position;
+  static const _nearMeLimit = 5;
 
   @override
   void initState() {
@@ -94,6 +98,67 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     return LocationService.formatDistance(m);
   }
 
+  /// Visible list — when "Near me" is active and we have a location,
+  /// trims to the closest [_nearMeLimit] churches that actually carry
+  /// lat/lng. Falls back to the full list otherwise so the screen
+  /// never looks empty just because location is unavailable.
+  List<Church> _visibleChurches() {
+    if (!_nearMode) return _churches;
+    final pos = _position;
+    if (pos == null) return _churches;
+    final geo = _churches.where((c) => c.hasLocation).toList();
+    if (geo.isEmpty) return _churches;
+    geo.sort((a, b) {
+      final ad = LocationService.distanceMeters(
+        fromLat: pos.latitude,
+        fromLng: pos.longitude,
+        toLat: a.latitude!,
+        toLng: a.longitude!,
+      );
+      final bd = LocationService.distanceMeters(
+        fromLat: pos.latitude,
+        fromLng: pos.longitude,
+        toLat: b.latitude!,
+        toLng: b.longitude!,
+      );
+      return ad.compareTo(bd);
+    });
+    return geo.take(_nearMeLimit).toList();
+  }
+
+  /// Toggle the "5 churches near me" filter. When turning ON, fetch a
+  /// fresh location (the bootstrap one may be stale or denied). When
+  /// turning OFF, just go back to the full list.
+  Future<void> _toggleNearMe() async {
+    if (_nearMode) {
+      setState(() {
+        _nearMode = false;
+        _locationError = null;
+      });
+      return;
+    }
+    setState(() {
+      _locating = true;
+      _locationError = null;
+    });
+    final pos = await LocationService.getCurrentPosition();
+    if (!mounted) return;
+    if (pos == null) {
+      setState(() {
+        _locating = false;
+        _locationError =
+            'Couldn\'t get your location. Check location permission and try again.';
+      });
+      return;
+    }
+    setState(() {
+      _position = pos;
+      _locating = false;
+      _nearMode = true;
+      _sortByDistance();
+    });
+  }
+
   Future<void> _loadCities() async {
     try {
       final cities = await ChurchService.fetchAvailableCities();
@@ -144,7 +209,9 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       body: Column(
         children: [
           _buildSearchBar(),
+          _buildNearMeRow(),
           if (_cities.isNotEmpty) _buildCityFilters(),
+          if (_locationError != null) _buildLocationErrorBanner(),
           Expanded(child: _buildList()),
           const AdBanner(),
         ],
@@ -180,6 +247,142 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           filled: true,
           fillColor: AppColors.white,
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNearMeRow() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _locating ? null : _toggleNearMe,
+          borderRadius: BorderRadius.circular(22),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: _nearMode ? AppColors.primaryGradient : null,
+              color: _nearMode ? null : AppColors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: _nearMode
+                    ? AppColors.primaryBlue
+                    : AppColors.primaryBlue.withValues(alpha: 0.25),
+                width: 1.4,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(
+                    alpha: _nearMode ? 0.25 : 0.08,
+                  ),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                _locating
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: AppColors.primaryBlue,
+                        ),
+                      )
+                    : Icon(
+                        _nearMode
+                            ? Icons.my_location
+                            : Icons.location_searching,
+                        color: _nearMode
+                            ? AppColors.white
+                            : AppColors.primaryBlue,
+                        size: 20,
+                      ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _nearMode
+                            ? 'Showing churches near you'
+                            : 'Find churches near me',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: _nearMode
+                              ? AppColors.white
+                              : AppColors.darkNavy,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        _nearMode
+                            ? 'Tap to clear and see all churches'
+                            : 'We\'ll use your location to list the 5 closest',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: _nearMode
+                              ? AppColors.white.withValues(alpha: 0.85)
+                              : const Color.fromRGBO(26, 26, 46, 0.6),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  _nearMode ? Icons.close : Icons.chevron_right_rounded,
+                  color: _nearMode
+                      ? AppColors.white
+                      : AppColors.primaryBlue,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationErrorBanner() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.red.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: AppColors.red,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _locationError!,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.red,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -295,13 +498,14 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       );
     }
 
+    final list = _visibleChurches();
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: _churches.length,
+      itemCount: list.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
-        final c = _churches[i];
+        final c = list[i];
         return ChurchCard(
           church: c,
           distanceLabel: _distanceLabelFor(c),

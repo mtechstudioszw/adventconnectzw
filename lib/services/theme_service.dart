@@ -5,8 +5,10 @@ import 'secure_storage_service.dart';
 
 /// User-chosen colour scheme — mirrors Flutter's [ThemeMode] but lives
 /// in secure storage so it survives a relaunch. The default is
-/// [ThemeMode.system] so users on a dark phone get a dark app right
-/// out of the box; settings can override either way.
+/// [ThemeMode.light] — the app's brand palette is light-first and most
+/// widgets still reference hard-coded `AppColors` values that don't
+/// repaint cleanly in dark mode. Users on a dark phone can still flip
+/// to dark via Settings; we just don't follow the system by default.
 ///
 /// NOTE: This wires the toggle, but many widgets in the app still
 /// reference hard-coded colours from [AppColors] (white, lightGrey,
@@ -19,9 +21,9 @@ class ThemeService {
 
   static const _storageKey = 'app_theme_mode_v1';
 
-  static ThemeMode _current = ThemeMode.system;
+  static ThemeMode _current = ThemeMode.light;
   static final ValueNotifier<ThemeMode> _notifier =
-      ValueNotifier(ThemeMode.system);
+      ValueNotifier(ThemeMode.light);
   static bool _initialized = false;
 
   /// Read the saved choice once at startup. Cheap secure-storage read;
@@ -53,8 +55,9 @@ class ThemeService {
       case 'light':
         return ThemeMode.light;
       case 'system':
-      default:
         return ThemeMode.system;
+      default:
+        return ThemeMode.light;
     }
   }
 

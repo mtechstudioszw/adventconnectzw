@@ -592,6 +592,7 @@ class _HomeScreenState extends State<HomeScreen>
               initials: _initials(),
               fullName: _displayFullName(),
               followedCount: _followedChurchIds.length,
+              photoUrl: _profilePhotoUrl(),
             ),
           ),
         ],
@@ -605,6 +606,14 @@ class _HomeScreenState extends State<HomeScreen>
     final raw = (meta['full_name'] as String?)?.trim() ?? '';
     if (raw.isNotEmpty) return raw;
     return user?.email ?? 'Welcome';
+  }
+
+  String? _profilePhotoUrl() {
+    final user = AuthService.currentUser;
+    final meta = user?.userMetadata ?? const {};
+    final raw = (meta['profile_photo_url'] as String?)?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    return raw;
   }
 
   Widget _buildSectionHeader(
@@ -1598,11 +1607,13 @@ class _WelcomeCard extends StatelessWidget {
     required this.initials,
     required this.fullName,
     required this.followedCount,
+    required this.photoUrl,
   });
 
   final String initials;
   final String fullName;
   final int followedCount;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -1624,9 +1635,11 @@ class _WelcomeCard extends StatelessWidget {
           Container(
             width: 56,
             height: 56,
+            clipBehavior: Clip.antiAlias,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
+              gradient: photoUrl == null ? AppColors.primaryGradient : null,
+              color: photoUrl == null ? null : AppColors.lightGrey,
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.white, width: 3),
               boxShadow: [
@@ -1637,15 +1650,29 @@ class _WelcomeCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: Text(
-              initials,
-              style: AppTextStyles.titleLarge.copyWith(
-                color: AppColors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-                letterSpacing: 0.4,
-              ),
-            ),
+            child: photoUrl == null
+                ? Text(
+                    initials,
+                    style: AppTextStyles.titleLarge.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      letterSpacing: 0.4,
+                    ),
+                  )
+                : Image.network(
+                    photoUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Text(
+                      initials,
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
           ),
           const SizedBox(width: 14),
           Expanded(

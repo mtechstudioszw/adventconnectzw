@@ -45,9 +45,11 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
   String? _selectedCategory;
   String? _selectedProvince;
   String? _photoUrl;
+  String? _coverUrl;
   bool _offersDelivery = false;
   bool _observesSabbath = false;
   bool _uploading = false;
+  bool _uploadingCover = false;
   bool _saving = false;
   String? _error;
 
@@ -126,6 +128,25 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
     }
   }
 
+  Future<void> _pickCoverPhoto() async {
+    if (_uploadingCover) return;
+    setState(() {
+      _uploadingCover = true;
+      _error = null;
+    });
+    try {
+      final url = await StorageService.pickAndUploadCoverPhoto();
+      if (!mounted) return;
+      if (url != null) setState(() => _coverUrl = url);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload background. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingCover = false);
+    }
+  }
+
   Future<void> _submit() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
@@ -152,6 +173,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
         whatsapp: _whatsappController.text,
         contactName: _contactNameController.text,
         profilePhotoUrl: _photoUrl,
+        coverPhotoUrl: _coverUrl,
         paymentMethods: _paymentMethodsController.text,
         offersDelivery: _offersDelivery,
         deliveryArea: _offersDelivery ? _deliveryAreaController.text : null,
@@ -215,6 +237,12 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
                               photoUrl: _photoUrl,
                               uploading: _uploading,
                               onTap: _pickPhoto,
+                            ),
+                            const SizedBox(height: 14),
+                            _CoverTile(
+                              photoUrl: _coverUrl,
+                              uploading: _uploadingCover,
+                              onTap: _pickCoverPhoto,
                             ),
                             const SizedBox(height: 18),
                             _LabeledField(
@@ -1075,6 +1103,86 @@ class _PhotoTile extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CoverTile extends StatelessWidget {
+  const _CoverTile({
+    required this.photoUrl,
+    required this.uploading,
+    required this.onTap,
+  });
+
+  final String? photoUrl;
+  final bool uploading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = photoUrl != null && photoUrl!.isNotEmpty;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: uploading ? null : onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: 110,
+          decoration: BoxDecoration(
+            color: AppColors.lightGrey,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.08),
+            ),
+            image: hasPhoto
+                ? DecorationImage(
+                    image: NetworkImage(photoUrl!),
+                    fit: BoxFit.cover,
+                  )
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: uploading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: AppColors.primaryBlue,
+                  ),
+                )
+              : Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.image_outlined,
+                        color: AppColors.primaryBlue,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        hasPhoto
+                            ? 'Change background photo'
+                            : 'Add background photo',
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ),
     );
   }
 }

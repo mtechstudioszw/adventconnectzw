@@ -27,8 +27,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   List<Church> _churches = [];
   String? _selectedChurchId;
   String? _profilePhotoUrl;
+  String? _coverPhotoUrl;
   bool _saving = false;
   bool _uploadingPhoto = false;
+  bool _uploadingCover = false;
   bool _loadingChurches = true;
   String? _error;
 
@@ -49,6 +51,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     _bioController.text = (meta['bio'] as String?) ?? '';
     _selectedChurchId = (meta['church_id'] as String?);
     _profilePhotoUrl = (meta['profile_photo_url'] as String?);
+    _coverPhotoUrl = (meta['cover_photo_url'] as String?);
     _loadChurches();
   }
 
@@ -95,6 +98,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       bio: _bioController.text.trim(),
       churchId: _selectedChurchId,
       profilePhotoUrl: _profilePhotoUrl,
+      coverPhotoUrl: _coverPhotoUrl,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -155,6 +159,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _buildPhotoUploader(),
+                      const SizedBox(height: 16),
+                      _buildCoverUploader(),
                       const SizedBox(height: 16),
                       _buildFieldsCard(),
                       if (_error != null) ...[
@@ -281,6 +287,27 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     }
   }
 
+  Future<void> _pickCoverPhoto() async {
+    if (_uploadingCover) return;
+    setState(() {
+      _uploadingCover = true;
+      _error = null;
+    });
+    try {
+      final url = await StorageService.pickAndUploadCoverPhoto();
+      if (!mounted) return;
+      if (url != null) {
+        setState(() => _coverPhotoUrl = url);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload background. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingCover = false);
+    }
+  }
+
   Widget _buildPhotoUploader() {
     final hasPhoto =
         _profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty;
@@ -352,6 +379,93 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             label: hasPhoto ? 'Change' : 'Upload',
             busy: _uploadingPhoto,
             onTap: _pickProfilePhoto,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoverUploader() {
+    final hasCover =
+        _coverPhotoUrl != null && _coverPhotoUrl!.isNotEmpty;
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: hasCover
+                ? Image.network(
+                    _coverPhotoUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: AppColors.lightGrey,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.broken_image_outlined,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                  )
+                : Container(
+                    decoration: const BoxDecoration(
+                      gradient: AppColors.appBarGradient,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.image_outlined,
+                      color: AppColors.white.withValues(alpha: 0.7),
+                      size: 36,
+                    ),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Background photo',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        hasCover
+                            ? 'Looking good. Tap change to swap it.'
+                            : 'Add a cover photo for the top of your profile.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color:
+                              const Color.fromRGBO(26, 26, 46, 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _UploadButton(
+                  label: hasCover ? 'Change' : 'Upload',
+                  busy: _uploadingCover,
+                  onTap: _pickCoverPhoto,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -564,62 +678,349 @@ class _ChurchDropdown extends StatelessWidget {
         ),
       );
     }
-    return DropdownButtonFormField<String?>(
-      initialValue: churches.any((c) => c.id == selectedId) ? selectedId : null,
-      isExpanded: true,
-      icon: const Icon(
-        Icons.expand_more,
-        color: Color.fromRGBO(26, 26, 46, 0.5),
+    final selected = churches.firstWhere(
+      (c) => c.id == selectedId,
+      orElse: () => const Church(
+        id: '',
+        name: '',
+        city: '',
+        membersCount: 0,
       ),
-      style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
-      decoration: InputDecoration(
-        prefixIcon: const Padding(
-          padding: EdgeInsets.only(left: 14, right: 10),
-          child: Icon(
-            Icons.church_outlined,
-            color: AppColors.primaryBlue,
-            size: 20,
-          ),
-        ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 44, minHeight: 44),
-        filled: true,
-        fillColor: AppColors.lightGrey,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
-        ),
-      ),
-      hint: Text(
-        'Choose your home church',
-        style: AppTextStyles.bodyLarge.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.5),
-          fontSize: 15,
-        ),
-      ),
-      items: [
-        const DropdownMenuItem<String?>(value: null, child: Text('No church')),
-        for (final c in churches)
-          DropdownMenuItem<String?>(
-            value: c.id,
-            child: Text(
-              '${c.name} • ${c.city}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    );
+    final hasSelection = selected.id.isNotEmpty;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          final picked = await showModalBottomSheet<String?>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) => _ChurchPickerSheet(
+              churches: churches,
+              selectedId: selectedId,
+            ),
+          );
+          // null = sheet was dismissed (no change). The sheet returns
+          // an empty string when the user picks "No church" so we can
+          // distinguish that from a dismiss.
+          if (picked == null) return;
+          onChanged(picked.isEmpty ? null : picked);
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.lightGrey,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.06),
             ),
           ),
-      ],
-      onChanged: onChanged,
+          child: Row(
+            children: [
+              const Icon(
+                Icons.church_outlined,
+                color: AppColors.primaryBlue,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  hasSelection
+                      ? '${selected.name} • ${selected.city}'
+                      : 'Choose your home church',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontSize: 15,
+                    color: hasSelection
+                        ? AppColors.textDark
+                        : const Color.fromRGBO(26, 26, 46, 0.5),
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.expand_more,
+                color: Color.fromRGBO(26, 26, 46, 0.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChurchPickerSheet extends StatefulWidget {
+  const _ChurchPickerSheet({
+    required this.churches,
+    required this.selectedId,
+  });
+
+  final List<Church> churches;
+  final String? selectedId;
+
+  @override
+  State<_ChurchPickerSheet> createState() => _ChurchPickerSheetState();
+}
+
+class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
+  late final TextEditingController _searchController;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Church> get _filtered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return widget.churches;
+    return widget.churches.where((c) {
+      return c.name.toLowerCase().contains(q) ||
+          c.city.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets.bottom;
+    final filtered = _filtered;
+    return Padding(
+      padding: EdgeInsets.only(bottom: viewInsets),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (ctx, scrollController) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppColors.white,
+              borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Choose your home church',
+                    style: AppTextStyles.titleLarge.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (v) => setState(() => _query = v),
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    style:
+                        AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: 'Search by name or city',
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(
+                        color:
+                            const Color.fromRGBO(26, 26, 46, 0.45),
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        color: AppColors.primaryBlue,
+                      ),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(
+                                Icons.close,
+                                color: Color.fromRGBO(
+                                    26, 26, 46, 0.5),
+                                size: 18,
+                              ),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _query = '');
+                              },
+                            ),
+                      filled: true,
+                      fillColor: AppColors.lightGrey,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: filtered.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              _query.isEmpty
+                                  ? 'No churches loaded yet.'
+                                  : 'No matches for "$_query".',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: const Color.fromRGBO(
+                                    26, 26, 46, 0.6),
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(
+                              8, 4, 8, 24),
+                          itemCount: filtered.length + 1,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 2),
+                          itemBuilder: (ctx, i) {
+                            if (i == 0) {
+                              final selected =
+                                  widget.selectedId == null ||
+                                      widget.selectedId!.isEmpty;
+                              return _PickerRow(
+                                title: 'No church',
+                                subtitle: 'Skip choosing a home church',
+                                selected: selected,
+                                onTap: () =>
+                                    Navigator.of(ctx).pop(''),
+                              );
+                            }
+                            final c = filtered[i - 1];
+                            return _PickerRow(
+                              title: c.name,
+                              subtitle: c.city,
+                              selected: c.id == widget.selectedId,
+                              onTap: () =>
+                                  Navigator.of(ctx).pop(c.id),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PickerRow extends StatelessWidget {
+  const _PickerRow({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primaryBlue.withValues(alpha: 0.08)
+                : null,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: selected
+                      ? AppColors.primaryGradient
+                      : null,
+                  color: selected ? null : AppColors.lightGrey,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.church,
+                  color: selected
+                      ? AppColors.white
+                      : AppColors.primaryBlue,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: const Color.fromRGBO(
+                              26, 26, 46, 0.6),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.primaryBlue,
+                  size: 22,
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

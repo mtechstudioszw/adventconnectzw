@@ -4,16 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
-import 'widgets/auth_hero.dart';
 
 /// Shown immediately after a successful signup. Supabase sends the
-/// confirmation email itself — this screen surfaces that, lets the user
-/// resend, and watches for the signed-in auth event so it can advance
-/// the moment they tap the email link on the same device.
+/// confirmation code itself — this screen surfaces that, lets the user
+/// resend, opens the system email app, and verifies the 6-digit code.
+/// It also listens for the signed-in auth event so it can advance the
+/// moment a user taps the email link on the same device (older flow).
 class EmailVerificationScreen extends StatefulWidget {
   const EmailVerificationScreen({super.key, required this.email});
 
@@ -25,10 +26,12 @@ class EmailVerificationScreen extends StatefulWidget {
 }
 
 class _EmailVerificationScreenState extends State<EmailVerificationScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _entrance;
+  late final AnimationController _pulse;
   late final Animation<double> _fade;
   late final Animation<double> _slide;
+  late final Animation<double> _iconScale;
 
   StreamSubscription<AuthState>? _authSub;
   Timer? _cooldownTimer;
@@ -48,10 +51,19 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
     _slide = Tween<double>(begin: 16, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
+      CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic),
+    );
+    _iconScale = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _entrance, curve: Curves.elasticOut),
     );
 
-    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat(reverse: true);
+
+    _authSub =
+        Supabase.instance.client.auth.onAuthStateChange.listen((state) {
       // Supabase fires signedIn when the user taps the magic link
       // from the confirmation email on the same device. At that point
       // emailConfirmedAt is populated — advance to profile setup.
@@ -65,14 +77,53 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   @override
   void dispose() {
     _entrance.dispose();
+    _pulse.dispose();
     _authSub?.cancel();
     _cooldownTimer?.cancel();
     _otpController.dispose();
     super.dispose();
   }
 
+  String _maskedEmail() {
+    final raw = widget.email.trim();
+    final at = raw.indexOf('@');
+    if (at < 2) return raw;
+    final local = raw.substring(0, at);
+    final domain = raw.substring(at);
+    if (local.length <= 2) return '${local[0]}•$domain';
+    final first = local[0];
+    final last = local[local.length - 1];
+    final dots = '•' * (local.length - 2).clamp(2, 6);
+    return '$first$dots$last$domain';
+  }
+
+  Future<void> _openEmailApp() async {
+    HapticFeedback.selectionClick();
+    // mailto: with no recipient opens the system email app on most
+    // platforms — better than a hardcoded provider-specific scheme
+    // which only works if the user has that exact app installed.
+    final uri = Uri(scheme: 'mailto', path: '');
+    try {
+      final ok = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!ok && mounted) {
+        setState(() => _info =
+            'Open your email app manually and look for the code.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _info =
+            'Couldn\'t open the email app automatically — please open '
+            'it manually.');
+      }
+    }
+  }
+
   Future<void> _resend() async {
     if (_resending || _cooldown > 0) return;
+    HapticFeedback.selectionClick();
     setState(() {
       _resending = true;
       _info = null;
@@ -117,11 +168,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     });
   }
 
-  /// Verify the 6-digit code Supabase emailed to the user. This is the
-  /// only path through verification — the older "tap the link" flow is
-  /// kept for users who really do click the email link (the auth state
-  /// listener picks that up), but the primary surface now is the OTP
-  /// input below.
+  void _changeEmail() {
+    HapticFeedback.selectionClick();
+    context.goNamed('signup');
+  }
+
   Future<void> _verifyCode() async {
     if (_checking) return;
     final token = _otpController.text.trim();
@@ -140,6 +191,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     );
     if (!mounted) return;
     if (result.isSuccess) {
+      HapticFeedback.mediumImpact();
       context.goNamed('profile_setup');
       return;
     }
@@ -153,225 +205,334 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            AuthHero(
-              title: 'Verify your email',
-              subtitle: 'We sent a confirmation link to your inbox.',
-              tagline: 'One more step',
-              onBack: () => context.canPop()
-                  ? context.pop()
-                  : context.goNamed('login'),
-            ),
-            AnimatedBuilder(
-              animation: _entrance,
-              builder: (context, child) => Opacity(
-                opacity: _fade.value,
-                child: Transform.translate(
-                  offset: Offset(0, _slide.value),
-                  child: child,
-                ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          child: AnimatedBuilder(
+            animation: _entrance,
+            builder: (context, child) => Opacity(
+              opacity: _fade.value,
+              child: Transform.translate(
+                offset: Offset(0, _slide.value),
+                child: child,
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _EnvelopeCard(email: widget.email),
-                    const SizedBox(height: 18),
-                    _OtpCard(
-                      controller: _otpController,
-                      onSubmit: _verifyCode,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _TopBar(onBack: () => context.canPop()
+                    ? context.pop()
+                    : context.goNamed('signup')),
+                const SizedBox(height: 8),
+                _SuccessRing(scale: _iconScale, pulse: _pulse),
+                const SizedBox(height: 28),
+                Text(
+                  'Verify your email',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.displayMedium.copyWith(
+                    color: AppColors.darkNavy,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'We sent a 6-digit verification code to your email '
+                    'address.',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.65),
+                      fontSize: 14,
+                      height: 1.5,
                     ),
-                    if (_info != null) ...[
-                      const SizedBox(height: 16),
-                      _InfoBanner(message: _info!),
-                    ],
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      _ErrorBanner(message: _error!),
-                    ],
-                    const SizedBox(height: 24),
-                    _GradientButton(
-                      label: _checking ? 'Verifying...' : 'Verify code',
-                      busy: _checking,
-                      onTap: _checking ? null : _verifyCode,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
                     ),
-                    const SizedBox(height: 12),
-                    _OutlineButton(
-                      label: _cooldown > 0
-                          ? 'Resend in $_cooldown s'
-                          : (_resending
-                              ? 'Sending...'
-                              : 'Resend confirmation email'),
-                      onTap: (_cooldown > 0 || _resending) ? null : _resend,
-                    ),
-                    const SizedBox(height: 18),
-                    Center(
-                      child: TextButton(
-                        onPressed: () => context.goNamed('login'),
-                        child: Text(
-                          'Back to sign in',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color:
+                            AppColors.primaryBlue.withValues(alpha: 0.18),
                       ),
                     ),
-                  ],
+                    child: Text(
+                      _maskedEmail(),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.darkNavy,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 28),
+                _OtpField(
+                  controller: _otpController,
+                  onSubmit: _verifyCode,
+                ),
+                if (_info != null) ...[
+                  const SizedBox(height: 14),
+                  _InfoBanner(message: _info!),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 14),
+                  _ErrorBanner(message: _error!),
+                ],
+                const SizedBox(height: 24),
+                _PrimaryButton(
+                  label: _checking ? 'Verifying…' : 'Verify code',
+                  busy: _checking,
+                  onTap: _checking ? null : _verifyCode,
+                ),
+                const SizedBox(height: 12),
+                _SecondaryButton(
+                  icon: Icons.mark_email_unread_outlined,
+                  label: 'Open Email App',
+                  onTap: _openEmailApp,
+                ),
+                const SizedBox(height: 18),
+                Center(
+                  child: TextButton(
+                    onPressed:
+                        (_cooldown > 0 || _resending) ? null : _resend,
+                    child: Text(
+                      _cooldown > 0
+                          ? 'Resend in $_cooldown s'
+                          : (_resending ? 'Sending…' : 'Resend email'),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: (_cooldown > 0 || _resending)
+                            ? const Color.fromRGBO(26, 26, 46, 0.45)
+                            : AppColors.primaryBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: TextButton(
+                    onPressed: _changeEmail,
+                    child: Text(
+                      'Change email',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _EnvelopeCard extends StatelessWidget {
-  const _EnvelopeCard({required this.email});
-  final String email;
+// =============================================================================
+// Sub-widgets
+// =============================================================================
+
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.onBack});
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      color: AppColors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Container(
-              width: 72,
-              height: 72,
+    return Row(
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onBack,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                shape: BoxShape.circle,
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color.fromRGBO(26, 26, 46, 0.08),
+                ),
               ),
               child: const Icon(
-                Icons.mark_email_unread_outlined,
-                color: AppColors.primaryBlue,
-                size: 36,
+                Icons.arrow_back_ios_new,
+                size: 14,
+                color: AppColors.darkNavy,
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Check your inbox',
-              style: AppTextStyles.headlineSmall.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SuccessRing extends StatelessWidget {
+  const _SuccessRing({required this.scale, required this.pulse});
+  final Animation<double> scale;
+  final AnimationController pulse;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: AnimatedBuilder(
+        animation: Listenable.merge([scale, pulse]),
+        builder: (context, _) {
+          final s = scale.value.clamp(0.0, 1.0);
+          // Two halo rings that grow and fade as the controller cycles —
+          // gives the icon a calm "we're listening" pulse.
+          final t = pulse.value;
+          return SizedBox(
+            width: 180,
+            height: 180,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                _Halo(progress: t),
+                _Halo(progress: (t + 0.5) % 1.0),
+                Transform.scale(
+                  scale: s,
+                  child: Container(
+                    width: 108,
+                    height: 108,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryBlue
+                              .withValues(alpha: 0.36),
+                          blurRadius: 32,
+                          offset: const Offset(0, 14),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.mark_email_read_outlined,
+                      color: AppColors.white,
+                      size: 52,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              email,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.primaryBlue,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Halo extends StatelessWidget {
+  const _Halo({required this.progress});
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    // progress is 0..1. As it grows the ring expands and fades.
+    final size = 108 + (progress * 72);
+    final opacity = (1 - progress).clamp(0.0, 1.0) * 0.5;
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppColors.primaryBlue.withValues(alpha: opacity),
+            width: 2,
+          ),
         ),
       ),
     );
   }
 }
 
-class _OtpCard extends StatelessWidget {
-  const _OtpCard({required this.controller, required this.onSubmit});
+class _OtpField extends StatelessWidget {
+  const _OtpField({required this.controller, required this.onSubmit});
 
   final TextEditingController controller;
   final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    final muted = const Color.fromRGBO(26, 26, 46, 0.7);
-    return Card(
-      elevation: 0,
-      color: AppColors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Open the email from Advent Connect ZW and enter the '
-              '6-digit code below. Delivery can take a few minutes — '
-              'check your Spam / Promotions folder if it hasn\'t '
-              'arrived. You can resend below.',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: muted,
-                height: 1.45,
-              ),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color.fromRGBO(26, 26, 46, 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(6),
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        textInputAction: TextInputAction.done,
+        autofocus: true,
+        maxLength: 6,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        onSubmitted: (_) => onSubmit(),
+        style: AppTextStyles.displayMedium.copyWith(
+          fontSize: 28,
+          letterSpacing: 12,
+          fontWeight: FontWeight.w800,
+          color: AppColors.darkNavy,
+        ),
+        textAlign: TextAlign.center,
+        decoration: InputDecoration(
+          hintText: '••••••',
+          hintStyle: AppTextStyles.displayMedium.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.18),
+            letterSpacing: 12,
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+          ),
+          counterText: '',
+          filled: true,
+          fillColor: AppColors.lightGrey,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(
+              color: AppColors.primaryBlue,
+              width: 1.6,
             ),
-            const SizedBox(height: 14),
-            Text(
-              '6-DIGIT CODE',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.done,
-              autofocus: true,
-              maxLength: 6,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onSubmitted: (_) => onSubmit(),
-              style: AppTextStyles.headlineSmall.copyWith(
-                letterSpacing: 8,
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
-              decoration: InputDecoration(
-                hintText: '••••••',
-                hintStyle: AppTextStyles.headlineSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.25),
-                  letterSpacing: 8,
-                  fontWeight: FontWeight.w700,
-                ),
-                filled: true,
-                fillColor: AppColors.lightGrey,
-                counterText: '',
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(
-                    color: AppColors.primaryBlue,
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _GradientButton extends StatelessWidget {
-  const _GradientButton({
+class _PrimaryButton extends StatelessWidget {
+  const _PrimaryButton({
     required this.label,
     required this.busy,
     required this.onTap,
@@ -388,12 +549,12 @@ class _GradientButton extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           gradient: AppColors.primaryGradient,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
               color: AppColors.primaryBlue.withValues(alpha: 0.30),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
@@ -401,27 +562,27 @@ class _GradientButton extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
+            borderRadius: BorderRadius.circular(22),
+            child: Container(
               padding: const EdgeInsets.symmetric(vertical: 18),
-              child: Center(
-                child: busy
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: AppColors.white,
-                        ),
-                      )
-                    : Text(
-                        label,
-                        style: AppTextStyles.buttonText.copyWith(
-                          fontSize: 15,
-                          letterSpacing: 0.4,
-                        ),
+              alignment: Alignment.center,
+              child: busy
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: AppColors.white,
+                        strokeWidth: 2.4,
                       ),
-              ),
+                    )
+                  : Text(
+                      label,
+                      style: AppTextStyles.buttonText.copyWith(
+                        fontSize: 15.5,
+                        letterSpacing: 0.4,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
             ),
           ),
         ),
@@ -430,42 +591,47 @@ class _GradientButton extends StatelessWidget {
   }
 }
 
-class _OutlineButton extends StatelessWidget {
-  const _OutlineButton({required this.label, required this.onTap});
+class _SecondaryButton extends StatelessWidget {
+  const _SecondaryButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
   final String label;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final disabled = onTap == null;
     return Material(
       color: AppColors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(22),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(22),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: AppColors.primaryBlue.withValues(
-                alpha: disabled ? 0.2 : 0.4,
-              ),
+              color: AppColors.primaryBlue.withValues(alpha: 0.30),
               width: 1.4,
             ),
           ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.primaryBlue.withValues(
-                alpha: disabled ? 0.45 : 1,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: AppColors.primaryBlue, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14.5,
+                ),
               ),
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-              letterSpacing: 0.3,
-            ),
+            ],
           ),
         ),
       ),
@@ -483,7 +649,7 @@ class _InfoBanner extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.successGreen.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: AppColors.successGreen.withValues(alpha: 0.3),
         ),
@@ -521,12 +687,16 @@ class _ErrorBanner extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.red.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: AppColors.red, size: 20),
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Icons.error_outline, color: AppColors.red, size: 20),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -534,6 +704,7 @@ class _ErrorBanner extends StatelessWidget {
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.red,
                 fontWeight: FontWeight.w500,
+                height: 1.4,
               ),
             ),
           ),

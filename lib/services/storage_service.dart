@@ -19,14 +19,24 @@ class StorageService {
   static final ImagePicker _picker = ImagePicker();
   static final ImageCropper _cropper = ImageCropper();
 
-  /// Profile-photo bucket. Square crop, 1024 max width, ~500KB target.
-  /// Profile photos go through the cropper so the user controls framing
-  /// (faces in particular benefit from this on tall portraits).
+  /// Profile-photo bucket. 800 max width, ~70 quality, ~400KB target.
+  /// The cropper is OFF by default because it has been crashing Android
+  /// builds (native OOM during cropping) for some users. The picker
+  /// itself already enforces maxWidth/quality so the file isn't huge,
+  /// and avoiding the cropper sidesteps the crash entirely.
   static Future<String?> pickAndUploadProfilePhoto() => _pickAndUpload(
         bucket: 'profile_photos',
-        maxWidth: 1024,
-        imageQuality: 80,
-        squareCrop: true,
+        maxWidth: 800,
+        imageQuality: 70,
+        squareCrop: false,
+      );
+
+  /// Profile background / cover photo. Wider crop, ~500KB target.
+  static Future<String?> pickAndUploadCoverPhoto() => _pickAndUpload(
+        bucket: 'profile_photos',
+        maxWidth: 1200,
+        imageQuality: 75,
+        squareCrop: false,
       );
 
   /// Product-photo bucket. Up to 1600 wide, ~600KB target.
@@ -79,7 +89,9 @@ class StorageService {
       picked = await _picker.pickImage(
         source: ImageSource.gallery,
         maxWidth: maxWidth,
+        maxHeight: maxWidth, // hard cap on both dimensions cuts native OOM risk
         imageQuality: imageQuality,
+        requestFullMetadata: false,
       );
     } catch (e, st) {
       debugPrint('StorageService.pickImage failed: $e\n$st');

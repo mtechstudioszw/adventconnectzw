@@ -13,6 +13,7 @@ class ChurchService {
   static Future<List<Church>> fetchChurches({
     String? search,
     String? city,
+    int limit = 5000,
   }) async {
     var query = _client.from(_table).select();
 
@@ -27,7 +28,7 @@ class ChurchService {
 
     final response = await query
         .order('members_count', ascending: false)
-        .limit(100);
+        .limit(limit);
 
     return (response as List)
         .map((row) => Church.fromJson(row as Map<String, dynamic>))

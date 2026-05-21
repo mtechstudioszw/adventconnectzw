@@ -446,7 +446,7 @@ class _EventsScreenState extends State<EventsScreen>
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       physics: const AlwaysScrollableScrollPhysics(),
       itemCount: events.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: 16),
       itemBuilder: (context, i) {
         final e = events[i];
         return EventCard(

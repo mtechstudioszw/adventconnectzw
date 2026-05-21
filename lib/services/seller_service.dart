@@ -76,6 +76,7 @@ class SellerService {
     String? whatsapp,
     String? contactName,
     String? profilePhotoUrl,
+    String? coverPhotoUrl,
     String? paymentMethods,
     bool offersDelivery = false,
     String? deliveryArea,
@@ -87,31 +88,45 @@ class SellerService {
     if (user == null) {
       throw const AuthException('Sign in to apply as a seller.');
     }
-    final inserted = await _client
-        .from(_sellersTable)
-        .insert({
-          'auth_user_id': user.id,
-          'business_name': businessName.trim(),
-          'category': category,
-          'description': description?.trim(),
-          'province': province,
-          'city': city?.trim(),
-          'suburb': suburb?.trim(),
-          'address': address?.trim(),
-          'phone': phone.trim(),
-          'whatsapp': whatsapp?.trim(),
-          'contact_name': contactName?.trim(),
-          'profile_photo_url': profilePhotoUrl,
-          'payment_methods': paymentMethods?.trim(),
-          'offers_delivery': offersDelivery,
-          'delivery_area': deliveryArea?.trim(),
-          'delivery_fee': deliveryFee?.trim(),
-          'observes_sabbath': observesSabbath,
-          'sabbath_notice_text': sabbathNoticeText?.trim(),
-          'status': 'pending',
-        })
-        .select()
-        .single();
+    final row = <String, dynamic>{
+      'auth_user_id': user.id,
+      'business_name': businessName.trim(),
+      'category': category,
+      'description': description?.trim(),
+      'province': province,
+      'city': city?.trim(),
+      'suburb': suburb?.trim(),
+      'address': address?.trim(),
+      'phone': phone.trim(),
+      'whatsapp': whatsapp?.trim(),
+      'contact_name': contactName?.trim(),
+      'profile_photo_url': profilePhotoUrl,
+      'cover_photo_url': coverPhotoUrl,
+      'payment_methods': paymentMethods?.trim(),
+      'offers_delivery': offersDelivery,
+      'delivery_area': deliveryArea?.trim(),
+      'delivery_fee': deliveryFee?.trim(),
+      'observes_sabbath': observesSabbath,
+      'sabbath_notice_text': sabbathNoticeText?.trim(),
+      'status': 'pending',
+    };
+    Map<String, dynamic> inserted;
+    try {
+      inserted = await _client
+          .from(_sellersTable)
+          .insert(row)
+          .select()
+          .single();
+    } catch (_) {
+      // Older deployments may not have the cover_photo_url column yet —
+      // retry without it so the application still goes through.
+      row.remove('cover_photo_url');
+      inserted = await _client
+          .from(_sellersTable)
+          .insert(row)
+          .select()
+          .single();
+    }
     AnalyticsService.sellerApplied();
     return Seller.fromJson(inserted);
   }
@@ -131,6 +146,7 @@ class SellerService {
     String? whatsapp,
     String? contactName,
     String? profilePhotoUrl,
+    String? coverPhotoUrl,
     String? paymentMethods,
     bool? offersDelivery,
     String? deliveryArea,
@@ -156,6 +172,7 @@ class SellerService {
       'whatsapp': ?whatsapp?.trim(),
       'contact_name': ?contactName?.trim(),
       'profile_photo_url': ?profilePhotoUrl,
+      'cover_photo_url': ?coverPhotoUrl,
       'payment_methods': ?paymentMethods?.trim(),
       'offers_delivery': ?offersDelivery,
       'delivery_area': ?deliveryArea?.trim(),
@@ -164,13 +181,27 @@ class SellerService {
       'sabbath_notice_text': ?sabbathNoticeText?.trim(),
       'is_active': ?isActive,
     };
-    final updated = await _client
-        .from(_sellersTable)
-        .update(updates)
-        .eq('id', sellerId)
-        .eq('auth_user_id', user.id)
-        .select()
-        .single();
+    Map<String, dynamic> updated;
+    try {
+      updated = await _client
+          .from(_sellersTable)
+          .update(updates)
+          .eq('id', sellerId)
+          .eq('auth_user_id', user.id)
+          .select()
+          .single();
+    } catch (_) {
+      // Retry without cover_photo_url when the column hasn't been
+      // migrated yet.
+      updates.remove('cover_photo_url');
+      updated = await _client
+          .from(_sellersTable)
+          .update(updates)
+          .eq('id', sellerId)
+          .eq('auth_user_id', user.id)
+          .select()
+          .single();
+    }
     return Seller.fromJson(updated);
   }
 

@@ -11,6 +11,8 @@ import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/home/comments_sheet.dart';
+import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
@@ -387,8 +389,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           PostCard(
             post: post,
             viewerId: viewerId,
-            onLikeToggled: () {},
-            onCommentsTapped: () {},
+            onLikeToggled: () => _toggleLike(post),
+            onCommentsTapped: () => _openComments(post),
             onImageTapped: () async {
               final url = post.imageUrl;
               if (url == null || url.isEmpty) return;
@@ -403,6 +405,54 @@ class _ProfileScreenState extends State<ProfileScreen>
             onToggleVisibility: () => _togglePostVisibility(post),
           ),
       ],
+    );
+  }
+
+  Future<void> _toggleLike(Post post) async {
+    final newLiked = !post.viewerLiked;
+    final newCount =
+        (post.likeCount + (newLiked ? 1 : -1)).clamp(0, 1 << 30);
+    setState(() {
+      _myPosts = _myPosts
+          .map((p) => p.id == post.id
+              ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+              : p)
+          .toList();
+    });
+    try {
+      if (newLiked) {
+        await FeedService.likePost(post.id);
+      } else {
+        await FeedService.unlikePost(post.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _myPosts = _myPosts
+            .map((p) => p.id == post.id
+                ? p.copyWith(
+                    viewerLiked: post.viewerLiked,
+                    likeCount: post.likeCount,
+                  )
+                : p)
+            .toList();
+      });
+    }
+  }
+
+  Future<void> _openComments(Post post) {
+    return showCommentsSheet(
+      context,
+      postId: post.id,
+      onCommentCountChanged: (newCount) {
+        if (!mounted) return;
+        setState(() {
+          _myPosts = _myPosts
+              .map((p) =>
+                  p.id == post.id ? p.copyWith(commentCount: newCount) : p)
+              .toList();
+        });
+      },
     );
   }
 
@@ -443,44 +493,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _editPost(Post post) async {
-    final controller = TextEditingController(text: post.body ?? '');
-    final newBody = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          'Edit post',
-          style:
-              AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          minLines: 3,
-          maxLines: 8,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Cancel',
-              style: AppTextStyles.buttonText.copyWith(
-                color: AppColors.textDark,
-              ),
-            ),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primaryBlue,
-            ),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
+    final newBody =
+        await showEditPostDialog(context, initialBody: post.body ?? '');
     if (newBody == null) return;
     try {
       final updated = await FeedService.updatePost(post.id, body: newBody);
@@ -710,7 +724,25 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  String? _coverPhotoUrl() {
+    final user = AuthService.currentUser;
+    final meta = user?.userMetadata ?? const {};
+    final raw = (meta['cover_photo_url'] as String?)?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    return raw;
+  }
+
+  String? _profilePhotoUrl() {
+    final user = AuthService.currentUser;
+    final meta = user?.userMetadata ?? const {};
+    final raw = (meta['profile_photo_url'] as String?)?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    return raw;
+  }
+
   Widget _buildHeader() {
+    final coverUrl = _coverPhotoUrl();
+    final photoUrl = _profilePhotoUrl();
     return SizedBox(
       height: 220,
       child: Stack(
@@ -724,20 +756,40 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: ClipPath(
               clipper: _CoverClipper(),
               child: Container(
-                decoration:
-                    const BoxDecoration(gradient: AppColors.appBarGradient),
+                decoration: coverUrl == null
+                    ? const BoxDecoration(
+                        gradient: AppColors.appBarGradient,
+                      )
+                    : null,
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
+                    if (coverUrl != null)
+                      Image.network(
+                        coverUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Container(
+                          decoration: const BoxDecoration(
+                            gradient: AppColors.appBarGradient,
+                          ),
+                        ),
+                      ),
+                    // Always darken slightly so the white app-bar text
+                    // stays legible over busy photos.
                     Positioned.fill(
                       child: IgnorePointer(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            gradient: RadialGradient(
-                              center: const Alignment(-0.6, -0.8),
-                              radius: 1.0,
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
                               colors: [
-                                AppColors.white.withValues(alpha: 0.07),
-                                AppColors.white.withValues(alpha: 0.0),
+                                Colors.black.withValues(
+                                  alpha: coverUrl == null ? 0.0 : 0.25,
+                                ),
+                                Colors.black.withValues(
+                                  alpha: coverUrl == null ? 0.0 : 0.35,
+                                ),
                               ],
                             ),
                           ),
@@ -779,9 +831,13 @@ class _ProfileScreenState extends State<ProfileScreen>
               child: Container(
                 width: 120,
                 height: 120,
+                clipBehavior: Clip.antiAlias,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
+                  gradient: photoUrl == null
+                      ? AppColors.primaryGradient
+                      : null,
+                  color: photoUrl == null ? null : AppColors.lightGrey,
                   shape: BoxShape.circle,
                   border: Border.all(color: AppColors.white, width: 5),
                   boxShadow: [
@@ -792,14 +848,27 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                   ],
                 ),
-                child: Text(
-                  _initials(),
-                  style: AppTextStyles.displayMedium.copyWith(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 38,
-                  ),
-                ),
+                child: photoUrl == null
+                    ? Text(
+                        _initials(),
+                        style: AppTextStyles.displayMedium.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 38,
+                        ),
+                      )
+                    : Image.network(
+                        photoUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => Text(
+                          _initials(),
+                          style: AppTextStyles.displayMedium.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 38,
+                          ),
+                        ),
+                      ),
               ),
             ),
           ),

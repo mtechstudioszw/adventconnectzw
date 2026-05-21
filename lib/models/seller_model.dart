@@ -20,6 +20,7 @@ class Seller {
     this.whatsapp,
     this.contactName,
     this.profilePhotoUrl,
+    this.coverPhotoUrl,
     this.paymentMethods,
     this.offersDelivery = false,
     this.deliveryArea,
@@ -50,6 +51,7 @@ class Seller {
   final String? whatsapp;
   final String? contactName;
   final String? profilePhotoUrl;
+  final String? coverPhotoUrl;
   final String? paymentMethods;
   final bool offersDelivery;
   final String? deliveryArea;
@@ -86,6 +88,7 @@ class Seller {
       whatsapp: json['whatsapp'] as String?,
       contactName: json['contact_name'] as String?,
       profilePhotoUrl: json['profile_photo_url'] as String?,
+      coverPhotoUrl: json['cover_photo_url'] as String?,
       paymentMethods: json['payment_methods'] as String?,
       offersDelivery: json['offers_delivery'] == true,
       deliveryArea: json['delivery_area'] as String?,

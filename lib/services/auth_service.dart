@@ -75,9 +75,82 @@ class AuthService {
 
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
-      return AuthResult.failure(e.message);
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } catch (e) {
+      return AuthResult.failure(_friendlyAuthError(e.toString()));
+    }
+  }
+
+  /// Translate Supabase's raw auth errors into something a user can
+  /// act on. Anything we don't recognise falls through untouched.
+  static String _friendlyAuthError(String raw) {
+    final lower = raw.toLowerCase();
+    if (lower.contains('error sending confirmation') ||
+        lower.contains('error sending email') ||
+        lower.contains('unable to send') ||
+        (lower.contains('unexpected') && lower.contains('email'))) {
+      return 'We couldn\'t send the confirmation email right now. '
+          'Please try again in a moment, or contact support if this '
+          'keeps happening.';
+    }
+    if (lower.contains('rate limit') || lower.contains('too many')) {
+      return 'Too many attempts — please wait a minute and try again.';
+    }
+    if (lower.contains('already registered') ||
+        lower.contains('user already') ||
+        lower.contains('already exists')) {
+      return 'An account with that email already exists. Try logging in instead.';
+    }
+    if (lower.contains('invalid login') ||
+        lower.contains('invalid credentials')) {
+      return 'Email or password is incorrect.';
+    }
+    if (lower.contains('weak password') || lower.contains('password should')) {
+      return 'Choose a stronger password — at least 8 characters.';
+    }
+    if (lower.contains('network') || lower.contains('failed host lookup')) {
+      return 'You appear to be offline. Check your connection and try again.';
+    }
+    return raw;
+  }
+
+  /// Best-effort check whether an account exists for `email`. Used by
+  /// the unified auth screen to decide whether to reveal the password
+  /// field (login) or the full signup form. Returns null if we couldn't
+  /// tell (network error, RPC not provisioned, etc.) — the caller
+  /// should then default to attempting a sign-in and reacting to the
+  /// error.
+  ///
+  /// Recommended Supabase RPC (run once in SQL editor):
+  /// ```
+  /// create or replace function public.email_exists(p_email text)
+  /// returns boolean
+  /// language sql security definer set search_path = public, auth
+  /// as $$
+  ///   select exists(select 1 from auth.users where email = lower(p_email));
+  /// $$;
+  /// grant execute on function public.email_exists(text) to anon, authenticated;
+  /// ```
+  static Future<bool?> emailExists(String email) async {
+    final trimmed = email.trim().toLowerCase();
+    if (trimmed.isEmpty) return null;
+    try {
+      final result = await _client.rpc(
+        'email_exists',
+        params: {'p_email': trimmed},
+      );
+      if (result is bool) return result;
+      if (result is List && result.isNotEmpty) {
+        final first = result.first;
+        if (first is bool) return first;
+        if (first is Map && first.values.isNotEmpty) {
+          final v = first.values.first;
+          if (v is bool) return v;
+        }
+      }
+      return null;
     } catch (_) {
-      return AuthResult.failure('An unexpected error occurred.');
+      return null;
     }
   }
 
@@ -124,9 +197,9 @@ class AuthService {
       await _persistSession(response.session);
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
-      return AuthResult.failure(e.message);
-    } catch (_) {
-      return AuthResult.failure('An unexpected error occurred.');
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } catch (e) {
+      return AuthResult.failure(_friendlyAuthError(e.toString()));
     }
   }
 
@@ -316,6 +389,7 @@ class AuthService {
     String? bio,
     String? churchId,
     String? profilePhotoUrl,
+    String? coverPhotoUrl,
   }) async {
     try {
       final user = currentUser;
@@ -331,6 +405,9 @@ class AuthService {
       if (profilePhotoUrl != null) {
         next['profile_photo_url'] = profilePhotoUrl;
       }
+      if (coverPhotoUrl != null) {
+        next['cover_photo_url'] = coverPhotoUrl;
+      }
       final response = await _client.auth.updateUser(
         UserAttributes(data: next),
       );
@@ -345,10 +422,27 @@ class AuthService {
       if (profilePhotoUrl != null) {
         dbUpdates['profile_photo_url'] = profilePhotoUrl;
       }
+      if (coverPhotoUrl != null) {
+        dbUpdates['cover_photo_url'] = coverPhotoUrl;
+      }
       if (dbUpdates.isNotEmpty) {
-        await _client
-            .from('profiles')
-            .upsert({'id': user.id, ...dbUpdates}, onConflict: 'id');
+        // Best-effort mirror to the profiles table. If the column doesn't
+        // exist yet (e.g. before the cover_photo_url migration is run)
+        // fall back to writing only the columns the table understands so
+        // the metadata write isn't lost.
+        try {
+          await _client
+              .from('profiles')
+              .upsert({'id': user.id, ...dbUpdates}, onConflict: 'id');
+        } catch (_) {
+          final safe = Map<String, dynamic>.from(dbUpdates)
+            ..remove('cover_photo_url');
+          if (safe.isNotEmpty) {
+            await _client
+                .from('profiles')
+                .upsert({'id': user.id, ...safe}, onConflict: 'id');
+          }
+        }
       }
 
       return AuthResult.success(response.user);
@@ -356,6 +450,25 @@ class AuthService {
       return AuthResult.failure(e.message);
     } catch (_) {
       return AuthResult.failure('Could not update profile.');
+    }
+  }
+
+  /// Best-effort write of arbitrary key/value pairs into the auth
+  /// user's metadata. Used for onboarding preferences (interests,
+  /// content types, notif prefs) that don't have first-class columns
+  /// on the profiles table. Failures are swallowed — callers should
+  /// treat this as fire-and-forget.
+  static Future<void> updateMetadataDirect(Map<String, dynamic> patch) async {
+    try {
+      final user = currentUser;
+      if (user == null) return;
+      final next = <String, dynamic>{
+        ...?user.userMetadata,
+        ...patch,
+      };
+      await _client.auth.updateUser(UserAttributes(data: next));
+    } catch (_) {
+      // ignore — these writes are best-effort
     }
   }
 

@@ -4,13 +4,11 @@ import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
 import '../screens/auth/age_verification_screen.dart';
+import '../screens/auth/auth_screen.dart';
 import '../screens/auth/email_verification_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
-import '../screens/auth/login_screen.dart';
-import '../screens/auth/profile_setup_church_screen.dart';
-import '../screens/auth/profile_setup_screen.dart';
+import '../screens/auth/onboarding_flow_screen.dart';
 import '../screens/auth/reset_password_screen.dart';
-import '../screens/auth/signup_screen.dart';
 import '../screens/churches/church_announcements_screen.dart';
 import '../screens/churches/claim_church_screen.dart';
 import '../screens/churches/suggest_church_screen.dart';
@@ -93,14 +91,19 @@ final GoRouter appRouter = GoRouter(
       path: '/signup',
       name: 'signup',
       builder: (context, state) {
-        final birthDate = state.extra is DateTime ? state.extra as DateTime : null;
-        return SignupScreen(birthDate: birthDate);
+        final birthDate =
+            state.extra is DateTime ? state.extra as DateTime : null;
+        return AuthScreen(birthDate: birthDate);
       },
     ),
     GoRoute(
       path: '/login',
       name: 'login',
-      builder: (context, state) => const LoginScreen(),
+      builder: (context, state) {
+        final birthDate =
+            state.extra is DateTime ? state.extra as DateTime : null;
+        return AuthScreen(birthDate: birthDate);
+      },
     ),
     GoRoute(
       path: '/email-verification',
@@ -113,12 +116,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/profile-setup',
       name: 'profile_setup',
-      builder: (context, state) => const ProfileSetupScreen(),
-    ),
-    GoRoute(
-      path: '/profile-setup-church',
-      name: 'profile_setup_church',
-      builder: (context, state) => const ProfileSetupChurchScreen(),
+      builder: (context, state) => const OnboardingFlowScreen(),
     ),
     GoRoute(
       path: '/forgot-password',

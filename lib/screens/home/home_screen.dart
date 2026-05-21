@@ -27,6 +27,7 @@ import '../../widgets/ad_banner.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_sheet.dart';
+import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
@@ -145,6 +146,13 @@ class _HomeScreenState extends State<HomeScreen>
       for (final c in conversations) {
         unreadMessages += c.unreadCount;
       }
+      // Hide the viewer's own posts from the home feed — they already
+      // see them in the Profile → Posts tab. Treating "home" as a feed
+      // of *other* people's content matches what users expect from a
+      // social timeline.
+      final feedPosts = (results[7] as List<Post>)
+          .where((p) => viewerId == null || p.authorId != viewerId)
+          .toList();
       setState(() {
         _events = events;
         _churches = churches;
@@ -153,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen>
         _unreadNotifications = results[4] as int;
         _banner = results[5] as UrgentBanner?;
         _suggestedMembers = results[6] as List<MemberDirectoryEntry>;
-        _posts = results[7] as List<Post>;
+        _posts = feedPosts;
         _stories = results[8] as List<Story>;
         _friendshipsByUser = friendsByUser;
         _pendingFriendRequests = results[10] as int;
@@ -248,7 +256,19 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _openPostComposer() async {
     final post = await showPostComposer(context);
     if (!mounted || post == null) return;
-    setState(() => _posts = [post, ..._posts]);
+    // The viewer's own posts are filtered out of the home feed (they
+    // belong on Profile → Posts), so don't insert a fresh one here.
+    // Surface a small confirmation instead so the user knows the post
+    // landed and where to find it.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.successGreen,
+        content: Text(
+          'Posted — see it on your profile.',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
   }
 
   Future<void> _openStoryComposer() async {
@@ -891,43 +911,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _editPost(Post post) async {
-    final controller = TextEditingController(text: post.body ?? '');
-    final newBody = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          'Edit post',
-          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          minLines: 3,
-          maxLines: 8,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Cancel',
-              style: AppTextStyles.buttonText.copyWith(
-                color: AppColors.textDark,
-              ),
-            ),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primaryBlue,
-            ),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
+    final newBody = await showEditPostDialog(context, initialBody: post.body ?? '');
     if (newBody == null) return;
     try {
       final updated = await FeedService.updatePost(post.id, body: newBody);

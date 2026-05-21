@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -15,12 +16,21 @@ import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
-/// Cross-content search. Hits churches, events, products and jobs in
-/// parallel — small per-list limit each so the UI stays snappy.
+/// Facebook-style cross-content search.
+///
+/// Empty state: a compact search bar at the top with the user's Recent
+/// searches below ("See all" expands the list). No big hero board.
+///
+/// Results state: filter chips (All / People / Posts / Churches /
+/// Events / Marketplace / Jobs) above the result sections so the user
+/// can narrow down. If nothing matches, a "Suggestions for you" list
+/// fills in from the directory's suggested-members cache — the same
+/// people the home tab surfaces — so the search never feels empty.
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
@@ -28,13 +38,20 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
+enum _Filter { all, people, posts, churches, events, marketplace, jobs }
+
 class _SearchScreenState extends State<SearchScreen> {
+  static const _recentKey = 'recent_searches_v1';
+  static const _maxRecent = 20;
+
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   Timer? _debounce;
 
   bool _searching = false;
   String _lastQuery = '';
+  _Filter _filter = _Filter.all;
+
   List<Church> _churches = const [];
   List<Event> _events = const [];
   List<Product> _products = const [];
@@ -42,10 +59,21 @@ class _SearchScreenState extends State<SearchScreen> {
   List<MemberDirectoryEntry> _people = const [];
   List<Post> _posts = const [];
 
+  // Fallback list — surfaced when the query has no matches. Loaded
+  // lazily the first time we hit an empty-result state.
+  List<MemberDirectoryEntry> _fallbackPeople = const [];
+  bool _fallbackLoading = false;
+
+  List<String> _recent = const [];
+  bool _seeAllRecent = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
+    _loadRecent();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _focusNode.requestFocus(),
+    );
   }
 
   @override
@@ -56,6 +84,63 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
+  Future<void> _loadRecent() async {
+    try {
+      final raw = await SecureStorageService.read(_recentKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      if (!mounted) return;
+      setState(() {
+        _recent = decoded
+            .whereType<String>()
+            .where((s) => s.trim().isNotEmpty)
+            .toList(growable: false);
+      });
+    } catch (_) {
+      // Recent searches are best-effort — ignore parse / IO failures.
+    }
+  }
+
+  Future<void> _saveRecent(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    final lower = trimmed.toLowerCase();
+    final next = <String>[trimmed];
+    for (final r in _recent) {
+      if (r.toLowerCase() == lower) continue;
+      next.add(r);
+      if (next.length >= _maxRecent) break;
+    }
+    if (mounted) setState(() => _recent = next);
+    try {
+      await SecureStorageService.write(_recentKey, jsonEncode(next));
+    } catch (_) {}
+  }
+
+  Future<void> _removeRecent(String query) async {
+    final lower = query.toLowerCase();
+    final next = _recent.where((r) => r.toLowerCase() != lower).toList();
+    setState(() => _recent = next);
+    try {
+      if (next.isEmpty) {
+        await SecureStorageService.delete(_recentKey);
+      } else {
+        await SecureStorageService.write(_recentKey, jsonEncode(next));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _clearRecent() async {
+    setState(() {
+      _recent = const [];
+      _seeAllRecent = false;
+    });
+    try {
+      await SecureStorageService.delete(_recentKey);
+    } catch (_) {}
+  }
+
   void _onChanged(String value) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () {
@@ -63,11 +148,26 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
+  void _submit(String value) {
+    _debounce?.cancel();
+    _runSearch(value.trim());
+  }
+
+  void _useRecent(String query) {
+    _controller.text = query;
+    _controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: query.length),
+    );
+    _focusNode.requestFocus();
+    _runSearch(query);
+  }
+
   Future<void> _runSearch(String query) async {
     if (query.isEmpty) {
       setState(() {
         _searching = false;
         _lastQuery = '';
+        _filter = _Filter.all;
         _churches = const [];
         _events = const [];
         _products = const [];
@@ -91,18 +191,48 @@ class _SearchScreenState extends State<SearchScreen> {
         FeedService.searchPosts(query),
       ]);
       if (!mounted) return;
+      final people = (results[0] as List<MemberDirectoryEntry>).take(12).toList();
+      final churches = (results[1] as List<Church>).take(12).toList();
+      final events = (results[2] as List<Event>).take(12).toList();
+      final products = (results[3] as List<Product>).take(12).toList();
+      final jobs = (results[4] as List<Job>).take(12).toList();
+      final posts = (results[5] as List<Post>).take(12).toList();
       setState(() {
-        _people = (results[0] as List<MemberDirectoryEntry>).take(8).toList();
-        _churches = (results[1] as List<Church>).take(8).toList();
-        _events = (results[2] as List<Event>).take(8).toList();
-        _products = (results[3] as List<Product>).take(8).toList();
-        _jobs = (results[4] as List<Job>).take(8).toList();
-        _posts = (results[5] as List<Post>).take(8).toList();
+        _people = people;
+        _churches = churches;
+        _events = events;
+        _products = products;
+        _jobs = jobs;
+        _posts = posts;
         _searching = false;
       });
+      final hasAny = people.isNotEmpty ||
+          churches.isNotEmpty ||
+          events.isNotEmpty ||
+          products.isNotEmpty ||
+          jobs.isNotEmpty ||
+          posts.isNotEmpty;
+      if (!hasAny) {
+        _loadFallback();
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _searching = false);
+    }
+  }
+
+  Future<void> _loadFallback() async {
+    if (_fallbackLoading) return;
+    if (_fallbackPeople.isNotEmpty) return;
+    _fallbackLoading = true;
+    try {
+      final list = await DirectoryService.fetchSuggestedMembers(limit: 30);
+      if (!mounted) return;
+      setState(() => _fallbackPeople = list);
+    } catch (_) {
+      // ignore
+    } finally {
+      _fallbackLoading = false;
     }
   }
 
@@ -118,7 +248,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final results = await Future.wait([
       DirectoryService.fetchEntries(search: query),
       DirectoryService.searchProfilesByName(query),
-      DirectoryService.fetchSuggestedMembers(limit: 60),
+      DirectoryService.fetchSuggestedMembers(limit: 80),
     ]);
     final byProfession = results[0];
     final byName = results[1];
@@ -132,6 +262,9 @@ class _SearchScreenState extends State<SearchScreen> {
     for (final e in byName) {
       if (seen.add(e.id)) merged.add(e);
     }
+    // Loose substring match on the cached suggestion list so accounts
+    // visible on the home tab also surface here — Supabase's text
+    // search index can miss partial names that the cache contains.
     for (final e in recent) {
       if (seen.contains(e.id)) continue;
       final name = (e.fullName ?? '').toLowerCase();
@@ -143,157 +276,338 @@ class _SearchScreenState extends State<SearchScreen> {
     return merged;
   }
 
+  void _openResult(String query, VoidCallback navigate) {
+    _saveRecent(query);
+    navigate();
+  }
+
+  bool get _hasResults =>
+      _people.isNotEmpty ||
+      _churches.isNotEmpty ||
+      _events.isNotEmpty ||
+      _products.isNotEmpty ||
+      _jobs.isNotEmpty ||
+      _posts.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
-    final hasResults = _people.isNotEmpty ||
-        _churches.isNotEmpty ||
-        _events.isNotEmpty ||
-        _products.isNotEmpty ||
-        _jobs.isNotEmpty ||
-        _posts.isNotEmpty;
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
-      body: Column(
-        children: [
-          _buildHero(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: _SearchField(
-              controller: _controller,
-              focusNode: _focusNode,
-              onChanged: _onChanged,
-              onClear: () {
-                _controller.clear();
-                _onChanged('');
-              },
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _buildSearchBar(),
+            if (_lastQuery.isNotEmpty && _hasResults) _buildFilterChips(),
+            Expanded(
+              child: _searching
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primaryBlue,
+                      ),
+                    )
+                  : _lastQuery.isEmpty
+                      ? _buildRecent()
+                      : _hasResults
+                          ? _buildResults()
+                          : _buildEmpty(),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      color: AppColors.white,
+      padding: const EdgeInsets.fromLTRB(8, 8, 12, 10),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.goNamed('home');
+              }
+            },
+            icon: const Icon(
+              Icons.arrow_back,
+              color: AppColors.textDark,
+            ),
+            splashRadius: 22,
           ),
           Expanded(
-            child: _searching
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primaryBlue,
-                    ),
-                  )
-                : _lastQuery.isEmpty
-                    ? _buildHint()
-                    : hasResults
-                        ? _buildResults()
-                        : _buildEmpty(),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.lightGrey,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                onChanged: _onChanged,
+                onSubmitted: _submit,
+                textInputAction: TextInputAction.search,
+                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                decoration: InputDecoration(
+                  hintText:
+                      'Search for friends, churches, events, products...',
+                  hintStyle: AppTextStyles.bodyMedium.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.5),
+                    fontSize: 14,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: Color.fromRGBO(26, 26, 46, 0.55),
+                    size: 20,
+                  ),
+                  suffixIcon: _controller.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            color: Color.fromRGBO(26, 26, 46, 0.55),
+                            size: 18,
+                          ),
+                          onPressed: () {
+                            _controller.clear();
+                            _onChanged('');
+                            setState(() {});
+                          },
+                        ),
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHero() {
-    return ClipPath(
-      clipper: _HeroClipper(),
-      child: Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const ScreenHeroBackButton(fallbackRoute: 'home'),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SEARCH',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.55),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.8,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Find anything',
-                        style: AppTextStyles.displayMedium.copyWith(
-                          color: AppColors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'People, churches, events, products and jobs — '
-                        'all in one place.',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+  Widget _buildFilterChips() {
+    final chips = <_FilterDef>[
+      const _FilterDef(_Filter.all, 'All'),
+      const _FilterDef(_Filter.people, 'People'),
+      const _FilterDef(_Filter.posts, 'Posts'),
+      const _FilterDef(_Filter.churches, 'Churches'),
+      const _FilterDef(_Filter.events, 'Events'),
+      const _FilterDef(_Filter.marketplace, 'Marketplace'),
+      const _FilterDef(_Filter.jobs, 'Jobs'),
+    ];
+    return Container(
+      color: AppColors.white,
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SizedBox(
+        height: 38,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          itemCount: chips.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (ctx, i) {
+            final c = chips[i];
+            final active = c.filter == _filter;
+            return _FilterChip(
+              label: c.label,
+              active: active,
+              onTap: () => setState(() => _filter = c.filter),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildHint() {
+  Widget _buildRecent() {
+    if (_recent.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+        children: [
+          Text(
+            'TRY SEARCHING FOR',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final s in const [
+                'Tendai',
+                'Harare central',
+                'Camp meeting',
+                'Plumber',
+                'Bibles',
+                'Solusi',
+                'Teaching',
+              ])
+                _SuggestionTap(
+                  label: s,
+                  onTap: () => _useRecent(s),
+                ),
+            ],
+          ),
+        ],
+      );
+    }
+    final shown =
+        _seeAllRecent ? _recent : _recent.take(5).toList(growable: false);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
       children: [
-        Text(
-          'TRY SEARCHING FOR',
-          style: AppTextStyles.labelSmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.55),
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.4,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+          child: Row(
+            children: [
+              Text(
+                'Recent',
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              if (_recent.length > 5)
+                TextButton(
+                  onPressed: () =>
+                      setState(() => _seeAllRecent = !_seeAllRecent),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primaryBlue,
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: Text(
+                    _seeAllRecent ? 'Show less' : 'See all',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              if (_recent.isNotEmpty)
+                TextButton(
+                  onPressed: _clearRecent,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color.fromRGBO(26, 26, 46, 0.6),
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: Text(
+                    'Clear',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: const [
-            _SuggestionChip('Tendai'),
-            _SuggestionChip('Harare central'),
-            _SuggestionChip('Camp meeting'),
-            _SuggestionChip('Plumber'),
-            _SuggestionChip('Bibles'),
-            _SuggestionChip('Solusi'),
-            _SuggestionChip('Teaching'),
-          ],
-        ),
+        for (final q in shown)
+          _RecentRow(
+            query: q,
+            onTap: () => _useRecent(q),
+            onRemove: () => _removeRecent(q),
+          ),
       ],
     );
   }
 
   Widget _buildEmpty() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-      child: EmptyStateCard(
-        icon: Icons.search_off,
-        title: 'No matches for "$_lastQuery"',
-        message:
-            'Try a shorter keyword or a different spelling — searches look across churches, events, products and jobs.',
-      ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      children: [
+        EmptyStateCard(
+          icon: Icons.search_off,
+          title: 'No matches for "$_lastQuery"',
+          message:
+              'Try a shorter keyword or different spelling. '
+              'Here are people you might know instead.',
+        ),
+        const SizedBox(height: 16),
+        if (_fallbackPeople.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              'Suggestions for you',
+              style: AppTextStyles.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          for (final p in _fallbackPeople.take(15))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _PersonRow(
+                person: p,
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => context.pushNamed(
+                    'user_profile',
+                    pathParameters: {'userId': p.userId},
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ],
     );
   }
 
   Widget _buildResults() {
+    final showPeople =
+        (_filter == _Filter.all || _filter == _Filter.people) &&
+            _people.isNotEmpty;
+    final showPosts =
+        (_filter == _Filter.all || _filter == _Filter.posts) &&
+            _posts.isNotEmpty;
+    final showChurches =
+        (_filter == _Filter.all || _filter == _Filter.churches) &&
+            _churches.isNotEmpty;
+    final showEvents =
+        (_filter == _Filter.all || _filter == _Filter.events) &&
+            _events.isNotEmpty;
+    final showProducts =
+        (_filter == _Filter.all || _filter == _Filter.marketplace) &&
+            _products.isNotEmpty;
+    final showJobs =
+        (_filter == _Filter.all || _filter == _Filter.jobs) &&
+            _jobs.isNotEmpty;
+
+    final anyForFilter = showPeople ||
+        showPosts ||
+        showChurches ||
+        showEvents ||
+        showProducts ||
+        showJobs;
+
+    if (!anyForFilter) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        child: EmptyStateCard(
+          icon: Icons.filter_alt_off,
+          title: 'No ${_filterName(_filter)} for "$_lastQuery"',
+          message: 'Try the All tab or a different keyword.',
+        ),
+      );
+    }
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
-        if (_people.isNotEmpty)
+        if (showPeople)
           _Section(
             label: 'PEOPLE',
             count: _people.length,
@@ -301,14 +615,17 @@ class _SearchScreenState extends State<SearchScreen> {
               for (final p in _people)
                 _PersonRow(
                   person: p,
-                  onTap: () => context.pushNamed(
-                    'user_profile',
-                    pathParameters: {'userId': p.userId},
+                  onTap: () => _openResult(
+                    _lastQuery,
+                    () => context.pushNamed(
+                      'user_profile',
+                      pathParameters: {'userId': p.userId},
+                    ),
                   ),
                 ),
             ],
           ),
-        if (_posts.isNotEmpty)
+        if (showPosts)
           _Section(
             label: 'POSTS',
             count: _posts.length,
@@ -316,11 +633,14 @@ class _SearchScreenState extends State<SearchScreen> {
               for (final post in _posts)
                 _PostRow(
                   post: post,
-                  onTap: () => Navigator.pop(context),
+                  onTap: () => _openResult(
+                    _lastQuery,
+                    () => Navigator.pop(context),
+                  ),
                 ),
             ],
           ),
-        if (_churches.isNotEmpty)
+        if (showChurches)
           _Section(
             label: 'CHURCHES',
             count: _churches.length,
@@ -328,15 +648,18 @@ class _SearchScreenState extends State<SearchScreen> {
               for (final c in _churches)
                 _ChurchRow(
                   church: c,
-                  onTap: () => context.pushNamed(
-                    'church_details',
-                    pathParameters: {'id': c.id},
-                    extra: c,
+                  onTap: () => _openResult(
+                    _lastQuery,
+                    () => context.pushNamed(
+                      'church_details',
+                      pathParameters: {'id': c.id},
+                      extra: c,
+                    ),
                   ),
                 ),
             ],
           ),
-        if (_events.isNotEmpty)
+        if (showEvents)
           _Section(
             label: 'EVENTS',
             count: _events.length,
@@ -344,31 +667,37 @@ class _SearchScreenState extends State<SearchScreen> {
               for (final e in _events)
                 _EventRow(
                   event: e,
-                  onTap: () => context.pushNamed(
-                    'event_details',
-                    pathParameters: {'id': e.id},
-                    extra: e,
+                  onTap: () => _openResult(
+                    _lastQuery,
+                    () => context.pushNamed(
+                      'event_details',
+                      pathParameters: {'id': e.id},
+                      extra: e,
+                    ),
                   ),
                 ),
             ],
           ),
-        if (_products.isNotEmpty)
+        if (showProducts)
           _Section(
-            label: 'PRODUCTS',
+            label: 'MARKETPLACE',
             count: _products.length,
             children: [
               for (final p in _products)
                 _ProductRow(
                   product: p,
-                  onTap: () => context.pushNamed(
-                    'product_details',
-                    pathParameters: {'id': p.id},
-                    extra: p,
+                  onTap: () => _openResult(
+                    _lastQuery,
+                    () => context.pushNamed(
+                      'product_details',
+                      pathParameters: {'id': p.id},
+                      extra: p,
+                    ),
                   ),
                 ),
             ],
           ),
-        if (_jobs.isNotEmpty)
+        if (showJobs)
           _Section(
             label: 'JOBS',
             count: _jobs.length,
@@ -376,15 +705,186 @@ class _SearchScreenState extends State<SearchScreen> {
               for (final j in _jobs)
                 _JobRow(
                   job: j,
-                  onTap: () => context.pushNamed(
-                    'job_details',
-                    pathParameters: {'id': j.id},
-                    extra: j,
+                  onTap: () => _openResult(
+                    _lastQuery,
+                    () => context.pushNamed(
+                      'job_details',
+                      pathParameters: {'id': j.id},
+                      extra: j,
+                    ),
                   ),
                 ),
             ],
           ),
       ],
+    );
+  }
+
+  String _filterName(_Filter f) {
+    switch (f) {
+      case _Filter.all:
+        return 'results';
+      case _Filter.people:
+        return 'people';
+      case _Filter.posts:
+        return 'posts';
+      case _Filter.churches:
+        return 'churches';
+      case _Filter.events:
+        return 'events';
+      case _Filter.marketplace:
+        return 'products';
+      case _Filter.jobs:
+        return 'jobs';
+    }
+  }
+}
+
+class _FilterDef {
+  const _FilterDef(this.filter, this.label);
+  final _Filter filter;
+  final String label;
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: active
+                ? AppColors.primaryBlue
+                : const Color.fromRGBO(26, 26, 46, 0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: active
+                  ? AppColors.primaryBlue
+                  : const Color.fromRGBO(26, 26, 46, 0.08),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: active ? AppColors.white : AppColors.textDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentRow extends StatelessWidget {
+  const _RecentRow({
+    required this.query,
+    required this.onTap,
+    required this.onRemove,
+  });
+
+  final String query;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(26, 26, 46, 0.05),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.history,
+                  color: AppColors.textDark,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  query,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: onRemove,
+                icon: const Icon(
+                  Icons.close,
+                  color: Color.fromRGBO(26, 26, 46, 0.5),
+                  size: 18,
+                ),
+                splashRadius: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionTap extends StatelessWidget {
+  const _SuggestionTap({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.08),
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -776,131 +1276,4 @@ class _Row extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SearchField extends StatelessWidget {
-  const _SearchField({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-    required this.onClear,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        onChanged: onChanged,
-        textInputAction: TextInputAction.search,
-        style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
-        decoration: InputDecoration(
-          hintText: 'Search the community',
-          hintStyle: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.45),
-          ),
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 14, right: 10),
-            child: Icon(
-              Icons.search,
-              color: AppColors.primaryBlue,
-              size: 20,
-            ),
-          ),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 44, minHeight: 44),
-          suffixIcon: controller.text.isEmpty
-              ? null
-              : IconButton(
-                  icon: const Icon(
-                    Icons.close,
-                    color: Color.fromRGBO(26, 26, 46, 0.5),
-                    size: 18,
-                  ),
-                  onPressed: onClear,
-                ),
-          filled: true,
-          fillColor: AppColors.white,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(
-              color: AppColors.primaryBlue,
-              width: 1.5,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SuggestionChip extends StatelessWidget {
-  const _SuggestionChip(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.08)),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelMedium.copyWith(
-          color: AppColors.textDark,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 28);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 28,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

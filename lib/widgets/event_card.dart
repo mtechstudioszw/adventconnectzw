@@ -3,6 +3,12 @@ import '../models/event_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
+/// Large hero-style event card used in the Events tab.
+///
+/// Layout: full-width cover image (16:9) with a date pill in the top
+/// corner, followed by a tall info block with title, schedule, location
+/// and an attendance footer. Designed to feel closer to Facebook /
+/// Eventbrite cards than the previous compact row.
 class EventCard extends StatelessWidget {
   const EventCard({
     super.key,
@@ -26,77 +32,81 @@ class EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(16),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _CompactThumbnail(
+              _CoverHero(
                 url: event.coverPhotoUrl,
                 date: event.eventDate,
+                isGoing: isGoing,
+                isFull: event.isFull,
               ),
-              const SizedBox(width: 14),
-              Expanded(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            event.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14.5,
-                            ),
-                          ),
-                        ),
-                        if (isGoing) ...[
-                          const SizedBox(width: 6),
-                          const _GoingChip(),
-                        ] else if (event.isFull) ...[
-                          const SizedBox(width: 6),
-                          const _FullChip(),
-                        ],
-                      ],
+                    Text(
+                      event.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        height: 1.25,
+                      ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 10),
                     _InfoRow(
                       icon: Icons.schedule,
                       text:
-                          '${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])} • ${_formatTime(event.eventTime)}',
+                          '${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])}  ·  ${_formatTime(event.eventTime)}',
                     ),
-                    if (event.location != null && event.location!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
+                    if (event.location != null &&
+                        event.location!.isNotEmpty) ...[
+                      const SizedBox(height: 6),
                       _InfoRow(
                         icon: Icons.place_outlined,
                         text: event.location!,
                       ),
                     ],
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 12),
+                    Container(
+                      height: 1,
+                      color: const Color.fromRGBO(26, 26, 46, 0.06),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         const Icon(
                           Icons.people_outline,
-                          size: 13,
+                          size: 16,
                           color: AppColors.primaryBlue,
                         ),
-                        const SizedBox(width: 3),
+                        const SizedBox(width: 6),
                         Text(
                           '${event.rsvpCount}',
                           style: AppTextStyles.labelMedium.copyWith(
                             color: AppColors.primaryBlue,
                             fontWeight: FontWeight.w700,
-                            fontSize: 12.5,
+                            fontSize: 14,
                           ),
                         ),
                         Text(
@@ -104,18 +114,30 @@ class EventCard extends StatelessWidget {
                               ? ' / ${event.capacity} going'
                               : ' going',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.6),
-                            fontSize: 11.5,
+                            color:
+                                const Color.fromRGBO(26, 26, 46, 0.6),
+                            fontSize: 13,
                           ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'View',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppColors.primaryBlue,
+                          size: 20,
                         ),
                       ],
                     ),
                   ],
                 ),
-              ),
-              const Icon(
-                Icons.chevron_right,
-                color: Color.fromRGBO(26, 26, 46, 0.3),
               ),
             ],
           ),
@@ -138,93 +160,132 @@ class EventCard extends StatelessWidget {
   }
 }
 
-/// Square thumbnail with a small date badge in the corner. Replaces the
-/// full-width 16:9 cover hero — cuts each card from ~320 to ~120 tall.
-class _CompactThumbnail extends StatelessWidget {
-  const _CompactThumbnail({required this.url, required this.date});
+class _CoverHero extends StatelessWidget {
+  const _CoverHero({
+    required this.url,
+    required this.date,
+    required this.isGoing,
+    required this.isFull,
+  });
 
   final String? url;
+  final DateTime date;
+  final bool isGoing;
+  final bool isFull;
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (url == null || url!.isEmpty)
+            Container(
+              decoration:
+                  const BoxDecoration(gradient: AppColors.appBarGradient),
+              child: Center(
+                child: Icon(
+                  Icons.event,
+                  color: AppColors.white.withValues(alpha: 0.55),
+                  size: 42,
+                ),
+              ),
+            )
+          else
+            Image.network(
+              url!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                color: AppColors.lightGrey,
+                child: const Center(
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    color: Color.fromRGBO(26, 26, 46, 0.3),
+                    size: 36,
+                  ),
+                ),
+              ),
+            ),
+          // Soft gradient at the bottom so the date pill / chips read
+          // cleanly over busy photos.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.30),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 12,
+            left: 12,
+            child: _DateBadge(date: date),
+          ),
+          if (isGoing || isFull)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: isGoing ? const _GoingChip() : const _FullChip(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateBadge extends StatelessWidget {
+  const _DateBadge({required this.date});
   final DateTime date;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 76,
-      height: 76,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (url == null || url!.isEmpty)
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: AppColors.appBarGradient,
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.event,
-                    color: AppColors.white.withValues(alpha: 0.55),
-                    size: 28,
-                  ),
-                ),
-              )
-            else
-              Image.network(
-                url!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  color: AppColors.lightGrey,
-                  child: const Icon(
-                    Icons.broken_image_outlined,
-                    color: Color.fromRGBO(26, 26, 46, 0.3),
-                    size: 28,
-                  ),
-                ),
-              ),
-            // Bottom-left date pill so the day is glanceable without
-            // having to read the body row.
-            Positioned(
-              left: 4,
-              right: 4,
-              bottom: 4,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.white.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${date.day}',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.darkNavy,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 11,
-                        height: 1,
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      EventCard._months[date.month - 1],
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 9,
-                        letterSpacing: 0.6,
-                        height: 1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            EventCard._months[date.month - 1],
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w800,
+              fontSize: 10,
+              letterSpacing: 1.1,
+              height: 1,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${date.day}',
+            style: AppTextStyles.titleLarge.copyWith(
+              color: AppColors.darkNavy,
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+              height: 1,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -236,19 +297,26 @@ class _GoingChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.successGreen,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
-        'GOING',
-        style: AppTextStyles.labelSmall.copyWith(
-          color: AppColors.white,
-          fontSize: 9,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.1,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle, color: AppColors.white, size: 12),
+          const SizedBox(width: 4),
+          Text(
+            'GOING',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -260,18 +328,18 @@ class _FullChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.red,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         'FULL',
         style: AppTextStyles.labelSmall.copyWith(
           color: AppColors.white,
-          fontSize: 9,
+          fontSize: 10,
           fontWeight: FontWeight.w800,
-          letterSpacing: 1.1,
+          letterSpacing: 1.2,
         ),
       ),
     );
@@ -289,18 +357,19 @@ class _InfoRow extends StatelessWidget {
       children: [
         Icon(
           icon,
-          size: 12,
+          size: 14,
           color: const Color.fromRGBO(26, 26, 46, 0.55),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 6),
         Expanded(
           child: Text(
             text,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.bodySmall.copyWith(
               color: const Color.fromRGBO(26, 26, 46, 0.7),
-              fontSize: 11.5,
+              fontSize: 13,
+              height: 1.35,
             ),
           ),
         ),

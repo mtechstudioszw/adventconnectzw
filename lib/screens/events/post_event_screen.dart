@@ -739,7 +739,7 @@ class _PickerField extends StatelessWidget {
                   ),
                 ),
               ),
-              if (trailing != null) trailing!,
+              ?trailing,
               const Icon(
                 Icons.expand_more,
                 color: Color.fromRGBO(26, 26, 46, 0.5),

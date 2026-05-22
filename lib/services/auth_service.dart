@@ -486,9 +486,26 @@ class AuthService {
   }
 
   static Future<DateTime?> getStoredBirthDate() async {
-    final stored = await SecureStorageService.read(_birthDateKey);
-    if (stored == null) return null;
-    return DateTime.tryParse(stored);
+    try {
+      final stored = await SecureStorageService.read(_birthDateKey);
+      if (stored == null) return null;
+      return DateTime.tryParse(stored);
+    } catch (_) {
+      // Secure storage can throw a MissingPluginException in unit /
+      // widget tests where the platform channel isn't mocked. Treat
+      // that the same as "no stored value" so the caller falls back
+      // to the route-extra birth date.
+      return null;
+    }
+  }
+
+  static Future<bool> isAgeVerifiedSafe() async {
+    try {
+      final value = await SecureStorageService.read(_ageVerifiedKey);
+      return value == 'true';
+    } catch (_) {
+      return false;
+    }
   }
 
   static bool meetsMinimumAge(DateTime birthDate, {int minimumAge = 16}) {

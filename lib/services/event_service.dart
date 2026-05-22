@@ -107,13 +107,15 @@ class EventService {
     if (user == null) {
       throw const AuthException('Sign in to post an event.');
     }
+    final endDateStr =
+        endDate == null ? null : _formatDate(_dateOnly(endDate));
     final row = <String, dynamic>{
       'title': title.trim(),
       'description': description?.trim(),
       'start_date': _formatDate(_dateOnly(startDate)),
       'start_time': startTime,
-      if (endDate != null) 'end_date': _formatDate(_dateOnly(endDate)),
-      if (endTime != null) 'end_time': endTime,
+      'end_date': ?endDateStr,
+      'end_time': ?endTime,
       'venue': venue?.trim(),
       'address': address?.trim(),
       'province': province?.trim(),

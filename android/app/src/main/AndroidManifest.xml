@@ -48,6 +48,14 @@
                       android:host="login-callback"/>
             </intent-filter>
         </activity>
+        <!-- image_cropper (UCrop) — registers the native crop activity
+             so picking + cropping a profile / cover photo doesn't crash
+             with ActivityNotFoundException. Theme must be AppCompat-
+             based since UCrop is built on it. -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

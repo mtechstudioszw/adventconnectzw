@@ -1,3 +1,5 @@
+import 'dart:ui' show Color;
+
 import 'package:flutter/foundation.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,24 +21,39 @@ class StorageService {
   static final ImagePicker _picker = ImagePicker();
   static final ImageCropper _cropper = ImageCropper();
 
-  /// Profile-photo bucket. 800 max width, ~70 quality, ~400KB target.
-  /// The cropper is OFF by default because it has been crashing Android
-  /// builds (native OOM during cropping) for some users. The picker
-  /// itself already enforces maxWidth/quality so the file isn't huge,
-  /// and avoiding the cropper sidesteps the crash entirely.
+  /// Profile-photo bucket. WhatsApp-style: square crop locked at 1:1,
+  /// output 640×640 at ~75 quality (~80–120 KB). The picker pre-resizes
+  /// to 1600 wide before the cropper opens so the native cropper isn't
+  /// handed a 4000×6000 phone capture (that was the OOM source on
+  /// earlier builds). The cropper itself caps output at 640 so the
+  /// final file is small even if someone disables the picker resize.
   static Future<String?> pickAndUploadProfilePhoto() => _pickAndUpload(
         bucket: 'profile_photos',
-        maxWidth: 800,
-        imageQuality: 70,
-        squareCrop: false,
+        maxWidth: 1600,
+        imageQuality: 85,
+        crop: const _CropSpec(
+          ratioX: 1,
+          ratioY: 1,
+          outputWidth: 640,
+          outputQuality: 75,
+          title: 'Crop profile photo',
+        ),
       );
 
-  /// Profile background / cover photo. Wider crop, ~500KB target.
+  /// Profile background / cover photo. 16:9 locked, output 1280×720 at
+  /// ~80 quality (~250 KB). Same pre-resize strategy as the profile
+  /// picker to keep the cropper memory-safe.
   static Future<String?> pickAndUploadCoverPhoto() => _pickAndUpload(
         bucket: 'profile_photos',
-        maxWidth: 1200,
-        imageQuality: 75,
-        squareCrop: false,
+        maxWidth: 2000,
+        imageQuality: 85,
+        crop: const _CropSpec(
+          ratioX: 16,
+          ratioY: 9,
+          outputWidth: 1280,
+          outputQuality: 80,
+          title: 'Crop background photo',
+        ),
       );
 
   /// Product-photo bucket. Up to 1600 wide, ~600KB target.
@@ -69,15 +86,17 @@ class StorageService {
         imageQuality: 82,
       );
 
-  /// Generic flow used by the three convenience methods above.
+  /// Generic flow used by the convenience methods above.
   /// Returns the public URL of the uploaded file, or null if the user
-  /// cancelled the picker. `squareCrop: true` runs the source image
-  /// through image_cropper with a locked 1:1 ratio.
+  /// cancelled the picker. When `crop` is supplied the source image is
+  /// run through image_cropper with the locked aspect ratio and output
+  /// dimensions from [_CropSpec]; the user sees a WhatsApp-style crop
+  /// frame they can drag before tapping Done.
   static Future<String?> _pickAndUpload({
     required String bucket,
     required double maxWidth,
     required int imageQuality,
-    bool squareCrop = false,
+    _CropSpec? crop,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -100,27 +119,38 @@ class StorageService {
     if (picked == null) return null;
 
     String sourcePath = picked.path;
-    if (squareCrop) {
-      // The cropper has crashed on some Android builds (native OOM
-      // during cropping). Wrap in try/catch and fall back to the
-      // uncropped image so the upload still succeeds — the picker
-      // already enforces maxWidth/quality so the file isn't huge.
+    if (crop != null) {
+      // Wrap the native cropper in try/catch — older Android builds
+      // occasionally OOM here. The pre-resize on the picker keeps the
+      // input under the cropper's bitmap budget so this is very
+      // unlikely now, but the fallback means a crash on a single
+      // device can't break uploads for everyone else.
       try {
         final cropped = await _cropper.cropImage(
           sourcePath: picked.path,
-          compressQuality: imageQuality,
-          maxWidth: maxWidth.toInt(),
-          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          compressQuality: crop.outputQuality,
+          maxWidth: crop.outputWidth,
+          maxHeight: (crop.outputWidth * crop.ratioY / crop.ratioX).round(),
+          aspectRatio: CropAspectRatio(
+            ratioX: crop.ratioX.toDouble(),
+            ratioY: crop.ratioY.toDouble(),
+          ),
           uiSettings: [
             AndroidUiSettings(
-              toolbarTitle: 'Crop photo',
+              toolbarTitle: crop.title,
+              toolbarColor: const Color(0xFF0D1B3E),
+              toolbarWidgetColor: const Color(0xFFFFFFFF),
+              activeControlsWidgetColor: const Color(0xFF1565C0),
               lockAspectRatio: true,
               hideBottomControls: true,
+              initAspectRatio: CropAspectRatioPreset.original,
             ),
             IOSUiSettings(
-              title: 'Crop photo',
+              title: crop.title,
               aspectRatioLockEnabled: true,
               resetAspectRatioEnabled: false,
+              doneButtonTitle: 'Done',
+              cancelButtonTitle: 'Cancel',
             ),
           ],
         );
@@ -255,4 +285,26 @@ class StorageService {
         return 'image/jpeg';
     }
   }
+}
+
+/// Crop-time config: aspect ratio locked to ratioX/ratioY and the
+/// cropper outputs an image capped at `outputWidth` wide (height
+/// follows from the ratio). `outputQuality` is the JPEG quality the
+/// cropper writes — lower than the picker's pre-resize quality is
+/// fine because the cropper is the last compression stage before
+/// upload.
+class _CropSpec {
+  const _CropSpec({
+    required this.ratioX,
+    required this.ratioY,
+    required this.outputWidth,
+    required this.outputQuality,
+    required this.title,
+  });
+
+  final int ratioX;
+  final int ratioY;
+  final int outputWidth;
+  final int outputQuality;
+  final String title;
 }

@@ -595,6 +595,12 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
 
   Widget _buildContact(Church church) {
     final rows = <Widget>[];
+    // Physical address gets top billing — it's the single most-asked
+    // piece of info on a church profile after the name.
+    final addressLine = _addressLine(church);
+    if (addressLine.isNotEmpty) {
+      rows.add(_infoRow(Icons.place_outlined, 'Address', addressLine));
+    }
     if (church.pastorName != null && church.pastorName!.isNotEmpty) {
       rows.add(_infoRow(Icons.person_outline, 'Pastor', church.pastorName!));
     }

@@ -90,6 +90,8 @@ class EventService {
     required String title,
     required DateTime startDate,
     required String startTime,
+    DateTime? endDate,
+    String? endTime,
     String? description,
     String? venue,
     String? address,
@@ -105,11 +107,13 @@ class EventService {
     if (user == null) {
       throw const AuthException('Sign in to post an event.');
     }
-    final inserted = await _client.from(_table).insert({
+    final row = <String, dynamic>{
       'title': title.trim(),
       'description': description?.trim(),
       'start_date': _formatDate(_dateOnly(startDate)),
       'start_time': startTime,
+      if (endDate != null) 'end_date': _formatDate(_dateOnly(endDate)),
+      if (endTime != null) 'end_time': endTime,
       'venue': venue?.trim(),
       'address': address?.trim(),
       'province': province?.trim(),
@@ -121,7 +125,19 @@ class EventService {
       'cover_photo_url': coverPhotoUrl?.trim(),
       'organizer_id': user.id,
       'event_source': 'community',
-    }).select('id').single();
+    };
+    Map<String, dynamic> inserted;
+    try {
+      inserted =
+          await _client.from(_table).insert(row).select('id').single();
+    } catch (_) {
+      // Retry without the end_* columns when the migration hasn't been
+      // applied yet, so existing deployments don't 400 on every post.
+      row.remove('end_date');
+      row.remove('end_time');
+      inserted =
+          await _client.from(_table).insert(row).select('id').single();
+    }
     return inserted['id'].toString();
   }
 
@@ -132,6 +148,8 @@ class EventService {
     required String title,
     required DateTime startDate,
     required String startTime,
+    DateTime? endDate,
+    String? endTime,
     String? description,
     String? venue,
     String? city,
@@ -146,11 +164,16 @@ class EventService {
     if (user == null) {
       throw const AuthException('Sign in to edit your event.');
     }
-    await _client.from(_table).update({
+    final updates = <String, dynamic>{
       'title': title.trim(),
       'description': description?.trim(),
       'start_date': _formatDate(_dateOnly(startDate)),
       'start_time': startTime,
+      // Pass nulls explicitly so clearing an end date in the form
+      // actually removes it from the row (not just leaves the previous
+      // value in place).
+      'end_date': endDate == null ? null : _formatDate(_dateOnly(endDate)),
+      'end_time': endTime,
       'venue': venue?.trim(),
       'city': city?.trim(),
       'province': province?.trim(),
@@ -159,7 +182,22 @@ class EventService {
       'contact_name': contactName?.trim(),
       'contact_phone': contactPhone?.trim(),
       'cover_photo_url': coverPhotoUrl?.trim(),
-    }).eq('id', eventId).eq('organizer_id', user.id);
+    };
+    try {
+      await _client
+          .from(_table)
+          .update(updates)
+          .eq('id', eventId)
+          .eq('organizer_id', user.id);
+    } catch (_) {
+      updates.remove('end_date');
+      updates.remove('end_time');
+      await _client
+          .from(_table)
+          .update(updates)
+          .eq('id', eventId)
+          .eq('organizer_id', user.id);
+    }
   }
 
   static Future<void> rsvpToEvent(String eventId) async {

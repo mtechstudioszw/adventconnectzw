@@ -38,6 +38,8 @@ class _PostEventScreenState extends State<PostEventScreen>
 
   DateTime? _startDate;
   TimeOfDay? _startTime;
+  DateTime? _endDate;
+  TimeOfDay? _endTime;
   String? _province;
   String _category = 'community';
   String? _coverPhotoUrl;
@@ -89,13 +91,21 @@ class _PostEventScreenState extends State<PostEventScreen>
       _capacityController.text = existing.capacity?.toString() ?? '';
       _coverPhotoUrl = existing.coverPhotoUrl;
       _startDate = existing.eventDate;
-      final parts = existing.eventTime.split(':');
-      if (parts.length >= 2) {
-        final h = int.tryParse(parts[0]) ?? 0;
-        final m = int.tryParse(parts[1]) ?? 0;
-        _startTime = TimeOfDay(hour: h, minute: m);
+      _startTime = _parseTime(existing.eventTime);
+      _endDate = existing.endDate;
+      if (existing.endTime != null) {
+        _endTime = _parseTime(existing.endTime!);
       }
     }
+  }
+
+  TimeOfDay? _parseTime(String value) {
+    final parts = value.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
   }
 
   @override
@@ -111,12 +121,15 @@ class _PostEventScreenState extends State<PostEventScreen>
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
+  Future<DateTime?> _showDatePicker({
+    required DateTime? initial,
+    required DateTime first,
+  }) {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    return showDatePicker(
       context: context,
-      initialDate: _startDate ?? now,
-      firstDate: now,
+      initialDate: initial ?? first,
+      firstDate: first,
       lastDate: now.add(const Duration(days: 365 * 3)),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
@@ -125,13 +138,12 @@ class _PostEventScreenState extends State<PostEventScreen>
         child: child!,
       ),
     );
-    if (picked != null && mounted) setState(() => _startDate = picked);
   }
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
+  Future<TimeOfDay?> _showTimePicker({required TimeOfDay? initial}) {
+    return showTimePicker(
       context: context,
-      initialTime: _startTime ?? const TimeOfDay(hour: 18, minute: 0),
+      initialTime: initial ?? const TimeOfDay(hour: 18, minute: 0),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(primary: AppColors.primaryBlue),
@@ -139,30 +151,84 @@ class _PostEventScreenState extends State<PostEventScreen>
         child: child!,
       ),
     );
+  }
+
+  Future<void> _pickStartDate() async {
+    final picked = await _showDatePicker(
+      initial: _startDate,
+      first: DateTime.now(),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _startDate = picked;
+        // Clamp the end date forwards if it now sits before the new
+        // start.
+        if (_endDate != null && _endDate!.isBefore(picked)) {
+          _endDate = picked;
+        }
+      });
+    }
+  }
+
+  Future<void> _pickStartTime() async {
+    final picked = await _showTimePicker(initial: _startTime);
     if (picked != null && mounted) setState(() => _startTime = picked);
+  }
+
+  Future<void> _pickEndDate() async {
+    final picked = await _showDatePicker(
+      initial: _endDate ?? _startDate,
+      first: _startDate ?? DateTime.now(),
+    );
+    if (picked != null && mounted) setState(() => _endDate = picked);
+  }
+
+  Future<void> _pickEndTime() async {
+    final picked = await _showTimePicker(initial: _endTime ?? _startTime);
+    if (picked != null && mounted) setState(() => _endTime = picked);
   }
 
   Future<void> _save() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
     if (_startDate == null) {
-      setState(() => _error = 'Pick the event date.');
+      setState(() => _error = 'Pick the event start date.');
       return;
     }
     if (_startTime == null) {
       setState(() => _error = 'Pick the start time.');
       return;
     }
+
+    // End-time must not sit before the start. Same-day events with an
+    // end-time set are validated minute-by-minute; multi-day events
+    // are validated by date.
+    if (_endDate != null && _endDate!.isBefore(_startDate!)) {
+      setState(() => _error = 'End date cannot be before the start date.');
+      return;
+    }
+    if (_endTime != null && _endDate == null) {
+      // Single-day event with both times — compare directly.
+      final startMin = _startTime!.hour * 60 + _startTime!.minute;
+      final endMin = _endTime!.hour * 60 + _endTime!.minute;
+      if (endMin <= startMin) {
+        setState(() => _error = 'End time must be after the start time.');
+        return;
+      }
+    }
+
     setState(() => _saving = true);
     try {
-      final hh = _startTime!.hour.toString().padLeft(2, '0');
-      final mm = _startTime!.minute.toString().padLeft(2, '0');
+      final startTimeStr = _formatTime(_startTime!);
+      final endTimeStr = _endTime == null ? null : _formatTime(_endTime!);
       if (widget.isEditing) {
         await EventService.updateEvent(
           eventId: widget.existing!.id,
           title: _titleController.text,
           startDate: _startDate!,
-          startTime: '$hh:$mm',
+          startTime: startTimeStr,
+          endDate: _endDate,
+          endTime: endTimeStr,
           description: _descriptionController.text.isEmpty
               ? null
               : _descriptionController.text,
@@ -183,7 +249,9 @@ class _PostEventScreenState extends State<PostEventScreen>
         await EventService.postEvent(
           title: _titleController.text,
           startDate: _startDate!,
-          startTime: '$hh:$mm',
+          startTime: startTimeStr,
+          endDate: _endDate,
+          endTime: endTimeStr,
           description: _descriptionController.text.isEmpty
               ? null
               : _descriptionController.text,
@@ -439,38 +507,89 @@ class _PostEventScreenState extends State<PostEventScreen>
   }
 
   Widget _buildScheduleCard() {
-    final dateLabel = _startDate == null
-        ? 'Pick a date'
-        : '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}';
-    final timeLabel = _startTime == null
-        ? 'Pick a time'
-        : _startTime!.format(context);
+    final startDateLabel = _startDate == null
+        ? 'Pick start date'
+        : _formatPickedDate(_startDate!);
+    final startTimeLabel =
+        _startTime == null ? 'Pick start time' : _startTime!.format(context);
+    final endDateLabel = _endDate == null
+        ? 'Pick end date (optional)'
+        : _formatPickedDate(_endDate!);
+    final endTimeLabel = _endTime == null
+        ? 'Pick end time (optional)'
+        : _endTime!.format(context);
     return PostFormCard(
       child: Column(
         children: [
           PostFormLabeledField(
-            label: 'Date',
+            label: 'Start date',
             child: _PickerField(
               icon: Icons.calendar_today_outlined,
-              label: dateLabel,
+              label: startDateLabel,
               isPlaceholder: _startDate == null,
-              onTap: _pickDate,
+              onTap: _pickStartDate,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           PostFormLabeledField(
             label: 'Start time',
             child: _PickerField(
               icon: Icons.access_time,
-              label: timeLabel,
+              label: startTimeLabel,
               isPlaceholder: _startTime == null,
-              onTap: _pickTime,
+              onTap: _pickStartTime,
+            ),
+          ),
+          const SizedBox(height: 18),
+          PostFormLabeledField(
+            label: 'End date',
+            child: _PickerField(
+              icon: Icons.event_outlined,
+              label: endDateLabel,
+              isPlaceholder: _endDate == null,
+              onTap: _pickEndDate,
+              trailing: _endDate == null
+                  ? null
+                  : IconButton(
+                      icon: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Color.fromRGBO(26, 26, 46, 0.5),
+                      ),
+                      onPressed: () => setState(() => _endDate = null),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          PostFormLabeledField(
+            label: 'End time',
+            child: _PickerField(
+              icon: Icons.timer_outlined,
+              label: endTimeLabel,
+              isPlaceholder: _endTime == null,
+              onTap: _pickEndTime,
+              trailing: _endTime == null
+                  ? null
+                  : IconButton(
+                      icon: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Color.fromRGBO(26, 26, 46, 0.5),
+                      ),
+                      onPressed: () => setState(() => _endTime = null),
+                    ),
             ),
           ),
         ],
       ),
     );
   }
+
+  String _formatPickedDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Widget _buildLocationCard() {
     return PostFormCard(
@@ -581,12 +700,14 @@ class _PickerField extends StatelessWidget {
     required this.label,
     required this.isPlaceholder,
     required this.onTap,
+    this.trailing,
   });
 
   final IconData icon;
   final String label;
   final bool isPlaceholder;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -618,6 +739,7 @@ class _PickerField extends StatelessWidget {
                   ),
                 ),
               ),
+              if (trailing != null) trailing!,
               const Icon(
                 Icons.expand_more,
                 color: Color.fromRGBO(26, 26, 46, 0.5),

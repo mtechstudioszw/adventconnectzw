@@ -5,6 +5,8 @@ class Event {
     required this.eventDate,
     required this.eventTime,
     required this.rsvpCount,
+    this.endDate,
+    this.endTime,
     this.description,
     this.location,
     this.churchId,
@@ -20,6 +22,11 @@ class Event {
   final String? description;
   final DateTime eventDate;
   final String eventTime;
+  /// Optional end date — for multi-day events. Null means single-day
+  /// (ends on [eventDate]).
+  final DateTime? endDate;
+  /// Optional end time in `HH:mm`. Null means open-ended.
+  final String? endTime;
   final String? location;
   final String? churchId;
   final String? organizerId;
@@ -73,6 +80,21 @@ class Event {
       }
     }
 
+    final rawEndDate = json['end_date'];
+    DateTime? endDate;
+    if (rawEndDate is DateTime) {
+      endDate = rawEndDate;
+    } else if (rawEndDate != null) {
+      endDate = DateTime.tryParse('$rawEndDate');
+    }
+
+    final rawEndTime = json['end_time'];
+    String? endTime;
+    if (rawEndTime != null) {
+      final s = rawEndTime.toString();
+      endTime = s.length >= 5 ? s.substring(0, 5) : s;
+    }
+
     // Service inserts `venue` + `city`; model surfaces a single `location`
     // string. Prefer an explicit `location`; otherwise compose one from
     // venue/city so events posted through the form still show a location.
@@ -101,6 +123,8 @@ class Event {
       description: json['description'] as String?,
       eventDate: eventDate,
       eventTime: eventTime,
+      endDate: endDate,
+      endTime: endTime,
       location: resolvedLocation,
       churchId: json['church_id']?.toString(),
       organizerId: json['organizer_id']?.toString(),
@@ -120,9 +144,10 @@ class Event {
         'id': id,
         'title': title,
         'description': description,
-        'start_date':
-            '${eventDate.year.toString().padLeft(4, '0')}-${eventDate.month.toString().padLeft(2, '0')}-${eventDate.day.toString().padLeft(2, '0')}',
+        'start_date': _formatDate(eventDate),
         'start_time': eventTime,
+        if (endDate != null) 'end_date': _formatDate(endDate!),
+        if (endTime != null) 'end_time': endTime,
         'location': location,
         'church_id': churchId,
         'organizer_id': organizerId,
@@ -132,6 +157,9 @@ class Event {
         'created_at': createdAt?.toIso8601String(),
       };
 
+  static String _formatDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   Event copyWith({int? rsvpCount}) {
     return Event(
       id: id,
@@ -139,6 +167,8 @@ class Event {
       description: description,
       eventDate: eventDate,
       eventTime: eventTime,
+      endDate: endDate,
+      endTime: endTime,
       location: location,
       churchId: churchId,
       organizerId: organizerId,

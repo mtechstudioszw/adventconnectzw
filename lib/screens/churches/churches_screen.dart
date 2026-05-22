@@ -99,15 +99,21 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   }
 
   /// Visible list — when "Near me" is active and we have a location,
-  /// trims to the closest [_nearMeLimit] churches that actually carry
-  /// lat/lng. Falls back to the full list otherwise so the screen
-  /// never looks empty just because location is unavailable.
+  /// trims to the closest [_nearMeLimit] churches that carry lat/lng.
+  /// If no churches in the database have coordinates yet, we still
+  /// return the top of the full list so the screen isn't empty — the
+  /// banner above the list explains the situation.
   List<Church> _visibleChurches() {
     if (!_nearMode) return _churches;
     final pos = _position;
     if (pos == null) return _churches;
     final geo = _churches.where((c) => c.hasLocation).toList();
-    if (geo.isEmpty) return _churches;
+    if (geo.isEmpty) {
+      // No mapped churches yet — return the first few so the list
+      // still feels alive. The banner explains why distance chips are
+      // missing.
+      return _churches.take(_nearMeLimit).toList();
+    }
     geo.sort((a, b) {
       final ad = LocationService.distanceMeters(
         fromLat: pos.latitude,
@@ -206,15 +212,88 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     return MainScaffold(
       title: 'Churches',
       currentIndex: 1,
+      floatingActionButton: _buildNearMeFab(),
       body: Column(
         children: [
           _buildSearchBar(),
-          _buildNearMeRow(),
           if (_cities.isNotEmpty) _buildCityFilters(),
+          if (_nearMode) _buildNearModeBanner(),
           if (_locationError != null) _buildLocationErrorBanner(),
           Expanded(child: _buildList()),
           const AdBanner(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNearMeFab() {
+    final label = _nearMode ? 'Clear' : 'Near me';
+    final iconData =
+        _locating ? null : (_nearMode ? Icons.close : Icons.my_location);
+    return FloatingActionButton.extended(
+      onPressed: _locating ? null : _toggleNearMe,
+      backgroundColor: AppColors.primaryBlue,
+      foregroundColor: AppColors.white,
+      elevation: 6,
+      icon: _locating
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: AppColors.white,
+              ),
+            )
+          : Icon(iconData, size: 20),
+      label: Text(
+        label,
+        style: AppTextStyles.buttonText.copyWith(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNearModeBanner() {
+    final hasGeo = _churches.any((c) => c.hasLocation);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.location_on,
+              color: AppColors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                hasGeo
+                    ? 'Showing the 5 churches closest to you'
+                    : 'No mapped churches in your area yet — showing all',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -247,109 +326,6 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           filled: true,
           fillColor: AppColors.white,
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNearMeRow() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _locating ? null : _toggleNearMe,
-          borderRadius: BorderRadius.circular(22),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              gradient: _nearMode ? AppColors.primaryGradient : null,
-              color: _nearMode ? null : AppColors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: _nearMode
-                    ? AppColors.primaryBlue
-                    : AppColors.primaryBlue.withValues(alpha: 0.25),
-                width: 1.4,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withValues(
-                    alpha: _nearMode ? 0.25 : 0.08,
-                  ),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                _locating
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: AppColors.primaryBlue,
-                        ),
-                      )
-                    : Icon(
-                        _nearMode
-                            ? Icons.my_location
-                            : Icons.location_searching,
-                        color: _nearMode
-                            ? AppColors.white
-                            : AppColors.primaryBlue,
-                        size: 20,
-                      ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _nearMode
-                            ? 'Showing churches near you'
-                            : 'Find churches near me',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleSmall.copyWith(
-                          color: _nearMode
-                              ? AppColors.white
-                              : AppColors.darkNavy,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        _nearMode
-                            ? 'Tap to clear and see all churches'
-                            : 'We\'ll use your location to list the 5 closest',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: _nearMode
-                              ? AppColors.white.withValues(alpha: 0.85)
-                              : const Color.fromRGBO(26, 26, 46, 0.6),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  _nearMode ? Icons.close : Icons.chevron_right_rounded,
-                  color: _nearMode
-                      ? AppColors.white
-                      : AppColors.primaryBlue,
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

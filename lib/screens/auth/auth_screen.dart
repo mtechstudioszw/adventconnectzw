@@ -54,6 +54,12 @@ class _AuthScreenState extends State<AuthScreen>
   bool _detectionAmbiguous = false;
   String? _error;
 
+  // The birth date we'll attach to the signUp call. Seeded from the
+  // route extra (`widget.birthDate`) and topped up from secure storage
+  // if the user reaches this screen via a path that doesn't carry it
+  // (deep link, hot restart, "Change email" mid-flow, etc).
+  DateTime? _birthDate;
+
   @override
   void initState() {
     super.initState();
@@ -68,9 +74,18 @@ class _AuthScreenState extends State<AuthScreen>
     _slide = Tween<double>(begin: 16, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic),
     );
+    _birthDate = widget.birthDate;
+    _loadStoredBirthDate();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _emailFocus.requestFocus(),
     );
+  }
+
+  Future<void> _loadStoredBirthDate() async {
+    if (_birthDate != null) return;
+    final stored = await AuthService.getStoredBirthDate();
+    if (!mounted || stored == null) return;
+    setState(() => _birthDate = stored);
   }
 
   @override
@@ -189,16 +204,33 @@ class _AuthScreenState extends State<AuthScreen>
           'Please accept the Terms & Conditions to create your account.');
       return;
     }
-    final birthDate = widget.birthDate;
+    // Prefer the route-extra birth date, then fall back to whatever
+    // was stored on the age-verification screen. If neither is set,
+    // push the user back to the age gate instead of dead-ending them.
+    final birthDate = _birthDate ?? await AuthService.getStoredBirthDate();
+    if (!mounted) return;
     if (birthDate == null) {
-      // Should be impossible — splash routes through age_verification
-      // first — but guard anyway so we never silently bypass the gate.
-      setState(() => _error =
-          'We need your date of birth before creating an account. '
-          'Please go back and complete the age check.');
+      setState(() {
+        _submitting = false;
+        _error = 'We need your date of birth before creating an account.';
+      });
+      // Give the user a one-tap way back to the age gate.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.primaryBlue,
+          content: const Text('Returning you to the age check…'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) context.goNamed('age_verification');
+      });
       return;
     }
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _birthDate = birthDate;
+    });
     final result = await AuthService.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text,

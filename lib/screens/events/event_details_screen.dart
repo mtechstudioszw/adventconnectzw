@@ -342,14 +342,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         children: [
           _MetaTile(
             icon: Icons.calendar_today_outlined,
-            label: 'Date',
-            value: _formatShortDate(event.eventDate),
+            label: event.endDate != null && event.endDate != event.eventDate
+                ? 'Dates'
+                : 'Date',
+            value: event.endDate != null && event.endDate != event.eventDate
+                ? '${_formatShortDate(event.eventDate)} → ${_formatShortDate(event.endDate!)}'
+                : _formatShortDate(event.eventDate),
           ),
           _verticalDivider(),
           _MetaTile(
             icon: Icons.access_time,
-            label: 'Time',
-            value: _formatTime(event.eventTime),
+            label: event.endTime != null ? 'Time' : 'Starts',
+            value: event.endTime != null
+                ? '${_formatTime(event.eventTime)} – ${_formatTime(event.endTime!)}'
+                : _formatTime(event.eventTime),
           ),
           _verticalDivider(),
           _MetaTile(

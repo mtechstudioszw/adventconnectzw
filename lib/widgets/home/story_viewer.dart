@@ -33,10 +33,13 @@ class StoryViewer extends StatefulWidget {
 
 class _StoryViewerState extends State<StoryViewer>
     with SingleTickerProviderStateMixin {
-  static const Duration _storyDuration = Duration(seconds: 5);
+  // 15s per story to match WhatsApp Status. Long enough to read a
+  // caption and admire the photo, short enough to keep the rail moving.
+  static const Duration _storyDuration = Duration(seconds: 15);
 
   late final AnimationController _progress;
   int _index = 0;
+  bool _paused = false;
 
   @override
   void initState() {
@@ -80,6 +83,30 @@ class _StoryViewerState extends State<StoryViewer>
       ..forward();
   }
 
+  /// Hold-to-pause: only fires after the system long-press threshold,
+  /// so a quick left/right tap still navigates. Release resumes from
+  /// the same position — the timer is *paused*, not restarted, which
+  /// is what users expect from WhatsApp Status.
+  void _onHoldStart() {
+    if (_paused) return;
+    setState(() => _paused = true);
+    _progress.stop();
+  }
+
+  void _onHoldEnd() {
+    if (!_paused) return;
+    setState(() => _paused = false);
+    _progress.forward();
+  }
+
+  String _relativeTime(DateTime when) {
+    final diff = DateTime.now().difference(when);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
   @override
   Widget build(BuildContext context) {
     final story = widget.stories[_index];
@@ -102,43 +129,62 @@ class _StoryViewerState extends State<StoryViewer>
                 ),
               ),
             ),
-            Listener(
-              // Press anywhere → pause the progress bar. Release →
-              // resume. We layer the tap-left / tap-right gestures on
-              // top via GestureDetector. A short press + release reads
-              // as a tap (advance/back) AND a brief pause/resume — the
-              // cycle is invisible during the tap.
-              onPointerDown: (_) => _progress.stop(),
-              onPointerUp: (_) => _progress.forward(),
-              onPointerCancel: (_) => _progress.forward(),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _back,
-                    ),
+            // Gesture layer — WhatsApp Status semantics.
+            //   - Tap LEFT third  → previous story
+            //   - Tap RIGHT third → next story
+            //   - Long-press anywhere → pause + hide overlays. Release
+            //     resumes from where the timer paused (not from zero).
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _back,
+                    onLongPressStart: (_) => _onHoldStart(),
+                    onLongPressEnd: (_) => _onHoldEnd(),
+                    onLongPressCancel: _onHoldEnd,
                   ),
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _advance,
-                    ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPressStart: (_) => _onHoldStart(),
+                    onLongPressEnd: (_) => _onHoldEnd(),
+                    onLongPressCancel: _onHoldEnd,
                   ),
-                ],
-              ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _advance,
+                    onLongPressStart: (_) => _onHoldStart(),
+                    onLongPressEnd: (_) => _onHoldEnd(),
+                    onLongPressCancel: _onHoldEnd,
+                  ),
+                ),
+              ],
             ),
+            // Top overlays (progress bar + author header). Hide while
+            // the user is holding to pause — matches WhatsApp's
+            // photo-on-press behaviour.
             Positioned(
               top: 12,
               left: 12,
               right: 12,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildProgressRow(),
-                  const SizedBox(height: 12),
-                  _buildHeader(story),
-                ],
+              child: IgnorePointer(
+                ignoring: _paused,
+                child: AnimatedOpacity(
+                  opacity: _paused ? 0 : 1,
+                  duration: const Duration(milliseconds: 180),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildProgressRow(),
+                      const SizedBox(height: 12),
+                      _buildHeader(story),
+                    ],
+                  ),
+                ),
               ),
             ),
             if ((story.caption ?? '').isNotEmpty)
@@ -248,15 +294,31 @@ class _StoryViewerState extends State<StoryViewer>
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            story.authorName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.titleMedium.copyWith(
-              color: AppColors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                story.authorName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                _relativeTime(story.createdAt),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.white.withValues(alpha: 0.75),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
         IconButton(

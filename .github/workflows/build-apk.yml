@@ -1,15 +1,18 @@
 # Builds a debug APK on every push to main and on manual trigger.
-# The APK is uploaded as a GitHub Actions artifact you can download
-# straight to your phone. Frees you from having to download ~400 MB
-# of Android build deps over a slow connection — GitHub does the
-# heavy lifting on their servers, you only download the finished
-# ~50 MB APK.
+# Two ways to download the result:
 #
-# How to grab the APK:
+# A) GitHub Release (RECOMMENDED — phone-friendly)
+#   1. Open https://github.com/mtechstudioszw/adventconnectzw/releases
+#   2. Find the "Latest debug build" release (auto-updated each push)
+#   3. Tap the `advent-connect-debug.apk` asset on your phone
+#   4. Open the downloaded file → install. No extraction needed.
+#
+# B) Actions Artifact (the file is wrapped in a .zip)
 #   1. Open https://github.com/mtechstudioszw/adventconnectzw/actions
-#   2. Click the latest "Build APK" run
-#   3. Scroll to "Artifacts" → tap "advent-connect-debug-apk" to download
-#   4. Open the .zip on your phone, extract the .apk, install.
+#   2. Click the latest "Build APK" run → scroll to "Artifacts"
+#   3. Tap "advent-connect-debug-apk" to download the .zip
+#   4. Extract on your phone (use Files by Google or similar) to get
+#      the .apk, then tap it to install.
 #
 # To trigger a manual build without a code push:
 #   Actions tab → "Build APK" → "Run workflow" → pick main → Run.
@@ -20,6 +23,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+
+# Required so the create-release step can push commits/tags + create
+# releases under the workflow's default GITHUB_TOKEN.
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -69,10 +77,39 @@ jobs:
       - name: Build debug APK
         run: flutter build apk --debug
 
+      - name: Rename APK for release
+        # Give the file a friendly name when downloaded by a phone —
+        # `app-debug.apk` looks generic in a notifications shade.
+        run: |
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+             release/advent-connect-debug.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: advent-connect-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: release/advent-connect-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish to "Latest debug build" release
+        # Always overwrites a single moving tag so the user always
+        # downloads from the same URL. Phones get a direct .apk
+        # link — no .zip extraction step.
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-debug
+          name: Latest debug build
+          body: |
+            Auto-built debug APK from commit ${{ github.sha }}.
+
+            **Install on your phone:**
+            Tap `advent-connect-debug.apk` below to download → open it
+            from the notifications shade → install.
+            (You may need to allow "Install unknown apps" for your
+            browser the first time.)
+          files: release/advent-connect-debug.apk
+          prerelease: true
+          make_latest: false

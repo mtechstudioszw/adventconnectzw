@@ -81,6 +81,30 @@ class Job {
     );
   }
 
+  /// Round-trip JSON for offline cache. Uses the same column names the
+  /// API returns so `fromJson` can hydrate it without special-casing.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'poster_id': posterId,
+        'poster_name': posterName,
+        'title': title,
+        'company': company,
+        'location': location,
+        'job_type': type,
+        'salary_min': salaryMin,
+        'salary_max': salaryMax,
+        'currency': currency,
+        'description': description,
+        'requirements': requirements,
+        'category': category,
+        'contact_phone': contactPhone,
+        'company_logo_url': companyLogoUrl,
+        'is_active': isActive,
+        'status': status,
+        'post_type': postType,
+        'created_at': createdAt.toIso8601String(),
+      };
+
   String formatSalary() {
     if (salaryMin == null && salaryMax == null) return 'Negotiable';
     final symbol = currency == 'USD' ? r'$' : '$currency ';

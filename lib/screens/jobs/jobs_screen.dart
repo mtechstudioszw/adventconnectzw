@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/job_model.dart';
+import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/job_card.dart';
+import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
@@ -44,7 +48,34 @@ class _JobsScreenState extends State<JobsScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    _hydrateFromCache();
     _loadJobs();
+  }
+
+  static const _cacheKey = 'jobs_list';
+
+  void _hydrateFromCache() {
+    try {
+      final raw = CacheService.readString(_cacheKey);
+      if (raw == null) return;
+      final list = (jsonDecode(raw) as List)
+          .map((e) => Job.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (!mounted || list.isEmpty) return;
+      setState(() {
+        _jobs = list;
+        _loading = false;
+      });
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<void> _writeCache(List<Job> list) async {
+    try {
+      final payload = jsonEncode(list.map((e) => e.toJson()).toList());
+      await CacheService.writeString(_cacheKey, payload);
+    } catch (_) {}
   }
 
   @override
@@ -57,7 +88,7 @@ class _JobsScreenState extends State<JobsScreen>
 
   Future<void> _loadJobs() async {
     setState(() {
-      _loading = true;
+      if (_jobs.isEmpty) _loading = true;
       _error = null;
     });
     try {
@@ -70,6 +101,11 @@ class _JobsScreenState extends State<JobsScreen>
         _jobs = list;
         _loading = false;
       });
+      // Cache the unfiltered list (no search, no category filter) so
+      // the cache represents the full feed users land on first.
+      if (_searchController.text.isEmpty && _selectedCategory == 'all') {
+        unawaited(_writeCache(list));
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -346,12 +382,24 @@ class _JobsScreenState extends State<JobsScreen>
         ],
       );
     }
+    final cachedAt = CacheService.cachedAt(_cacheKey);
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: _jobs.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, i) {
+      itemCount: _jobs.length + (cachedAt != null ? 1 : 0),
+      separatorBuilder: (_, i) {
+        if (cachedAt != null && i == 0) return const SizedBox(height: 6);
+        return const SizedBox(height: 12);
+      },
+      itemBuilder: (context, rawIndex) {
+        if (cachedAt != null && rawIndex == 0) {
+          return LastUpdatedStrip(
+            timestamp: cachedAt,
+            isOnline: ConnectivityService.isOnline,
+            onRefresh: _loadJobs,
+          );
+        }
+        final i = cachedAt != null ? rawIndex - 1 : rawIndex;
         final j = _jobs[i];
         return JobCard(
           job: j,

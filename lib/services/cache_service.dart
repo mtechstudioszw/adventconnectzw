@@ -57,6 +57,18 @@ class CacheService {
     return value;
   }
 
+  /// When was the value at [key] last written? Returns null if there's
+  /// nothing cached, or the timestamp is missing / malformed. Used by
+  /// the "Updated X ago" strip on each tab so users know how fresh the
+  /// list they're looking at is.
+  static DateTime? cachedAt(String key) {
+    final box = _box;
+    if (box == null) return null;
+    final tsRaw = box.get('${key}__ts');
+    if (tsRaw == null) return null;
+    return DateTime.tryParse(tsRaw);
+  }
+
   static Future<void> clear() async {
     await _box?.clear();
   }

@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/event_model.dart';
+import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/event_card.dart';
+import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/post_form_widgets.dart';
@@ -49,7 +53,36 @@ class _EventsScreenState extends State<EventsScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    _hydrateUpcomingFromCache();
     _bootstrap();
+  }
+
+  static const _cacheKey = 'events_upcoming';
+
+  void _hydrateUpcomingFromCache() {
+    try {
+      final raw = CacheService.readString(_cacheKey);
+      if (raw == null) return;
+      final list = (jsonDecode(raw) as List)
+          .map((e) => Event.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (!mounted || list.isEmpty) return;
+      setState(() {
+        _upcoming = list;
+        _loadingUpcoming = false;
+      });
+    } catch (_) {
+      // Corrupt cache is not an error — just a missed paint.
+    }
+  }
+
+  Future<void> _writeUpcomingCache(List<Event> list) async {
+    try {
+      final payload = jsonEncode(list.map((e) => e.toJson()).toList());
+      await CacheService.writeString(_cacheKey, payload);
+    } catch (_) {
+      // Cache writes never block.
+    }
   }
 
   @override
@@ -84,8 +117,11 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Future<void> _loadUpcoming() async {
+    // Only show the centred spinner when we have NO cached content to
+    // paint. When we already have something on screen, refresh silently
+    // in the background — Facebook-style.
     setState(() {
-      _loadingUpcoming = true;
+      if (_upcoming.isEmpty) _loadingUpcoming = true;
       _error = null;
     });
     try {
@@ -100,6 +136,12 @@ class _EventsScreenState extends State<EventsScreen>
         _upcoming = list;
         _loadingUpcoming = false;
       });
+      // Cache the unfiltered "fresh" list. Only persist when there's
+      // no search / date filter so the cache reflects the full upcoming
+      // feed users land on first.
+      if (_searchController.text.isEmpty && _dateRange == null) {
+        unawaited(_writeUpcomingCache(list));
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -470,12 +512,28 @@ class _EventsScreenState extends State<EventsScreen>
       );
     }
 
+    // Inject the "Updated X ago" strip above the upcoming list — only
+    // for the upcoming tab where we cache.
+    final showFreshness = isUpcoming;
+    final cachedAt =
+        showFreshness ? CacheService.cachedAt(_cacheKey) : null;
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: events.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 16),
-      itemBuilder: (context, i) {
+      itemCount: events.length + (cachedAt != null ? 1 : 0),
+      separatorBuilder: (_, i) {
+        if (cachedAt != null && i == 0) return const SizedBox(height: 8);
+        return const SizedBox(height: 16);
+      },
+      itemBuilder: (context, rawIndex) {
+        if (cachedAt != null && rawIndex == 0) {
+          return LastUpdatedStrip(
+            timestamp: cachedAt,
+            isOnline: ConnectivityService.isOnline,
+            onRefresh: _refreshActive,
+          );
+        }
+        final i = cachedAt != null ? rawIndex - 1 : rawIndex;
         final e = events[i];
         return EventCard(
           event: e,

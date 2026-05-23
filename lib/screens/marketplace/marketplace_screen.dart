@@ -1,16 +1,20 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
 import '../../services/account_mode_service.dart';
 import '../../services/account_service.dart';
+import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../../widgets/product_card.dart';
 import '../widgets/main_bottom_nav.dart';
@@ -49,8 +53,33 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    _hydrateFromCache();
     _loadProducts();
     _loadMySeller();
+  }
+
+  static const _cacheKey = 'products_list';
+
+  void _hydrateFromCache() {
+    try {
+      final raw = CacheService.readString(_cacheKey);
+      if (raw == null) return;
+      final list = (jsonDecode(raw) as List)
+          .map((e) => Product.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (!mounted || list.isEmpty) return;
+      setState(() {
+        _products = list;
+        _loading = false;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _writeCache(List<Product> list) async {
+    try {
+      final payload = jsonEncode(list.map((e) => e.toJson()).toList());
+      await CacheService.writeString(_cacheKey, payload);
+    } catch (_) {}
   }
 
   Future<void> _loadMySeller() async {
@@ -72,7 +101,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
 
   Future<void> _loadProducts() async {
     setState(() {
-      _loading = true;
+      if (_products.isEmpty) _loading = true;
       _error = null;
     });
     try {
@@ -85,6 +114,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
         _products = list;
         _loading = false;
       });
+      if (_searchController.text.isEmpty && _selectedCategory == 'all') {
+        unawaited(_writeCache(list));
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -414,27 +446,47 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
         ],
       );
     }
-    return GridView.builder(
+    final cachedAt = CacheService.cachedAt(_cacheKey);
+    return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: _products.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 14,
-        crossAxisSpacing: 14,
-        childAspectRatio: 0.72,
-      ),
-      itemBuilder: (context, i) {
-        final p = _products[i];
-        return ProductCard(
-          product: p,
-          onTap: () => context.pushNamed(
-            'product_details',
-            pathParameters: {'id': p.id},
-            extra: p,
+      slivers: [
+        if (cachedAt != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: LastUpdatedStrip(
+                timestamp: cachedAt,
+                isOnline: ConnectivityService.isOnline,
+                onRefresh: _loadProducts,
+              ),
+            ),
           ),
-        );
-      },
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 14,
+              childAspectRatio: 0.72,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, i) {
+                final p = _products[i];
+                return ProductCard(
+                  product: p,
+                  onTap: () => context.pushNamed(
+                    'product_details',
+                    pathParameters: {'id': p.id},
+                    extra: p,
+                  ),
+                );
+              },
+              childCount: _products.length,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

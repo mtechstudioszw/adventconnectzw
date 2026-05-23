@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
+import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/location_service.dart';
@@ -10,6 +13,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/church_card.dart';
+import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
 
@@ -38,7 +42,32 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   @override
   void initState() {
     super.initState();
+    _hydrateFromCache();
     _bootstrap();
+  }
+
+  static const _cacheKey = 'churches_list';
+
+  void _hydrateFromCache() {
+    try {
+      final raw = CacheService.readString(_cacheKey);
+      if (raw == null) return;
+      final list = (jsonDecode(raw) as List)
+          .map((e) => Church.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (!mounted || list.isEmpty) return;
+      setState(() {
+        _churches = list;
+        _loading = false;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _writeCache(List<Church> list) async {
+    try {
+      final payload = jsonEncode(list.map((e) => e.toJson()).toList());
+      await CacheService.writeString(_cacheKey, payload);
+    } catch (_) {}
   }
 
   @override
@@ -176,7 +205,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
 
   Future<void> _loadChurches() async {
     setState(() {
-      _loading = true;
+      if (_churches.isEmpty) _loading = true;
       _error = null;
     });
     try {
@@ -190,6 +219,9 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         _loading = false;
         _sortByDistance();
       });
+      if (_searchController.text.isEmpty && _selectedCity == null) {
+        unawaited(_writeCache(list));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -499,12 +531,24 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     }
 
     final list = _visibleChurches();
+    final cachedAt = CacheService.cachedAt(_cacheKey);
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: list.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, i) {
+      itemCount: list.length + (cachedAt != null ? 1 : 0),
+      separatorBuilder: (_, i) {
+        if (cachedAt != null && i == 0) return const SizedBox(height: 6);
+        return const SizedBox(height: 12);
+      },
+      itemBuilder: (context, rawIndex) {
+        if (cachedAt != null && rawIndex == 0) {
+          return LastUpdatedStrip(
+            timestamp: cachedAt,
+            isOnline: ConnectivityService.isOnline,
+            onRefresh: _loadChurches,
+          );
+        }
+        final i = cachedAt != null ? rawIndex - 1 : rawIndex;
         final c = list[i];
         return ChurchCard(
           church: c,

@@ -54,6 +54,24 @@ class Product {
     );
   }
 
+  /// Round-trip JSON for offline cache. Column names mirror the API
+  /// payload so `fromJson` hydrates without special-casing.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'seller_id': sellerId,
+        'seller_name': sellerName,
+        'seller_phone': sellerPhone,
+        'seller_verified': sellerVerified,
+        'title': title,
+        'description': description,
+        'price': price,
+        'currency': currency,
+        'category': category,
+        'image_urls': imageUrls,
+        'is_available': isAvailable,
+        'created_at': createdAt.toIso8601String(),
+      };
+
   static double _readDouble(dynamic value) {
     if (value is double) return value;
     if (value is int) return value.toDouble();

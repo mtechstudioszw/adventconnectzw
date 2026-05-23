@@ -154,11 +154,25 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
           churchId: _homeChurchId,
         );
         if (!mounted) return;
-        setState(() => _saving = false);
         if (!result.isSuccess) {
-          setState(() => _error = result.errorMessage);
+          setState(() {
+            _saving = false;
+            _error = result.errorMessage;
+          });
           return;
         }
+        // Mirror the home-church pick into church_followers so the
+        // home greeting card actually reflects it. Without this, the
+        // user lands on Home and sees "No church set yet" even though
+        // they picked one moments ago. Best-effort — a follow failure
+        // shouldn't dead-end onboarding.
+        try {
+          await ChurchService.follow(_homeChurchId!);
+        } catch (_) {
+          // ignore — already-following or transient errors
+        }
+        if (!mounted) return;
+        setState(() => _saving = false);
       }
     } else if (_index == 3) {
       setState(() => _saving = true);

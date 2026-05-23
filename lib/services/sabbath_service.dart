@@ -48,6 +48,59 @@ class SabbathService {
 
   static List<String> get provinces => _provinceCoords.keys.toList();
 
+  /// True while we're inside the Sabbath window: from Friday sundown
+  /// through Saturday sundown. The home chip uses this to switch from
+  /// a countdown ("Sabbath in 6h 12m") to a celebratory tag ("Happy
+  /// Sabbath") for the duration.
+  static bool isSabbathNow({DateTime? from, String? overrideProvince}) {
+    final end = currentSabbathEnd(
+      from: from,
+      overrideProvince: overrideProvince,
+    );
+    return end != null;
+  }
+
+  /// If we're currently inside the Sabbath window, returns its end
+  /// (Saturday sundown in UTC). Otherwise null. Useful for showing a
+  /// "Sabbath ends in 1h 20m" hint near the end of the day.
+  static DateTime? currentSabbathEnd({
+    DateTime? from,
+    String? overrideProvince,
+  }) {
+    final coordKey = overrideProvince ?? province() ?? 'Harare';
+    final coords = _provinceCoords[coordKey];
+    if (coords == null) return null;
+    final now = (from ?? DateTime.now()).toUtc();
+    // Africa/Harare wall-clock — same UTC+2 offset trick as below.
+    final hararet = now.add(const Duration(hours: 2));
+
+    // Find the Friday that started the current Sabbath (today if it's
+    // already Saturday or late Friday, yesterday if early Saturday, or
+    // never if it's Sunday–Thursday).
+    DateTime friday = DateTime(hararet.year, hararet.month, hararet.day);
+    // Walk back to the most recent Friday.
+    while (friday.weekday != DateTime.friday) {
+      friday = friday.subtract(const Duration(days: 1));
+    }
+    final saturday = friday.add(const Duration(days: 1));
+
+    final fridaySunset = _sunsetLocal(
+      date: friday,
+      latDeg: coords.lat,
+      lonDeg: coords.lon,
+    );
+    final saturdaySunset = _sunsetLocal(
+      date: saturday,
+      latDeg: coords.lat,
+      lonDeg: coords.lon,
+    );
+
+    if (hararet.isAfter(fridaySunset) && hararet.isBefore(saturdaySunset)) {
+      return saturdaySunset.subtract(const Duration(hours: 2)).toUtc();
+    }
+    return null;
+  }
+
   /// The next Friday sundown after [from] in Africa/Harare local time.
   /// Returns null if the province isn't recognised.
   static DateTime? nextSabbathStart({DateTime? from, String? overrideProvince}) {

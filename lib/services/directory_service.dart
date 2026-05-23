@@ -112,37 +112,78 @@ class DirectoryService {
   /// surfaces profiles even if they don't have a directory row, so
   /// search had to gain a matching path or the user could see a name
   /// on the home tab and then fail to find it in search.
+  ///
+  /// Cascading fallback: try the strict query first (is_discoverable +
+  /// is_banned). If that returns empty (or 400s because the columns
+  /// don't exist on this deployment) retry without those filters so
+  /// users can actually find each other by name. This was the cause
+  /// of "I search and see nothing" — users hadn't set is_discoverable
+  /// to true (or the column never shipped).
   static Future<List<MemberDirectoryEntry>> searchProfilesByName(
     String query, {
     int limit = 30,
   }) async {
     final term = query.trim();
     if (term.isEmpty) return const [];
-    final user = _client.auth.currentUser;
-    var profilesQuery = _client
-        .from('profiles')
-        .select('id, full_name, profile_photo_url, province, city, bio')
-        .eq('is_discoverable', true)
-        .eq('is_banned', false)
-        .ilike('full_name', '%$term%');
-    if (user != null) {
-      profilesQuery = profilesQuery.neq('id', user.id);
+
+    // Pass 1 — strict filter.
+    final strict = await _searchByNameOnce(
+      term,
+      limit: limit,
+      filters: const {'is_discoverable': true, 'is_banned': false},
+    );
+    if (strict.isNotEmpty) return strict;
+
+    // Pass 2 — drop the discoverable flag (column might be missing,
+    // or nobody opted in).
+    final loose = await _searchByNameOnce(
+      term,
+      limit: limit,
+      filters: const {'is_banned': false},
+    );
+    if (loose.isNotEmpty) return loose;
+
+    // Pass 3 — name-only, no flag filters at all.
+    return _searchByNameOnce(term, limit: limit, filters: const {});
+  }
+
+  static Future<List<MemberDirectoryEntry>> _searchByNameOnce(
+    String term, {
+    required int limit,
+    required Map<String, bool> filters,
+  }) async {
+    try {
+      final user = _client.auth.currentUser;
+      var q = _client
+          .from('profiles')
+          .select('id, full_name, profile_photo_url, province, city, bio');
+      filters.forEach((column, value) {
+        q = q.eq(column, value);
+      });
+      var filtered = q.ilike('full_name', '%$term%');
+      if (user != null) {
+        filtered = filtered.neq('id', user.id);
+      }
+      final response =
+          await filtered.order('created_at', ascending: false).limit(limit);
+      return (response as List)
+          .map((row) => row as Map<String, dynamic>)
+          .map((row) => MemberDirectoryEntry(
+                id: row['id'].toString(),
+                userId: row['id'].toString(),
+                isVisible: true,
+                fullName: row['full_name'] as String?,
+                profilePhotoUrl: row['profile_photo_url'] as String?,
+                province: row['province'] as String?,
+                city: row['city'] as String?,
+                bio: row['bio'] as String?,
+              ))
+          .toList();
+    } catch (_) {
+      // Column missing, RLS rejection, etc. Return empty so the
+      // caller can fall through to the next pass.
+      return const [];
     }
-    final response =
-        await profilesQuery.order('created_at', ascending: false).limit(limit);
-    return (response as List)
-        .map((row) => row as Map<String, dynamic>)
-        .map((row) => MemberDirectoryEntry(
-              id: row['id'].toString(),
-              userId: row['id'].toString(),
-              isVisible: true,
-              fullName: row['full_name'] as String?,
-              profilePhotoUrl: row['profile_photo_url'] as String?,
-              province: row['province'] as String?,
-              city: row['city'] as String?,
-              bio: row['bio'] as String?,
-            ))
-        .toList();
   }
 
   /// Returns the current user's directory entry, or null if they

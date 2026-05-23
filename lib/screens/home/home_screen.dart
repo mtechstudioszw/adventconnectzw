@@ -477,7 +477,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 const SizedBox(height: 12),
                 _buildChurchGrid(),
-                if (_suggestedMembers.isNotEmpty) ...[
+                if (_hasNonFriendSuggestions) ...[
                   const SizedBox(height: 28),
                   _buildSectionHeader('People to meet', null),
                   const SizedBox(height: 12),
@@ -606,6 +606,17 @@ class _HomeScreenState extends State<HomeScreen>
     final raw = (meta['full_name'] as String?)?.trim() ?? '';
     if (raw.isNotEmpty) return raw;
     return user?.email ?? 'Welcome';
+  }
+
+  /// True when there's at least one suggested member the viewer is
+  /// NOT already friends with. Pending requests still count so the
+  /// rail shows even when there's only an Accept-button card to show.
+  bool get _hasNonFriendSuggestions {
+    return _suggestedMembers.any((m) {
+      final f = _friendshipsByUser[m.userId];
+      if (f == null) return true;
+      return f.status != FriendshipStatus.accepted;
+    });
   }
 
   String? _profilePhotoUrl() {
@@ -850,8 +861,23 @@ class _HomeScreenState extends State<HomeScreen>
             onDelete: () => _confirmDeletePost(post),
             onToggleVisibility: () => _togglePostVisibility(post),
             onReport: () => _reportPost(post),
+            onAuthorTapped: () => _openAuthorProfile(post),
           ),
       ],
+    );
+  }
+
+  void _openAuthorProfile(Post post) {
+    final viewerId = AuthService.currentUser?.id;
+    // Tapping your own name goes to your profile tab, not a read-only
+    // user-profile view of yourself.
+    if (viewerId != null && post.authorId == viewerId) {
+      context.goNamed('profile');
+      return;
+    }
+    context.pushNamed(
+      'user_profile',
+      pathParameters: {'userId': post.authorId},
     );
   }
 
@@ -995,15 +1021,23 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildSuggestedMembersRow() {
     final viewerId = AuthService.currentUser?.id;
+    // Hide people the viewer is already friends with — they no longer
+    // belong in a "suggestions" rail. Pending requests (either
+    // direction) stay visible so the viewer can react to them.
+    final visibleSuggestions = _suggestedMembers.where((m) {
+      final f = _friendshipsByUser[m.userId];
+      if (f == null) return true;
+      return f.status != FriendshipStatus.accepted;
+    }).toList();
     return SizedBox(
       height: 210,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: _suggestedMembers.length,
+        itemCount: visibleSuggestions.length,
         separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
-          final m = _suggestedMembers[i];
+          final m = visibleSuggestions[i];
           final friendship = _friendshipsByUser[m.userId];
           return SizedBox(
             width: 150,
@@ -1109,6 +1143,50 @@ class _SabbathChipState extends State<_SabbathChip> {
   @override
   Widget build(BuildContext context) {
     if (!SabbathService.isEnabled()) return const SizedBox.shrink();
+    final inSabbath = SabbathService.isSabbathNow();
+    if (inSabbath) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.goldAccent.withValues(alpha: 0.55),
+                AppColors.goldAccent.withValues(alpha: 0.30),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppColors.goldAccent,
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.auto_awesome,
+                size: 13,
+                color: AppColors.white,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Happy Sabbath',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.white,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final next = SabbathService.nextSabbathStart();
     if (next == null) return const SizedBox.shrink();
     final remaining = next.difference(DateTime.now().toUtc());

@@ -245,10 +245,23 @@ class _SearchScreenState extends State<SearchScreen> {
   ///      cleanly.
   Future<List<MemberDirectoryEntry>> _searchPeople(String query) async {
     final lower = query.toLowerCase();
+    // Each sub-source can fail independently (missing column, RLS
+    // rejection, network blip). Wrap each in catch-returning-empty so
+    // one failure doesn't blank the entire people section.
+    Future<List<MemberDirectoryEntry>> safe(
+      Future<List<MemberDirectoryEntry>> Function() fn,
+    ) async {
+      try {
+        return await fn();
+      } catch (_) {
+        return const [];
+      }
+    }
+
     final results = await Future.wait([
-      DirectoryService.fetchEntries(search: query),
-      DirectoryService.searchProfilesByName(query),
-      DirectoryService.fetchSuggestedMembers(limit: 80),
+      safe(() => DirectoryService.fetchEntries(search: query)),
+      safe(() => DirectoryService.searchProfilesByName(query)),
+      safe(() => DirectoryService.fetchSuggestedMembers(limit: 80)),
     ]);
     final byProfession = results[0];
     final byName = results[1];

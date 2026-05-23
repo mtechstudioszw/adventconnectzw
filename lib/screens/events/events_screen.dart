@@ -2,11 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/event_model.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/event_card.dart';
+import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/post_form_widgets.dart';
 
@@ -377,7 +379,33 @@ class _EventsScreenState extends State<EventsScreen>
       );
     }
 
+    // Soft inline notice instead of a full-screen blocker when the
+    // load failed because we're offline. The tab still feels alive —
+    // the user sees the search bar, tabs, and either cached items or
+    // the empty state right below this strip.
     if (_error != null && events.isEmpty && isUpcoming) {
+      final isOffline = !ConnectivityService.isOnline;
+      if (isOffline) {
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            OfflineInlineNotice(onRetry: _refreshActive),
+            const SizedBox(height: 80),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'No events cached yet for this tab.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [

@@ -5,11 +5,13 @@ import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
 import '../../services/account_mode_service.dart';
 import '../../services/account_service.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
+import '../../widgets/offline_inline_notice.dart';
 import '../../widgets/product_card.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
@@ -270,6 +272,28 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
       );
     }
     if (_error != null && _products.isEmpty) {
+      final isOffline = !ConnectivityService.isOnline;
+      if (isOffline) {
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            OfflineInlineNotice(onRetry: _loadProducts),
+            const SizedBox(height: 60),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  'No products cached yet.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [

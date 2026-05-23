@@ -4,11 +4,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
 import '../../services/church_service.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/location_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ad_banner.dart';
 import '../../widgets/church_card.dart';
+import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
 
 class ChurchesScreen extends StatefulWidget {
@@ -406,6 +408,28 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     }
 
     if (_error != null && _churches.isEmpty) {
+      final isOffline = !ConnectivityService.isOnline;
+      if (isOffline) {
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            OfflineInlineNotice(onRetry: _bootstrap),
+            const SizedBox(height: 60),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'No churches cached yet.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [

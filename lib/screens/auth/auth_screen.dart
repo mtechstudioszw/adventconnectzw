@@ -48,10 +48,6 @@ class _AuthScreenState extends State<AuthScreen>
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _acceptedTerms = false;
-  // True when emailExists() couldn't tell us. In that case we land on
-  // the login stage with an extra "or create account" toggle so the
-  // user picks.
-  bool _detectionAmbiguous = false;
   String? _error;
 
   // The birth date we'll attach to the signUp call. Seeded from the
@@ -154,7 +150,6 @@ class _AuthScreenState extends State<AuthScreen>
     };
     setState(() {
       _checking = false;
-      _detectionAmbiguous = exists == null;
       _stage = next;
     });
     HapticFeedback.selectionClick();
@@ -204,33 +199,26 @@ class _AuthScreenState extends State<AuthScreen>
           'Please accept the Terms & Conditions to create your account.');
       return;
     }
-    // Prefer the route-extra birth date, then fall back to whatever
-    // was stored on the age-verification screen. If neither is set,
-    // push the user back to the age gate instead of dead-ending them.
+    // Prefer the in-form picker; fall back to whatever's stored from
+    // a previous signup attempt.
     final birthDate = _birthDate ?? await AuthService.getStoredBirthDate();
     if (!mounted) return;
     if (birthDate == null) {
-      setState(() {
-        _submitting = false;
-        _error = 'We need your date of birth before creating an account.';
-      });
-      // Give the user a one-tap way back to the age gate.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.primaryBlue,
-          content: const Text('Returning you to the age check…'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      Future.delayed(const Duration(milliseconds: 600), () {
-        if (mounted) context.goNamed('age_verification');
-      });
+      setState(() => _error = 'Please pick your date of birth.');
+      return;
+    }
+    if (!AuthService.meetsMinimumAge(birthDate)) {
+      setState(() => _error =
+          'You must be at least 16 years old to create an account.');
       return;
     }
     setState(() {
       _submitting = true;
       _birthDate = birthDate;
     });
+    // Persist regardless — even if signup later fails, the picked
+    // value should survive the next attempt.
+    await AuthService.markAgeVerified(birthDate);
     final result = await AuthService.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text,
@@ -300,7 +288,6 @@ class _AuthScreenState extends State<AuthScreen>
     HapticFeedback.selectionClick();
     setState(() {
       _stage = _Stage.email;
-      _detectionAmbiguous = false;
       _passwordController.clear();
       _confirmController.clear();
       _nameController.clear();
@@ -312,20 +299,35 @@ class _AuthScreenState extends State<AuthScreen>
     });
   }
 
-  void _switchToSignup() {
-    HapticFeedback.selectionClick();
-    setState(() => _stage = _Stage.signup);
-    Future.delayed(const Duration(milliseconds: 280), () {
-      if (mounted) _nameFocus.requestFocus();
+  Future<void> _pickBirthDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _birthDate ?? DateTime(now.year - 20, now.month, now.day),
+      firstDate: DateTime(1920),
+      lastDate: now,
+      helpText: 'Date of birth',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primaryBlue,
+            onPrimary: AppColors.white,
+            onSurface: AppColors.textDark,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _birthDate = picked;
+      // Clear any prior age-related error so the form looks fresh.
+      if (_error != null && _error!.toLowerCase().contains('birth')) {
+        _error = null;
+      }
     });
-  }
-
-  void _switchToLogin() {
-    HapticFeedback.selectionClick();
-    setState(() => _stage = _Stage.login);
-    Future.delayed(const Duration(milliseconds: 280), () {
-      if (mounted) _passwordFocus.requestFocus();
-    });
+    // Persist so a hot restart / Change-email cycle doesn't drop it.
+    await AuthService.markAgeVerified(picked);
   }
 
   @override
@@ -414,6 +416,12 @@ class _AuthScreenState extends State<AuthScreen>
                     onTap: _submitting || _checking ? null : _onPrimary,
                   ),
                   const SizedBox(height: 18),
+                  // Single secondary action — "Use a different email"
+                  // — visible on both login + signup stages. The old
+                  // manual Login/Signup toggles are gone: the email
+                  // auto-detect on Continue already picks the right
+                  // stage, and if it gets it wrong, the user can
+                  // simply tap here and re-enter the email.
                   if (_stage != _Stage.email)
                     Center(
                       child: TextButton(
@@ -423,32 +431,6 @@ class _AuthScreenState extends State<AuthScreen>
                           style: AppTextStyles.bodySmall.copyWith(
                             color: const Color.fromRGBO(26, 26, 46, 0.7),
                             fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (_stage == _Stage.login && _detectionAmbiguous)
-                    Center(
-                      child: TextButton(
-                        onPressed: _switchToSignup,
-                        child: Text(
-                          'No account yet? Create one',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (_stage == _Stage.signup)
-                    Center(
-                      child: TextButton(
-                        onPressed: _switchToLogin,
-                        child: Text(
-                          'Already have an account? Log in',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -664,6 +646,11 @@ class _AuthScreenState extends State<AuthScreen>
           ),
         ),
         const SizedBox(height: 14),
+        _BirthDateField(
+          birthDate: _birthDate,
+          onTap: _pickBirthDate,
+        ),
+        const SizedBox(height: 14),
         _TermsCheckbox(
           value: _acceptedTerms,
           onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
@@ -676,6 +663,83 @@ class _AuthScreenState extends State<AuthScreen>
 // =============================================================================
 // Sub-widgets
 // =============================================================================
+
+class _BirthDateField extends StatelessWidget {
+  const _BirthDateField({required this.birthDate, required this.onTap});
+
+  final DateTime? birthDate;
+  final VoidCallback onTap;
+
+  static const _months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDate = birthDate != null;
+    final label = hasDate
+        ? '${birthDate!.day} ${_months[birthDate!.month - 1]} ${birthDate!.year}'
+        : 'Date of birth';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.10),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(left: 4, right: 12),
+                child: Icon(
+                  Icons.cake_outlined,
+                  color: Color.fromRGBO(26, 26, 46, 0.5),
+                  size: 20,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontSize: 15,
+                    color: hasDate
+                        ? AppColors.textDark
+                        : const Color.fromRGBO(26, 26, 46, 0.5),
+                    fontWeight:
+                        hasDate ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 18,
+                color: AppColors.primaryBlue,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _LogoMark extends StatelessWidget {
   const _LogoMark();

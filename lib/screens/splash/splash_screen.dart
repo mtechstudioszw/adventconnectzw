@@ -108,9 +108,12 @@ class _SplashScreenState extends State<SplashScreen>
           return;
         }
       }
-      final ageVerified = await AuthService.isAgeVerified();
+      // Already signed in -> straight to the home tab. The
+      // standalone age-verification screen is no longer part of the
+      // first-launch flow; the in-form birthday picker on
+      // AuthScreen's signup stage handles it once, at signup time.
       if (!mounted) return;
-      context.goNamed(ageVerified ? 'home' : 'age_verification');
+      context.goNamed('home');
       return;
     }
 
@@ -125,9 +128,8 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    final ageVerified = await AuthService.isAgeVerified();
     if (!mounted) return;
-    context.goNamed(ageVerified ? 'login' : 'age_verification');
+    context.goNamed('login');
   }
 
   @override

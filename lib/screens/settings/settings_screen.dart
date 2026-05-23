@@ -119,7 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         action: () async {
           await AuthService.signOut();
           if (!mounted) return;
-          context.goNamed('age_verification');
+          context.goNamed('login');
         },
       );
 
@@ -146,7 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
             ),
           );
-          context.goNamed('age_verification');
+          context.goNamed('login');
         },
       );
 

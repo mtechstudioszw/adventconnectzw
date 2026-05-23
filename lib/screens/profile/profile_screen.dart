@@ -166,7 +166,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     if (confirm != true) return;
     await AuthService.signOut();
     if (!mounted) return;
-    context.goNamed('age_verification');
+    // After sign-out land on the unified auth screen. The standalone
+    // age-verification screen is no longer in the first-run flow.
+    context.goNamed('login');
   }
 
   @override

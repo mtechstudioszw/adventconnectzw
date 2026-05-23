@@ -134,7 +134,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       'true',
     );
     if (!mounted) return;
-    context.goNamed('age_verification');
+    // Skip the standalone age screen — AuthScreen's signup stage
+    // collects the birth date inline as part of the create-account
+    // form.
+    context.goNamed('login');
   }
 
   void _next() {

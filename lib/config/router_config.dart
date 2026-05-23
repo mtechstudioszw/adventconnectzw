@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
-import '../screens/auth/age_verification_screen.dart';
 import '../screens/auth/auth_screen.dart';
 import '../screens/auth/email_verification_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -81,11 +80,6 @@ final GoRouter appRouter = GoRouter(
       path: '/onboarding',
       name: 'onboarding',
       builder: (context, state) => const OnboardingScreen(),
-    ),
-    GoRoute(
-      path: '/age-verification',
-      name: 'age_verification',
-      builder: (context, state) => const AgeVerificationScreen(),
     ),
     GoRoute(
       path: '/signup',

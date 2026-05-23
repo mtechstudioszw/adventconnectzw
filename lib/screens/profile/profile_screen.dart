@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/business_application_model.dart';
@@ -6,7 +9,9 @@ import '../../models/post_model.dart';
 import '../../services/account_mode_service.dart';
 import '../../services/account_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/gallery_service.dart';
@@ -17,6 +22,7 @@ import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
+import '../../widgets/last_updated_strip.dart';
 import '../widgets/main_bottom_nav.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -60,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _bootstrap() async {
+    _hydrateFromCache();
     final viewerId = AuthService.currentUser?.id;
     try {
       final results = await Future.wait([
@@ -73,20 +80,57 @@ class _ProfileScreenState extends State<ProfileScreen>
       final followed = results[0] as Set<String>;
       final allPosts = results[3] as List<Post>;
       final allChurches = results[4] as List<Church>;
+      final myPosts = viewerId == null
+          ? const <Post>[]
+          : allPosts.where((p) => p.authorId == viewerId).toList();
+      final myChurches =
+          allChurches.where((c) => followed.contains(c.id)).toList();
       setState(() {
         _churchesFollowed = followed.length;
         _eventsGoing = (results[1] as Set).length;
         _accountState = results[2] as AccountState?;
-        _myPosts = viewerId == null
-            ? const []
-            : allPosts.where((p) => p.authorId == viewerId).toList();
-        _myChurches = allChurches
-            .where((c) => followed.contains(c.id))
-            .toList();
+        _myPosts = myPosts;
+        _myChurches = myChurches;
+      });
+      unawaited(_writeCache(myPosts, myChurches));
+    } catch (_) {
+      // ignore — UI just keeps showing whatever it has from cache.
+    }
+  }
+
+  static const _cacheKey = 'profile_self';
+
+  void _hydrateFromCache() {
+    try {
+      final raw = CacheService.readString(_cacheKey);
+      if (raw == null) return;
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final viewerId = AuthService.currentUser?.id;
+      final posts = ((decoded['posts'] as List?) ?? const [])
+          .map((p) =>
+              Post.fromJson(p as Map<String, dynamic>, viewerId: viewerId))
+          .toList();
+      final churches = ((decoded['churches'] as List?) ?? const [])
+          .map((c) => Church.fromJson(c as Map<String, dynamic>))
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        if (_myPosts.isEmpty) _myPosts = posts;
+        if (_myChurches.isEmpty) _myChurches = churches;
       });
     } catch (_) {
-      // ignore — UI just keeps showing whatever it has.
+      // ignore — corrupt cache is just a missed paint.
     }
+  }
+
+  Future<void> _writeCache(List<Post> posts, List<Church> churches) async {
+    try {
+      final payload = jsonEncode({
+        'posts': posts.take(50).map((p) => p.toJson()).toList(),
+        'churches': churches.map((c) => c.toJson()).toList(),
+      });
+      await CacheService.writeString(_cacheKey, payload);
+    } catch (_) {}
   }
 
   Future<void> _openApplyBusiness() async {
@@ -386,8 +430,18 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
     }
     final viewerId = AuthService.currentUser?.id;
+    final cachedAt = CacheService.cachedAt(_cacheKey);
     return Column(
       children: [
+        if (cachedAt != null) ...[
+          const SizedBox(height: 4),
+          LastUpdatedStrip(
+            timestamp: cachedAt,
+            isOnline: ConnectivityService.isOnline,
+            onRefresh: _bootstrap,
+          ),
+          const SizedBox(height: 4),
+        ],
         for (final post in _myPosts)
           PostCard(
             post: post,

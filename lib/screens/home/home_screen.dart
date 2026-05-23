@@ -34,6 +34,7 @@ import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
+import '../../widgets/last_updated_strip.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../widgets/main_bottom_nav.dart';
@@ -100,11 +101,10 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _bootstrap() async {
-    // On a cold-start, if we're already offline and we have a cached
-    // payload, hydrate from it first so the user sees real content
-    // instead of empty tiles. Network calls happen anyway and will
-    // overwrite when they finish (or be skipped silently if offline).
-    if (_loading && !ConnectivityService.isOnline) {
+    // Always hydrate from cache first so the screen paints real
+    // content immediately, before the network call resolves.
+    // Facebook-style: see something instantly, then silently refresh.
+    if (_loading) {
       _hydrateFromCache();
     }
 
@@ -170,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen>
         _loading = false;
       });
       // Best-effort cache write — failures here must never surface.
-      unawaited(_writeCache(events, churches));
+      unawaited(_writeCache(events, churches, feedPosts));
     } catch (_) {
       if (!mounted) return;
       // Network failed. If we haven't hydrated from cache yet (e.g.
@@ -182,11 +182,16 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<void> _writeCache(List<Event> events, List<Church> churches) async {
+  Future<void> _writeCache(
+    List<Event> events,
+    List<Church> churches,
+    List<Post> posts,
+  ) async {
     try {
       final payload = jsonEncode({
         'events': events.map((e) => e.toJson()).toList(),
         'churches': churches.map((c) => c.toJson()).toList(),
+        'posts': posts.take(30).map((p) => p.toJson()).toList(),
       });
       await CacheService.writeString('home_feed', payload);
     } catch (_) {
@@ -205,10 +210,22 @@ class _HomeScreenState extends State<HomeScreen>
       final churches = ((decoded['churches'] as List?) ?? const [])
           .map((c) => Church.fromJson(c as Map<String, dynamic>))
           .toList();
+      final viewerId = AuthService.currentUser?.id;
+      final posts = ((decoded['posts'] as List?) ?? const [])
+          .map((p) => Post.fromJson(
+                p as Map<String, dynamic>,
+                viewerId: viewerId,
+              ))
+          .toList();
       if (!mounted) return;
       setState(() {
         if (_events.isEmpty) _events = events;
         if (_churches.isEmpty) _churches = churches;
+        if (_posts.isEmpty) _posts = posts;
+        // Paint instantly when cache hits — no spinner.
+        if (events.isNotEmpty || churches.isNotEmpty || posts.isNotEmpty) {
+          _loading = false;
+        }
       });
     } catch (_) {
       // ignore — corrupt cache is just a missed-paint, not an error.
@@ -849,8 +866,17 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
     final viewerId = AuthService.currentUser?.id;
+    final cachedAt = CacheService.cachedAt('home_feed');
     return Column(
       children: [
+        if (cachedAt != null) ...[
+          const SizedBox(height: 4),
+          LastUpdatedStrip(
+            timestamp: cachedAt,
+            isOnline: ConnectivityService.isOnline,
+            onRefresh: _bootstrap,
+          ),
+        ],
         for (final post in _posts)
           PostCard(
             post: post,

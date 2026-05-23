@@ -100,4 +100,27 @@ class Post {
       viewerLiked: viewerLiked,
     );
   }
+
+  /// Round-trip JSON for offline cache. The wire format from Supabase
+  /// uses joined sub-objects (`profiles`, `post_likes`, `post_comments`)
+  /// — we collapse those into simple counts + a fake `profiles` map so
+  /// `fromJson` can re-hydrate without special-casing cached payloads.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'author_id': authorId,
+        'profiles': {
+          'full_name': authorName,
+          'profile_photo_url': authorPhotoUrl,
+        },
+        'body': body,
+        'image_url': imageUrl,
+        'visibility': visibility == PostVisibility.friendsOnly
+            ? 'friends_only'
+            : 'public',
+        'created_at': createdAt.toIso8601String(),
+        // Aggregate form so fromJson reads counts from the
+        // { count: N } branch.
+        'post_likes': {'count': likeCount},
+        'post_comments': {'count': commentCount},
+      };
 }

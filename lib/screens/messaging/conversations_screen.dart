@@ -28,6 +28,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   List<Conversation> _conversations = [];
   List<Story> _stories = const [];
+  List<PendingFriendRequest> _friendRequests = const [];
   bool _loading = true;
   String? _error;
   _ConversationsTab _tab = _ConversationsTab.inbox;
@@ -61,11 +62,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       final results = await Future.wait([
         MessagingService.fetchConversations(),
         FeedService.fetchStories(),
+        FeedService.fetchPendingFriendRequests(),
       ]);
       if (!mounted) return;
       setState(() {
         _conversations = results[0] as List<Conversation>;
         _stories = results[1] as List<Story>;
+        _friendRequests = results[2] as List<PendingFriendRequest>;
         _loading = false;
       });
     } catch (_) {
@@ -127,6 +130,37 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     } catch (_) {
       if (!mounted) return;
       _toast('Could not accept this request. Try again.');
+    }
+  }
+
+  Future<void> _acceptFriendRequest(PendingFriendRequest req) async {
+    try {
+      await FeedService.acceptRequest(req.friendshipId);
+      if (!mounted) return;
+      setState(() {
+        _friendRequests = _friendRequests
+            .where((r) => r.friendshipId != req.friendshipId)
+            .toList();
+      });
+      _toast('You\'re now friends with ${req.requesterName.split(' ').first}.');
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not accept the request. Try again.');
+    }
+  }
+
+  Future<void> _declineFriendRequest(PendingFriendRequest req) async {
+    try {
+      await FeedService.declineRequest(req.friendshipId);
+      if (!mounted) return;
+      setState(() {
+        _friendRequests = _friendRequests
+            .where((r) => r.friendshipId != req.friendshipId)
+            .toList();
+      });
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not decline the request. Try again.');
     }
   }
 
@@ -360,38 +394,78 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       return _buildErrorState();
     }
     final list = _tab == _ConversationsTab.inbox ? _inbox : _requests;
-    if (list.isEmpty) {
-      return _buildEmptyState(
-        title: _tab == _ConversationsTab.inbox
-            ? 'No conversations yet'
-            : 'No message requests',
-        body: _tab == _ConversationsTab.inbox
-            ? 'Reach out from a member directory or church page to start chatting.'
-            : 'Requests from members you haven\'t chatted with will appear here.',
-      );
-    }
+    // The Requests tab can render two distinct things:
+    //   - Friend requests (someone wants to friend you)
+    //   - Message requests (someone you don't know yet messaged you)
+    // Either or both may be empty. Surface friend requests at the top
+    // so users see them — the red badge on the floating chat used to
+    // light up with nothing visible inside, which felt like a bug.
     if (_tab == _ConversationsTab.requests) {
-      return ListView.separated(
+      final hasFriendRequests = _friendRequests.isNotEmpty;
+      final hasMessageRequests = list.isNotEmpty;
+      if (!hasFriendRequests && !hasMessageRequests) {
+        return _buildEmptyState(
+          title: 'No requests',
+          body:
+              'Friend requests and messages from people you haven\'t chatted '
+              'with yet will land here.',
+        );
+      }
+      return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        itemCount: list.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, i) {
-          final c = list[i];
-          return _RequestTile(
-            conversation: c,
-            onAccept: () => _accept(c),
-            onDecline: () => _decline(c),
-            onPreview: () async {
-              await context.pushNamed(
-                'chat',
-                pathParameters: {'id': c.id},
-                extra: c,
-              );
-              if (mounted) _bootstrap();
-            },
-          );
-        },
+        children: [
+          if (hasFriendRequests) ...[
+            _RequestsSectionHeader(
+              label: 'Friend requests',
+              count: _friendRequests.length,
+            ),
+            const SizedBox(height: 10),
+            for (final req in _friendRequests) ...[
+              _FriendRequestTile(
+                request: req,
+                onAccept: () => _acceptFriendRequest(req),
+                onDecline: () => _declineFriendRequest(req),
+                onOpenProfile: () => context.pushNamed(
+                  'user_profile',
+                  pathParameters: {'userId': req.requesterId},
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            const SizedBox(height: 8),
+          ],
+          if (hasMessageRequests) ...[
+            _RequestsSectionHeader(
+              label: 'Message requests',
+              count: list.length,
+            ),
+            const SizedBox(height: 10),
+            for (final c in list) ...[
+              _RequestTile(
+                conversation: c,
+                onAccept: () => _accept(c),
+                onDecline: () => _decline(c),
+                onPreview: () async {
+                  await context.pushNamed(
+                    'chat',
+                    pathParameters: {'id': c.id},
+                    extra: c,
+                  );
+                  if (mounted) _bootstrap();
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+          ],
+        ],
+      );
+    }
+    if (list.isEmpty) {
+      return _buildEmptyState(
+        title: 'No conversations yet',
+        body:
+            'Reach out from a member directory or church page to start chatting.',
       );
     }
     return ListView.separated(
@@ -774,6 +848,215 @@ class _ConversationTile extends StatelessWidget {
   }
 }
 
+class _RequestsSectionHeader extends StatelessWidget {
+  const _RequestsSectionHeader({required this.label, required this.count});
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: AppTextStyles.titleSmall.copyWith(
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '$count',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FriendRequestTile extends StatelessWidget {
+  const _FriendRequestTile({
+    required this.request,
+    required this.onAccept,
+    required this.onDecline,
+    required this.onOpenProfile,
+  });
+
+  final PendingFriendRequest request;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+  final VoidCallback onOpenProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = [
+      if ((request.requesterChurchName ?? '').trim().isNotEmpty)
+        request.requesterChurchName!.trim(),
+      _relativeTime(request.createdAt),
+    ].join('  ·  ');
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpenProfile,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.20),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _Avatar(
+                    name: request.requesterName,
+                    photoUrl: request.requesterPhotoUrl,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          request.requesterName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleSmall.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Sent you a friend request',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: const Color.fromRGBO(26, 26, 46, 0.65),
+                          ),
+                        ),
+                        if (subtitle.trim().isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: const Color.fromRGBO(26, 26, 46, 0.5),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ActionButton(
+                      label: 'Accept',
+                      filled: true,
+                      onTap: onAccept,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ActionButton(
+                      label: 'Decline',
+                      filled: false,
+                      onTap: onDecline,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _relativeTime(DateTime when) {
+    final diff = DateTime.now().difference(when);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: filled ? AppColors.primaryBlue : AppColors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: filled
+                ? null
+                : Border.all(
+                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: AppTextStyles.buttonText.copyWith(
+              color: filled ? AppColors.white : AppColors.textDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RequestTile extends StatelessWidget {
   const _RequestTile({
     required this.conversation,
@@ -943,8 +1226,13 @@ class _RequestTile extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, this.isSelfChat = false});
+  const _Avatar({
+    required this.name,
+    this.photoUrl,
+    this.isSelfChat = false,
+  });
   final String name;
+  final String? photoUrl;
   final bool isSelfChat;
 
   @override
@@ -957,12 +1245,15 @@ class _Avatar extends StatelessWidget {
             ? parts.first.substring(0, 1).toUpperCase()
             : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
                 .toUpperCase();
+    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
     return Container(
       width: 50,
       height: 50,
+      clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
+        gradient: hasPhoto && !isSelfChat ? null : AppColors.primaryGradient,
+        color: hasPhoto && !isSelfChat ? AppColors.lightGrey : null,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
@@ -978,7 +1269,22 @@ class _Avatar extends StatelessWidget {
               color: AppColors.white,
               size: 22,
             )
-          : Text(
+          : hasPhoto
+              ? Image.network(
+                  photoUrl!,
+                  fit: BoxFit.cover,
+                  width: 50,
+                  height: 50,
+                  errorBuilder: (_, _, _) => Text(
+                    initials,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                )
+              : Text(
               initials,
               style: AppTextStyles.titleMedium.copyWith(
                 color: AppColors.white,

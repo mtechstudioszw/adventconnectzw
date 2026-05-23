@@ -77,12 +77,15 @@ class _StartConversationSheetState extends State<_StartConversationSheet> {
         isBusiness: widget.isBusiness,
       ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      navigator.pop();
-      await router.pushNamed(
+      // Push first, *then* pop the sheet. Popping before push can
+      // sometimes lose the navigator frame mid-transition on slower
+      // devices and leave the user back on the original screen.
+      router.pushNamed(
         'chat',
         pathParameters: {'id': convo.id},
         extra: convo,
       );
+      navigator.pop();
     } on TimeoutException {
       if (!mounted) return;
       setState(() => _sending = false);
@@ -94,13 +97,21 @@ class _StartConversationSheetState extends State<_StartConversationSheet> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
+      // Surface the underlying error so users can tell the difference
+      // between "no permission" / "network down" / "blocked by RLS"
+      // instead of all of them looking identical.
+      final msg = e.toString();
+      final shortened =
+          msg.length > 220 ? '${msg.substring(0, 220)}…' : msg;
       messenger.showSnackBar(
         SnackBar(
+          backgroundColor: AppColors.red,
+          duration: const Duration(seconds: 6),
           content: Text(
-            'Could not start chat. Try again.',
+            'Could not start chat: $shortened',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

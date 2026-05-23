@@ -334,6 +334,70 @@ class FeedService {
     return (response as List).length;
   }
 
+  /// Pending incoming friend requests + the requester's profile. Used
+  /// by the Conversations "Requests" tab so users can find and act on
+  /// incoming requests without having to hunt for the suggestion card
+  /// on the home tab.
+  ///
+  /// Two round-trips: friendships first, then a single batched lookup
+  /// of the requester profiles. We avoid relying on a Supabase FK
+  /// embed (`profiles!friendships_requester_id_fkey(...)`) because the
+  /// FK name varies across deployments — the two-step path works
+  /// regardless of how the schema is named.
+  static Future<List<PendingFriendRequest>>
+      fetchPendingFriendRequests() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const [];
+    final rows = await _client
+        .from(_friendshipsTable)
+        .select('id, requester_id, created_at')
+        .eq('addressee_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', ascending: false);
+    final list = (rows as List).cast<Map<String, dynamic>>();
+    if (list.isEmpty) return const [];
+
+    final requesterIds = list
+        .map((r) => (r['requester_id'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    Map<String, Map<String, dynamic>> profilesById = const {};
+    if (requesterIds.isNotEmpty) {
+      try {
+        final profileRows = await _client
+            .from('profiles')
+            .select('id, full_name, profile_photo_url, church_name')
+            .inFilter('id', requesterIds);
+        profilesById = {
+          for (final row in (profileRows as List).cast<Map<String, dynamic>>())
+            row['id'].toString(): row,
+        };
+      } catch (_) {
+        // If the profiles table isn't readable for some reason (RLS),
+        // we still want the requests to surface — just without the
+        // pretty name + photo.
+      }
+    }
+
+    return list.map((r) {
+      final requesterId = (r['requester_id'] ?? '').toString();
+      final profile = profilesById[requesterId];
+      final name = (profile?['full_name'] as String?)?.trim();
+      return PendingFriendRequest(
+        friendshipId: r['id'].toString(),
+        requesterId: requesterId,
+        requesterName: (name == null || name.isEmpty) ? 'Member' : name,
+        requesterPhotoUrl: profile?['profile_photo_url'] as String?,
+        requesterChurchName: profile?['church_name'] as String?,
+        createdAt: r['created_at'] != null
+            ? (DateTime.tryParse(r['created_at'].toString()) ??
+                DateTime.now())
+            : DateTime.now(),
+      );
+    }).toList();
+  }
+
   static Future<Friendship> sendRequest(String addresseeId) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -369,4 +433,25 @@ class FeedService {
   static Future<void> removeFriendship(String friendshipId) async {
     await _client.from(_friendshipsTable).delete().eq('id', friendshipId);
   }
+}
+
+/// Lightweight DTO for a single pending friend request, joined with
+/// the requester's profile so the Conversations Requests tab can
+/// render a name + photo without a second round-trip.
+class PendingFriendRequest {
+  const PendingFriendRequest({
+    required this.friendshipId,
+    required this.requesterId,
+    required this.requesterName,
+    required this.createdAt,
+    this.requesterPhotoUrl,
+    this.requesterChurchName,
+  });
+
+  final String friendshipId;
+  final String requesterId;
+  final String requesterName;
+  final String? requesterPhotoUrl;
+  final String? requesterChurchName;
+  final DateTime createdAt;
 }

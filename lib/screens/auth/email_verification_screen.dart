@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -38,6 +39,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   bool _resending = false;
   bool _checking = false;
   int _cooldown = 0;
+  int _resendCount = 0;
+  // Rate-limit knobs: cooldown grows after each resend (30, 60, 120
+  // ...) and we stop accepting new resends after [_resendCap]. This
+  // protects Supabase's SMTP quota AND the user's inbox from people
+  // hammering the button while waiting on a slow email.
+  static const _baseCooldown = 60;
+  static const _resendCap = 5;
   String? _info;
   String? _error;
   final _otpController = TextEditingController();
@@ -99,30 +107,56 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
 
   Future<void> _openEmailApp() async {
     HapticFeedback.selectionClick();
-    // mailto: with no recipient opens the system email app on most
-    // platforms — better than a hardcoded provider-specific scheme
-    // which only works if the user has that exact app installed.
-    final uri = Uri(scheme: 'mailto', path: '');
-    try {
-      final ok = await launchUrl(
-        uri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!ok && mounted) {
-        setState(() => _info =
-            'Open your email app manually and look for the code.');
+    // We want the user to land on their INBOX (where the new
+    // verification email is sitting), not on the compose / account
+    // picker screen. The right tool varies by platform:
+    //
+    //   Android  →  intent with category=APP_EMAIL pops the
+    //               default email app's inbox.
+    //   iOS      →  message:// opens Apple Mail at the inbox.
+    //               Fall back to googlegmail:// for Gmail-only
+    //               users who don't have Mail set up.
+    //
+    // Each candidate is tried in order; the first one that
+    // canLaunchUrl wins. If none work we drop a small instruction
+    // line so the user knows to switch apps manually.
+    final candidates = <String>[
+      if (Platform.isAndroid)
+        'intent://#Intent;action=android.intent.action.MAIN;'
+            'category=android.intent.category.APP_EMAIL;end',
+      if (Platform.isIOS) 'message://',
+      // Both platforms: try the Gmail app directly. Works if it's
+      // installed even when no default mail app is registered.
+      'googlegmail://',
+    ];
+
+    for (final raw in candidates) {
+      final uri = Uri.parse(raw);
+      try {
+        final canLaunch = await canLaunchUrl(uri);
+        if (!canLaunch) continue;
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (ok) return;
+      } catch (_) {
+        // Try the next candidate.
       }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _info =
-            'Couldn\'t open the email app automatically — please open '
-            'it manually.');
-      }
+    }
+
+    if (mounted) {
+      setState(() => _info =
+          'Couldn\'t open your inbox automatically — open your email '
+          'app and look for the code.');
     }
   }
 
   Future<void> _resend() async {
     if (_resending || _cooldown > 0) return;
+    if (_resendCount >= _resendCap) {
+      setState(() => _error =
+          'You\'ve resent the code a few times already. Check your '
+          'Spam folder, or use Change email to try a different address.');
+      return;
+    }
     HapticFeedback.selectionClick();
     setState(() {
       _resending = true;
@@ -135,10 +169,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
         email: widget.email,
       );
       if (!mounted) return;
+      // Backoff: 60s the first time, then double each subsequent
+      // resend up to 5 minutes. Keeps casual retries fast but
+      // discourages anyone pounding the button on a flaky network.
+      _resendCount += 1;
+      final next = (_baseCooldown * (1 << (_resendCount - 1))).clamp(60, 300);
       setState(() {
         _resending = false;
         _info = 'Confirmation email sent again.';
-        _cooldown = 30;
+        _cooldown = next;
       });
       _startCooldown();
     } on AuthException catch (e) {

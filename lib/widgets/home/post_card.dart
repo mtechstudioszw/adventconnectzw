@@ -18,6 +18,7 @@ class PostCard extends StatelessWidget {
     this.onDelete,
     this.onToggleVisibility,
     this.onReport,
+    this.onSaveImage,
   });
 
   final Post post;
@@ -30,6 +31,10 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onToggleVisibility;
   final VoidCallback? onReport;
+  // Owner menu shows "Save to gallery" when this is wired AND the
+  // post actually has an image. Non-owner cards get the same option
+  // via the viewer menu.
+  final VoidCallback? onSaveImage;
 
   bool get _isOwner => viewerId != null && viewerId == post.authorId;
 
@@ -124,9 +129,13 @@ class PostCard extends StatelessWidget {
               onEdit: onEdit,
               onDelete: onDelete,
               onToggleVisibility: onToggleVisibility,
+              onSaveImage: (post.imageUrl ?? '').isNotEmpty ? onSaveImage : null,
             )
           else if (onReport != null)
-            _ViewerMenu(onReport: onReport!),
+            _ViewerMenu(
+              onReport: onReport!,
+              onSaveImage: (post.imageUrl ?? '').isNotEmpty ? onSaveImage : null,
+            ),
         ],
       ),
     );
@@ -372,12 +381,14 @@ class _OwnerMenu extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggleVisibility,
+    this.onSaveImage,
   });
 
   final bool isFriendsOnly;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleVisibility;
+  final VoidCallback? onSaveImage;
 
   @override
   Widget build(BuildContext context) {
@@ -398,6 +409,9 @@ class _OwnerMenu extends StatelessWidget {
             break;
           case 'visibility':
             onToggleVisibility?.call();
+            break;
+          case 'save':
+            onSaveImage?.call();
             break;
           case 'delete':
             onDelete?.call();
@@ -432,6 +446,18 @@ class _OwnerMenu extends StatelessWidget {
               ],
             ),
           ),
+        if (onSaveImage != null)
+          PopupMenuItem(
+            value: 'save',
+            child: Row(
+              children: const [
+                Icon(Icons.download_outlined, size: 18,
+                    color: AppColors.primaryBlue),
+                SizedBox(width: 10),
+                Text('Save to gallery'),
+              ],
+            ),
+          ),
         if (onDelete != null)
           PopupMenuItem(
             value: 'delete',
@@ -449,9 +475,10 @@ class _OwnerMenu extends StatelessWidget {
 }
 
 class _ViewerMenu extends StatelessWidget {
-  const _ViewerMenu({required this.onReport});
+  const _ViewerMenu({required this.onReport, this.onSaveImage});
 
   final VoidCallback onReport;
+  final VoidCallback? onSaveImage;
 
   @override
   Widget build(BuildContext context) {
@@ -465,9 +492,28 @@ class _ViewerMenu extends StatelessWidget {
       shape:
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (value) {
-        if (value == 'report') onReport();
+        switch (value) {
+          case 'save':
+            onSaveImage?.call();
+            break;
+          case 'report':
+            onReport();
+            break;
+        }
       },
       itemBuilder: (ctx) => [
+        if (onSaveImage != null)
+          PopupMenuItem(
+            value: 'save',
+            child: Row(
+              children: const [
+                Icon(Icons.download_outlined, size: 18,
+                    color: AppColors.primaryBlue),
+                SizedBox(width: 10),
+                Text('Save image to gallery'),
+              ],
+            ),
+          ),
         PopupMenuItem(
           value: 'report',
           child: Row(

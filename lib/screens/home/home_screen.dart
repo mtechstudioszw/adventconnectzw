@@ -15,6 +15,7 @@ import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/directory_service.dart';
+import '../../services/gallery_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/messaging_service.dart';
@@ -862,8 +863,37 @@ class _HomeScreenState extends State<HomeScreen>
             onToggleVisibility: () => _togglePostVisibility(post),
             onReport: () => _reportPost(post),
             onAuthorTapped: () => _openAuthorProfile(post),
+            onSaveImage: () => _savePostImage(post),
           ),
       ],
+    );
+  }
+
+  Future<void> _savePostImage(Post post) async {
+    final url = post.imageUrl;
+    if (url == null || url.isEmpty) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.darkNavy,
+        duration: const Duration(seconds: 2),
+        content: Text(
+          'Saving image to gallery…',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
+    final ok = await GalleryService.saveImageFromUrl(url);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: ok ? AppColors.successGreen : AppColors.red,
+        content: Text(
+          ok
+              ? 'Saved to your Advent Connect album.'
+              : 'Could not save the image. Check storage permission and try again.',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
     );
   }
 

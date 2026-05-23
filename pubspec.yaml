@@ -59,6 +59,12 @@ dependencies:
   # which is pinned to Dart 2). Revisit once upstream republishes.
   url_launcher: ^6.3.1
 
+  # Save downloaded images (post photos) to the device's photo
+  # gallery. Lightweight cross-platform package — handles
+  # ACCESS_MEDIA_LOCATION on Android 11+ and Photos Library
+  # permission on iOS automatically.
+  gal: ^2.3.0
+
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale
 # hasPermission signature, which breaks compilation even for Android builds.

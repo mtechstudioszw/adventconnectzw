@@ -9,6 +9,7 @@ import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/gallery_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/comments_sheet.dart';
@@ -405,6 +406,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             onEdit: () => _editPost(post),
             onDelete: () => _confirmDeletePost(post),
             onToggleVisibility: () => _togglePostVisibility(post),
+            onSaveImage: () => _savePostImage(post),
           ),
       ],
     );
@@ -455,6 +457,35 @@ class _ProfileScreenState extends State<ProfileScreen>
               .toList();
         });
       },
+    );
+  }
+
+  Future<void> _savePostImage(Post post) async {
+    final url = post.imageUrl;
+    if (url == null || url.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.darkNavy,
+        duration: const Duration(seconds: 2),
+        content: Text(
+          'Saving image to gallery…',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
+    final ok = await GalleryService.saveImageFromUrl(url);
+    if (!mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        backgroundColor: ok ? AppColors.successGreen : AppColors.red,
+        content: Text(
+          ok
+              ? 'Saved to your Advent Connect album.'
+              : 'Could not save the image. Check storage permission and try again.',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
     );
   }
 

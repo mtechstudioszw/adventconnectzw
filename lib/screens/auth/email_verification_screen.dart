@@ -176,8 +176,12 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   Future<void> _verifyCode() async {
     if (_checking) return;
     final token = _otpController.text.trim();
-    if (token.length < 6) {
-      setState(() => _error = 'Enter the 6-digit code from your email.');
+    // Supabase projects can be configured with 6, 7, or 8-digit OTPs
+    // (dashboard: Authentication -> Providers -> Email -> OTP Length).
+    // Accept the full 4-10 range so the app doesn't truncate a longer
+    // code into "invalid token" errors.
+    if (token.length < 4) {
+      setState(() => _error = 'Enter the code from your email.');
       return;
     }
     setState(() {
@@ -487,7 +491,11 @@ class _OtpField extends StatelessWidget {
         keyboardType: TextInputType.number,
         textInputAction: TextInputAction.done,
         autofocus: true,
-        maxLength: 6,
+        // Allow up to 10 digits — Supabase projects can be configured
+        // for 6, 7, or 8-digit OTPs (and that's been the cause of
+        // mysterious "token expired" errors when the field truncated
+        // an 8-digit code to 6).
+        maxLength: 10,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         onSubmitted: (_) => onSubmit(),
         style: AppTextStyles.displayMedium.copyWith(

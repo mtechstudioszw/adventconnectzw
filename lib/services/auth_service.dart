@@ -224,6 +224,11 @@ class AuthService {
   static Future<AuthResult> signInWithGoogle() async {
     try {
       final google = GoogleSignIn(serverClientId: _googleWebClientId);
+      // Clear any cached Google account from a previous session so the
+      // picker actually shows up. Without this, signIn() silently
+      // returns the last-used account — users who signed out can't
+      // switch to a different Google account on the same device.
+      await google.signOut();
       final account = await google.signIn();
       if (account == null) {
         return AuthResult.failure('Sign in cancelled.');
@@ -353,6 +358,16 @@ class AuthService {
     } catch (_) {
       // ignore
     }
+    // Disconnect (not just sign out) the Google session so even if the
+    // RPC failed and auth.users still exists, the next Google sign-in
+    // tap shows the picker — letting the user pick a different account
+    // rather than silently re-linking the same Google identity to the
+    // un-deleted auth user.
+    try {
+      await GoogleSignIn(serverClientId: _googleWebClientId).disconnect();
+    } catch (_) {
+      // ignore
+    }
     await SecureStorageService.clearAll();
     if (rpcError != null) {
       // RPC missing — surface a soft warning so the caller can tell the
@@ -381,6 +396,14 @@ class AuthService {
       // ignore — user may already be offline
     }
     await _client.auth.signOut();
+    // Also clear Google's native sign-in cache so next time the user
+    // hits "Continue with Google" they see the account picker instead
+    // of being auto-signed-in with the previous account.
+    try {
+      await GoogleSignIn(serverClientId: _googleWebClientId).signOut();
+    } catch (_) {
+      // ignore — no cached Google session is fine
+    }
     await SecureStorageService.clearAll();
   }
 

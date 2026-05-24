@@ -219,7 +219,7 @@ class AuthService {
   /// expected to work; the catch-all error in this method will surface
   /// the misconfig clearly to the user.
   static const _googleWebClientId =
-      'REPLACE_WITH_WEB_CLIENT_ID.apps.googleusercontent.com';
+      '13892017929-sn69ofm9c8bvb46qtj9m3qac4aajuk57.apps.googleusercontent.com';
 
   static Future<AuthResult> signInWithGoogle() async {
     try {

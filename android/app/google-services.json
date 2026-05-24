@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "advent-connect-zw-placeholder",
-    "storage_bucket": "advent-connect-zw-placeholder.appspot.com"
+    "project_number": "13892017929",
+    "project_id": "adventconnectzw",
+    "storage_bucket": "adventconnectzw.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:13892017929:android:02e0288cb7bd8f72a53dd8",
         "android_client_info": {
           "package_name": "io.supabase.adventconnectzw.advent_connect_zw"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyPLACEHOLDER_REPLACE_WITH_REAL_KEY_XXXXX"
+          "current_key": "AIzaSyDgKlv0SAPzf9G3YvZyEkKokinbaEdDMxQ"
         }
       ],
       "services": {

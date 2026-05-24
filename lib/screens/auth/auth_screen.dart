@@ -873,28 +873,68 @@ class _GoogleGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Lightweight stand-in for the multi-colour G — keeps the bundle
-    // free of an extra image asset. The icon is colour-balanced
-    // against the app's blue palette.
-    return Container(
+    return const SizedBox(
       width: 22,
       height: 22,
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.10)),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        'G',
-        style: AppTextStyles.labelLarge.copyWith(
-          color: AppColors.primaryBlue,
-          fontWeight: FontWeight.w800,
-          fontSize: 14,
-        ),
-      ),
+      child: CustomPaint(painter: _GoogleGPainter()),
     );
   }
+}
+
+class _GoogleGPainter extends CustomPainter {
+  const _GoogleGPainter();
+
+  // Official Google brand colours.
+  static const _blue = Color(0xFF4285F4);
+  static const _red = Color(0xFFEA4335);
+  static const _yellow = Color(0xFFFBBC05);
+  static const _green = Color(0xFF34A853);
+
+  // Flutter angle convention used below: 0° = 3 o'clock, sweeps clockwise.
+  // So 90° = bottom, 180° = left, 270° = top.
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+    final stroke = size.width * 0.20;
+
+    final ringRect = Rect.fromCircle(
+      center: Offset(cx, cy),
+      radius: r - stroke / 2,
+    );
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.butt;
+
+    // Ring has a small gap at the 3-4 o'clock area where the G's bar
+    // exits. Going clockwise from just above 3 o'clock:
+    //   Blue   : 12 o'clock down to a touch above 3 o'clock (where bar begins)
+    //   Red    : 9 o'clock to 12 o'clock
+    //   Yellow : 6 o'clock to 9 o'clock
+    //   Green  : 3 o'clock-ish (below bar) to 6 o'clock
+    canvas.drawArc(ringRect, _deg(270), _deg(85), false, ring..color = _blue);
+    canvas.drawArc(ringRect, _deg(180), _deg(90), false, ring..color = _red);
+    canvas.drawArc(ringRect, _deg(90), _deg(90), false, ring..color = _yellow);
+    canvas.drawArc(ringRect, _deg(25), _deg(65), false, ring..color = _green);
+
+    // Horizontal blue bar at the vertical midline. Starts just past
+    // centre and reaches the inner edge of the blue arc.
+    final barHeight = stroke * 0.95;
+    final barRect = Rect.fromLTRB(
+      cx + size.width * 0.04,
+      cy - barHeight / 2,
+      cx + r - stroke * 0.15,
+      cy + barHeight / 2,
+    );
+    canvas.drawRect(barRect, Paint()..color = _blue);
+  }
+
+  static double _deg(double d) => d * 3.1415926535 / 180;
+
+  @override
+  bool shouldRepaint(covariant _GoogleGPainter oldDelegate) => false;
 }
 
 class _GlowField extends StatefulWidget {

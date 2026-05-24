@@ -57,6 +57,20 @@ android {
     }
 
     signingConfigs {
+        // Pin the debug keystore to a copy in the repo so CI builds
+        // produce APKs with the SAME SHA-1 as local builds. This is the
+        // SHA-1 registered with Google Cloud for OAuth — without this,
+        // every GitHub Actions APK would have a fresh random SHA-1
+        // (because the runner has no ~/.android/debug.keystore) and
+        // Google Sign-In would fail with DEVELOPER_ERROR (code 10).
+        // The debug keystore is NOT secret — passwords are the well-
+        // known Android defaults ("android" / "androiddebugkey").
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("release") {
             if (keystorePropertiesFile.exists()) {
                 keyAlias = keystoreProperties["keyAlias"] as String

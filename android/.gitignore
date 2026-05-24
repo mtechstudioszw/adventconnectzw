@@ -12,3 +12,10 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Exception: the debug keystore IS committed so CI and local builds
+# produce APKs with the same SHA-1 — required for Google Sign-In to
+# accept builds from GitHub Actions. Debug passwords are the well-known
+# Android defaults; not a secret. Release/upload keystores remain
+# ignored by the **/*.keystore + **/*.jks rules above.
+!app/debug.keystore

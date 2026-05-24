@@ -56,7 +56,10 @@
 	<true/>
 	<!-- Custom URL scheme for Supabase password-recovery deep links.
 	     Mirrors the AndroidManifest intent-filter; AuthService routes
-	     the link to /reset-password on the passwordRecovery event. -->
+	     the link to /reset-password on the passwordRecovery event.
+	     The second entry is the REVERSED_CLIENT_ID from
+	     GoogleService-Info.plist — google_sign_in uses it as the
+	     return URL after the Google OAuth dialog. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -67,6 +70,16 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>io.supabase.adventconnect</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>google-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.13892017929-dg9g51c203gldfk9qb05mv80ps7t997m</string>
 			</array>
 		</dict>
 	</array>

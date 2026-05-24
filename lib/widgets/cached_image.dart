@@ -34,6 +34,7 @@ class CachedImage extends StatelessWidget {
   // Kept for source-level compatibility with Image.network so call
   // sites compile unchanged. We don't have CachedNetworkImage chunk
   // events to forward to it, so it's intentionally unused.
+  // ignore: unused_field
   final ImageLoadingBuilder? loadingBuilder;
 
   @override

@@ -508,6 +508,30 @@ class AuthService {
     return value == 'true';
   }
 
+  /// Returns true if the signed-in user has a row in `profiles`. This is
+  /// the source of truth for "has finished onboarding" — checking the
+  /// auth user_metadata isn't reliable because Google fills in
+  /// `full_name` automatically on sign-in, so a brand-new Google account
+  /// would appear "set up" before the user has actually touched the
+  /// onboarding flow.
+  static Future<bool> hasCompletedProfileSetup() async {
+    final user = currentUser;
+    if (user == null) return false;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('id')
+          .eq('id', user.id)
+          .maybeSingle();
+      return row != null;
+    } catch (_) {
+      // Network error or RLS issue — fall back to assuming NOT set up
+      // so the user goes through onboarding rather than being silently
+      // dropped into the app with no profile.
+      return false;
+    }
+  }
+
   static Future<DateTime?> getStoredBirthDate() async {
     try {
       final stored = await SecureStorageService.read(_birthDateKey);

@@ -265,23 +265,90 @@ class _AuthScreenState extends State<AuthScreen>
     });
     final result = await AuthService.signInWithGoogle();
     if (!mounted) return;
-    setState(() => _googleBusy = false);
-    if (result.isSuccess) {
-      // Google has already verified the email — Supabase marks
-      // email_confirmed_at automatically, so we can skip the email
-      // verification screen and head straight into onboarding (or
-      // home if the user has been here before).
-      HapticFeedback.mediumImpact();
-      final hasFullName = (AuthService.currentUser?.userMetadata?[
-              'full_name'] as String?)
-              ?.trim()
-              .isNotEmpty ==
-          true;
-      context.goNamed(hasFullName ? 'home' : 'profile_setup');
+    if (!result.isSuccess) {
+      setState(() => _googleBusy = false);
+      if (result.errorMessage == 'Sign in cancelled.') return;
+      setState(() => _error = result.errorMessage);
       return;
     }
-    if (result.errorMessage == 'Sign in cancelled.') return;
-    setState(() => _error = result.errorMessage);
+
+    // Returning user (already has a profiles row) → straight to home.
+    // New Google user → age verification (date-of-birth picker) →
+    // profile-setup onboarding. Checking the auth user_metadata isn't
+    // enough because Google auto-fills full_name on sign-in, so the
+    // old check sent every new Google user straight to home and
+    // bypassed onboarding.
+    final hasProfile = await AuthService.hasCompletedProfileSetup();
+    if (!mounted) return;
+    if (hasProfile) {
+      HapticFeedback.mediumImpact();
+      setState(() => _googleBusy = false);
+      context.goNamed('home');
+      return;
+    }
+
+    // New user — collect birth date for age verification before the
+    // profile setup flow. If they cancel or are under 13, sign them
+    // back out so we don't leak an unverified account into the app.
+    final dob = await _pickBirthDateForGoogleSignup();
+    if (!mounted) return;
+    if (dob == null) {
+      await AuthService.signOut();
+      if (!mounted) return;
+      setState(() {
+        _googleBusy = false;
+        _error = 'Date of birth is required to create an account.';
+      });
+      return;
+    }
+    final age = _ageInYears(dob);
+    if (age < 13) {
+      await AuthService.signOut();
+      if (!mounted) return;
+      setState(() {
+        _googleBusy = false;
+        _error = 'You must be at least 13 to use Advent Connect.';
+      });
+      return;
+    }
+    await AuthService.markAgeVerified(dob);
+    HapticFeedback.mediumImpact();
+    setState(() => _googleBusy = false);
+    context.goNamed('profile_setup');
+  }
+
+  Future<DateTime?> _pickBirthDateForGoogleSignup() async {
+    final now = DateTime.now();
+    return showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year - 20, now.month, now.day),
+      firstDate: DateTime(now.year - 110),
+      lastDate: now,
+      helpText: 'Your date of birth',
+      cancelText: 'Cancel',
+      confirmText: 'Continue',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: ColorScheme.light(
+            primary: AppColors.primaryBlue,
+            onPrimary: AppColors.white,
+            surface: AppColors.white,
+            onSurface: AppColors.textDark,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+  }
+
+  int _ageInYears(DateTime dob) {
+    final now = DateTime.now();
+    var age = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      age -= 1;
+    }
+    return age;
   }
 
   void _changeEmail() {

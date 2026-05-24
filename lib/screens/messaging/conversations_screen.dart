@@ -306,7 +306,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     const SizedBox(width: 8),
                     _CircleIconButton(
                       icon: Icons.search,
-                      onTap: () {},
+                      // Reuse the cross-content Search screen so tapping
+                      // the magnifier in the inbox finds people the same
+                      // way the Home tab does — and falls back to
+                      // "Suggestions for you" when there's no match.
+                      onTap: () => context.pushNamed('search'),
                     ),
                   ],
                 ),

@@ -272,7 +272,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       context,
       otherUserId: job.posterId,
       otherUserName: job.posterName,
-      source: 'job_details',
+      source: 'job',
     );
   }
 

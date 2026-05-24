@@ -464,7 +464,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 context,
                 otherUserId: widget.userId,
                 otherUserName: _profile!.fullName,
-                source: 'user_profile',
+                source: 'direct',
               ),
             ),
           ),

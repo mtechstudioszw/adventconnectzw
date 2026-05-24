@@ -176,7 +176,12 @@ class MessagingService {
           'participant_a_name': myName,
           'participant_b_name': myName,
           'initiator_id': user.id,
-          'conversation_source': 'self',
+          // 'direct' is the only generic value the conversation_source
+          // CHECK constraint allows. Self-chats are identified by
+          // participant_a_id = participant_b_id (see idx_conversations_self_chat
+          // in patch_016), not by a special source value — passing 'self'
+          // here would violate conversations_conversation_source_check.
+          'conversation_source': 'direct',
           'request_status': 'accepted',
         })
         .select()

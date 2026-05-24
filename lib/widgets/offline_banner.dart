@@ -6,10 +6,11 @@ import '../services/connectivity_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
-/// Subtle pill that floats above the bottom of the screen when the
-/// device drops offline. We deliberately render it as an overlay rather
-/// than a top bar so it doesn't look like the app has crashed when it
-/// appears.
+/// Subtle pill that floats below the status bar when the device drops
+/// offline. Previously rendered at the bottom of the screen, which
+/// visually covered the tab bar — even though IgnorePointer let taps
+/// through, users couldn't see which tab they were tapping. Top
+/// placement matches how Facebook / Instagram surface "No internet".
 class OfflineBanner extends StatefulWidget {
   const OfflineBanner({super.key, required this.child});
 
@@ -46,20 +47,20 @@ class _OfflineBannerState extends State<OfflineBanner> {
         Positioned(
           left: 0,
           right: 0,
-          bottom: 0,
+          top: 0,
           child: IgnorePointer(
             child: AnimatedSlide(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
-              offset: _online ? const Offset(0, 1.5) : Offset.zero,
+              offset: _online ? const Offset(0, -1.5) : Offset.zero,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 220),
                 opacity: _online ? 0 : 1,
                 child: SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: Align(
-                      alignment: Alignment.bottomCenter,
+                      alignment: Alignment.topCenter,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,

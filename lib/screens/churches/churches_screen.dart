@@ -36,6 +36,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   bool _nearMode = false;
   String? _error;
   String? _locationError;
+  LocationFailure? _locationFailure;
   Position? _position;
   static const _nearMeLimit = 5;
 
@@ -171,25 +172,38 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       setState(() {
         _nearMode = false;
         _locationError = null;
+        _locationFailure = null;
       });
       return;
     }
     setState(() {
       _locating = true;
       _locationError = null;
+      _locationFailure = null;
     });
-    final pos = await LocationService.getCurrentPosition();
+    final result = await LocationService.getCurrentPositionDetailed();
     if (!mounted) return;
-    if (pos == null) {
+    if (!result.isSuccess) {
       setState(() {
         _locating = false;
-        _locationError =
-            'Couldn\'t get your location. Check location permission and try again.';
+        _locationFailure = result.failure;
+        _locationError = switch (result.failure!) {
+          LocationFailure.servicesDisabled =>
+            'Location is turned off on this device. Turn it on in Settings, then tap Near me again.',
+          LocationFailure.permissionDenied =>
+            'Advent Connect needs location permission to find nearby churches. Try Near me again to grant access.',
+          LocationFailure.permissionDeniedForever =>
+            'Location permission is blocked for Advent Connect. Open Settings to allow it.',
+          LocationFailure.timeout =>
+            'Took too long to get a GPS fix. Move to a window or outdoors and try again.',
+          LocationFailure.unknown =>
+            'Couldn\'t get your location. Please try again.',
+        };
       });
       return;
     }
     setState(() {
-      _position = pos;
+      _position = result.position;
       _locating = false;
       _nearMode = true;
       _sortByDistance();
@@ -366,6 +380,22 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   }
 
   Widget _buildLocationErrorBanner() {
+    // Pick the right action button for the failure type. permission-
+    // deniedForever → Settings (the OS won't show the prompt again).
+    // servicesDisabled → Location toggle. Everything else → just a
+    // dismiss button since "try again" reopens the picker via the FAB.
+    final (String? actionLabel, VoidCallback? action) = switch (
+        _locationFailure) {
+      LocationFailure.permissionDeniedForever => (
+          'Open Settings',
+          () => LocationService.openAppSettings(),
+        ),
+      LocationFailure.servicesDisabled => (
+          'Turn On Location',
+          () => LocationService.openLocationSettings(),
+        ),
+      _ => (null, null),
+    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Container(
@@ -375,23 +405,67 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(
-              Icons.error_outline,
-              color: AppColors.red,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                _locationError!,
-                style: AppTextStyles.bodySmall.copyWith(
+            Row(
+              children: [
+                const Icon(
+                  Icons.error_outline,
                   color: AppColors.red,
-                  fontWeight: FontWeight.w500,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _locationError!,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.red,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(
+                    Icons.close,
+                    size: 18,
+                    color: AppColors.red,
+                  ),
+                  onPressed: () => setState(() {
+                    _locationError = null;
+                    _locationFailure = null;
+                  }),
+                ),
+              ],
+            ),
+            if (actionLabel != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: action,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primaryBlue,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    actionLabel,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),

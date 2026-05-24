@@ -9,6 +9,7 @@ import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AddProductScreen extends StatefulWidget {
   const AddProductScreen({super.key});
@@ -526,7 +527,7 @@ class _PhotoThumb extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             color: AppColors.lightGrey,
             image: DecorationImage(
-              image: NetworkImage(url),
+              image: CachedNetworkImageProvider(url),
               fit: BoxFit.cover,
             ),
             border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),

@@ -8,6 +8,7 @@ import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/start_conversation_sheet.dart';
+import '../../widgets/cached_image.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   const JobDetailsScreen({
@@ -443,7 +444,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                         ),
                         child: job.companyLogoUrl != null &&
                                 job.companyLogoUrl!.isNotEmpty
-                            ? Image.network(
+                            ? CachedImage(
                                 job.companyLogoUrl!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, _, _) =>

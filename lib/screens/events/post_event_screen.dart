@@ -6,6 +6,7 @@ import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class PostEventScreen extends StatefulWidget {
   const PostEventScreen({super.key, this.existing});
@@ -409,7 +410,7 @@ class _PostEventScreenState extends State<PostEventScreen>
                     ),
                     image: hasPhoto
                         ? DecorationImage(
-                            image: NetworkImage(_coverPhotoUrl!),
+                            image: CachedNetworkImageProvider(_coverPhotoUrl!),
                             fit: BoxFit.cover,
                           )
                         : null,

@@ -3,6 +3,7 @@ import '../../models/post_comment_model.dart';
 import '../../services/feed_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../cached_image.dart';
 
 /// Bottom sheet that opens when the user taps "Comment" on a feed post.
 /// Loads comments lazily and lets the viewer post a new one, reply to
@@ -435,7 +436,7 @@ class _CommentRow extends StatelessWidget {
                     fontSize: 13,
                   ),
                 )
-              : Image.network(
+              : CachedImage(
                   url,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => Text(

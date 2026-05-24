@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/event_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'cached_image.dart';
 
 /// Large hero-style event card used in the Events tab.
 ///
@@ -193,7 +194,7 @@ class _CoverHero extends StatelessWidget {
               ),
             )
           else
-            Image.network(
+            CachedImage(
               url!,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => Container(

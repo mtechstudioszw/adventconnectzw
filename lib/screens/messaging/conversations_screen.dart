@@ -10,6 +10,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/home/composer_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
+import '../../widgets/cached_image.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
@@ -1274,7 +1275,7 @@ class _Avatar extends StatelessWidget {
               size: 22,
             )
           : hasPhoto
-              ? Image.network(
+              ? CachedImage(
                   photoUrl!,
                   fit: BoxFit.cover,
                   width: 50,

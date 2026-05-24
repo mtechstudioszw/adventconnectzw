@@ -4,6 +4,7 @@ import '../../services/block_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Lists everyone the current user has blocked. Tap "Unblock" to undo.
 class BlockedUsersScreen extends StatefulWidget {
@@ -179,7 +180,7 @@ class _UserRow extends StatelessWidget {
               shape: BoxShape.circle,
               image: hasPhoto
                   ? DecorationImage(
-                      image: NetworkImage(photo),
+                      image: CachedNetworkImageProvider(photo),
                       fit: BoxFit.cover,
                     )
                   : null,

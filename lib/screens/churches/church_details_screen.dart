@@ -5,6 +5,7 @@ import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/church_map.dart';
+import '../../widgets/cached_image.dart';
 
 class ChurchDetailsScreen extends StatefulWidget {
   const ChurchDetailsScreen({
@@ -175,7 +176,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                     ),
                   ),
                 )
-              : Image.network(
+              : CachedImage(
                   church.coverPhotoUrl!,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => Container(

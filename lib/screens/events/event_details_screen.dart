@@ -7,6 +7,7 @@ import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/cached_image.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   const EventDetailsScreen({
@@ -1006,7 +1007,7 @@ class _CoverImage extends StatelessWidget {
         ),
       );
     }
-    return Image.network(
+    return CachedImage(
       url!,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => Container(

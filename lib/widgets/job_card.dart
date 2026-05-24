@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/job_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'cached_image.dart';
 
 class JobCard extends StatelessWidget {
   const JobCard({
@@ -191,7 +192,7 @@ class _CompanyLogo extends StatelessWidget {
         border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
       ),
       child: hasLogo
-          ? Image.network(
+          ? CachedImage(
               logoUrl!,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => _initialsView(),

@@ -10,6 +10,7 @@ import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Browse other community members who opted into the directory.
 class MemberDirectoryScreen extends StatefulWidget {
@@ -322,7 +323,7 @@ class _DirectoryRow extends StatelessWidget {
               shape: BoxShape.circle,
               image: hasPhoto
                   ? DecorationImage(
-                      image: NetworkImage(photo),
+                      image: CachedNetworkImageProvider(photo),
                       fit: BoxFit.cover,
                     )
                   : null,

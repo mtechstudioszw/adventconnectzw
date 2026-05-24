@@ -7,6 +7,7 @@ import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Post-approval edit screen. Pre-filled from the existing sellers row.
 /// Category is shown but not editable — switching category requires
@@ -1016,7 +1017,7 @@ class _PhotoTile extends StatelessWidget {
             ],
             image: hasPhoto
                 ? DecorationImage(
-                    image: NetworkImage(photoUrl!),
+                    image: CachedNetworkImageProvider(photoUrl!),
                     fit: BoxFit.cover,
                   )
                 : null,

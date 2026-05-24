@@ -65,6 +65,13 @@ dependencies:
   # permission on iOS automatically.
   gal: ^2.3.0
 
+  # Disk-cache network images so they don't redownload on every
+  # scroll. All Image.network call sites go through the CachedImage
+  # wrapper in lib/widgets/cached_image.dart, which has a
+  # source-compatible API with Image.network so the migration was
+  # a mechanical search-and-replace.
+  cached_network_image: ^3.4.1
+
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale
 # hasPermission signature, which breaks compilation even for Android builds.

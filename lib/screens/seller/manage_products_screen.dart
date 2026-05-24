@@ -5,6 +5,7 @@ import '../../models/product_model.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/cached_image.dart';
 
 /// Owner view of a seller's full product list. Lets them toggle each
 /// listing between live/hidden, jump into product details, and delete
@@ -594,7 +595,7 @@ class _ProductRow extends StatelessWidget {
                         width: 76,
                         color: AppColors.lightGrey,
                         child: firstImage.isNotEmpty
-                            ? Image.network(
+                            ? CachedImage(
                                 firstImage,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, _, _) => const Icon(

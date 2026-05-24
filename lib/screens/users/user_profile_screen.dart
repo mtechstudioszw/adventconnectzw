@@ -11,6 +11,8 @@ import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/start_conversation_sheet.dart';
+import '../../widgets/cached_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Viewing another user's profile (not the logged-in user — that's the
 /// regular ProfileScreen). Surfaces:
@@ -278,7 +280,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               gradient: AppColors.appBarGradient,
               image: cover != null && cover.isNotEmpty
                   ? DecorationImage(
-                      image: NetworkImage(cover),
+                      image: CachedNetworkImageProvider(cover),
                       fit: BoxFit.cover,
                     )
                   : null,
@@ -335,7 +337,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 child: ClipOval(
                   child: _profile!.profilePhotoUrl != null &&
                           _profile!.profilePhotoUrl!.isNotEmpty
-                      ? Image.network(
+                      ? CachedImage(
                           _profile!.profilePhotoUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => _initialAvatar(),

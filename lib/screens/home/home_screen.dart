@@ -38,6 +38,7 @@ import '../../widgets/last_updated_strip.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../widgets/main_bottom_nav.dart';
+import '../../widgets/cached_image.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -465,44 +466,14 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
                 const SizedBox(height: 6),
+                // _buildFeedList() is now a Facebook-style mixed feed:
+                // posts intercalated with discovery cards (suggested
+                // people, events, prayer prompt, churches, invite
+                // friends, quick stats). The standalone sections that
+                // used to live below this point were folded into the
+                // feed so the user gets one continuous scroll instead
+                // of jumping between mode-locked panels.
                 _buildFeedList(),
-                const SizedBox(height: 24),
-                _buildSectionHeader('Quick stats', null),
-                const SizedBox(height: 12),
-                _buildQuickStats(),
-                const SizedBox(height: 28),
-                _buildSectionHeader(
-                  'Upcoming events',
-                  _events.isEmpty ? null : 'See all',
-                  onAction: () => context.goNamed('events'),
-                ),
-                const SizedBox(height: 12),
-                _buildEventsRow(),
-                const SizedBox(height: 28),
-                _buildSectionHeader('Active prayers', null),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _PrayersEmpty(
-                    onTap: () => context.pushNamed('prayer'),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                _buildSectionHeader(
-                  'Discover churches',
-                  _churches.isEmpty ? null : 'See all',
-                  onAction: () => context.goNamed('churches'),
-                ),
-                const SizedBox(height: 12),
-                _buildChurchGrid(),
-                if (_hasNonFriendSuggestions) ...[
-                  const SizedBox(height: 28),
-                  _buildSectionHeader('People to meet', null),
-                  const SizedBox(height: 12),
-                  _buildSuggestedMembersRow(),
-                ],
-                const SizedBox(height: 22),
-                const InviteFriendsCard(),
                 const SizedBox(height: 24),
                 const AdBanner(),
                 // Bottom padding so the floating chat bubble + plus FAB
@@ -867,30 +838,120 @@ class _HomeScreenState extends State<HomeScreen>
     }
     final viewerId = AuthService.currentUser?.id;
     final cachedAt = CacheService.cachedAt('home_feed');
+    final discoveryCards = _buildDiscoveryCards();
+
+    // Facebook-style mixed feed: real posts intercalated with discovery
+    // cards (suggested people / events / churches / prayer prompt /
+    // invite friends / quick stats). One discovery card after every
+    // [_discoveryEveryNPosts] posts, then any remaining cards are
+    // appended at the end so the user always sees the full set even
+    // when the post backlog is short.
+    final children = <Widget>[];
+    if (cachedAt != null) {
+      children.add(const SizedBox(height: 4));
+      children.add(LastUpdatedStrip(
+        timestamp: cachedAt,
+        isOnline: ConnectivityService.isOnline,
+        onRefresh: _bootstrap,
+      ));
+    }
+    var cardIdx = 0;
+    for (var i = 0; i < _posts.length; i++) {
+      final post = _posts[i];
+      children.add(PostCard(
+        post: post,
+        viewerId: viewerId,
+        onLikeToggled: () => _toggleLike(post),
+        onCommentsTapped: () => _openComments(post),
+        onImageTapped: () => _openImageViewer(post),
+        onEdit: () => _editPost(post),
+        onDelete: () => _confirmDeletePost(post),
+        onToggleVisibility: () => _togglePostVisibility(post),
+        onReport: () => _reportPost(post),
+        onAuthorTapped: () => _openAuthorProfile(post),
+        onSaveImage: () => _savePostImage(post),
+      ));
+      if ((i + 1) % _discoveryEveryNPosts == 0 &&
+          cardIdx < discoveryCards.length) {
+        children.add(discoveryCards[cardIdx++]);
+      }
+    }
+    while (cardIdx < discoveryCards.length) {
+      children.add(discoveryCards[cardIdx++]);
+    }
+    return Column(children: children);
+  }
+
+  // Cadence for the Facebook-style mixed feed. Smaller = more
+  // discovery cards interrupting posts; larger = posts feel more
+  // continuous. 3 lands close to what Instagram does for sponsored
+  // breakers.
+  static const _discoveryEveryNPosts = 3;
+
+  /// Builds the ordered list of "discovery" cards (suggested people,
+  /// upcoming events, prayer prompt, churches, invite friends, quick
+  /// stats) that get sprinkled between posts in the feed. Empty
+  /// sections are skipped so we don't waste a slot on, e.g., a "0
+  /// upcoming events" card.
+  List<Widget> _buildDiscoveryCards() {
+    final cards = <Widget>[];
+    if (_hasNonFriendSuggestions) {
+      cards.add(_discoverySection(
+        title: 'People to meet',
+        child: _buildSuggestedMembersRow(),
+      ));
+    }
+    if (_events.isNotEmpty) {
+      cards.add(_discoverySection(
+        title: 'Upcoming events',
+        action: 'See all',
+        onAction: () => context.goNamed('events'),
+        child: _buildEventsRow(),
+      ));
+    }
+    cards.add(_discoverySection(
+      title: 'Active prayers',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: _PrayersEmpty(onTap: () => context.pushNamed('prayer')),
+      ),
+    ));
+    if (_churches.isNotEmpty) {
+      cards.add(_discoverySection(
+        title: 'Discover churches',
+        action: 'See all',
+        onAction: () => context.goNamed('churches'),
+        child: _buildChurchGrid(),
+      ));
+    }
+    cards.add(const Padding(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: InviteFriendsCard(),
+    ));
+    cards.add(_discoverySection(
+      title: 'Quick stats',
+      child: _buildQuickStats(),
+    ));
+    return cards;
+  }
+
+  /// Wraps a discovery card body with its section header + consistent
+  /// vertical spacing so they slot cleanly between PostCards in the
+  /// mixed feed.
+  Widget _discoverySection({
+    required String title,
+    required Widget child,
+    String? action,
+    VoidCallback? onAction,
+  }) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (cachedAt != null) ...[
-          const SizedBox(height: 4),
-          LastUpdatedStrip(
-            timestamp: cachedAt,
-            isOnline: ConnectivityService.isOnline,
-            onRefresh: _bootstrap,
-          ),
-        ],
-        for (final post in _posts)
-          PostCard(
-            post: post,
-            viewerId: viewerId,
-            onLikeToggled: () => _toggleLike(post),
-            onCommentsTapped: () => _openComments(post),
-            onImageTapped: () => _openImageViewer(post),
-            onEdit: () => _editPost(post),
-            onDelete: () => _confirmDeletePost(post),
-            onToggleVisibility: () => _togglePostVisibility(post),
-            onReport: () => _reportPost(post),
-            onAuthorTapped: () => _openAuthorProfile(post),
-            onSaveImage: () => _savePostImage(post),
-          ),
+        const SizedBox(height: 16),
+        _buildSectionHeader(title, action, onAction: onAction),
+        const SizedBox(height: 12),
+        child,
+        const SizedBox(height: 8),
       ],
     );
   }
@@ -1552,7 +1613,7 @@ class _MemberAvatar extends StatelessWidget {
             width: 2,
           ),
         ),
-        child: Image.network(
+        child: CachedImage(
           photoUrl!,
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => _initialsBox(initials),
@@ -1794,7 +1855,7 @@ class _WelcomeCard extends StatelessWidget {
                       letterSpacing: 0.4,
                     ),
                   )
-                : Image.network(
+                : CachedImage(
                     photoUrl!,
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) => Text(
@@ -2236,7 +2297,7 @@ class _CoverImage extends StatelessWidget {
         ),
       );
     }
-    return Image.network(
+    return CachedImage(
       url!,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => Container(
@@ -2502,7 +2563,7 @@ class _ComposerEntry extends StatelessWidget {
                           fontSize: 15,
                         ),
                       )
-                    : Image.network(
+                    : CachedImage(
                         photoUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => Text(

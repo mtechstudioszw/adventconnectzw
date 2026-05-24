@@ -5,6 +5,7 @@ import '../../services/feed_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../cached_image.dart';
 
 /// Opens the "write a post" bottom sheet. Resolves to the freshly
 /// created Post or null if the user cancelled.
@@ -214,7 +215,7 @@ class _PostComposerState extends State<_PostComposer> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.network(_imageUrl!, fit: BoxFit.cover),
+                        CachedImage(_imageUrl!, fit: BoxFit.cover),
                         Positioned(
                           top: 8,
                           right: 8,
@@ -512,7 +513,7 @@ class _StoryComposerState extends State<_StoryComposer> {
                               // caption + keyboard still fit on most
                               // phones without scrolling.
                               aspectRatio: 4 / 5,
-                              child: Image.network(
+                              child: CachedImage(
                                 _mediaUrl!,
                                 fit: BoxFit.cover,
                               ),

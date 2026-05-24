@@ -11,6 +11,7 @@ import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Single-screen post-signup onboarding. PageView drives 6 steps:
 ///
@@ -732,7 +733,7 @@ class _PhotoAvatar extends StatelessWidget {
             ],
             image: hasPhoto
                 ? DecorationImage(
-                    image: NetworkImage(photoUrl!),
+                    image: CachedNetworkImageProvider(photoUrl!),
                     fit: BoxFit.cover,
                   )
                 : null,

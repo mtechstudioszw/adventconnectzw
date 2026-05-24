@@ -6,6 +6,8 @@ import '../../models/seller_model.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/cached_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Entry point into the seller flow. Three states:
 ///   * no seller row → CTA to set up the store
@@ -510,7 +512,7 @@ class _StoreSummaryCard extends StatelessWidget {
               shape: BoxShape.circle,
               image: hasPhoto
                   ? DecorationImage(
-                      image: NetworkImage(photo),
+                      image: CachedNetworkImageProvider(photo),
                       fit: BoxFit.cover,
                     )
                   : null,
@@ -954,7 +956,7 @@ class _ProductPreviewRow extends StatelessWidget {
               height: 52,
               color: AppColors.lightGrey,
               child: firstImage.isNotEmpty
-                  ? Image.network(
+                  ? CachedImage(
                       firstImage,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) => const Icon(

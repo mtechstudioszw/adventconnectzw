@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/story_model.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../cached_image.dart';
 
 /// Facebook-style horizontal stories rail with vertical 9:16-ish
 /// cards. First card is always "Your story" (full-bleed avatar +
@@ -117,7 +118,7 @@ class _YourStoryCard extends StatelessWidget {
                       Expanded(
                         flex: 7,
                         child: _hasStory
-                            ? Image.network(
+                            ? CachedImage(
                                 ownStories!.first.mediaUrl,
                                 fit: BoxFit.cover,
                                 width: double.infinity,
@@ -198,7 +199,7 @@ class _YourStoryCard extends StatelessWidget {
 
   Widget _avatarBackground() {
     if (viewerPhotoUrl != null && viewerPhotoUrl!.isNotEmpty) {
-      return Image.network(
+      return CachedImage(
         viewerPhotoUrl!,
         fit: BoxFit.cover,
         width: double.infinity,
@@ -248,7 +249,7 @@ class _FriendStoryCard extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 // Layer 1: full-bleed story image.
-                Image.network(
+                CachedImage(
                   story.mediaUrl,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => Container(
@@ -294,7 +295,7 @@ class _FriendStoryCard extends StatelessWidget {
                           height: 28,
                           child: (story.authorPhotoUrl ?? '').isEmpty
                               ? _initialAvatar(story.authorName)
-                              : Image.network(
+                              : CachedImage(
                                   story.authorPhotoUrl!,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) =>

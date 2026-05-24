@@ -20,6 +20,7 @@ import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Facebook-style cross-content search.
 ///
@@ -1119,7 +1120,7 @@ class _PersonAvatar extends StatelessWidget {
         color: AppColors.primaryBlue.withValues(alpha: 0.10),
         image: hasPhoto
             ? DecorationImage(
-                image: NetworkImage(photoUrl!),
+                image: CachedNetworkImageProvider(photoUrl!),
                 fit: BoxFit.cover,
               )
             : null,

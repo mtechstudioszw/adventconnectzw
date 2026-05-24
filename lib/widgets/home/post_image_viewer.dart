@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
+import '../cached_image.dart';
 
 /// Full-screen post-image viewer. Tap-anywhere or back-button to
 /// dismiss; pinch-to-zoom is handled via InteractiveViewer. The Hero
@@ -53,7 +54,7 @@ class PostImageViewer extends StatelessWidget {
                   child: InteractiveViewer(
                     minScale: 1,
                     maxScale: 4,
-                    child: Image.network(
+                    child: CachedImage(
                       imageUrl,
                       fit: BoxFit.contain,
                       errorBuilder: (_, _, _) => const Center(

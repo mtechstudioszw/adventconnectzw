@@ -6,6 +6,8 @@ import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/cached_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -343,7 +345,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               ],
               image: hasPhoto
                   ? DecorationImage(
-                      image: NetworkImage(_profilePhotoUrl!),
+                      image: CachedNetworkImageProvider(_profilePhotoUrl!),
                       fit: BoxFit.cover,
                     )
                   : null,
@@ -407,7 +409,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           AspectRatio(
             aspectRatio: 16 / 9,
             child: hasCover
-                ? Image.network(
+                ? CachedImage(
                     _coverPhotoUrl!,
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) => Container(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/post_model.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../cached_image.dart';
 
 /// One card in the home feed. Stateless — the parent owns the Post and
 /// receives optimistic-update callbacks for like/comment/menu taps.
@@ -166,7 +167,7 @@ class PostCard extends StatelessWidget {
             aspectRatio: 1.0,
             child: Hero(
               tag: 'post_image_${post.id}',
-              child: Image.network(
+              child: CachedImage(
                 post.imageUrl!,
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => Container(
@@ -312,7 +313,7 @@ class _Avatar extends StatelessWidget {
                 fontSize: 17,
               ),
             )
-          : Image.network(
+          : CachedImage(
               url,
               fit: BoxFit.cover,
               width: 42,

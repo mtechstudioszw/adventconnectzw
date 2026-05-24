@@ -7,6 +7,7 @@ import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// The "Become a Seller" application form. Inserts a row into `sellers`
 /// with status='pending' and routes to the seller dashboard, which
@@ -1034,7 +1035,7 @@ class _PhotoTile extends StatelessWidget {
             ],
             image: hasPhoto
                 ? DecorationImage(
-                    image: NetworkImage(photoUrl!),
+                    image: CachedNetworkImageProvider(photoUrl!),
                     fit: BoxFit.cover,
                   )
                 : null,
@@ -1136,7 +1137,7 @@ class _CoverTile extends StatelessWidget {
             ),
             image: hasPhoto
                 ? DecorationImage(
-                    image: NetworkImage(photoUrl!),
+                    image: CachedNetworkImageProvider(photoUrl!),
                     fit: BoxFit.cover,
                   )
                 : null,

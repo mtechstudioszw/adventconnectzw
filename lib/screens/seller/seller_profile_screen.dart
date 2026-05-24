@@ -11,6 +11,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/rate_seller_sheet.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Public storefront view. Buyers reach this from product_details → tap
 /// seller, or from any future "Featured sellers" surface. Shows store
@@ -386,7 +387,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                     ],
                     image: hasPhoto
                         ? DecorationImage(
-                            image: NetworkImage(photo),
+                            image: CachedNetworkImageProvider(photo),
                             fit: BoxFit.cover,
                           )
                         : null,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/story_model.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../cached_image.dart';
 
 /// Full-screen story viewer modelled on Instagram / Facebook. Each
 /// story plays for [_storyDuration] before advancing; tapping the
@@ -117,7 +118,7 @@ class _StoryViewerState extends State<StoryViewer>
           fit: StackFit.expand,
           children: [
             Center(
-              child: Image.network(
+              child: CachedImage(
                 story.mediaUrl,
                 fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => const Center(
@@ -279,7 +280,7 @@ class _StoryViewerState extends State<StoryViewer>
                     fontSize: 14,
                   ),
                 )
-              : Image.network(
+              : CachedImage(
                   story.authorPhotoUrl!,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => Text(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/church_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'cached_image.dart';
 
 class ChurchCard extends StatelessWidget {
   const ChurchCard({
@@ -179,7 +180,7 @@ class _CoverImage extends StatelessWidget {
         ),
       );
     }
-    return Image.network(
+    return CachedImage(
       url!,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => Container(

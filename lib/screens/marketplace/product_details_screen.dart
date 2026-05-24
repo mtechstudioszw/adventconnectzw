@@ -8,6 +8,7 @@ import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/start_conversation_sheet.dart';
+import '../../widgets/cached_image.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({
@@ -675,7 +676,7 @@ class _CarouselImage extends StatelessWidget {
         ),
       );
     }
-    return Image.network(
+    return CachedImage(
       url,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => Container(

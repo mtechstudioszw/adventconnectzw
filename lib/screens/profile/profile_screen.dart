@@ -24,6 +24,7 @@ import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../widgets/main_bottom_nav.dart';
+import '../../widgets/cached_image.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -709,7 +710,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
             child: Hero(
               tag: 'post_image_${post.id}',
-              child: Image.network(post.imageUrl!, fit: BoxFit.cover),
+              child: CachedImage(post.imageUrl!, fit: BoxFit.cover),
             ),
           );
         },
@@ -852,7 +853,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   fit: StackFit.expand,
                   children: [
                     if (coverUrl != null)
-                      Image.network(
+                      CachedImage(
                         coverUrl,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => Container(
@@ -944,7 +945,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           fontSize: 38,
                         ),
                       )
-                    : Image.network(
+                    : CachedImage(
                         photoUrl,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => Text(

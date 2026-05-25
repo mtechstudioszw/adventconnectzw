@@ -44,7 +44,9 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
   final _usernameController = TextEditingController();
   final _bioController = TextEditingController();
   String? _profilePhotoUrl;
+  String? _coverPhotoUrl;
   bool _uploadingPhoto = false;
+  bool _uploadingCover = false;
 
   // ---------------- church step -----------------
   String? _homeChurchId;
@@ -77,6 +79,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     _usernameController.text = (meta['username'] as String?) ?? '';
     _bioController.text = (meta['bio'] as String?) ?? '';
     _profilePhotoUrl = meta['profile_photo_url'] as String?;
+    _coverPhotoUrl = meta['cover_photo_url'] as String?;
     _homeChurchId = meta['church_id'] as String?;
     _loadChurches();
   }
@@ -137,7 +140,8 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
       final result = await AuthService.updateProfile(
         fullName: name,
         bio: _bioController.text.trim(),
-        profilePhotoUrl: _profilePhotoUrl,
+        profilePhotoUrl: _profilePhotoUrl ?? '',
+        coverPhotoUrl: _coverPhotoUrl ?? '',
       );
       if (username.isNotEmpty) {
         await _writeMetadata({'username': username});
@@ -195,6 +199,33 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
 
   Future<void> _writeMetadata(Map<String, dynamic> patch) =>
       AuthService.updateMetadataDirect(patch);
+
+  void _removeProfilePhoto() {
+    setState(() => _profilePhotoUrl = null);
+  }
+
+  void _removeCoverPhoto() {
+    setState(() => _coverPhotoUrl = null);
+  }
+
+  Future<void> _pickCover() async {
+    if (_uploadingCover) return;
+    setState(() {
+      _uploadingCover = true;
+      _error = null;
+    });
+    try {
+      final url = await StorageService.pickAndUploadCoverPhoto();
+      if (!mounted) return;
+      if (url != null) setState(() => _coverPhotoUrl = url);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload cover. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingCover = false);
+    }
+  }
 
   Future<void> _pickPhoto() async {
     if (_uploadingPhoto) return;
@@ -257,8 +288,13 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
                     usernameController: _usernameController,
                     bioController: _bioController,
                     photoUrl: _profilePhotoUrl,
-                    uploading: _uploadingPhoto,
+                    coverUrl: _coverPhotoUrl,
+                    uploadingPhoto: _uploadingPhoto,
+                    uploadingCover: _uploadingCover,
                     onPickPhoto: _pickPhoto,
+                    onPickCover: _pickCover,
+                    onRemovePhoto: _removeProfilePhoto,
+                    onRemoveCover: _removeCoverPhoto,
                   ),
                   _ChurchPage(
                     churches: _allChurches,
@@ -643,16 +679,29 @@ class _ProfilePage extends StatelessWidget {
     required this.usernameController,
     required this.bioController,
     required this.photoUrl,
-    required this.uploading,
+    required this.coverUrl,
+    required this.uploadingPhoto,
+    required this.uploadingCover,
     required this.onPickPhoto,
+    required this.onPickCover,
+    required this.onRemovePhoto,
+    required this.onRemoveCover,
   });
 
   final TextEditingController nameController;
   final TextEditingController usernameController;
   final TextEditingController bioController;
   final String? photoUrl;
-  final bool uploading;
+  final String? coverUrl;
+  final bool uploadingPhoto;
+  final bool uploadingCover;
   final VoidCallback onPickPhoto;
+  final VoidCallback onPickCover;
+  final VoidCallback onRemovePhoto;
+  final VoidCallback onRemoveCover;
+
+  bool get _hasPhoto => (photoUrl ?? '').isNotEmpty;
+  bool get _hasCover => (coverUrl ?? '').isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -665,16 +714,44 @@ class _ProfilePage extends StatelessWidget {
             tagline: 'Step 1',
             title: 'Set up your profile',
             subtitle:
-                'A photo and a name help others recognise you in the community.',
+                'A photo, cover, and a name help others recognise you in the community.',
           ),
           const SizedBox(height: 24),
+          // Cover strip on top — uploads to the same profile_photos
+          // storage bucket as the avatar. Tappable to pick / replace;
+          // the trailing icon removes it when present.
+          _CoverStrip(
+            coverUrl: coverUrl,
+            uploading: uploadingCover,
+            onTap: onPickCover,
+            onRemove: _hasCover ? onRemoveCover : null,
+          ),
+          const SizedBox(height: 12),
           Center(
             child: _PhotoAvatar(
               photoUrl: photoUrl,
-              uploading: uploading,
+              uploading: uploadingPhoto,
               onTap: onPickPhoto,
             ),
           ),
+          if (_hasPhoto) ...[
+            const SizedBox(height: 6),
+            Center(
+              child: TextButton.icon(
+                onPressed: onRemovePhoto,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.red,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('Remove photo'),
+              ),
+            ),
+          ],
           const SizedBox(height: 22),
           _GlowField(
             controller: nameController,
@@ -696,6 +773,96 @@ class _ProfilePage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CoverStrip extends StatelessWidget {
+  const _CoverStrip({
+    required this.coverUrl,
+    required this.uploading,
+    required this.onTap,
+    this.onRemove,
+  });
+
+  final String? coverUrl;
+  final bool uploading;
+  final VoidCallback onTap;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCover = (coverUrl ?? '').isNotEmpty;
+    return Stack(
+      children: [
+        InkWell(
+          onTap: uploading ? null : onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 132,
+            decoration: BoxDecoration(
+              color: AppColors.lightGrey,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.primaryBlue.withValues(alpha: 0.15),
+              ),
+              image: hasCover
+                  ? DecorationImage(
+                      image: CachedNetworkImageProvider(coverUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: uploading
+                ? const CircularProgressIndicator(
+                    color: AppColors.primaryBlue,
+                    strokeWidth: 2.5,
+                  )
+                : hasCover
+                    ? null
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.add_photo_alternate_outlined,
+                            size: 30,
+                            color: AppColors.primaryBlue.withValues(alpha: 0.7),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Add a cover photo',
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+          ),
+        ),
+        if (hasCover && onRemove != null && !uploading)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.55),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onRemove,
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.close,
+                    size: 18,
+                    color: AppColors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

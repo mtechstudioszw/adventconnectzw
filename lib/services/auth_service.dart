@@ -456,14 +456,30 @@ class AuthService {
 
       final current = user.userMetadata ?? const {};
       final next = <String, dynamic>{...current};
+      // Empty string is the "remove" signal — callers pass '' to
+      // clear a photo (or bio etc). We write null to the DB and
+      // strip the metadata key so the field actually goes back to
+      // unset, not "set to empty string".
+      String? sentinelOrNull(String? v) =>
+          (v != null && v.isEmpty) ? null : v;
       if (fullName != null) next['full_name'] = fullName.trim();
       if (bio != null) next['bio'] = bio.trim();
       if (churchId != null) next['church_id'] = churchId;
       if (profilePhotoUrl != null) {
-        next['profile_photo_url'] = profilePhotoUrl;
+        final v = sentinelOrNull(profilePhotoUrl);
+        if (v == null) {
+          next.remove('profile_photo_url');
+        } else {
+          next['profile_photo_url'] = v;
+        }
       }
       if (coverPhotoUrl != null) {
-        next['cover_photo_url'] = coverPhotoUrl;
+        final v = sentinelOrNull(coverPhotoUrl);
+        if (v == null) {
+          next.remove('cover_photo_url');
+        } else {
+          next['cover_photo_url'] = v;
+        }
       }
       final response = await _client.auth.updateUser(
         UserAttributes(data: next),
@@ -477,10 +493,10 @@ class AuthService {
             churchId.isEmpty ? null : int.tryParse(churchId);
       }
       if (profilePhotoUrl != null) {
-        dbUpdates['profile_photo_url'] = profilePhotoUrl;
+        dbUpdates['profile_photo_url'] = sentinelOrNull(profilePhotoUrl);
       }
       if (coverPhotoUrl != null) {
-        dbUpdates['cover_photo_url'] = coverPhotoUrl;
+        dbUpdates['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
       if (dbUpdates.isNotEmpty) {
         // Best-effort mirror to the profiles table. If the column doesn't

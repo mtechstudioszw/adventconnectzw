@@ -316,16 +316,40 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _send() async {
     final text = _inputController.text.trim();
     if (text.isEmpty || _sending) return;
-    setState(() => _sending = true);
+    final me = AuthService.currentUser?.id ?? '';
+
+    // Optimistic UI — show the bubble immediately so the user gets
+    // feedback even on a slow network. Previously `_send` awaited the
+    // round-trip silently, so tapping the send button "did nothing"
+    // until the server acknowledged. We give the local message a
+    // temporary negative id; the stream subscription replaces it
+    // with the real row when it arrives a moment later.
+    final tempId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
+    final optimistic = Message(
+      id: tempId,
+      conversationId: widget.conversationId,
+      senderId: me,
+      senderName: 'You',
+      content: text,
+      createdAt: DateTime.now(),
+    );
+    setState(() {
+      _messages = [..._messages, optimistic];
+      _sending = true;
+    });
+    _inputController.clear();
+    _scrollToBottom();
+
     try {
       await MessagingService.sendMessage(
         conversationId: widget.conversationId,
         content: text,
       );
-      _inputController.clear();
+      // Stream picks up the real row and replaces _messages — the
+      // optimistic one drops out because its temp id won't be in
+      // the server response. Nothing else to do here.
     } on OutboxQueuedException {
       if (!mounted) return;
-      _inputController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -336,6 +360,13 @@ class _ChatScreenState extends State<ChatScreen>
       );
     } catch (_) {
       if (!mounted) return;
+      // Send failed — roll back the optimistic bubble and put the
+      // text back in the input so the user can retry.
+      setState(() {
+        _messages =
+            _messages.where((m) => m.id != tempId).toList(growable: false);
+      });
+      _inputController.text = text;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -686,8 +717,12 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   String _stamp(DateTime t) {
-    final hh = t.hour.toString().padLeft(2, '0');
-    final mm = t.minute.toString().padLeft(2, '0');
+    // Supabase returns created_at as UTC. Convert to the device's
+    // local timezone so the user sees "11:37" instead of "09:37"
+    // when they're in CAT / SAST (UTC+2).
+    final local = t.toLocal();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
     return '$hh:$mm';
   }
 }

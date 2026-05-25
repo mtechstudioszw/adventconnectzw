@@ -1071,17 +1071,21 @@ class _ChangePasswordDialog extends StatefulWidget {
 }
 
 class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _currentCtrl = TextEditingController();
   final _newCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _busy = false;
   String? _error;
+  // Independent obscure flags for each field — tapping the eye on the
+  // current-password field doesn't reveal the new one, and vice versa.
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
 
   @override
   void dispose() {
-    // Owned by this State so dispose only fires after the dialog has
-    // fully unmounted. Avoids the "controller used after disposed"
-    // assertion that the old StatefulBuilder pattern hit on cancel.
+    _currentCtrl.dispose();
     _newCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
@@ -1094,6 +1098,21 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       _error = null;
     });
     try {
+      // Verify the current password BEFORE we let Supabase accept the
+      // new one. The session-token is already proof of identity but
+      // for "change password" the user expects this extra check (and
+      // it stops a stolen-but-locked phone from rotating the password).
+      final verify = await AuthService.verifyCurrentPassword(
+        _currentCtrl.text,
+      );
+      if (!verify.isSuccess) {
+        if (!mounted) return;
+        setState(() {
+          _busy = false;
+          _error = verify.errorMessage ?? 'Current password is incorrect.';
+        });
+        return;
+      }
       final r = await AuthService.changePassword(_newCtrl.text);
       if (!mounted) return;
       if (!r.isSuccess) {
@@ -1113,6 +1132,36 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
     }
   }
 
+  Widget _passwordField({
+    required TextEditingController controller,
+    required String label,
+    required bool obscure,
+    required VoidCallback onToggle,
+    String? hint,
+    bool autofocus = false,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      autofocus: autofocus,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        suffixIcon: IconButton(
+          icon: Icon(
+            obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+            size: 20,
+            color: AppColors.textDark.withValues(alpha: 0.55),
+          ),
+          onPressed: onToggle,
+          tooltip: obscure ? 'Show password' : 'Hide password',
+        ),
+      ),
+      validator: validator,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -1124,26 +1173,40 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
-              controller: _newCtrl,
-              obscureText: true,
+            _passwordField(
+              controller: _currentCtrl,
+              label: 'Current password',
+              obscure: _obscureCurrent,
+              onToggle: () =>
+                  setState(() => _obscureCurrent = !_obscureCurrent),
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'New password',
-                hintText: 'Min 8 characters',
-              ),
               validator: (v) {
-                if ((v ?? '').length < 8) return 'At least 8 characters';
+                if ((v ?? '').isEmpty) return 'Enter your current password';
                 return null;
               },
             ),
             const SizedBox(height: 12),
-            TextFormField(
+            _passwordField(
+              controller: _newCtrl,
+              label: 'New password',
+              hint: 'Min 8 characters',
+              obscure: _obscureNew,
+              onToggle: () => setState(() => _obscureNew = !_obscureNew),
+              validator: (v) {
+                if ((v ?? '').length < 8) return 'At least 8 characters';
+                if (v == _currentCtrl.text) {
+                  return 'Choose a different password from your current one';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            _passwordField(
               controller: _confirmCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Confirm new password',
-              ),
+              label: 'Confirm new password',
+              obscure: _obscureConfirm,
+              onToggle: () =>
+                  setState(() => _obscureConfirm = !_obscureConfirm),
               validator: (v) {
                 if (v != _newCtrl.text) return 'Passwords do not match';
                 return null;

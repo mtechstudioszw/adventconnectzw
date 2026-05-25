@@ -532,11 +532,103 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 );
                 if (mounted) _bootstrap();
               },
+              onLongPress: () => _openConversationActions(c),
             );
           },
         );
       },
     );
+  }
+
+  /// WhatsApp-style long-press menu on an inbox tile. Bottom sheet with
+  /// Mark as read / Delete — same pattern (and same set of actions) as
+  /// the chat-screen overflow menu uses inside the conversation.
+  Future<void> _openConversationActions(Conversation c) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.mark_email_read_outlined,
+                    color: AppColors.primaryBlue),
+                title: const Text('Mark as read'),
+                onTap: () => Navigator.of(sheetCtx).pop('read'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline,
+                    color: AppColors.red),
+                title: const Text(
+                  'Delete conversation',
+                  style: TextStyle(color: AppColors.red),
+                ),
+                onTap: () => Navigator.of(sheetCtx).pop('delete'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.close, color: AppColors.textDark),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.of(sheetCtx).pop(null),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'read':
+        await MessagingService.markConversationRead(c.id);
+        if (!mounted) return;
+        await _bootstrap();
+        break;
+      case 'delete':
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dctx) => AlertDialog(
+            title: const Text('Delete conversation?'),
+            content: Text(
+              'This deletes ${c.otherUserName == 'Notes to self' ? 'your notes-to-self thread' : "your chat with ${c.otherUserName}"} and all messages.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+                onPressed: () => Navigator.of(dctx).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+        try {
+          await MessagingService.declineRequest(c.id);
+          if (!mounted) return;
+          await _bootstrap();
+        } catch (_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.red,
+              content: Text(
+                'Could not delete. Try again.',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+              ),
+            ),
+          );
+        }
+        break;
+    }
   }
 
   Widget _buildErrorState() {
@@ -709,12 +801,14 @@ class _ConversationTile extends StatelessWidget {
     required this.isLastFromMe,
     required this.isOutgoingPending,
     required this.onTap,
+    this.onLongPress,
   });
 
   final Conversation conversation;
   final bool isLastFromMe;
   final bool isOutgoingPending;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -723,6 +817,7 @@ class _ConversationTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(20),
         child: Container(
           padding: const EdgeInsets.all(14),

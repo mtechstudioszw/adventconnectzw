@@ -7,6 +7,7 @@ import '../../services/feed_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/home/report_sheet.dart';
@@ -579,13 +580,63 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               PostCard(
                 post: post,
                 viewerId: _viewerId,
-                onLikeToggled: () {},
-                onCommentsTapped: () {},
+                onLikeToggled: () => _toggleLike(post),
+                onCommentsTapped: () => _openComments(post),
                 onImageTapped: () => _openImage(post),
               ),
           ],
         ),
     ];
+  }
+
+  /// Optimistic like/unlike — same pattern as home_screen so the
+  /// search-to-profile path supports liking instead of the empty
+  /// `() {}` no-op it had before.
+  Future<void> _toggleLike(Post post) async {
+    final newLiked = !post.viewerLiked;
+    final newCount = (post.likeCount + (newLiked ? 1 : -1)).clamp(0, 1 << 30);
+    setState(() {
+      _posts = _posts
+          .map((p) => p.id == post.id
+              ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+              : p)
+          .toList();
+    });
+    try {
+      if (newLiked) {
+        await FeedService.likePost(post.id);
+      } else {
+        await FeedService.unlikePost(post.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _posts = _posts
+            .map((p) => p.id == post.id
+                ? p.copyWith(
+                    viewerLiked: post.viewerLiked,
+                    likeCount: post.likeCount,
+                  )
+                : p)
+            .toList();
+      });
+    }
+  }
+
+  Future<void> _openComments(Post post) {
+    return showCommentsSheet(
+      context,
+      postId: post.id,
+      onCommentCountChanged: (newCount) {
+        if (!mounted) return;
+        setState(() {
+          _posts = _posts
+              .map((p) =>
+                  p.id == post.id ? p.copyWith(commentCount: newCount) : p)
+              .toList();
+        });
+      },
+    );
   }
 
   Widget _buildPrivateNotice() {

@@ -266,10 +266,44 @@ class AuthService {
     }
   }
 
+  /// Verify the current password by re-running signInWithPassword
+  /// against the active user's email. Supabase doesn't expose a
+  /// "reauthenticate" RPC, so we use a sign-in attempt as the
+  /// authoritative check. Doesn't change the session — on success
+  /// we just return AuthResult.success and the caller proceeds with
+  /// the password change flow.
+  static Future<AuthResult> verifyCurrentPassword(String password) async {
+    final user = currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) {
+      return AuthResult.failure('Sign in to change your password.');
+    }
+    try {
+      final response = await _client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      if (response.user == null) {
+        return AuthResult.failure('Current password is incorrect.');
+      }
+      return AuthResult.success(response.user);
+    } on AuthException catch (e) {
+      // Supabase emits "Invalid login credentials" for wrong password;
+      // re-phrase it for the change-password context so the user knows
+      // exactly which field is wrong.
+      if (e.message.toLowerCase().contains('credentials')) {
+        return AuthResult.failure('Current password is incorrect.');
+      }
+      return AuthResult.failure(e.message);
+    } catch (_) {
+      return AuthResult.failure('Could not verify your password.');
+    }
+  }
+
   /// Change the signed-in user's password. Caller is responsible for
-  /// asking the user to confirm the new value twice. Supabase doesn't
-  /// require the current password since the session is already proof
-  /// of identity, but a sensible UI still asks for it.
+  /// asking the user to confirm the new value twice and (for the
+  /// settings flow) for verifying the current password first via
+  /// [verifyCurrentPassword].
   static Future<AuthResult> changePassword(String newPassword) async {
     try {
       if (newPassword.length < 8) {

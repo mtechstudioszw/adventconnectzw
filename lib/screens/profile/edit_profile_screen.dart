@@ -377,10 +377,24 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               ],
             ),
           ),
-          _UploadButton(
-            label: hasPhoto ? 'Change' : 'Upload',
-            busy: _uploadingPhoto,
-            onTap: _pickProfilePhoto,
+          Column(
+            children: [
+              _UploadButton(
+                label: hasPhoto ? 'Change' : 'Upload',
+                busy: _uploadingPhoto,
+                onTap: _pickProfilePhoto,
+              ),
+              if (hasPhoto)
+                TextButton(
+                  onPressed: () => setState(() => _profilePhotoUrl = ''),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.red,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('Remove'),
+                ),
+            ],
           ),
         ],
       ),
@@ -461,10 +475,25 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                   ),
                 ),
                 const SizedBox(width: 10),
-                _UploadButton(
-                  label: hasCover ? 'Change' : 'Upload',
-                  busy: _uploadingCover,
-                  onTap: _pickCoverPhoto,
+                Column(
+                  children: [
+                    _UploadButton(
+                      label: hasCover ? 'Change' : 'Upload',
+                      busy: _uploadingCover,
+                      onTap: _pickCoverPhoto,
+                    ),
+                    if (hasCover)
+                      TextButton(
+                        onPressed: () =>
+                            setState(() => _coverPhotoUrl = ''),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.red,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Text('Remove'),
+                      ),
+                  ],
                 ),
               ],
             ),

@@ -2,9 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
-import 'cached_image.dart';
 
-/// Drop-in replacement for `CachedImage(...)`. Disk-caches the image
+/// Drop-in replacement for `Image.network(...)`. Disk-caches the image
 /// via cached_network_image so post photos, avatars, product shots
 /// etc. don't redownload on every scroll / app start.
 ///

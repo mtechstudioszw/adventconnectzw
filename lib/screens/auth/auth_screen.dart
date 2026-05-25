@@ -312,6 +312,7 @@ class _AuthScreenState extends State<AuthScreen>
       return;
     }
     await AuthService.markAgeVerified(dob);
+    if (!mounted) return;
     HapticFeedback.mediumImpact();
     setState(() => _googleBusy = false);
     context.goNamed('profile_setup');

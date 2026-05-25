@@ -119,12 +119,16 @@ class MessagingService {
   /// user hasn't written anything for a while.
   /// Selects the conversation columns plus a join to both participants'
   /// profile_photo_url so the inbox + chat header can render an actual
-  /// avatar instead of just initials. The named-aliases form
-  /// `participant_a:participant_a_id(...)` tells PostgREST which FK to
-  /// follow when the same table has multiple FKs to profiles.
+  /// avatar instead of just initials. Uses the explicit
+  /// `target_table!fk_constraint_name(...)` form because conversations
+  /// has four FKs to profiles (initiator, last_sender, participant_a,
+  /// participant_b) and PostgREST needs the constraint name to pick
+  /// the right one — the shorter `:fk_column(...)` form was returning
+  /// empty embedded objects, leaving the chat header on initials only.
   static const _conversationSelect =
-      '*, participant_a:participant_a_id(profile_photo_url), '
-      'participant_b:participant_b_id(profile_photo_url)';
+      '*, '
+      'participant_a:profiles!conversations_participant_a_id_fkey(profile_photo_url), '
+      'participant_b:profiles!conversations_participant_b_id_fkey(profile_photo_url)';
 
   /// Fetches a single conversation by id, joining both participants'
   /// profile photos. Used when the chat screen is entered from a deep

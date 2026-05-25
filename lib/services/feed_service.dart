@@ -302,6 +302,62 @@ class FeedService {
     return Story.fromJson(inserted);
   }
 
+  /// Delete a story. RLS gates this to the author only (per the
+  /// stories_delete_author policy created in schema.sql); failures
+  /// throw a PostgrestException the caller can surface.
+  static Future<void> deleteStory(String storyId) async {
+    await _client.from(_storiesTable).delete().eq('id', storyId);
+  }
+
+  /// Record that the current viewer has watched [storyId]. Idempotent
+  /// — re-watching the same story is a no-op (PK collision on the
+  /// (story_id, viewer_id) pair is silently swallowed). Authors
+  /// don't get marked as viewing their own stories.
+  static Future<void> markStoryViewed(String storyId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    try {
+      await _client.from('story_views').insert({
+        'story_id': storyId,
+        'viewer_id': user.id,
+      });
+    } catch (_) {
+      // duplicate-key (already viewed) is fine — swallow all errors
+      // so a flaky network never blocks the viewer UI.
+    }
+  }
+
+  /// Fetch the viewer list for a story the current user owns. Returns
+  /// a list of {user_id, full_name, profile_photo_url, viewed_at}
+  /// tuples ordered by most-recent view first. RLS only returns rows
+  /// when the caller is the story's author.
+  static Future<List<Map<String, dynamic>>> fetchStoryViewers(
+    String storyId,
+  ) async {
+    try {
+      final response = await _client
+          .from('story_views')
+          .select(
+            'viewed_at, profiles!story_views_viewer_id_fkey('
+            'id, full_name, profile_photo_url)',
+          )
+          .eq('story_id', storyId)
+          .order('viewed_at', ascending: false);
+      return (response as List).map((row) {
+        final map = row as Map<String, dynamic>;
+        final profile = map['profiles'] as Map<String, dynamic>?;
+        return <String, dynamic>{
+          'user_id': profile?['id']?.toString() ?? '',
+          'full_name': profile?['full_name']?.toString() ?? 'Member',
+          'profile_photo_url': profile?['profile_photo_url']?.toString(),
+          'viewed_at': map['viewed_at']?.toString() ?? '',
+        };
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   // ===================================================================
   // FRIENDSHIPS
   // ===================================================================

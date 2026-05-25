@@ -124,9 +124,20 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   String get _currentUserId => AuthService.currentUser?.id ?? '';
 
-  List<Conversation> get _inbox => _conversations
-      .where((c) => !c.isIncomingRequestFor(_currentUserId))
-      .toList();
+  /// Inbox tab list. Pins the "Notes to self" self-chat to the top so
+  /// it doesn't bounce around the list every time a regular thread
+  /// gets a new message (per user complaint — the row was flipping
+  /// position on each refresh because it was sorted by last_message_at
+  /// alongside everything else). WhatsApp also fixes self-chat to a
+  /// constant position.
+  List<Conversation> get _inbox {
+    final filtered = _conversations
+        .where((c) => !c.isIncomingRequestFor(_currentUserId))
+        .toList();
+    final selfChats = filtered.where((c) => c.isSelfChat).toList();
+    final others = filtered.where((c) => !c.isSelfChat).toList();
+    return [...selfChats, ...others];
+  }
 
   List<Conversation> get _requests => _conversations
       .where((c) => c.isIncomingRequestFor(_currentUserId))

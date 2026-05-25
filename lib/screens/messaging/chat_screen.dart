@@ -370,15 +370,56 @@ class _ChatScreenState extends State<ChatScreen>
       _activeRecordingPath = null;
       return;
     }
-    setState(() => _sending = true);
+    // Optimistic UI for voice notes — same pattern as text. Upload +
+    // insert can take 1-3 seconds; without this the user taps "send"
+    // and sees nothing until the stream tick lands, which is exactly
+    // the "send shows nothing until refresh" bug reported.
+    final me = AuthService.currentUser?.id ?? '';
+    final tempId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
+    final optimistic = Message(
+      id: tempId,
+      conversationId: widget.conversationId,
+      senderId: me,
+      senderName: 'You',
+      content: '🎙️ Voice note',
+      messageType: 'voice',
+      mediaDurationSeconds: duration,
+      createdAt: DateTime.now(),
+    );
+    setState(() {
+      _messages = [..._messages, optimistic];
+      _sending = true;
+    });
+    _scrollToBottom();
+
     try {
       await MessagingService.sendVoiceNote(
         conversationId: widget.conversationId,
         localFilePath: path,
         durationSeconds: duration,
       );
+      // Stream picks up the canonical row and drops our temp bubble.
+    } on PostgrestException catch (e) {
+      // Silent block parity for voice notes too — RLS rejection keeps
+      // the optimistic bubble in place, no toast.
+      if (!mounted) return;
+      final isRlsBlock = e.code == '42501' ||
+          e.message.toLowerCase().contains('row-level security');
+      if (!isRlsBlock) {
+        setState(() {
+          _messages =
+              _messages.where((m) => m.id != tempId).toList(growable: false);
+        });
+        _toast('Could not send voice note. Please try again.');
+      }
     } catch (_) {
-      if (mounted) _toast('Could not send voice note. Please try again.');
+      if (mounted) {
+        setState(() {
+          _messages =
+              _messages.where((m) => m.id != tempId).toList(growable: false);
+        });
+        _toast('Could not send voice note. Please try again.');
+      }
     } finally {
       try {
         await File(path).delete();
@@ -935,12 +976,11 @@ class _ChatScreenState extends State<ChatScreen>
         itemBuilder: (context, i) {
           final m = _messages[i];
           final isMine = m.senderId == currentUserId;
-          final showStamp = i == _messages.length - 1 ||
-              _messages[i + 1].createdAt
-                      .difference(m.createdAt)
-                      .inMinutes >
-                  4 ||
-              _messages[i + 1].senderId != m.senderId;
+          // Per user request: every message gets its own timestamp,
+          // not just the last one in a sender-grouped cluster. This
+          // matches how WhatsApp actually renders — each bubble has
+          // its own time underneath, not a single trailing stamp.
+          final showStamp = true;
           return Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Column(

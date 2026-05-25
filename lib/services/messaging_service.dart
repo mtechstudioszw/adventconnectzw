@@ -263,10 +263,14 @@ class MessagingService {
 
     final conversationId = convoRow['id'].toString();
     final now = DateTime.now().toUtc().toIso8601String();
+    // Note: messages table has NO sender_name column. Earlier code was
+    // inserting it, which made every PostgREST insert fail with 400
+    // "column sender_name does not exist". The display name is read
+    // from the conversation's participant_a_name / participant_b_name
+    // (or live-joined from profiles) at render time.
     await _client.from(_messagesTable).insert({
       'conversation_id': conversationId,
       'sender_id': user.id,
-      'sender_name': myName,
       'content': body,
     });
     await _client.from(_conversationsTable).update({
@@ -324,15 +328,10 @@ class MessagingService {
     if (user == null) {
       throw const AuthException('Sign in to send messages.');
     }
-    final meta = user.userMetadata ?? const {};
-    final senderName = (meta['full_name'] as String?)?.trim();
-    final resolvedName =
-        senderName?.isNotEmpty == true ? senderName! : 'Member';
     final body = content.trim();
     final payload = <String, dynamic>{
       'conversation_id': conversationId,
       'sender_id': user.id,
-      'sender_name': resolvedName,
       'content': body,
     };
 
@@ -477,15 +476,11 @@ class MessagingService {
           ),
         );
 
-    final meta = user.userMetadata ?? const {};
-    final senderName = (meta['full_name'] as String?)?.trim();
     final response = await _client
         .from(_messagesTable)
         .insert({
           'conversation_id': conversationId,
           'sender_id': user.id,
-          'sender_name':
-              senderName?.isNotEmpty == true ? senderName : 'Member',
           'content': '🎙️ Voice note',
           'message_type': 'voice',
           'media_url': storagePath,

@@ -22,7 +22,6 @@ class _SplashScreenState extends State<SplashScreen>
   static const Duration _minLoaderDuration = Duration(milliseconds: 3200);
 
   late final AnimationController _entrance;
-  late final AnimationController _dots;
   late final AnimationController _progress;
 
   late final Animation<double> _logoScale;
@@ -65,11 +64,6 @@ class _SplashScreenState extends State<SplashScreen>
       curve: const Interval(0.30, 0.50, curve: Curves.easeOut),
     );
 
-    _dots = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-
     _progress = AnimationController(
       vsync: this,
       duration: _minLoaderDuration,
@@ -81,7 +75,6 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void dispose() {
     _entrance.dispose();
-    _dots.dispose();
     _progress.dispose();
     super.dispose();
   }
@@ -158,13 +151,14 @@ class _SplashScreenState extends State<SplashScreen>
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: 24,
+                    bottom: 30,
                     child: Column(
                       children: [
+                        // Single refined loader — the bouncing dots were
+                        // dropped (redundant alongside the progress bar
+                        // and part of the "busy / AI-generated" feel).
                         _buildProgressBar(),
-                        const SizedBox(height: 14),
-                        _buildDots(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 18),
                         Text(
                           'MTECH STUDIOS ZW',
                           style: AppTextStyles.labelSmall.copyWith(
@@ -212,35 +206,37 @@ class _SplashScreenState extends State<SplashScreen>
           opacity: _logoOpacity.value,
           child: Transform.scale(
             scale: _logoScale.value,
+            // Premium circular emblem: white disc, thin gold ring, soft
+            // blue glow. Cleaner and more "brand mark" than the old
+            // rounded-square gradient tile.
             child: Container(
-              width: 104,
-              height: 104,
+              width: 116,
+              height: 116,
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(28),
+                shape: BoxShape.circle,
+                color: AppColors.white,
                 border: Border.all(
-                  color: AppColors.white.withValues(alpha: 0.12),
-                  width: 1.5,
+                  color: AppColors.goldAccent,
+                  width: 2.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.30),
-                    blurRadius: 24,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 8),
+                    color: AppColors.goldAccent.withValues(alpha: 0.28),
+                    blurRadius: 30,
+                    spreadRadius: 2,
                   ),
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
+                    color: AppColors.primaryBlue.withValues(alpha: 0.35),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
                   ),
                 ],
               ),
               child: const Center(
                 child: Icon(
-                  Icons.church,
-                  size: 48,
-                  color: AppColors.goldAccent,
+                  Icons.church_rounded,
+                  size: 52,
+                  color: AppColors.primaryBlue,
                 ),
               ),
             ),
@@ -335,32 +331,4 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  Widget _buildDots() {
-    return AnimatedBuilder(
-      animation: _dots,
-      builder: (context, _) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (i) {
-            final phase = (_dots.value - i * 0.18) % 1.0;
-            final wave = phase < 0.5
-                ? phase * 2
-                : (1.0 - phase) * 2;
-            final alpha = 0.25 + (0.75 * wave.clamp(0.0, 1.0));
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.white.withValues(alpha: alpha),
-                ),
-              ),
-            );
-          }),
-        );
-      },
-    );
-  }
 }

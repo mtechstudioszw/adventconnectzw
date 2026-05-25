@@ -182,43 +182,52 @@ class _SearchScreenState extends State<SearchScreen> {
       _searching = true;
       _lastQuery = query;
     });
-    try {
-      final results = await Future.wait([
-        _searchPeople(query),
-        ChurchService.fetchChurches(search: query),
-        EventService.fetchEvents(search: query),
-        MarketplaceService.fetchProducts(search: query),
-        JobService.fetchJobs(search: query),
-        FeedService.searchPosts(query),
-      ]);
-      if (!mounted) return;
-      final people = (results[0] as List<MemberDirectoryEntry>).take(12).toList();
-      final churches = (results[1] as List<Church>).take(12).toList();
-      final events = (results[2] as List<Event>).take(12).toList();
-      final products = (results[3] as List<Product>).take(12).toList();
-      final jobs = (results[4] as List<Job>).take(12).toList();
-      final posts = (results[5] as List<Post>).take(12).toList();
-      setState(() {
-        _people = people;
-        _churches = churches;
-        _events = events;
-        _products = products;
-        _jobs = jobs;
-        _posts = posts;
-        _searching = false;
-      });
-      final hasAny = people.isNotEmpty ||
-          churches.isNotEmpty ||
-          events.isNotEmpty ||
-          products.isNotEmpty ||
-          jobs.isNotEmpty ||
-          posts.isNotEmpty;
-      if (!hasAny) {
-        _loadFallback();
+    // Wrap each search source so one throwing service (a missing
+    // column in events / a schema mismatch in jobs / etc.) doesn't
+    // blank the entire results screen. Previously a single failing
+    // Future caused the whole Future.wait to reject and the catch
+    // block showed "No results" even when `_searchPeople` had returned
+    // a dozen matches — which is what the user saw.
+    Future<List<T>> safe<T>(Future<List<T>> Function() fn) async {
+      try {
+        return await fn();
+      } catch (_) {
+        return const [];
       }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _searching = false);
+    }
+
+    final results = await Future.wait([
+      safe(() => _searchPeople(query)),
+      safe(() => ChurchService.fetchChurches(search: query)),
+      safe(() => EventService.fetchEvents(search: query)),
+      safe(() => MarketplaceService.fetchProducts(search: query)),
+      safe(() => JobService.fetchJobs(search: query)),
+      safe(() => FeedService.searchPosts(query)),
+    ]);
+    if (!mounted) return;
+    final people = (results[0] as List<MemberDirectoryEntry>).take(12).toList();
+    final churches = (results[1] as List<Church>).take(12).toList();
+    final events = (results[2] as List<Event>).take(12).toList();
+    final products = (results[3] as List<Product>).take(12).toList();
+    final jobs = (results[4] as List<Job>).take(12).toList();
+    final posts = (results[5] as List<Post>).take(12).toList();
+    setState(() {
+      _people = people;
+      _churches = churches;
+      _events = events;
+      _products = products;
+      _jobs = jobs;
+      _posts = posts;
+      _searching = false;
+    });
+    final hasAny = people.isNotEmpty ||
+        churches.isNotEmpty ||
+        events.isNotEmpty ||
+        products.isNotEmpty ||
+        jobs.isNotEmpty ||
+        posts.isNotEmpty;
+    if (!hasAny) {
+      _loadFallback();
     }
   }
 

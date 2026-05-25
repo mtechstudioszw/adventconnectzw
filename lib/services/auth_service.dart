@@ -508,22 +508,28 @@ class AuthService {
     return value == 'true';
   }
 
-  /// Returns true if the signed-in user has a row in `profiles`. This is
-  /// the source of truth for "has finished onboarding" — checking the
-  /// auth user_metadata isn't reliable because Google fills in
-  /// `full_name` automatically on sign-in, so a brand-new Google account
-  /// would appear "set up" before the user has actually touched the
-  /// onboarding flow.
+  /// Returns true if the signed-in user has FINISHED the onboarding
+  /// flow. We can't just check "has a row in profiles" because the
+  /// `on_auth_user_created` trigger (patch_001) inserts an empty
+  /// profiles row the moment auth.users gets a new entry — so every
+  /// brand-new account would look "completed".
+  ///
+  /// We check `username` instead: the onboarding flow (step 1) requires
+  /// a username before letting the user continue, so a non-empty
+  /// username is the authoritative "this user has been through the
+  /// onboarding setup" signal.
   static Future<bool> hasCompletedProfileSetup() async {
     final user = currentUser;
     if (user == null) return false;
     try {
       final row = await _client
           .from('profiles')
-          .select('id')
+          .select('username')
           .eq('id', user.id)
           .maybeSingle();
-      return row != null;
+      if (row == null) return false;
+      final username = (row['username'] as String?)?.trim();
+      return username != null && username.isNotEmpty;
     } catch (_) {
       // Network error or RLS issue — fall back to assuming NOT set up
       // so the user goes through onboarding rather than being silently

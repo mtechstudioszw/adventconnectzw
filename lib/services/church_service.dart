@@ -88,21 +88,31 @@ class ChurchService {
     if (user == null) {
       throw const AuthException('You must be signed in to follow a church.');
     }
+    // church_followers.church_id is BIGINT — passing the raw String was
+    // failing silently (or with a type error depending on the postgrest
+    // server version), which is why a church picked in onboarding never
+    // appeared on Home/Profile ("No church yet").
+    final id = int.tryParse(churchId);
+    if (id == null) {
+      throw ArgumentError('Invalid church id: $churchId');
+    }
     await _client.from(_followsTable).insert({
       'user_id': user.id,
-      'church_id': churchId,
+      'church_id': id,
     });
-    AnalyticsService.churchFollowed(int.tryParse(churchId) ?? 0);
+    AnalyticsService.churchFollowed(id);
   }
 
   static Future<void> unfollow(String churchId) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
+    final id = int.tryParse(churchId);
+    if (id == null) return;
     await _client
         .from(_followsTable)
         .delete()
         .eq('user_id', user.id)
-        .eq('church_id', churchId);
+        .eq('church_id', id);
   }
 
   /// True when at least one approved church_admins row exists for the

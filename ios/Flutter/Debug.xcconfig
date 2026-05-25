@@ -1,7 +1,1 @@
 #include "Generated.xcconfig"
-
-// AdMob app id — defaults to Google's official test id. Override by
-// creating ios/Flutter/AdMob.xcconfig (gitignored) with your real id.
-// See ios/Flutter/AdMob.xcconfig.example.
-ADMOB_IOS_APP_ID = ca-app-pub-3940256099942544~1458002511
-#include? "AdMob.xcconfig"

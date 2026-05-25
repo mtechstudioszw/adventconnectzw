@@ -13,7 +13,6 @@ import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/ad_banner.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../../widgets/product_card.dart';
@@ -173,7 +172,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                   ),
                 ),
               ),
-              const AdBanner(),
             ],
           ),
         ),

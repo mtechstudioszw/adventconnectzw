@@ -11,7 +11,6 @@ import '../../services/connectivity_service.dart';
 import '../../services/location_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/ad_banner.dart';
 import '../../widgets/church_card.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
@@ -268,7 +267,6 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           if (_nearMode) _buildNearModeBanner(),
           if (_locationError != null) _buildLocationErrorBanner(),
           Expanded(child: _buildList()),
-          const AdBanner(),
         ],
       ),
     );

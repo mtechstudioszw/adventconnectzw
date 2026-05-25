@@ -1,9 +1,1 @@
 #include "Generated.xcconfig"
-
-// AdMob app id — MUST be overridden before shipping to the App Store.
-// Create ios/Flutter/AdMob.xcconfig (gitignored) and paste your real
-// id from the AdMob console. The fallback below is Google's test id;
-// shipping it to production will not display real ads and may flag
-// the app for policy review.
-ADMOB_IOS_APP_ID = ca-app-pub-3940256099942544~1458002511
-#include? "AdMob.xcconfig"

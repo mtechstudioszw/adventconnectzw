@@ -36,9 +36,6 @@ dependencies:
   # flutter_windowmanager_plus 1.0.1 forces an old AGP 7.3.0 download that
   # fails on slow networks. Consider `screen_protector` when revisiting.
 
-  # Stage 20 — AdMob banner ads
-  google_mobile_ads: ^5.3.1
-
   # Stage 20 — UI polish
   shimmer: ^3.0.0
   image_cropper: ^8.0.2

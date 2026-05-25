@@ -19,19 +19,6 @@
 	<string>Advent Connect ZW uses your location to find SDA churches near you.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Advent Connect ZW uses Face ID to securely unlock your account.</string>
-	<!-- AdMob App ID injected at build time from ADMOB_IOS_APP_ID in
-	     ios/Flutter/{Debug,Release}.xcconfig. Override by creating
-	     ios/Flutter/AdMob.xcconfig (gitignored). See
-	     ios/Flutter/AdMob.xcconfig.example. -->
-	<key>GADApplicationIdentifier</key>
-	<string>$(ADMOB_IOS_APP_ID)</string>
-	<key>SKAdNetworkItems</key>
-	<array>
-		<dict>
-			<key>SKAdNetworkIdentifier</key>
-			<string>cstr6suwn9.skadnetwork</string>
-		</dict>
-	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

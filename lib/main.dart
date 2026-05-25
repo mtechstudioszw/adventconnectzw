@@ -9,7 +9,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'config/router_config.dart';
 import 'services/account_mode_service.dart';
-import 'services/ads_service.dart';
 import 'services/analytics_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
@@ -33,9 +32,7 @@ void main() async {
   // after CacheService.initialize() (which runs Hive.initFlutter()).
   await MessagingService.startOutboxFlusher();
 
-  // AdMob — load the SDK early so the first banner request on the
-  // home screen has the SDK ready when the screen mounts.
-  await AdsService.initialize();
+  // AdMob removed for v1 launch — re-add when monetization is wired up.
 
   // Read the user's last chosen view mode (personal / business). Cheap
   // disk read, must finish before the first widget builds because the

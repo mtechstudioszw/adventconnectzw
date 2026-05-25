@@ -11,10 +11,10 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
-// Release signing + AdMob app ID come from android/key.properties at
-// build time. If the file is missing (typical local dev), we sign
-// the release build with the debug key and use Google's sample AdMob
-// app ID so `flutter run --release` still works.
+// Release signing comes from android/key.properties at build time.
+// If the file is missing (typical local dev), we sign the release
+// build with the debug key so `flutter run --release` still works
+// for development. AAB uploads to Play require a real upload key.
 //
 // See android/key.properties.example for the expected keys.
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -22,9 +22,6 @@ val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
-
-val admobAppId: String = (keystoreProperties["admobAndroidAppId"] as String?)
-    ?: "ca-app-pub-3940256099942544~3347511713"
 
 android {
     namespace = "io.supabase.adventconnectzw.advent_connect_zw"
@@ -52,8 +49,6 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Injected into AndroidManifest.xml via ${admobAppId}.
-        manifestPlaceholders["admobAppId"] = admobAppId
     }
 
     signingConfigs {

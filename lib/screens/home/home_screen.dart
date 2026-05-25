@@ -24,7 +24,6 @@ import '../../services/sabbath_service.dart';
 import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/ad_banner.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_sheet.dart';
@@ -475,7 +474,6 @@ class _HomeScreenState extends State<HomeScreen>
                 // of jumping between mode-locked panels.
                 _buildFeedList(),
                 const SizedBox(height: 24),
-                const AdBanner(),
                 // Bottom padding so the floating chat bubble + plus FAB
                 // don't sit on top of the last bit of feed content.
                 const SizedBox(height: 96),

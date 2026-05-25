@@ -455,6 +455,35 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
       );
+    } on PostgrestException catch (e) {
+      // Silent-block path: the recipient blocked this user, so the
+      // INSERT was rejected by RLS (Postgres SQLSTATE 42501 = row-
+      // level-security violation). Keep the optimistic bubble in
+      // place and DON'T toast — WhatsApp parity: the sender should
+      // not know they've been blocked. Their bubble sits with a
+      // single grey tick forever; if they leave the chat and come
+      // back, it's gone, which is consistent with "delivery is
+      // taking a while".
+      if (!mounted) return;
+      final isRlsBlock = e.code == '42501' ||
+          (e.message).toLowerCase().contains('row-level security');
+      if (isRlsBlock) {
+        return; // bubble stays, single tick stays, no toast
+      }
+      // Any other Postgrest error → existing rollback + retry path.
+      setState(() {
+        _messages =
+            _messages.where((m) => m.id != tempId).toList(growable: false);
+      });
+      _inputController.text = text;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not send message. Please try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
       // Send failed — roll back the optimistic bubble and put the

@@ -125,6 +125,26 @@ class MessagingService {
       '*, participant_a:participant_a_id(profile_photo_url), '
       'participant_b:participant_b_id(profile_photo_url)';
 
+  /// Fetches a single conversation by id, joining both participants'
+  /// profile photos. Used when the chat screen is entered from a deep
+  /// link (push notification tap) and we don't yet have a
+  /// Conversation object to pre-populate the header.
+  static Future<Conversation?> fetchConversation(String conversationId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+    try {
+      final row = await _client
+          .from(_conversationsTable)
+          .select(_conversationSelect)
+          .eq('id', conversationId)
+          .maybeSingle();
+      if (row == null) return null;
+      return Conversation.fromJson(row, currentUserId: user.id);
+    } catch (_) {
+      return null;
+    }
+  }
+
   static Future<List<Conversation>> fetchConversations() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
@@ -202,18 +222,21 @@ class MessagingService {
   }
 
   /// Creates a conversation (or returns an existing one between the
-  /// two users) and posts [firstMessage] into it. New conversations are
-  /// inserted with `request_status='pending'` so the recipient sees it
-  /// in their Requests inbox until they accept. If a conversation
-  /// already exists between the pair in either participant ordering,
-  /// it's reused and the message is appended — no duplicate row.
+  /// two users). If [firstMessage] is provided and non-empty, it's
+  /// posted as the opening message; otherwise the conversation row is
+  /// created empty (WhatsApp-style: tap a contact, land on an empty
+  /// chat, type your own opener). New conversations are inserted with
+  /// `request_status='pending'` so the recipient sees it in their
+  /// Requests inbox until they accept. If a conversation already
+  /// exists between the pair in either participant ordering, it's
+  /// reused and the message (if any) is appended — no duplicate row.
   ///
   /// Returns the conversation (post-insert / post-update) so the caller
   /// can immediately navigate into the chat.
   static Future<Conversation> createConversation({
     required String otherUserId,
     required String otherUserName,
-    required String firstMessage,
+    String? firstMessage,
     String source = 'direct',
     bool isBusiness = false,
   }) async {
@@ -221,10 +244,7 @@ class MessagingService {
     if (user == null) {
       throw const AuthException('Sign in to send a message request.');
     }
-    final body = firstMessage.trim();
-    if (body.isEmpty) {
-      throw ArgumentError('firstMessage cannot be empty.');
-    }
+    final body = (firstMessage ?? '').trim();
     final meta = user.userMetadata ?? const {};
     final myName = ((meta['full_name'] as String?)?.trim().isNotEmpty == true)
         ? (meta['full_name'] as String).trim()
@@ -271,12 +291,16 @@ class MessagingService {
     }
 
     final conversationId = convoRow['id'].toString();
+
+    // Empty-opener path: WhatsApp-style "tap contact → land in empty
+    // chat → user types their own first message." Skip the message
+    // insert + conversation last_message update entirely.
+    if (body.isEmpty) {
+      return Conversation.fromJson(convoRow, currentUserId: user.id);
+    }
+
     final now = DateTime.now().toUtc().toIso8601String();
-    // Note: messages table has NO sender_name column. Earlier code was
-    // inserting it, which made every PostgREST insert fail with 400
-    // "column sender_name does not exist". The display name is read
-    // from the conversation's participant_a_name / participant_b_name
-    // (or live-joined from profiles) at render time.
+    // Note: messages table has NO sender_name column.
     await _client.from(_messagesTable).insert({
       'conversation_id': conversationId,
       'sender_id': user.id,

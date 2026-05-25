@@ -100,12 +100,14 @@ class _StoryViewerState extends State<StoryViewer>
     _progress.forward();
   }
 
+  /// Absolute clock time per the user's preference — stories should
+  /// show "14:32" not "2h ago". Stories age out after 24h so a 24h
+  /// clock is always enough (no date fallbacks needed).
   String _relativeTime(DateTime when) {
-    final diff = DateTime.now().difference(when);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    final local = when.toLocal();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
   }
 
   @override

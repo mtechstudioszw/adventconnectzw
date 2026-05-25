@@ -134,22 +134,28 @@ class PresenceService {
     }
   }
 
-  /// Human-readable "last seen" string. Returns "just now" for under
-  /// a minute, "Nm ago" / "Nh ago" / "Nd ago" for short ranges, and
-  /// "MMM d" (e.g. "May 25") for older timestamps. The input is
-  /// expected in UTC; conversion to local happens here.
+  /// WhatsApp-style "last seen" string with absolute time, not
+  /// relative ("X mins ago"). Today: "today at 10:34", yesterday:
+  /// "yesterday at 10:34", earlier this year: "Mar 12 at 10:34",
+  /// other years: "Mar 12, 2025 at 10:34".
   static String formatLastSeen(DateTime t) {
     final local = t.toLocal();
-    final diff = DateTime.now().difference(local);
-    if (diff.isNegative || diff.inSeconds < 60) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDay = DateTime(local.year, local.month, local.day);
+    final diffDays = today.difference(messageDay).inDays;
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    final timeStr = '$hh:$mm';
+    if (diffDays == 0) return 'today at $timeStr';
+    if (diffDays == 1) return 'yesterday at $timeStr';
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
-    return '${months[local.month - 1]} ${local.day}';
+    final monthDay = '${months[local.month - 1]} ${local.day}';
+    if (local.year == now.year) return '$monthDay at $timeStr';
+    return '$monthDay, ${local.year} at $timeStr';
   }
 
   static Future<void> _touchLastActive() async {

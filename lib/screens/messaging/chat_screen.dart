@@ -40,6 +40,12 @@ class _ChatScreenState extends State<ChatScreen>
   bool _sending = false;
   String? _error;
 
+  // Resolved conversation — starts as widget.initialConversation (may
+  // be null when arriving via a notification tap with only the id),
+  // gets back-filled from MessagingService.fetchConversation so the
+  // header shows the real name + photo instead of "Conversation".
+  Conversation? _conversation;
+
   // Typing indicator state.
   RealtimeChannel? _typingChannel;
   Timer? _typingExpiry;
@@ -78,13 +84,30 @@ class _ChatScreenState extends State<ChatScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    _conversation = widget.initialConversation;
     _enableScreenshotBlock();
     _bootstrap();
+    _resolveConversation();
+  }
+
+  /// Notification-tap → chat: we only have the id, so the header
+  /// would otherwise render "Conversation" with an initials avatar.
+  /// Fetch the row so name + photo + participant id come through, and
+  /// THEN wire presence (which needs the other-user id).
+  Future<void> _resolveConversation() async {
+    if (_conversation == null) {
+      final fetched =
+          await MessagingService.fetchConversation(widget.conversationId);
+      if (!mounted) return;
+      if (fetched != null) {
+        setState(() => _conversation = fetched);
+      }
+    }
     _wirePresence();
   }
 
   void _wirePresence() {
-    final otherId = widget.initialConversation?.otherUserId;
+    final otherId = _conversation?.otherUserId;
     if (otherId == null || otherId.isEmpty) return;
     // Re-fetch last seen periodically so the header stays fresh even
     // if the user has the chat open for a while (presence sync only
@@ -431,7 +454,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildHeader() {
-    final convo = widget.initialConversation;
+    final convo = _conversation;
     final name = convo?.otherUserName ?? 'Conversation';
     final photoUrl = convo?.otherUserPhotoUrl;
     final otherUserId = convo?.otherUserId;
@@ -911,7 +934,7 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       );
     }
-    final otherId = widget.initialConversation?.otherUserId;
+    final otherId = _conversation?.otherUserId;
     if (otherId != null && PresenceService.isOnline(otherId)) {
       // Lit green dot + "Online" — same affordance WhatsApp uses.
       return Row(

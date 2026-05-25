@@ -10,7 +10,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/home/report_sheet.dart';
-import '../../widgets/start_conversation_sheet.dart';
+import '../../services/messaging_service.dart';
 import '../../widgets/cached_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -197,6 +197,38 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openChat() async {
+    final profile = _profile;
+    if (profile == null) return;
+    // WhatsApp behaviour: tap the contact, land directly inside an
+    // empty chat with them — no "Hi {name} 👋" auto-message, no
+    // confirmation sheet. The user types their own opener.
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: widget.userId,
+        otherUserName: profile.fullName,
+        source: 'direct',
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      context.pushNamed(
+        'chat',
+        pathParameters: {'id': convo.id},
+        extra: convo,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not open chat. Please try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _reportUser() async {
@@ -462,12 +494,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             flex: 1,
             child: _SquareButton(
               icon: Icons.chat_bubble_outline,
-              onTap: () => showStartConversationSheet(
-                context,
-                otherUserId: widget.userId,
-                otherUserName: _profile!.fullName,
-                source: 'direct',
-              ),
+              onTap: _openChat,
             ),
           ),
         ],

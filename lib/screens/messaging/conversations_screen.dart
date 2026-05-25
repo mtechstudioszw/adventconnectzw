@@ -1045,12 +1045,32 @@ class _FriendRequestTile extends StatelessWidget {
     );
   }
 
+  /// WhatsApp-style absolute time: today shows "10:34", yesterday
+  /// shows "yesterday", same week shows the weekday name ("Mon"),
+  /// otherwise shows the date ("12/03/26"). Replaces the previous
+  /// "Xm ago" relative format that the user found vague.
   String _relativeTime(DateTime when) {
-    final diff = DateTime.now().difference(when);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    final local = when.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDay = DateTime(local.year, local.month, local.day);
+    final diffDays = today.difference(messageDay).inDays;
+    if (diffDays == 0) {
+      // Same calendar day: 24-hour clock to mirror WhatsApp's
+      // device-locale convention.
+      final hh = local.hour.toString().padLeft(2, '0');
+      final mm = local.minute.toString().padLeft(2, '0');
+      return '$hh:$mm';
+    }
+    if (diffDays == 1) return 'yesterday';
+    if (diffDays < 7) {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return days[local.weekday - 1];
+    }
+    final d = local.day.toString().padLeft(2, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final y = local.year.toString().substring(2);
+    return '$d/$m/$y';
   }
 }
 

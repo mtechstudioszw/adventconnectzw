@@ -6,8 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/job_model.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
+import '../../services/messaging_service.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/start_conversation_sheet.dart';
 import '../../widgets/cached_image.dart';
 
 class JobDetailsScreen extends StatefulWidget {
@@ -269,12 +269,32 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   Future<void> _messagePoster() async {
     final job = _job;
     if (job == null) return;
-    await showStartConversationSheet(
-      context,
-      otherUserId: job.posterId,
-      otherUserName: job.posterName,
-      source: 'job',
-    );
+    // Open an empty chat with the poster — WhatsApp behaviour, no
+    // auto-sent greeting. The user types whatever opener they want.
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: job.posterId,
+        otherUserName: job.posterName,
+        source: 'job',
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      context.pushNamed(
+        'chat',
+        pathParameters: {'id': convo.id},
+        extra: convo,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not open chat. Please try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _apply() async {

@@ -6,11 +6,12 @@ import '../services/connectivity_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
-/// Subtle pill that floats below the status bar when the device drops
-/// offline. Previously rendered at the bottom of the screen, which
-/// visually covered the tab bar — even though IgnorePointer let taps
-/// through, users couldn't see which tab they were tapping. Top
-/// placement matches how Facebook / Instagram surface "No internet".
+/// Facebook-style "no connection" strip. Slim grey bar that slides
+/// down from under the status bar when the device drops offline,
+/// slides back up when it reconnects. Doesn't overlap navigation,
+/// doesn't grab focus, doesn't animate aggressively. The previous
+/// dark-navy floating pill felt loud — this is invisible until it
+/// matters and then quietly self-removes.
 class OfflineBanner extends StatefulWidget {
   const OfflineBanner({super.key, required this.child});
 
@@ -49,58 +50,28 @@ class _OfflineBannerState extends State<OfflineBanner> {
           right: 0,
           top: 0,
           child: IgnorePointer(
-            child: AnimatedSlide(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              offset: _online ? const Offset(0, -1.5) : Offset.zero,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 220),
-                opacity: _online ? 0 : 1,
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 9,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.darkNavy
-                              .withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.cloud_off_rounded,
-                              size: 14,
-                              color: AppColors.white,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              "You're offline",
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.white,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+            child: SafeArea(
+              bottom: false,
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                alignment: Alignment.topCenter,
+                child: _online
+                    ? const SizedBox(height: 0, width: double.infinity)
+                    : Container(
+                        height: 22,
+                        color: const Color(0xFF6B7280),
+                        alignment: Alignment.center,
+                        child: Text(
+                          'No Internet Connection',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.1,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             ),
           ),

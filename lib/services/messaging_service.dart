@@ -412,6 +412,79 @@ class MessagingService {
             .toList());
   }
 
+  // ---------- blocking ----------
+
+  static const _blocksTable = 'blocked_users';
+
+  /// Block [otherUserId]: insert a blocked_users row keyed by the
+  /// current user. Idempotent — re-blocking is a no-op.
+  static Future<void> blockUser(String otherUserId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to block users.');
+    }
+    try {
+      await _client.from(_blocksTable).insert({
+        'blocker_id': user.id,
+        'blocked_id': otherUserId,
+      });
+    } catch (e) {
+      // Duplicate-key (already-blocked) is fine; bubble anything else.
+      if (e is PostgrestException && e.code == '23505') return;
+      rethrow;
+    }
+  }
+
+  /// Unblock [otherUserId].
+  static Future<void> unblockUser(String otherUserId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    await _client
+        .from(_blocksTable)
+        .delete()
+        .eq('blocker_id', user.id)
+        .eq('blocked_id', otherUserId);
+  }
+
+  /// True when the current viewer has blocked [otherUserId].
+  static Future<bool> isBlockedByMe(String otherUserId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return false;
+    try {
+      final row = await _client
+          .from(_blocksTable)
+          .select('id')
+          .eq('blocker_id', user.id)
+          .eq('blocked_id', otherUserId)
+          .maybeSingle();
+      return row != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ---------- read / delivered receipts ----------
+
+  /// Mark unread messages from [otherSenderIds] as delivered (but
+  /// not read). WhatsApp fires this when the recipient's device has
+  /// the message in hand — before they've actually opened the chat.
+  /// Two grey ticks then appear on the sender's side via the stream.
+  ///
+  /// The list is built client-side from the realtime stream so we
+  /// only issue an UPDATE for genuinely-new inbound rows, not every
+  /// frame.
+  static Future<void> markMessagesDelivered(List<String> messageIds) async {
+    if (messageIds.isEmpty) return;
+    try {
+      await _client
+          .from(_messagesTable)
+          .update({'delivered_at': DateTime.now().toUtc().toIso8601String()})
+          .inFilter('id', messageIds);
+    } catch (_) {
+      // Delivery receipts are best-effort — never block chat rendering.
+    }
+  }
+
   /// Mark every unread message in this conversation that was sent by
   /// someone other than the current user as read. Called when the user
   /// opens the chat — the other party will then see the double-tick

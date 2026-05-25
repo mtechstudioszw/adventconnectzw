@@ -130,6 +130,7 @@ class Message {
     required this.createdAt,
     this.read = false,
     this.readAt,
+    this.deliveredAt,
     this.messageType = 'text',
     this.mediaUrl,
     this.mediaDurationSeconds,
@@ -143,6 +144,11 @@ class Message {
   final DateTime createdAt;
   final bool read;
   final DateTime? readAt;
+  // WhatsApp-style three-state tick:
+  //   deliveredAt == null && !read → ✓  (single grey: sent only)
+  //   deliveredAt != null && !read → ✓✓ (double grey: delivered)
+  //   read                         → ✓✓ blue (read)
+  final DateTime? deliveredAt;
   final String messageType;
   final String? mediaUrl;
   final int? mediaDurationSeconds;
@@ -160,6 +166,9 @@ class Message {
       readAt: json['read_at'] == null
           ? null
           : DateTime.tryParse(json['read_at'].toString()),
+      deliveredAt: json['delivered_at'] == null
+          ? null
+          : DateTime.tryParse(json['delivered_at'].toString()),
       messageType: (json['message_type'] ?? 'text') as String,
       mediaUrl: json['media_url'] as String?,
       mediaDurationSeconds: (json['media_duration_seconds'] as num?)?.toInt(),

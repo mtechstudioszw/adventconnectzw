@@ -14,6 +14,7 @@ import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/chat_contact_sheet.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -58,6 +59,9 @@ class _ChatScreenState extends State<ChatScreen>
   DateTime? _otherLastSeen;
   Timer? _lastSeenRefreshTimer;
   void Function()? _presenceListener;
+
+  // Block state — surfaced in the overflow menu (Block / Unblock).
+  bool _isBlocked = false;
 
   // Voice-note recording state. We use a single AudioRecorder per
   // chat screen and tear it down in dispose().
@@ -113,6 +117,7 @@ class _ChatScreenState extends State<ChatScreen>
     // if the user has the chat open for a while (presence sync only
     // fires on join/leave; long-running idle doesn't bump it).
     unawaited(_refreshLastSeen(otherId));
+    unawaited(_refreshBlockedState(otherId));
     _lastSeenRefreshTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => unawaited(_refreshLastSeen(otherId)),
@@ -121,6 +126,12 @@ class _ChatScreenState extends State<ChatScreen>
       if (mounted) setState(() {});
     };
     PresenceService.onChange.addListener(_presenceListener!);
+  }
+
+  Future<void> _refreshBlockedState(String otherId) async {
+    final blocked = await MessagingService.isBlockedByMe(otherId);
+    if (!mounted) return;
+    setState(() => _isBlocked = blocked);
   }
 
   Future<void> _refreshLastSeen(String otherId) async {
@@ -182,14 +193,29 @@ class _ChatScreenState extends State<ChatScreen>
         if (!mounted) return;
         setState(() => _messages = list);
         _scrollToBottom();
-        // Any new inbound rows? Mark them read so the sender sees the
-        // double-tick in near-real time.
+        // Any new inbound rows that haven't been marked delivered?
+        // Hit them with delivered_at FIRST so the sender sees two
+        // grey ticks the moment our app receives the message — even
+        // before the user opens this screen / scrolls to it. THEN
+        // mark them read (blue double-tick) since this screen being
+        // mounted means they're being viewed.
         final me = AuthService.currentUser?.id;
-        if (me != null &&
-            list.any((m) => m.senderId != me && !m.read)) {
-          unawaited(
-            MessagingService.markConversationRead(widget.conversationId),
-          );
+        if (me != null) {
+          final undelivered = list
+              .where((m) => m.senderId != me && m.deliveredAt == null)
+              .map((m) => m.id)
+              .where((id) => !id.startsWith('pending-'))
+              .toList();
+          if (undelivered.isNotEmpty) {
+            unawaited(
+              MessagingService.markMessagesDelivered(undelivered),
+            );
+          }
+          if (list.any((m) => m.senderId != me && !m.read)) {
+            unawaited(
+              MessagingService.markConversationRead(widget.conversationId),
+            );
+          }
         }
       });
       _typingChannel = MessagingService.subscribeTyping(
@@ -483,10 +509,18 @@ class _ChatScreenState extends State<ChatScreen>
                 Expanded(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(20),
+                    // Tap → WhatsApp-style mini contact sheet (photo,
+                    // name, online state, bio) with a "View full
+                    // profile" button that pushes to UserProfileScreen.
+                    // Previously the tap deep-linked straight to the
+                    // full profile, which felt too much for a quick
+                    // glance.
                     onTap: canOpenProfile
-                        ? () => context.pushNamed(
-                              'user_profile',
-                              pathParameters: {'userId': otherUserId},
+                        ? () => showChatContactSheet(
+                              context,
+                              userId: otherUserId,
+                              fallbackName: name,
+                              fallbackPhotoUrl: photoUrl,
                             )
                         : null,
                     child: Padding(
@@ -550,6 +584,12 @@ class _ChatScreenState extends State<ChatScreen>
               );
             }
             break;
+          case 'block':
+            await _confirmBlock(otherUserId);
+            break;
+          case 'unblock':
+            await _confirmUnblock(otherUserId);
+            break;
           case 'clear':
             await _confirmClearChat();
             break;
@@ -567,6 +607,32 @@ class _ChatScreenState extends State<ChatScreen>
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.person_outline, color: AppColors.textDark),
               title: Text('View contact'),
+            ),
+          ),
+        if (canOpenProfile && !_isBlocked)
+          const PopupMenuItem(
+            value: 'block',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.block, color: AppColors.red),
+              title: Text(
+                'Block',
+                style: TextStyle(color: AppColors.red),
+              ),
+            ),
+          ),
+        if (canOpenProfile && _isBlocked)
+          const PopupMenuItem(
+            value: 'unblock',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.lock_open, color: AppColors.primaryBlue),
+              title: Text(
+                'Unblock',
+                style: TextStyle(color: AppColors.primaryBlue),
+              ),
             ),
           ),
         const PopupMenuItem(
@@ -593,6 +659,88 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       ],
     );
+  }
+
+  Future<void> _confirmBlock(String? otherUserId) async {
+    if (otherUserId == null) return;
+    final name = _conversation?.otherUserName ?? 'this user';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Block $name?'),
+        content: const Text(
+          'Blocked contacts can\'t message you and won\'t see your stories or '
+          'last seen. You can unblock anytime from this menu.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await MessagingService.blockUser(otherUserId);
+      if (!mounted) return;
+      setState(() => _isBlocked = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            '$name has been blocked.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not block. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmUnblock(String? otherUserId) async {
+    if (otherUserId == null) return;
+    final name = _conversation?.otherUserName ?? 'this user';
+    try {
+      await MessagingService.unblockUser(otherUserId);
+      if (!mounted) return;
+      setState(() => _isBlocked = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            '$name has been unblocked.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not unblock. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _confirmClearChat() async {
@@ -779,14 +927,17 @@ class _ChatScreenState extends State<ChatScreen>
                         ),
                         if (isMine) ...[
                           const SizedBox(width: 4),
-                          // WhatsApp-style status:
-                          //   ⌛ — optimistic message still in flight
-                          //   ✓  — sent to server (not yet read)
-                          //   ✓✓ blue — read by the other party
+                          // WhatsApp three-state delivery indicator:
+                          //   ⌛  pending  — optimistic, still uploading
+                          //   ✓   sent    — server has the row
+                          //   ✓✓  delivered — recipient device received it
+                          //   ✓✓  read    — recipient opened the chat (blue)
                           Icon(
                             m.id.startsWith('pending-')
                                 ? Icons.access_time
-                                : (m.read ? Icons.done_all : Icons.done),
+                                : (m.deliveredAt != null || m.read
+                                    ? Icons.done_all
+                                    : Icons.done),
                             size: 13,
                             color: m.read
                                 ? AppColors.primaryBlue
@@ -805,6 +956,41 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildInputBar() {
+    // When the viewer has blocked this contact, hide the composer
+    // entirely (WhatsApp does exactly this) and replace it with a
+    // tappable strip that opens the Unblock confirmation.
+    if (_isBlocked) {
+      return Container(
+        color: AppColors.white,
+        child: SafeArea(
+          top: false,
+          child: InkWell(
+            onTap: () => _confirmUnblock(_conversation?.otherUserId),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisSize.max == MainAxisSize.max
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.block,
+                      size: 16, color: AppColors.textDark),
+                  const SizedBox(width: 8),
+                  Text(
+                    'You blocked this contact. Tap to unblock.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textDark.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         color: AppColors.white,

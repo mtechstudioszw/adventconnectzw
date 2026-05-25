@@ -118,19 +118,40 @@ class PresenceService {
   }
 
   /// Returns the `profiles.last_active_at` timestamp for [userId], or
-  /// null on lookup failure. Used by the chat header to render
-  /// "last seen 3 hours ago" when the user isn't currently online.
+  /// null if the user has hidden their last seen via the chat
+  /// privacy settings (show_last_seen = false) or on lookup failure.
   static Future<DateTime?> fetchLastSeen(String userId) async {
     try {
       final row = await _client
           .from('profiles')
-          .select('last_active_at')
+          .select('last_active_at, show_last_seen')
           .eq('id', userId)
           .maybeSingle();
       if (row == null) return null;
+      // Respect the target user's privacy choice — hidden last seen
+      // is reported as null so the chat header falls back to "Offline"
+      // instead of pretending we have data.
+      if (row['show_last_seen'] == false) return null;
       return DateTime.tryParse(row['last_active_at']?.toString() ?? '');
     } catch (_) {
       return null;
+    }
+  }
+
+  /// Whether the given user opts into having their green online dot
+  /// shown to others. Used by the chat header / inbox tile to gate
+  /// the live presence indicator.
+  static Future<bool> showsOnlineStatus(String userId) async {
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('show_online_status')
+          .eq('id', userId)
+          .maybeSingle();
+      if (row == null) return true;
+      return row['show_online_status'] != false;
+    } catch (_) {
+      return true;
     }
   }
 

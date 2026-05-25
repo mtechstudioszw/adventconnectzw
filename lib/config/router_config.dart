@@ -46,6 +46,7 @@ import '../screens/marketplace/add_product_screen.dart';
 import '../screens/marketplace/category_screen.dart';
 import '../screens/marketplace/marketplace_screen.dart';
 import '../screens/marketplace/product_details_screen.dart';
+import '../screens/messaging/chat_privacy_screen.dart';
 import '../screens/messaging/chat_screen.dart';
 import '../screens/messaging/conversations_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
@@ -329,6 +330,11 @@ final GoRouter appRouter = GoRouter(
       name: 'messages',
       builder: (context, state) => const ConversationsScreen(),
       routes: [
+        GoRoute(
+          path: 'privacy',
+          name: 'chat_privacy',
+          builder: (context, state) => const ChatPrivacyScreen(),
+        ),
         GoRoute(
           path: ':id',
           name: 'chat',

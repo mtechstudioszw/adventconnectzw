@@ -99,4 +99,12 @@ class CacheService {
   static Future<void> deletePref(String key) async {
     await _box?.delete(key);
   }
+
+  /// Read a cached value WITHOUT the 24h freshness gate. Used for
+  /// chat caches (`inbox`, `chat:<id>`) where the user expects to
+  /// see old conversations / messages offline even after a multi-day
+  /// network outage. Sister of [readString] which auto-evicts stale.
+  static String? readStringStale(String key) {
+    return _box?.get(key);
+  }
 }

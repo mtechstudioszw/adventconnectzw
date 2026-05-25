@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
 import 'analytics_service.dart';
+import 'cache_service.dart';
 import 'connectivity_service.dart';
 
 class MessagingService {
@@ -148,15 +149,35 @@ class MessagingService {
   static Future<List<Conversation>> fetchConversations() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
-    final response = await _client
-        .from(_conversationsTable)
-        .select(_conversationSelect)
-        .or(
-          'participant_a_id.eq.${user.id},participant_b_id.eq.${user.id}',
-        )
-        .order('last_message_at', ascending: false)
-        .limit(100);
-    final list = (response as List)
+    // Offline → return whatever we last cached so the inbox always
+    // shows something (WhatsApp parity). The caller already drives
+    // a refresh when ConnectivityService.onChanged fires online.
+    if (!ConnectivityService.isOnline) {
+      return readCachedInbox();
+    }
+    List<dynamic> response;
+    try {
+      response = await _client
+          .from(_conversationsTable)
+          .select(_conversationSelect)
+          .or(
+            'participant_a_id.eq.${user.id},participant_b_id.eq.${user.id}',
+          )
+          .order('last_message_at', ascending: false)
+          .limit(100) as List;
+    } catch (_) {
+      // Connectivity check raced — fall back to cache rather than
+      // surfacing a generic failure on the inbox.
+      return readCachedInbox();
+    }
+    // Persist the raw rows for the next offline session BEFORE we
+    // map them into the model — we want exactly what the server
+    // returned (including the joined participant_a/b photo objects)
+    // so a cache restore is indistinguishable from a live fetch.
+    unawaited(_writeInboxCache(
+      response.map((r) => Map<String, dynamic>.from(r as Map)).toList(),
+    ));
+    final list = response
         .map((row) => Conversation.fromJson(
               row as Map<String, dynamic>,
               currentUserId: user.id,
@@ -342,13 +363,29 @@ class MessagingService {
   }
 
   static Future<List<Message>> fetchMessages(String conversationId) async {
-    final response = await _client
-        .from(_messagesTable)
-        .select()
-        .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true)
-        .limit(500);
-    return (response as List)
+    // Offline → serve from cache so the user can still read older
+    // messages with no connection (WhatsApp parity).
+    if (!ConnectivityService.isOnline) {
+      return readCachedMessages(conversationId);
+    }
+    List<dynamic> response;
+    try {
+      response = await _client
+          .from(_messagesTable)
+          .select()
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: true)
+          .limit(500) as List;
+    } catch (_) {
+      return readCachedMessages(conversationId);
+    }
+    // Persist for the next offline open. We write the raw rows so a
+    // restore looks exactly like a fresh fetch.
+    unawaited(_writeMessagesCache(
+      conversationId,
+      response.map((r) => Map<String, dynamic>.from(r as Map)).toList(),
+    ));
+    return response
         .map((row) => Message.fromJson(row as Map<String, dynamic>))
         .toList();
   }
@@ -410,6 +447,62 @@ class MessagingService {
         .map((rows) => rows
             .map((row) => Message.fromJson(row))
             .toList());
+  }
+
+  // ---------- offline cache ----------
+
+  static const _inboxCacheKey = 'inbox_v1';
+  static String _chatCacheKey(String conversationId) => 'chat:$conversationId';
+
+  /// Read the cached inbox even if it's older than 24h — when the
+  /// device is offline we'd rather show stale conversations than a
+  /// blank Inbox screen.
+  static List<Conversation> readCachedInbox() {
+    final raw = CacheService.readStringStale(_inboxCacheKey);
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final user = _client.auth.currentUser;
+      if (user == null) return const [];
+      final list = jsonDecode(raw) as List;
+      return list
+          .map((row) => Conversation.fromJson(
+                Map<String, dynamic>.from(row as Map),
+                currentUserId: user.id,
+              ))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static Future<void> _writeInboxCache(List<Map<String, dynamic>> rows) async {
+    await CacheService.writeString(_inboxCacheKey, jsonEncode(rows));
+  }
+
+  /// Read cached messages for a conversation. Returns the list as we
+  /// last saw it from the server — newest at the end, same ordering
+  /// as [fetchMessages] / [streamMessages] expose.
+  static List<Message> readCachedMessages(String conversationId) {
+    final raw = CacheService.readStringStale(_chatCacheKey(conversationId));
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final list = jsonDecode(raw) as List;
+      return list
+          .map((row) => Message.fromJson(Map<String, dynamic>.from(row as Map)))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static Future<void> _writeMessagesCache(
+    String conversationId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    await CacheService.writeString(
+      _chatCacheKey(conversationId),
+      jsonEncode(rows),
+    );
   }
 
   // ---------- blocking ----------
@@ -493,6 +586,18 @@ class MessagingService {
     final user = _client.auth.currentUser;
     if (user == null) return;
     try {
+      // Respect the viewer's read-receipts opt-out (WhatsApp parity):
+      // if they've turned off read receipts in chat privacy settings,
+      // we DON'T flip the read flag — the other party stays on two
+      // grey ticks and never gets the blue.
+      final profileRow = await _client
+          .from('profiles')
+          .select('show_read_receipts')
+          .eq('id', user.id)
+          .maybeSingle();
+      final wantsReceipts = profileRow == null ||
+          profileRow['show_read_receipts'] != false;
+      if (!wantsReceipts) return;
       await _client
           .from(_messagesTable)
           .update({

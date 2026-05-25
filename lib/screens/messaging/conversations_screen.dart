@@ -56,10 +56,21 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   Future<void> _bootstrap() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    // Cache-first paint: surface whatever inbox we last saw so the
+    // screen never blanks on cold start, even offline. The fresh
+    // network fetch below replaces it once it lands.
+    final cachedInbox = MessagingService.readCachedInbox();
+    if (cachedInbox.isNotEmpty) {
+      setState(() {
+        _conversations = cachedInbox;
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final results = await Future.wait([
         MessagingService.fetchConversations(),
@@ -76,7 +87,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load messages. Pull to retry.';
+        // Only surface the error if we had nothing cached to show.
+        if (cachedInbox.isEmpty) {
+          _error = 'Could not load messages. Pull to retry.';
+        }
         _loading = false;
       });
     }
@@ -313,6 +327,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                       // way the Home tab does — and falls back to
                       // "Suggestions for you" when there's no match.
                       onTap: () => context.pushNamed('search'),
+                    ),
+                    const SizedBox(width: 8),
+                    _CircleIconButton(
+                      icon: Icons.tune,
+                      // Dedicated chat-privacy screen (last-seen / online /
+                      // read-receipt opt-outs) — WhatsApp's "Settings → Privacy"
+                      // pattern but reachable directly from the inbox.
+                      onTap: () => context.pushNamed('chat_privacy'),
                     ),
                   ],
                 ),

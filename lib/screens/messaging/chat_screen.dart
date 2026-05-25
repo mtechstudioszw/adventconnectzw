@@ -177,6 +177,18 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _bootstrap() async {
+    // Show cached messages immediately so the screen never blanks on
+    // open — even on a slow network. The fresh fetch below will
+    // replace this with server state in a moment.
+    final cached =
+        MessagingService.readCachedMessages(widget.conversationId);
+    if (cached.isNotEmpty) {
+      setState(() {
+        _messages = cached;
+        _loading = false;
+      });
+      _scrollToBottom();
+    }
     try {
       final list =
           await MessagingService.fetchMessages(widget.conversationId);

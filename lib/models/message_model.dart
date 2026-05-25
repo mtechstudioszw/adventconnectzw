@@ -5,6 +5,7 @@ class Conversation {
     required this.otherUserName,
     required this.lastMessage,
     required this.lastMessageAt,
+    this.otherUserPhotoUrl,
     this.unreadCount = 0,
     this.lastSenderId,
     this.requestStatus = 'accepted',
@@ -16,6 +17,7 @@ class Conversation {
   final String id;
   final String otherUserId;
   final String otherUserName;
+  final String? otherUserPhotoUrl;
   final String lastMessage;
   final DateTime lastMessageAt;
   final int unreadCount;
@@ -50,10 +52,26 @@ class Conversation {
                     : json['participant_a_name'])
                 ?.toString() ??
             'Member');
+    // The joined profile photo is brought in by fetchConversations
+    // via select('*, participant_a:participant_a_id(profile_photo_url),
+    // participant_b:participant_b_id(profile_photo_url)'). Pick the
+    // side that ISN'T the viewer so the inbox tile shows the other
+    // person's avatar.
+    String? otherPhoto;
+    final pa = json['participant_a'];
+    final pb = json['participant_b'];
+    if (selfChat) {
+      otherPhoto = (pa is Map ? pa['profile_photo_url'] : null) as String?;
+    } else if (isCurrentA) {
+      otherPhoto = (pb is Map ? pb['profile_photo_url'] : null) as String?;
+    } else {
+      otherPhoto = (pa is Map ? pa['profile_photo_url'] : null) as String?;
+    }
     return Conversation(
       id: json['id'].toString(),
       otherUserId: otherId,
       otherUserName: otherName,
+      otherUserPhotoUrl: otherPhoto,
       lastMessage: (json['last_message'] ?? '') as String,
       lastMessageAt: DateTime.tryParse(
               json['last_message_at']?.toString() ?? '') ??
@@ -77,11 +95,13 @@ class Conversation {
     String? initiatorId,
     bool? isBusiness,
     bool? isSelfChat,
+    String? otherUserPhotoUrl,
   }) {
     return Conversation(
       id: id,
       otherUserId: otherUserId,
       otherUserName: otherUserName,
+      otherUserPhotoUrl: otherUserPhotoUrl ?? this.otherUserPhotoUrl,
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,

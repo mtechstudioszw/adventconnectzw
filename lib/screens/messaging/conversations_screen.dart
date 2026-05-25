@@ -710,6 +710,7 @@ class _ConversationTile extends StatelessWidget {
                 children: [
                   _Avatar(
                     name: conversation.otherUserName,
+                    photoUrl: conversation.otherUserPhotoUrl,
                     isSelfChat: conversation.isSelfChat,
                   ),
                   // Small green dot on the avatar's bottom-right when
@@ -1137,7 +1138,10 @@ class _RequestTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  _Avatar(name: conversation.otherUserName),
+                  _Avatar(
+                    name: conversation.otherUserName,
+                    photoUrl: conversation.otherUserPhotoUrl,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

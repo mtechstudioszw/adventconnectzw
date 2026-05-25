@@ -13,6 +13,7 @@ import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/cached_image.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -430,7 +431,12 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildHeader() {
-    final name = widget.initialConversation?.otherUserName ?? 'Conversation';
+    final convo = widget.initialConversation;
+    final name = convo?.otherUserName ?? 'Conversation';
+    final photoUrl = convo?.otherUserPhotoUrl;
+    final otherUserId = convo?.otherUserId;
+    final canOpenProfile =
+        otherUserId != null && otherUserId.isNotEmpty && !(convo?.isSelfChat ?? false);
     return ClipPath(
       clipper: _HeaderClipper(),
       child: Container(
@@ -448,41 +454,195 @@ class _ChatScreenState extends State<ChatScreen>
                       : context.goNamed('messages'),
                 ),
                 const SizedBox(width: 8),
-                _Avatar(name: name, size: 40),
-                const SizedBox(width: 12),
+                // Tappable avatar + name strip — opens the other user's
+                // public profile, the same way WhatsApp does when you
+                // tap the contact's name at the top of a chat.
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleLarge.copyWith(
-                          color: AppColors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: canOpenProfile
+                        ? () => context.pushNamed(
+                              'user_profile',
+                              pathParameters: {'userId': otherUserId},
+                            )
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          _Avatar(name: name, size: 40, photoUrl: photoUrl),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.titleLarge.copyWith(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                AnimatedSwitcher(
+                                  duration:
+                                      const Duration(milliseconds: 220),
+                                  child: _buildPresenceSubtitle(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        child: _buildPresenceSubtitle(),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                _CircleIconButton(
-                  icon: Icons.more_vert,
-                  onTap: () {},
-                ),
+                _buildOverflowMenu(canOpenProfile, otherUserId),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildOverflowMenu(bool canOpenProfile, String? otherUserId) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, color: AppColors.white),
+      color: AppColors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      onSelected: (action) async {
+        switch (action) {
+          case 'profile':
+            if (canOpenProfile) {
+              context.pushNamed(
+                'user_profile',
+                pathParameters: {'userId': otherUserId!},
+              );
+            }
+            break;
+          case 'clear':
+            await _confirmClearChat();
+            break;
+          case 'delete':
+            await _confirmDeleteConversation();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        if (canOpenProfile)
+          const PopupMenuItem(
+            value: 'profile',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.person_outline, color: AppColors.textDark),
+              title: Text('View contact'),
+            ),
+          ),
+        const PopupMenuItem(
+          value: 'clear',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.cleaning_services_outlined,
+                color: AppColors.textDark),
+            title: Text('Clear chat'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.delete_outline, color: AppColors.red),
+            title: Text(
+              'Delete conversation',
+              style: TextStyle(color: AppColors.red),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmClearChat() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear chat?'),
+        content: const Text(
+          'All messages in this conversation will be removed from your device. '
+          'The other person will still see their copy.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _messages = const []);
+  }
+
+  Future<void> _confirmDeleteConversation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete conversation?'),
+        content: const Text(
+          'This deletes the entire conversation and its messages for both sides. '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      // declineRequest deletes the conversation row; messages cascade
+      // away. Same primitive whether it's an unaccepted request or
+      // an active chat — RLS only allows participants.
+      await MessagingService.declineRequest(widget.conversationId);
+      if (!mounted) return;
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.goNamed('messages');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not delete conversation. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildBody() {
@@ -596,8 +756,14 @@ class _ChatScreenState extends State<ChatScreen>
                         ),
                         if (isMine) ...[
                           const SizedBox(width: 4),
+                          // WhatsApp-style status:
+                          //   ⌛ — optimistic message still in flight
+                          //   ✓  — sent to server (not yet read)
+                          //   ✓✓ blue — read by the other party
                           Icon(
-                            m.read ? Icons.done_all : Icons.done,
+                            m.id.startsWith('pending-')
+                                ? Icons.access_time
+                                : (m.read ? Icons.done_all : Icons.done),
                             size: 13,
                             color: m.read
                                 ? AppColors.primaryBlue
@@ -1204,9 +1370,10 @@ class _SendButton extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, this.size = 50});
+  const _Avatar({required this.name, this.size = 50, this.photoUrl});
   final String name;
   final double size;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -1218,23 +1385,40 @@ class _Avatar extends StatelessWidget {
             ? parts.first.substring(0, 1).toUpperCase()
             : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
                 .toUpperCase();
+    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
     return Container(
       width: size,
       height: size,
+      clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppColors.white.withValues(alpha: 0.15),
         shape: BoxShape.circle,
         border: Border.all(color: AppColors.white.withValues(alpha: 0.30)),
       ),
-      child: Text(
-        initials,
-        style: AppTextStyles.titleMedium.copyWith(
-          color: AppColors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: size * 0.32,
-        ),
-      ),
+      child: hasPhoto
+          ? CachedImage(
+              photoUrl!,
+              fit: BoxFit.cover,
+              width: size,
+              height: size,
+              errorBuilder: (_, _, _) => Text(
+                initials,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: size * 0.32,
+                ),
+              ),
+            )
+          : Text(
+              initials,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: size * 0.32,
+              ),
+            ),
     );
   }
 }

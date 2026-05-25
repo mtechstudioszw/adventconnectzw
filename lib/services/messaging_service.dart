@@ -116,12 +116,21 @@ class MessagingService {
   /// "Notes to self" is always pinned to the top of the inbox regardless
   /// of last_message_at — keeps the bookmark predictable even when the
   /// user hasn't written anything for a while.
+  /// Selects the conversation columns plus a join to both participants'
+  /// profile_photo_url so the inbox + chat header can render an actual
+  /// avatar instead of just initials. The named-aliases form
+  /// `participant_a:participant_a_id(...)` tells PostgREST which FK to
+  /// follow when the same table has multiple FKs to profiles.
+  static const _conversationSelect =
+      '*, participant_a:participant_a_id(profile_photo_url), '
+      'participant_b:participant_b_id(profile_photo_url)';
+
   static Future<List<Conversation>> fetchConversations() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
     final response = await _client
         .from(_conversationsTable)
-        .select()
+        .select(_conversationSelect)
         .or(
           'participant_a_id.eq.${user.id},participant_b_id.eq.${user.id}',
         )

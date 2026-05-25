@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:firebase_core/firebase_core.dart';
@@ -13,6 +14,7 @@ import 'services/analytics_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/messaging_service.dart';
+import 'services/presence_service.dart';
 import 'services/push_service.dart';
 import 'services/secure_supabase_storage.dart';
 import 'services/theme_service.dart';
@@ -123,7 +125,29 @@ void main() async {
       appRouter.goNamed('reset_password');
     }
     AnalyticsService.setUserId(data.session?.user.id);
+    // Mirror sign-in / sign-out into the presence channel so other
+    // users see "online" green dots and accurate last-seen times.
+    switch (data.event) {
+      case AuthChangeEvent.signedIn:
+      case AuthChangeEvent.initialSession:
+      case AuthChangeEvent.tokenRefreshed:
+        if (data.session?.user != null) {
+          unawaited(PresenceService.start());
+        }
+        break;
+      case AuthChangeEvent.signedOut:
+        unawaited(PresenceService.stop());
+        break;
+      default:
+        break;
+    }
   });
+
+  // Kick off presence immediately if we already have a session (warm
+  // start). The auth-state listener above also covers later sign-ins.
+  if (Supabase.instance.client.auth.currentUser != null) {
+    unawaited(PresenceService.start());
+  }
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/messaging_service.dart';
+import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -46,6 +47,11 @@ class _ChatScreenState extends State<ChatScreen>
   DateTime _lastTypingBroadcast =
       DateTime.fromMillisecondsSinceEpoch(0);
 
+  // Presence (other-user online / last-seen) state.
+  DateTime? _otherLastSeen;
+  Timer? _lastSeenRefreshTimer;
+  void Function()? _presenceListener;
+
   // Voice-note recording state. We use a single AudioRecorder per
   // chat screen and tear it down in dispose().
   final AudioRecorder _recorder = AudioRecorder();
@@ -73,6 +79,30 @@ class _ChatScreenState extends State<ChatScreen>
     );
     _enableScreenshotBlock();
     _bootstrap();
+    _wirePresence();
+  }
+
+  void _wirePresence() {
+    final otherId = widget.initialConversation?.otherUserId;
+    if (otherId == null || otherId.isEmpty) return;
+    // Re-fetch last seen periodically so the header stays fresh even
+    // if the user has the chat open for a while (presence sync only
+    // fires on join/leave; long-running idle doesn't bump it).
+    unawaited(_refreshLastSeen(otherId));
+    _lastSeenRefreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_refreshLastSeen(otherId)),
+    );
+    _presenceListener = () {
+      if (mounted) setState(() {});
+    };
+    PresenceService.onChange.addListener(_presenceListener!);
+  }
+
+  Future<void> _refreshLastSeen(String otherId) async {
+    final t = await PresenceService.fetchLastSeen(otherId);
+    if (!mounted || t == null) return;
+    setState(() => _otherLastSeen = t);
   }
 
   @override
@@ -81,6 +111,11 @@ class _ChatScreenState extends State<ChatScreen>
     _typingExpiry?.cancel();
     _typingThrottle?.cancel();
     _recordingTimer?.cancel();
+    _lastSeenRefreshTimer?.cancel();
+    final listener = _presenceListener;
+    if (listener != null) {
+      PresenceService.onChange.removeListener(listener);
+    }
     // Best-effort stop in case user leaves the screen mid-record.
     unawaited(_recorder.stop().catchError((_) => null));
     unawaited(_recorder.dispose());
@@ -433,27 +468,7 @@ class _ChatScreenState extends State<ChatScreen>
                       const SizedBox(height: 2),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 220),
-                        child: _otherTyping
-                            ? Text(
-                                'typing…',
-                                key: const ValueKey('typing'),
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.white,
-                                  fontSize: 11,
-                                  fontStyle: FontStyle.italic,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              )
-                            : Text(
-                                'Active member',
-                                key: const ValueKey('idle'),
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color:
-                                      AppColors.white.withValues(alpha: 0.7),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
+                        child: _buildPresenceSubtitle(),
                       ),
                     ],
                   ),
@@ -713,6 +728,62 @@ class _ChatScreenState extends State<ChatScreen>
         const SizedBox(width: 6),
         _SendButton(busy: _sending, onTap: _stopAndSendRecording),
       ],
+    );
+  }
+
+  Widget _buildPresenceSubtitle() {
+    // Typing always wins — it's the most "live" signal.
+    if (_otherTyping) {
+      return Text(
+        'typing…',
+        key: const ValueKey('typing'),
+        style: AppTextStyles.labelSmall.copyWith(
+          color: AppColors.white,
+          fontSize: 11,
+          fontStyle: FontStyle.italic,
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
+    final otherId = widget.initialConversation?.otherUserId;
+    if (otherId != null && PresenceService.isOnline(otherId)) {
+      // Lit green dot + "Online" — same affordance WhatsApp uses.
+      return Row(
+        key: const ValueKey('online'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+              color: AppColors.successGreen,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Online',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      );
+    }
+    final lastSeen = _otherLastSeen;
+    final label = lastSeen != null
+        ? 'last seen ${PresenceService.formatLastSeen(lastSeen)}'
+        : 'Offline';
+    return Text(
+      label,
+      key: ValueKey(label),
+      style: AppTextStyles.labelSmall.copyWith(
+        color: AppColors.white.withValues(alpha: 0.7),
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 

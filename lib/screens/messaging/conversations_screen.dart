@@ -5,6 +5,7 @@ import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/messaging_service.dart';
+import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/composer_sheet.dart';
@@ -473,25 +474,32 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             'Reach out from a member directory or church page to start chatting.',
       );
     }
-    return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: list.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, i) {
-        final c = list[i];
-        return _ConversationTile(
-          conversation: c,
-          isLastFromMe: c.lastSenderId == _currentUserId,
-          isOutgoingPending:
-              c.requestStatus == 'pending' && c.initiatorId == _currentUserId,
-          onTap: () async {
-            await context.pushNamed(
-              'chat',
-              pathParameters: {'id': c.id},
-              extra: c,
+    // Rebuild when the presence roster changes so newly online users
+    // get a green dot without forcing a refresh.
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: PresenceService.onChange,
+      builder: (context, _, _) {
+        return ListView.separated(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          itemCount: list.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (context, i) {
+            final c = list[i];
+            return _ConversationTile(
+              conversation: c,
+              isLastFromMe: c.lastSenderId == _currentUserId,
+              isOutgoingPending: c.requestStatus == 'pending' &&
+                  c.initiatorId == _currentUserId,
+              onTap: () async {
+                await context.pushNamed(
+                  'chat',
+                  pathParameters: {'id': c.id},
+                  extra: c,
+                );
+                if (mounted) _bootstrap();
+              },
             );
-            if (mounted) _bootstrap();
           },
         );
       },
@@ -698,9 +706,35 @@ class _ConversationTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _Avatar(
-                name: conversation.otherUserName,
-                isSelfChat: conversation.isSelfChat,
+              Stack(
+                children: [
+                  _Avatar(
+                    name: conversation.otherUserName,
+                    isSelfChat: conversation.isSelfChat,
+                  ),
+                  // Small green dot on the avatar's bottom-right when
+                  // the other user is currently online (WhatsApp-style).
+                  // Hidden for self-chats and pending requests.
+                  if (!conversation.isSelfChat &&
+                      conversation.requestStatus == 'accepted' &&
+                      PresenceService.isOnline(conversation.otherUserId))
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: AppColors.successGreen,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.white,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 12),
               Expanded(

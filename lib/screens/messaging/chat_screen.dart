@@ -66,19 +66,50 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   /// Replace the server list and drop any optimistic rows the server
-  /// has now echoed back (matched on sender + content + type within a
-  /// 2-minute window — enough to catch clock skew without colliding
-  /// with a genuinely repeated message).
+  /// has now echoed back. Matching is BY ID — when _send/_send-voice
+  /// captures sendMessage's return value, it swaps the pending entry's
+  /// tempId for the canonical server id (via _replacePendingWithCanonical
+  /// below), so this dedupe is precise: no content-based false matches
+  /// (which broke when a blocked send had the same body as an earlier
+  /// real message), and no flicker (the canonical replaces the pending
+  /// in-place, never both visible).
   void _applyServerMessages(List<Message> list) {
     _serverMessages = list;
-    _pending.removeWhere((p) {
-      return list.any((s) =>
-          s.senderId == p.senderId &&
-          s.content == p.content &&
-          s.messageType == p.messageType &&
-          s.createdAt.difference(p.createdAt).abs() <
-              const Duration(minutes: 2));
-    });
+    final serverIds = list.map((m) => m.id).toSet();
+    _pending.removeWhere((p) => serverIds.contains(p.id));
+  }
+
+  /// Called after sendMessage returns the canonical row. Swaps the
+  /// optimistic tempId entry in _pending for the canonical message so
+  /// the next stream tick can dedupe by id and so the bubble shows
+  /// the real server timestamp/status without re-rendering.
+  void _replacePendingWithCanonical(String tempId, Message canonical) {
+    for (var i = 0; i < _pending.length; i++) {
+      if (_pending[i].id == tempId) {
+        _pending[i] = canonical;
+        return;
+      }
+    }
+  }
+
+  /// Pick a UTC timestamp for an optimistic bubble that's guaranteed
+  /// to sort AFTER everything currently on screen. Stops voice notes
+  /// and rapid sends from briefly rendering at the top while the
+  /// server timestamp catches up (which the user reported as
+  /// "voice goes to top, then jumps to the right position").
+  DateTime _optimisticTimestamp() {
+    final now = DateTime.now().toUtc();
+    DateTime? latest;
+    for (final m in _serverMessages) {
+      final t = m.createdAt.toUtc();
+      if (latest == null || t.isAfter(latest)) latest = t;
+    }
+    for (final m in _pending) {
+      final t = m.createdAt.toUtc();
+      if (latest == null || t.isAfter(latest)) latest = t;
+    }
+    if (latest == null || now.isAfter(latest)) return now;
+    return latest.add(const Duration(milliseconds: 1));
   }
 
   // Resolved conversation — starts as widget.initialConversation (may
@@ -430,10 +461,10 @@ class _ChatScreenState extends State<ChatScreen>
       content: '🎙️ Voice note',
       messageType: 'voice',
       mediaDurationSeconds: duration,
-      // UTC so optimistic rows sort correctly against server UTC
-      // timestamps — a local-time createdAt was placing fresh sends
-      // out of order relative to incoming server rows.
-      createdAt: DateTime.now().toUtc(),
+      // Forced-after-latest timestamp so the bubble never briefly
+      // sorts above older messages while the server roundtrip lands
+      // ("voice note jumps from top to bottom" bug).
+      createdAt: _optimisticTimestamp(),
     );
     setState(() {
       _pending.add(optimistic);
@@ -442,12 +473,16 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
 
     try {
-      await MessagingService.sendVoiceNote(
+      final canonical = await MessagingService.sendVoiceNote(
         conversationId: widget.conversationId,
         localFilePath: path,
         durationSeconds: duration,
       );
-      // Stream picks up the canonical row and prunes our temp bubble.
+      // Swap optimistic for the canonical row so the stream's later
+      // tick dedupes by id rather than content.
+      if (mounted) {
+        setState(() => _replacePendingWithCanonical(tempId, canonical));
+      }
     } on PostgrestException catch (e) {
       // Silent block parity for voice notes too — RLS rejection keeps
       // the optimistic bubble in place, no toast.
@@ -510,9 +545,11 @@ class _ChatScreenState extends State<ChatScreen>
     final me = AuthService.currentUser?.id ?? '';
 
     // Optimistic UI — show the bubble immediately in the _pending
-    // list. The realtime stream echoes the real row a moment later
-    // and _applyServerMessages prunes this optimistic copy. createdAt
-    // is UTC so it sorts correctly against server timestamps.
+    // list. Use _optimisticTimestamp() so the new bubble is GUARANTEED
+    // to sort after everything else on screen (previously the bubble
+    // could briefly render above older messages if client/server
+    // clocks disagreed by a few hundred ms — what the user saw as
+    // "voice note jumps from top to bottom").
     final tempId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     final optimistic = Message(
       id: tempId,
@@ -520,7 +557,7 @@ class _ChatScreenState extends State<ChatScreen>
       senderId: me,
       senderName: 'You',
       content: text,
-      createdAt: DateTime.now().toUtc(),
+      createdAt: _optimisticTimestamp(),
     );
     setState(() {
       _pending.add(optimistic);
@@ -530,12 +567,16 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
 
     try {
-      await MessagingService.sendMessage(
+      final canonical = await MessagingService.sendMessage(
         conversationId: widget.conversationId,
         content: text,
       );
-      // Realtime stream picks up the real row and prunes the
-      // optimistic copy. Nothing else to do here.
+      // Replace the optimistic entry with the canonical message in
+      // place. The stream tick that follows dedupes by id (now that
+      // the pending IS the canonical) — no double-render, no flicker.
+      if (mounted) {
+        setState(() => _replacePendingWithCanonical(tempId, canonical));
+      }
     } on OutboxQueuedException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/product_model.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
@@ -73,6 +74,32 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
         _error = 'Could not load product.';
         _loading = false;
       });
+    }
+  }
+
+  /// Share the product with the in-app text + download CTA. No
+  /// dedicated product-share Open Graph page exists yet, so the
+  /// link points at the GitHub Releases page where the APK lives.
+  Future<void> _shareProduct() async {
+    final product = _product;
+    if (product == null) return;
+    const downloadUrl =
+        'https://github.com/mtechstudioszw/adventconnectzw/releases/latest';
+    final text = '${product.title}\n\n'
+        'For sale on Advent Connect ZW marketplace. '
+        'Get the app to see details + message the seller: $downloadUrl';
+    try {
+      await Share.share(text, subject: product.title);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open the share sheet.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
     }
   }
 
@@ -238,7 +265,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                 const Spacer(),
                 _CircleIconButton(
                   icon: Icons.share_outlined,
-                  onTap: () {},
+                  onTap: _shareProduct,
                 ),
               ],
             ),

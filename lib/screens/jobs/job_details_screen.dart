@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/job_model.dart';
@@ -297,6 +298,35 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     }
   }
 
+  /// Share the job posting with a friendly invite to the app.
+  /// Jobs don't have a dedicated Open Graph share page yet (events
+  /// do — see supabase/functions/event-share/), so we share a text
+  /// summary + the GitHub Releases APK link as the call-to-action.
+  /// Replace with a job-share Edge Function URL when one exists.
+  Future<void> _shareJob() async {
+    final job = _job;
+    if (job == null) return;
+    const downloadUrl =
+        'https://github.com/mtechstudioszw/adventconnectzw/releases/latest';
+    final text = '${job.title}\n\n'
+        'I saw this on Advent Connect ZW — '
+        'a community job board for Adventist members in Zimbabwe. '
+        'Download the app: $downloadUrl';
+    try {
+      await Share.share(text, subject: job.title);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open the share sheet.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _apply() async {
     final job = _job;
     final phone = job?.contactPhone?.trim() ?? '';
@@ -444,7 +474,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                     const Spacer(),
                     _CircleIconButton(
                       icon: Icons.share_outlined,
-                      onTap: () {},
+                      onTap: () => _shareJob(),
                     ),
                   ],
                 ),

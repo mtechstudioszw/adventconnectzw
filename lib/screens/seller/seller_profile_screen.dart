@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
@@ -155,6 +156,34 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
           backgroundColor: AppColors.successGreen,
           content: Text(
             'Thanks — your review is live.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Share the seller's storefront with the app download link.
+  /// No dedicated Open Graph share page exists for seller profiles
+  /// yet, so we share a text intro + the GitHub Releases URL.
+  Future<void> _shareSeller() async {
+    final seller = _seller;
+    if (seller == null) return;
+    const downloadUrl =
+        'https://github.com/mtechstudioszw/adventconnectzw/releases/latest';
+    final name = seller.businessName.trim().isNotEmpty
+        ? seller.businessName.trim()
+        : 'this seller';
+    final text = 'Check out $name on Advent Connect ZW marketplace. '
+        'Get the app to browse the store + message the seller: $downloadUrl';
+    try {
+      await Share.share(text, subject: name);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open the share sheet.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -364,7 +393,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                   const Spacer(),
                   _CircleIconButton(
                     icon: Icons.share_outlined,
-                    onTap: () {},
+                    onTap: _shareSeller,
                   ),
                 ],
               ),

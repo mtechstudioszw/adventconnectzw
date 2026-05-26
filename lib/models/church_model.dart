@@ -15,6 +15,8 @@ class Church {
     this.createdAt,
     this.latitude,
     this.longitude,
+    this.province,
+    this.conference,
   });
 
   final String id;
@@ -32,6 +34,12 @@ class Church {
   final DateTime? createdAt;
   final double? latitude;
   final double? longitude;
+  /// Zimbabwe province this church sits in. Drives the "My Province"
+  /// filter chip — matched against the viewer's profile province.
+  final String? province;
+  /// SDA conference (e.g. "North Zimbabwe Conference"). Surfaced in
+  /// the conference dropdown filter per master reference Part 15.
+  final String? conference;
 
   bool get hasLocation => latitude != null && longitude != null;
 
@@ -56,6 +64,12 @@ class Church {
           : null,
       latitude: _readDouble(json['latitude']),
       longitude: _readDouble(json['longitude']),
+      province: (json['province'] as String?)?.trim().isNotEmpty == true
+          ? (json['province'] as String).trim()
+          : null,
+      conference: (json['conference'] as String?)?.trim().isNotEmpty == true
+          ? (json['conference'] as String).trim()
+          : null,
     );
   }
 
@@ -75,6 +89,8 @@ class Church {
         'created_at': createdAt?.toIso8601String(),
         'latitude': latitude,
         'longitude': longitude,
+        'province': province,
+        'conference': conference,
       };
 
   Church copyWith({
@@ -97,6 +113,8 @@ class Church {
       createdAt: createdAt,
       latitude: latitude,
       longitude: longitude,
+      province: province,
+      conference: conference,
     );
   }
 

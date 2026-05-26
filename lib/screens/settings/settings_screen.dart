@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
@@ -187,35 +188,42 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  /// PayNow Zimbabwe payment link for ministry support. External
-  /// (not in-app billing) because App Store / Play Store forbid IAP
-  /// for nonprofit donations, and PayNow covers EcoCash, OneMoney,
-  /// ZIPIT, and bank cards in one flow — the right primitive for
-  /// Zim users.
+  /// Personal EcoCash details for ministry donations. Zim's
+  /// dominant mobile-money network — every smartphone user already
+  /// has the dialer flow muscle-memorised. Two CTAs in the sheet
+  /// below: tap-to-copy the number so it pastes straight into the
+  /// EcoCash app, and tap-to-dial *151# to launch the USSD send-
+  /// money flow without leaving the phone keyboard.
   ///
-  /// Replace this constant with the actual PayNow Express Checkout
-  /// or Pay Link URL once the merchant account is provisioned. The
-  /// format is usually:
-  ///   https://www.paynow.co.zw/Payment/Link/?q=<merchant-token>
-  static const _paynowDonationUrl =
-      'https://www.paynow.co.zw/Payment/Link/?q=REPLACE_WITH_MERCHANT_TOKEN';
+  /// REPLACE both constants with your real values:
+  ///   - Number: full Zim mobile (e.g. +263 77 123 4567)
+  ///   - Display name: how the recipient appears on the EcoCash
+  ///     confirmation prompt (helps donors trust the destination)
+  static const _ecoCashNumber = '0778 092 494';
+  static const _ecoCashName = 'Advent Connect ZW';
 
   Future<void> _openDonation() async {
-    final uri = Uri.parse(_paynowDonationUrl);
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok) throw Exception('launch returned false');
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Could not open the donation page. Try again later.',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-          ),
-        ),
-      );
-    }
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _EcoCashDonationSheet(
+        number: _ecoCashNumber,
+        recipientName: _ecoCashName,
+        onSnack: (msg) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.successGreen,
+              content: Text(
+                msg,
+                style:
+                    AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _pickLanguage() async {
@@ -556,6 +564,233 @@ class _SettingsScreenState extends State<SettingsScreen>
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EcoCashDonationSheet extends StatelessWidget {
+  const _EcoCashDonationSheet({
+    required this.number,
+    required this.recipientName,
+    required this.onSnack,
+  });
+
+  final String number;
+  final String recipientName;
+  final void Function(String) onSnack;
+
+  Future<void> _copyNumber(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: number));
+    onSnack('EcoCash number copied — paste it in your EcoCash app.');
+  }
+
+  Future<void> _dialUssd(BuildContext context) async {
+    // *151# is the EcoCash menu shortcut on Econet lines. We URL-
+    // encode the # as %23 because some Android dialers refuse a
+    // raw # in a tel: URI. Launches the dialer pre-filled, user
+    // hits the call button.
+    final uri = Uri.parse('tel:*151%23');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('launch failed');
+    } catch (_) {
+      onSnack('Could not open the dialer. Try dialling *151# manually.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.favorite,
+                    color: AppColors.goldAccent,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Donate via EcoCash',
+                        style: AppTextStyles.titleLarge.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Send any amount to the number below.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: const Color.fromRGBO(26, 26, 46, 0.65),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.lightGrey,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color.fromRGBO(26, 26, 46, 0.06),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ECOCASH NUMBER',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.55),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          number,
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                      Material(
+                        color: AppColors.primaryBlue,
+                        borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => _copyNumber(context),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 9,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.content_copy,
+                                  color: AppColors.white,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Copy',
+                                  style: AppTextStyles.labelMedium.copyWith(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Account name: $recipientName',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.70),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Material(
+              color: AppColors.primaryBlue,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _dialUssd(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.dialpad,
+                          color: AppColors.white, size: 18),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Open dialer  •  *151#',
+                        style: AppTextStyles.buttonText.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'How to send:\n'
+              '1. Dial *151# (or open the EcoCash app)\n'
+              '2. Choose "Send Money" → "To Mobile"\n'
+              '3. Enter the number above\n'
+              '4. Enter the amount you want to donate\n'
+              '5. Confirm with your PIN',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.70),
+                height: 1.55,
+                fontSize: 12.5,
+              ),
+            ),
+          ],
         ),
       ),
     );

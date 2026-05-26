@@ -86,12 +86,23 @@ jobs:
              release/advent-connect-debug.apk
 
       - name: Upload APK artifact
+        # Belt-and-braces: also store the APK as a workflow artifact
+        # for the few CI cases where downloading from a release page
+        # is awkward. The Release below is the primary distribution.
+        #
+        # Free GitHub plan caps Actions storage at 0.5 GB total, so
+        # 30-day retention was filling it up and silently failing
+        # subsequent builds. 3 days keeps a couple of recent APKs
+        # available without exhausting the quota. continue-on-error
+        # means even if storage IS full, the Release step still runs
+        # and the phone-friendly install link keeps updating.
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: advent-connect-debug-apk
           path: release/advent-connect-debug.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
       - name: Publish to "Latest debug build" release
         # Always overwrites a single moving tag so the user always

@@ -20,6 +20,8 @@ class AboutScreen extends StatelessWidget {
   static const _studioName = 'MyTech Studios Zw';
   static const _contactEmail = 'tanatswamichaelmikuwa@gmail.com';
   static const _contactWhatsApp = '+263778092494';
+  static const _sponsorEcoCash = '0778 092 494';
+  static const _sponsorEcoCashName = 'Advent Connect ZW';
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +89,11 @@ class AboutScreen extends StatelessWidget {
                             'Conference or any specific local conference.',
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  _SponsorCard(
+                    number: _sponsorEcoCash,
+                    accountName: _sponsorEcoCashName,
                   ),
                   const SizedBox(height: 16),
                   _buildSection(
@@ -335,6 +342,203 @@ class AboutScreen extends StatelessWidget {
       'https://wa.me/$cleaned?text=${Uri.encodeComponent("Hi $_developerName — ")}',
     );
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
+
+/// Honest "we're still building this" card. Acknowledges that some
+/// features aren't yet working and frames the user's support as the
+/// thing that gets them shipped. EcoCash details are surfaced
+/// inline so a tap-to-copy + open-dialer flow stays one screen
+/// deep — fewer hoops, more conversions.
+class _SponsorCard extends StatelessWidget {
+  const _SponsorCard({
+    required this.number,
+    required this.accountName,
+  });
+
+  final String number;
+  final String accountName;
+
+  Future<void> _copy(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: number));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.successGreen,
+        content: Text(
+          'EcoCash number copied.',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _dial() async {
+    final uri = Uri.parse('tel:*151%23');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.28),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.construction,
+                  color: AppColors.goldAccent, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Still building — here\'s how to help',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'If you notice a feature that isn\'t quite working yet, '
+            'it\'s usually because the resources to build and host it '
+            'aren\'t there yet — not a bug we forgot. You can sponsor '
+            'this ministry directly so the next feature ships sooner '
+            'and the app keeps running smoothly for the community.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.white.withValues(alpha: 0.88),
+              height: 1.55,
+              fontSize: 13.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.18),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ECOCASH',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.goldAccent,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        number,
+                        style: AppTextStyles.headlineSmall.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 19,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                    Material(
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => _copy(context),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.content_copy,
+                                color: AppColors.primaryBlue,
+                                size: 13,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Copy',
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.primaryBlue,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Account name: $accountName',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.white.withValues(alpha: 0.78),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Material(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: _dial,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.dialpad,
+                        color: AppColors.primaryBlue, size: 18),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Open dialer  •  *151#',
+                      style: AppTextStyles.buttonText.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

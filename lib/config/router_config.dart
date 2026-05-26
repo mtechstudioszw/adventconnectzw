@@ -27,6 +27,7 @@ import '../services/church_service.dart';
 import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
+import '../models/advent_news_model.dart';
 import '../models/event_model.dart';
 import '../models/job_model.dart';
 import '../models/message_model.dart';
@@ -49,6 +50,8 @@ import '../screens/marketplace/product_details_screen.dart';
 import '../screens/messaging/chat_privacy_screen.dart';
 import '../screens/messaging/chat_screen.dart';
 import '../screens/messaging/conversations_screen.dart';
+import '../screens/news/advent_news_details_screen.dart';
+import '../screens/news/advent_news_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
 import '../screens/prayer/post_prayer_screen.dart';
 import '../screens/prayer/prayer_details_screen.dart';
@@ -229,6 +232,26 @@ final GoRouter appRouter = GoRouter(
             return EventDetailsScreen(
               eventId: id,
               initialEvent: initial,
+            );
+          },
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/news',
+      name: 'news',
+      builder: (context, state) => const AdventNewsScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          name: 'news_details',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            final initial =
+                state.extra is AdventNews ? state.extra as AdventNews : null;
+            return AdventNewsDetailsScreen(
+              newsId: id,
+              initialItem: initial,
             );
           },
         ),

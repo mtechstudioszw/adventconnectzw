@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/advent_news_model.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../models/friendship_model.dart';
@@ -10,6 +11,7 @@ import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
 import '../../models/post_model.dart';
 import '../../models/story_model.dart';
+import '../../services/advent_news_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
@@ -55,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Event> _events = [];
   List<Church> _churches = [];
   List<MemberDirectoryEntry> _suggestedMembers = [];
+  List<AdventNews> _topNews = const [];
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
   int _unreadNotifications = 0;
@@ -166,6 +169,7 @@ class _HomeScreenState extends State<HomeScreen>
         FeedService.fetchMyFriendships(),
         FeedService.pendingRequestCount(),
         MessagingService.fetchConversations(),
+        AdventNewsService.fetchTopNews(limit: 3),
       ]);
       if (!mounted) return;
       // Drop events whose start time is more than a few hours in the
@@ -211,6 +215,7 @@ class _HomeScreenState extends State<HomeScreen>
         _friendshipsByUser = friendsByUser;
         _pendingFriendRequests = results[10] as int;
         _unreadMessages = unreadMessages;
+        _topNews = results[12] as List<AdventNews>;
         _loading = false;
       });
       // Best-effort cache write — failures here must never surface.
@@ -508,8 +513,22 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ],
+                if (_topNews.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _AdventNewsHero(items: _topNews),
+                  ),
+                ],
                 const SizedBox(height: 18),
-                _buildSectionHeader('Stories', null),
+                _buildSectionHeader(
+                  'Stories',
+                  // Tiny "See all" → /news so a user who wants to dive
+                  // into the full editorial feed has a one-tap path
+                  // even when no story is pinned in the rail.
+                  'Advent News',
+                  onAction: () => context.pushNamed('news'),
+                ),
                 const SizedBox(height: 10),
                 StoriesRail(
                   stories: _stories,
@@ -2758,4 +2777,207 @@ class _DiscoverySlot {
   const _DiscoverySlot({required this.key, required this.widget});
   final String key;
   final Widget widget;
+}
+
+/// Magazine-style hero for the editorial Advent News feed. Renders
+/// the top news item with cover photo + title + summary and links
+/// out to /news for the full list. Pinned at the very top of the
+/// home feed so members see "what's trending in the Adventist
+/// community in Zimbabwe" before scrolling through user posts.
+class _AdventNewsHero extends StatelessWidget {
+  const _AdventNewsHero({required this.items});
+
+  final List<AdventNews> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    final lead = items.first;
+    final hasCover = (lead.coverPhotoUrl ?? '').isNotEmpty;
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(22),
+      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      child: InkWell(
+        onTap: () => context.pushNamed(
+          'news_details',
+          pathParameters: {'id': lead.id},
+          extra: lead,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 8.5,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasCover)
+                    CachedImage(lead.coverPhotoUrl!, fit: BoxFit.cover)
+                  else
+                    const DecoratedBox(
+                      decoration:
+                          BoxDecoration(gradient: AppColors.appBarGradient),
+                      child: Center(
+                        child: Icon(
+                          Icons.newspaper,
+                          color: AppColors.white,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.15),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.65),
+                            ],
+                            stops: const [0.0, 0.45, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.goldAccent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.bolt,
+                            color: AppColors.darkNavy,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'ADVENT NEWS',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.darkNavy,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        lead.category.label.toUpperCase(),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 14,
+                    right: 14,
+                    bottom: 14,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          lead.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 17,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          lead.summary,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.white.withValues(alpha: 0.88),
+                            height: 1.35,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (items.length > 1)
+              InkWell(
+                onTap: () => context.pushNamed('news'),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.dynamic_feed,
+                        size: 16,
+                        color: AppColors.primaryBlue,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${items.length} stories',
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'See all',
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

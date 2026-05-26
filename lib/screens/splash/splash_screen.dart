@@ -168,7 +168,7 @@ class _SplashScreenState extends State<SplashScreen>
                         _buildProgressBar(),
                         const SizedBox(height: 18),
                         Text(
-                          'MTECH STUDIOS ZW',
+                          'MYTECH STUDIOS ZW',
                           style: AppTextStyles.labelSmall.copyWith(
                             color: AppColors.textDark.withValues(alpha: 0.35),
                             fontSize: 10,

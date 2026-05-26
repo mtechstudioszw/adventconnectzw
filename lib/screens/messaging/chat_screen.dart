@@ -55,8 +55,26 @@ class _ChatScreenState extends State<ChatScreen>
   /// The single, strictly-chronological list the UI renders. Server
   /// rows + still-unconfirmed optimistic rows, merged and sorted by
   /// createdAt (ties broken by id so equal-timestamp rows are stable).
+  ///
+  /// Dedupe by id at RENDER time, not write time. This closes the
+  /// race window where:
+  ///   1. Optimistic added with tempId 'pending-xxx'
+  ///   2. Realtime fires the canonical row → _serverMessages updated
+  ///   3. sendMessage hasn't returned yet → _pending still has tempId
+  ///   4. Both render → DUPLICATE (the Notes-to-Self bug)
+  ///   5. sendMessage returns → tempId swapped for canonical id
+  ///   6. _pending now has the canonical id alongside _serverMessages
+  ///      → STILL duplicate until the next realtime tick re-dedupes
+  ///
+  /// Skipping any _pending row whose id is already in _serverMessages
+  /// at getter time makes the duplicate window vanish — same data,
+  /// rendered once, regardless of the order events arrive.
   List<Message> get _messages {
-    final merged = <Message>[..._serverMessages, ..._pending];
+    final serverIds = _serverMessages.map((m) => m.id).toSet();
+    final merged = <Message>[..._serverMessages];
+    for (final p in _pending) {
+      if (!serverIds.contains(p.id)) merged.add(p);
+    }
     merged.sort((a, b) {
       final c = a.createdAt.compareTo(b.createdAt);
       if (c != 0) return c;
@@ -562,6 +580,13 @@ class _ChatScreenState extends State<ChatScreen>
     setState(() {
       _pending.add(optimistic);
       _sending = true;
+      // TextField.onChanged doesn't fire when the controller is
+      // cleared programmatically — so without flipping _hasText
+      // here, the send button stayed in "send" mode after every
+      // text message and the mic button never came back until
+      // the user reopened the chat. WhatsApp/Telegram parity:
+      // after send, the toolbar reverts to mic immediately.
+      _hasText = false;
     });
     _inputController.clear();
     _scrollToBottom();

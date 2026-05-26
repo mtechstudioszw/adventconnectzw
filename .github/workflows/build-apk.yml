@@ -1,21 +1,15 @@
 # Builds a debug APK on every push to main and on manual trigger.
-# Two ways to download the result:
-#
-# A) GitHub Release (RECOMMENDED — phone-friendly)
+# How to install on your phone:
 #   1. Open https://github.com/mtechstudioszw/adventconnectzw/releases
 #   2. Find the "Latest debug build" release (auto-updated each push)
 #   3. Tap the `advent-connect-debug.apk` asset on your phone
 #   4. Open the downloaded file → install. No extraction needed.
 #
-# B) Actions Artifact (the file is wrapped in a .zip)
-#   1. Open https://github.com/mtechstudioszw/adventconnectzw/actions
-#   2. Click the latest "Build APK" run → scroll to "Artifacts"
-#   3. Tap "advent-connect-debug-apk" to download the .zip
-#   4. Extract on your phone (use Files by Google or similar) to get
-#      the .apk, then tap it to install.
-#
 # To trigger a manual build without a code push:
 #   Actions tab → "Build APK" → "Run workflow" → pick main → Run.
+#
+# For Play-Store-ready signed AAB builds, see .github/workflows/
+# build-aab.yml (manual trigger only, requires keystore secrets).
 
 name: Build APK
 
@@ -85,24 +79,12 @@ jobs:
           cp build/app/outputs/flutter-apk/app-debug.apk \
              release/advent-connect-debug.apk
 
-      - name: Upload APK artifact
-        # Belt-and-braces: also store the APK as a workflow artifact
-        # for the few CI cases where downloading from a release page
-        # is awkward. The Release below is the primary distribution.
-        #
-        # Free GitHub plan caps Actions storage at 0.5 GB total, so
-        # 30-day retention was filling it up and silently failing
-        # subsequent builds. 3 days keeps a couple of recent APKs
-        # available without exhausting the quota. continue-on-error
-        # means even if storage IS full, the Release step still runs
-        # and the phone-friendly install link keeps updating.
-        uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: advent-connect-debug-apk
-          path: release/advent-connect-debug.apk
-          if-no-files-found: error
-          retention-days: 3
+      # NOTE: artifact upload removed in May 2026 — the free GitHub
+      # plan caps Actions storage at 0.5 GB, and every retained APK
+      # was eating into that quota even on a 3-day retention. The
+      # Release below uses git-side storage (not Actions storage),
+      # so distribution still works for free and there's no red
+      # "Failed to CreateArtifact" sub-step on every run.
 
       - name: Publish to "Latest debug build" release
         # Always overwrites a single moving tag so the user always

@@ -1,0 +1,155 @@
+# Builds a Play-Store-ready signed Android App Bundle (AAB).
+# Manual trigger only — there's no reason to burn CI minutes
+# producing a signed Play upload artifact on every push.
+#
+# Setup (one-time):
+#   1. Generate an upload keystore locally if you haven't already:
+#        keytool -genkey -v -keystore upload.jks \
+#                -keyalg RSA -keysize 2048 -validity 10000 \
+#                -alias upload
+#      Pick passwords you'll remember. Keep upload.jks SAFE — losing
+#      it locks you out of all future Play Store updates for this
+#      application id (Google offers Play App Signing as a backup
+#      but you still need this for the upload signature).
+#
+#   2. Base64-encode the keystore so it can live in a GitHub Secret:
+#        base64 -w0 upload.jks > upload.jks.b64        (Linux)
+#        certutil -encode upload.jks upload.jks.b64    (Windows)
+#
+#   3. Repo Settings → Secrets and variables → Actions → New secret:
+#        ANDROID_KEYSTORE_BASE64  — paste of upload.jks.b64 contents
+#        ANDROID_KEYSTORE_PASSWORD — keystore password
+#        ANDROID_KEY_ALIAS         — usually "upload"
+#        ANDROID_KEY_PASSWORD      — key password (often same as store)
+#
+#   4. Trigger: Actions → "Build AAB (Play Store)" → Run workflow.
+#
+# Download:
+#   Releases page → "Latest Play Store build" → app-release.aab.
+#   Upload that AAB to Play Console → Production / Internal / Closed
+#   testing track.
+
+name: Build AAB (Play Store)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Release AAB (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.9"
+          channel: stable
+          cache: true
+
+      - name: Show toolchain versions
+        run: |
+          flutter --version
+          dart --version
+          java -version
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Restore upload keystore from secret
+        # Decode the base64 secret back into a real .jks file and
+        # write the matching key.properties Gradle reads at build
+        # time. Path inside the runner is /home/runner/work/... —
+        # keystorePropertiesFile in android/app/build.gradle.kts
+        # uses rootProject.file("key.properties") which resolves
+        # under android/, hence the explicit path below.
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is empty."
+            echo "::error::See .github/workflows/build-aab.yml header for setup."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > android/app/upload.jks
+          cat <<EOF > android/key.properties
+          storeFile=upload.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          admobAndroidAppId=ca-app-pub-0000000000000000~0000000000
+          EOF
+          # Sanity-check the keystore decoded (won't print the file).
+          if [ ! -s android/app/upload.jks ]; then
+            echo "::error::Decoded upload.jks is empty."
+            exit 1
+          fi
+          echo "Keystore restored (size: $(wc -c < android/app/upload.jks) bytes)"
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release AAB
+        # `flutter build appbundle --release` produces
+        # build/app/outputs/bundle/release/app-release.aab — the
+        # AAB format Play Store requires for all new uploads since
+        # Aug 2021. AAB is smaller than APK on-device and lets
+        # Play Store generate per-device APKs at install time.
+        run: flutter build appbundle --release
+
+      - name: Rename AAB for release
+        run: |
+          mkdir -p release
+          cp build/app/outputs/bundle/release/app-release.aab \
+             release/advent-connect-release.aab
+
+      - name: Publish to "Latest Play Store build" release
+        # Separate moving tag from the debug build so the two never
+        # collide. Marked prerelease until the user explicitly
+        # promotes it via the Releases page UI.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-aab
+          name: Latest Play Store build
+          body: |
+            Signed release AAB built from commit ${{ github.sha }}.
+
+            **Upload to Play Console:**
+            Download `advent-connect-release.aab` below, then go to
+            Play Console → your app → Production (or Internal /
+            Closed testing) → Create new release → upload this AAB.
+
+            Each build increments the versionCode automatically via
+            pubspec.yaml (`version: x.y.z+N`). Bump the `+N` before
+            running this workflow if Play Console rejects the upload
+            for using a versionCode already used by a previous release.
+          files: release/advent-connect-release.aab
+          prerelease: true
+          make_latest: false
+
+      - name: Wipe restored secrets
+        # Belt-and-braces: ensure the decoded keystore + plaintext
+        # key.properties never linger in the runner cache.
+        if: always()
+        run: |
+          rm -f android/app/upload.jks
+          rm -f android/key.properties

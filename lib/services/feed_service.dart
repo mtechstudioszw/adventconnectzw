@@ -40,7 +40,16 @@ class FeedService {
   /// After scoring we apply a diversity pass that prevents 3+
   /// consecutive posts from the same author — splits clusters by
   /// pushing later posts down the list.
-  static Future<List<Post>> fetchFeed({int limit = 40}) async {
+  ///
+  /// The optional [refreshNonce] reshuffles the jitter component on
+  /// each pull-to-refresh so the same user sees a different ordering
+  /// the next time they refresh — without changing the underlying
+  /// content pool. Caller passes `DateTime.now().millisecondsSinceEpoch`
+  /// (or any monotonically-changing int) from their refresh handler.
+  static Future<List<Post>> fetchFeed({
+    int limit = 40,
+    int refreshNonce = 0,
+  }) async {
     final viewer = _viewerId;
     // Over-fetch so the re-rank has actual signal to work with.
     final overfetch = limit * 2;
@@ -64,26 +73,27 @@ class FeedService {
       return posts.take(limit).toList();
     }
     posts.sort(
-      (a, b) => _personalisedScore(b, viewer).compareTo(
-        _personalisedScore(a, viewer),
+      (a, b) => _personalisedScore(b, viewer, refreshNonce).compareTo(
+        _personalisedScore(a, viewer, refreshNonce),
       ),
     );
     return _diversify(posts).take(limit).toList();
   }
 
   /// Composite ranking score — higher = nearer the top of the feed.
-  /// Pure function of post + viewer id; no DB call, no state.
-  static double _personalisedScore(Post p, String viewerId) {
+  /// Pure function of post + viewer id + refresh nonce.
+  static double _personalisedScore(Post p, String viewerId, int nonce) {
     final ageHours =
         DateTime.now().difference(p.createdAt).inHours.toDouble();
     // Smooth decay: 1.0 at 0h, ~0.5 at 24h, ~0.25 at 72h.
     final recency = 1.0 / (1.0 + (ageHours / 24.0));
     final engagement =
         math.log(1 + p.likeCount + (p.commentCount * 2)) * 0.30;
-    // Deterministic per-viewer jitter so the order is stable within
-    // a session but different between accounts. Two different users
-    // looking at the same 40 posts see meaningfully different orders.
-    final seed = '${viewerId}_${p.id}'.hashCode.abs();
+    // Including the nonce in the seed means a fresh refresh hands
+    // the user a different jittered order, even on identical content.
+    // Two different users still see different orders too (viewerId
+    // is part of the seed).
+    final seed = '${viewerId}_${p.id}_$nonce'.hashCode.abs();
     final jitter = ((seed % 1000) / 1000.0) * 0.20;
     final ownPenalty = p.authorId == viewerId ? -1.0 : 0.0;
     return recency + engagement + jitter + ownPenalty;

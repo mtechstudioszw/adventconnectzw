@@ -201,6 +201,102 @@ class _SettingsScreenState extends State<SettingsScreen>
   ///     confirmation prompt (helps donors trust the destination)
   static const _ecoCashNumber = '0778 092 494';
   static const _ecoCashName = 'Advent Connect ZW';
+  // Same number doubles as the support WhatsApp + a contact email.
+  // Update these as the ministry's reach grows.
+  static const _supportWhatsApp = '+263778092494';
+  static const _supportEmail = 'tanatswamichaelmikuwa@gmail.com';
+
+  Future<void> _openSupportSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Contact us',
+                style: AppTextStyles.titleLarge
+                    .copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Reach the Advent Connect ZW team for support, '
+                'feedback, or partnership.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _SupportChannel(
+                icon: Icons.chat,
+                tint: const Color(0xFF25D366),
+                label: 'WhatsApp',
+                subtitle: _supportWhatsApp,
+                onTap: () async {
+                  final url = Uri.parse(
+                    'https://wa.me/${_supportWhatsApp.replaceAll(RegExp(r"[^0-9+]"), "")}'
+                    '?text=${Uri.encodeComponent("Hi Advent Connect ZW team — ")}',
+                  );
+                  Navigator.of(ctx).pop();
+                  await launchUrl(url,
+                      mode: LaunchMode.externalApplication);
+                },
+              ),
+              const SizedBox(height: 10),
+              _SupportChannel(
+                icon: Icons.email_outlined,
+                tint: AppColors.primaryBlue,
+                label: 'Email',
+                subtitle: _supportEmail,
+                onTap: () async {
+                  final url = Uri(
+                    scheme: 'mailto',
+                    path: _supportEmail,
+                    queryParameters: {
+                      'subject': 'Advent Connect ZW — Support',
+                    },
+                  );
+                  Navigator.of(ctx).pop();
+                  await launchUrl(url,
+                      mode: LaunchMode.externalApplication);
+                },
+              ),
+              const SizedBox(height: 10),
+              _SupportChannel(
+                icon: Icons.feedback_outlined,
+                tint: AppColors.darkNavy,
+                label: 'In-app feedback form',
+                subtitle: 'Send us a structured report from inside the app.',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  context.pushNamed('feedback');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _openDonation() async {
     await showModalBottomSheet<void>(
@@ -466,7 +562,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         _NavRow(
                           icon: Icons.mail_outline,
                           label: 'Contact us',
-                          onTap: () => context.pushNamed('feedback'),
+                          onTap: _openSupportSheet,
                         ),
                       ],
                     ),
@@ -474,8 +570,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                     _Section(
                       title: 'App',
                       children: [
-                        const _InfoRow(
+                        _NavRow(
                           icon: Icons.info_outline,
+                          label: 'About',
+                          onTap: () => context.pushNamed('about'),
+                        ),
+                        const _Divider(),
+                        const _InfoRow(
+                          icon: Icons.tag,
                           label: 'App version',
                           value: 'v1.0.0',
                         ),
@@ -493,7 +595,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(height: 24),
                     Center(
                       child: Text(
-                        'Made with care • Mtech Studios ZW',
+                        'Made with care • MyTech Studios Zw',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: const Color.fromRGBO(26, 26, 46, 0.45),
                           fontSize: 11,
@@ -563,6 +665,82 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SupportChannel extends StatelessWidget {
+  const _SupportChannel({
+    required this.icon,
+    required this.tint,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color tint;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.lightGrey,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color.fromRGBO(26, 26, 46, 0.05),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: tint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: tint, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.65),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                color: AppColors.primaryBlue,
+              ),
+            ],
           ),
         ),
       ),

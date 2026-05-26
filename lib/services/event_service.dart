@@ -37,8 +37,13 @@ class EventService {
 
     if (search != null && search.trim().isNotEmpty) {
       final term = '%${search.trim()}%';
+      // Events table has separate `venue` + `city` columns (no
+      // `location` column — the model composes that string from
+      // venue/city at hydrate time). Searching the non-existent
+      // location column was failing silently, leaving the search
+      // bar permanently returning zero results.
       query = query.or(
-        'title.ilike.$term,description.ilike.$term,location.ilike.$term',
+        'title.ilike.$term,description.ilike.$term,venue.ilike.$term,city.ilike.$term',
       );
     }
 
@@ -47,6 +52,24 @@ class EventService {
         .order('start_time', ascending: upcomingOnly)
         .limit(200);
 
+    return (response as List)
+        .map((row) => Event.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Events the current user posted (organized). Used by the Profile
+  /// → My events screen's "Posted" tab so the user can find rows
+  /// they created (which the RSVP-based list won't surface unless
+  /// they also RSVP'd to their own event).
+  static Future<List<Event>> fetchMyPostedEvents() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const [];
+    final response = await _client
+        .from(_table)
+        .select('*, profiles!events_organizer_id_fkey(id, full_name)')
+        .eq('organizer_id', user.id)
+        .order('start_date', ascending: false)
+        .limit(200);
     return (response as List)
         .map((row) => Event.fromJson(row as Map<String, dynamic>))
         .toList();

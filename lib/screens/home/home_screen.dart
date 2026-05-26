@@ -154,7 +154,14 @@ class _HomeScreenState extends State<HomeScreen>
         NotificationService.unreadCount(),
         UrgentBannerService.fetchActive(),
         DirectoryService.fetchSuggestedMembers(),
-        FeedService.fetchFeed(),
+        // The pull-to-refresh nonce reshuffles the personalised
+        // jitter so each refresh hands the user a visibly different
+        // feed order, even on identical content. Without it the
+        // sort was stable per session and refresh felt like a
+        // no-op.
+        FeedService.fetchFeed(
+          refreshNonce: DateTime.now().millisecondsSinceEpoch,
+        ),
         FeedService.fetchStories(),
         FeedService.fetchMyFriendships(),
         FeedService.pendingRequestCount(),

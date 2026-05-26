@@ -76,9 +76,13 @@ class EventCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     _InfoRow(
-                      icon: Icons.schedule,
-                      text:
-                          '${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])}  ·  ${_formatTime(event.eventTime)}',
+                      icon: event.isPast ? Icons.event_busy : Icons.schedule,
+                      // Past events get an "ENDED" prefix instead of the
+                      // future start time so the card doesn't look like a
+                      // live upcoming event when it isn't.
+                      text: event.isPast
+                          ? 'Ended  ·  ${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])}'
+                          : '${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])}  ·  ${_formatTime(event.eventTime)}',
                     ),
                     if (event.location != null &&
                         event.location!.isNotEmpty) ...[

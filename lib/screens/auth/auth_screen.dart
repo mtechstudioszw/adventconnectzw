@@ -188,6 +188,17 @@ class _AuthScreenState extends State<AuthScreen>
       );
       return;
     }
+    // OAuth-only paradox: if the account exists (emailExists returned
+    // true earlier) but signInWithPassword fails with invalid creds,
+    // it's almost certainly a Google-only account. Surface a hint
+    // pointing at "Continue with Google" instead of just "wrong
+    // password" — that's the dead-end the user reported.
+    if (message.contains('incorrect') || message.contains('invalid')) {
+      setState(() => _error =
+          'That password didn\'t match. If you signed up with Google, '
+          'tap "Continue with Google" above instead.');
+      return;
+    }
     setState(() => _error = result.errorMessage);
   }
 

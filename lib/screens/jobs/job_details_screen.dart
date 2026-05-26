@@ -664,15 +664,45 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         if (!job.isFilled && hasPhone) ...[
           const SizedBox(height: 10),
           _SecondaryActionButton(
-            icon: Icons.send_outlined,
+            icon: Icons.chat,
             label: job.isSeeking
                 ? 'Contact via WhatsApp'
                 : 'Apply via WhatsApp',
             onTap: _apply,
           ),
+          const SizedBox(height: 10),
+          _SecondaryActionButton(
+            icon: Icons.call,
+            label: 'Call the poster',
+            onTap: _callPoster,
+          ),
         ],
       ],
     );
+  }
+
+  /// Direct phone-call shortcut for the job's contact_phone.
+  /// Complements _apply() (WhatsApp) so the poster can be reached
+  /// however the applicant prefers.
+  Future<void> _callPoster() async {
+    final phone = (_job?.contactPhone ?? '').trim();
+    if (phone.isEmpty) return;
+    final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final uri = Uri.parse('tel:$cleaned');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('launch failed');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not start the call.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildDescription(Job job) {

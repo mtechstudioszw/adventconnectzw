@@ -295,7 +295,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     final parts = <String>[
       '$_churchesFollowed Church${_churchesFollowed == 1 ? '' : 'es'} followed',
       '${_myPosts.length} Post${_myPosts.length == 1 ? '' : 's'}',
-      '$_eventsGoing Event${_eventsGoing == 1 ? '' : 's'}',
+      // Label this "Going" so it's clearly an RSVP count, not the
+      // number of events the user POSTED. The previous label
+      // ("X Events") was being misread as authorship attribution
+      // every time someone RSVP'd to one event and saw "1 Event".
+      '$_eventsGoing Going',
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),

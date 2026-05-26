@@ -7,9 +7,11 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
-/// Lists events the current user has RSVP'd to, split into upcoming
-/// and past. Tap a row → event_details. Cancel RSVP swipes the row off
-/// the upcoming list.
+/// Lists events the current user has RSVP'd to OR posted, split by
+/// tab. Tap a row → event_details. Cancel RSVP swipes the row off
+/// the upcoming list (Going tab only).
+enum _MyEventsTab { going, posted }
+
 class MyEventsScreen extends StatefulWidget {
   const MyEventsScreen({super.key});
 
@@ -22,6 +24,9 @@ class _MyEventsScreenState extends State<MyEventsScreen> {
   String? _error;
   List<Event> _upcoming = const [];
   List<Event> _past = const [];
+  List<Event> _postedUpcoming = const [];
+  List<Event> _postedPast = const [];
+  _MyEventsTab _tab = _MyEventsTab.going;
 
   @override
   void initState() {
@@ -35,35 +40,46 @@ class _MyEventsScreenState extends State<MyEventsScreen> {
       _error = null;
     });
     try {
+      // Fetch RSVP ids + posted events in parallel so the screen
+      // paints once instead of twice.
       final ids = await EventService.fetchUserRsvpedEventIds();
-      if (ids.isEmpty) {
-        if (!mounted) return;
-        setState(() {
-          _upcoming = const [];
-          _past = const [];
-          _loading = false;
-        });
-        return;
-      }
-      // Fetch a wide window of events, then filter to ones we RSVP'd to
-      // and split by date. Cheaper than N round-trips for one row each.
-      final all = await EventService.fetchEvents(upcomingOnly: true);
-      final past = await EventService.fetchEvents(upcomingOnly: false);
-      final mine = [...all, ...past].where((e) => ids.contains(e.id)).toList();
+      final posted = await EventService.fetchMyPostedEvents();
+
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final upcoming = mine
+
+      List<Event> rsvpUpcoming = const [];
+      List<Event> rsvpPast = const [];
+      if (ids.isNotEmpty) {
+        final all = await EventService.fetchEvents(upcomingOnly: true);
+        final pastAll = await EventService.fetchEvents(upcomingOnly: false);
+        final mine =
+            [...all, ...pastAll].where((e) => ids.contains(e.id)).toList();
+        rsvpUpcoming = mine
+            .where((e) => !e.eventDate.isBefore(today))
+            .toList()
+          ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
+        rsvpPast = mine
+            .where((e) => e.eventDate.isBefore(today))
+            .toList()
+          ..sort((a, b) => b.eventDate.compareTo(a.eventDate));
+      }
+
+      final postedUpcoming = posted
           .where((e) => !e.eventDate.isBefore(today))
           .toList()
         ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
-      final pastEvents = mine
+      final postedPast = posted
           .where((e) => e.eventDate.isBefore(today))
           .toList()
         ..sort((a, b) => b.eventDate.compareTo(a.eventDate));
+
       if (!mounted) return;
       setState(() {
-        _upcoming = upcoming;
-        _past = pastEvents;
+        _upcoming = rsvpUpcoming;
+        _past = rsvpPast;
+        _postedUpcoming = postedUpcoming;
+        _postedPast = postedPast;
         _loading = false;
       });
     } catch (_) {
@@ -143,60 +159,206 @@ class _MyEventsScreenState extends State<MyEventsScreen> {
     if (_error != null) {
       return ErrorBanner(message: _error!);
     }
-    if (_upcoming.isEmpty && _past.isEmpty) {
-      return EmptyStateCard(
-        icon: Icons.event_outlined,
-        title: 'No events yet',
-        message:
-            'Browse the Events tab and tap "I\'m going" to start collecting RSVPs.',
-        action: PrimaryGradientButton(
-          label: 'Browse events',
-          icon: Icons.search,
-          onTap: () => context.goNamed('events'),
-        ),
-      );
-    }
+    final isGoing = _tab == _MyEventsTab.going;
+    final upcoming = isGoing ? _upcoming : _postedUpcoming;
+    final past = isGoing ? _past : _postedPast;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_upcoming.isNotEmpty) ...[
-          _SectionLabel(label: 'UPCOMING', count: _upcoming.length),
-          const SizedBox(height: 10),
-          for (final e in _upcoming)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _EventRow(
-                event: e,
-                isPast: false,
-                onOpen: () => context.pushNamed(
-                  'event_details',
-                  pathParameters: {'id': e.id},
-                  extra: e,
-                ),
-                onCancel: () => _cancel(e),
-              ),
+        _TabSwitcher(
+          active: _tab,
+          goingCount: _upcoming.length + _past.length,
+          postedCount: _postedUpcoming.length + _postedPast.length,
+          onChanged: (t) => setState(() => _tab = t),
+        ),
+        const SizedBox(height: 16),
+        if (upcoming.isEmpty && past.isEmpty)
+          EmptyStateCard(
+            icon: Icons.event_outlined,
+            title: isGoing ? 'No RSVPs yet' : 'No events posted yet',
+            message: isGoing
+                ? 'Browse the Events tab and tap "I\'m going" to start collecting RSVPs.'
+                : 'Tap the + button on the Events tab to post your first event.',
+            action: PrimaryGradientButton(
+              label: isGoing ? 'Browse events' : 'Post an event',
+              icon: isGoing ? Icons.search : Icons.add_circle_outline,
+              onTap: () => context.goNamed(isGoing ? 'events' : 'post_event'),
             ),
-        ],
-        if (_past.isNotEmpty) ...[
-          if (_upcoming.isNotEmpty) const SizedBox(height: 12),
-          _SectionLabel(label: 'PAST', count: _past.length),
-          const SizedBox(height: 10),
-          for (final e in _past)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _EventRow(
-                event: e,
-                isPast: true,
-                onOpen: () => context.pushNamed(
-                  'event_details',
-                  pathParameters: {'id': e.id},
-                  extra: e,
+          )
+        else ...[
+          if (upcoming.isNotEmpty) ...[
+            _SectionLabel(label: 'UPCOMING', count: upcoming.length),
+            const SizedBox(height: 10),
+            for (final e in upcoming)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _EventRow(
+                  event: e,
+                  isPast: false,
+                  onOpen: () => context.pushNamed(
+                    'event_details',
+                    pathParameters: {'id': e.id},
+                    extra: e,
+                  ),
+                  // Cancel button only on the Going tab — Posted
+                  // tab uses the event detail screen's edit flow.
+                  onCancel: isGoing ? () => _cancel(e) : null,
                 ),
-                onCancel: null,
               ),
-            ),
+          ],
+          if (past.isNotEmpty) ...[
+            if (upcoming.isNotEmpty) const SizedBox(height: 12),
+            _SectionLabel(label: 'PAST', count: past.length),
+            const SizedBox(height: 10),
+            for (final e in past)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _EventRow(
+                  event: e,
+                  isPast: true,
+                  onOpen: () => context.pushNamed(
+                    'event_details',
+                    pathParameters: {'id': e.id},
+                    extra: e,
+                  ),
+                  onCancel: null,
+                ),
+              ),
+          ],
         ],
       ],
+    );
+  }
+}
+
+class _TabSwitcher extends StatelessWidget {
+  const _TabSwitcher({
+    required this.active,
+    required this.goingCount,
+    required this.postedCount,
+    required this.onChanged,
+  });
+
+  final _MyEventsTab active;
+  final int goingCount;
+  final int postedCount;
+  final ValueChanged<_MyEventsTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _TabPill(
+            label: 'Going',
+            count: goingCount,
+            selected: active == _MyEventsTab.going,
+            onTap: () => onChanged(_MyEventsTab.going),
+          ),
+          _TabPill(
+            label: 'Posted',
+            count: postedCount,
+            selected: active == _MyEventsTab.posted,
+            onTap: () => onChanged(_MyEventsTab.posted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabPill extends StatelessWidget {
+  const _TabPill({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            margin: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              gradient: selected ? AppColors.primaryGradient : null,
+              color: selected ? null : Colors.transparent,
+              borderRadius: BorderRadius.circular(11),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color:
+                            AppColors.primaryBlue.withValues(alpha: 0.25),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: selected ? AppColors.white : AppColors.textDark,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (count > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? AppColors.white.withValues(alpha: 0.22)
+                          : const Color.fromRGBO(26, 26, 46, 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: selected
+                            ? AppColors.white
+                            : const Color.fromRGBO(26, 26, 46, 0.65),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

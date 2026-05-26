@@ -354,17 +354,87 @@ class AuthService {
   static const _passwordResetRedirectUrl =
       'io.supabase.adventconnect://login-callback';
 
+  /// Client-side throttle to prevent abuse. Keyed by lowercased
+  /// email so the same user can't spam reset emails (or burn through
+  /// Supabase's default 3-emails-per-hour quota) from this device.
+  /// Server-side rate limiting still belongs in a Supabase Edge
+  /// Function / RPC for the production hardening pass — this is a
+  /// best-effort client guard that catches the common case.
+  static const _resetLimitWindow = Duration(hours: 1);
+  static const _resetLimitMax = 3;
+
   static Future<AuthResult> sendPasswordReset(String email) async {
+    final normalised = email.trim().toLowerCase();
+    if (normalised.isEmpty) {
+      return AuthResult.failure('Enter your email to reset.');
+    }
+    final allowed = await _checkResetThrottle(normalised);
+    if (!allowed) {
+      return AuthResult.failure(
+        'Too many reset attempts for this email in the last hour. '
+        'Wait a bit before trying again.',
+      );
+    }
     try {
       await _client.auth.resetPasswordForEmail(
-        email,
+        normalised,
         redirectTo: _passwordResetRedirectUrl,
       );
+      await _recordResetAttempt(normalised);
       return AuthResult.success(null);
     } on AuthException catch (e) {
-      return AuthResult.failure(e.message);
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } catch (e) {
+      // Supabase commonly returns success even when SMTP fails on
+      // the server, so a thrown error here usually means the
+      // request couldn't even leave the device. Map the common
+      // "network" cases the same way signIn does.
+      return AuthResult.failure(_friendlyAuthError(e.toString()));
+    }
+  }
+
+  /// Records a reset attempt timestamp. Stored as a CSV of unix-ms
+  /// in secure storage so attempts older than the window self-purge
+  /// on the next read.
+  static Future<void> _recordResetAttempt(String email) async {
+    try {
+      final key = 'pwreset_log_$email';
+      final existing = (await SecureStorageService.read(key)) ?? '';
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final cutoff =
+          now - _resetLimitWindow.inMilliseconds;
+      final kept = existing
+          .split(',')
+          .map(int.tryParse)
+          .whereType<int>()
+          .where((t) => t >= cutoff)
+          .toList()
+        ..add(now);
+      await SecureStorageService.write(key, kept.join(','));
     } catch (_) {
-      return AuthResult.failure('Could not send reset email.');
+      // Throttle is best-effort; storage failures shouldn't block
+      // legitimate reset requests.
+    }
+  }
+
+  static Future<bool> _checkResetThrottle(String email) async {
+    try {
+      final key = 'pwreset_log_$email';
+      final existing = await SecureStorageService.read(key);
+      if (existing == null || existing.isEmpty) return true;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final cutoff = now - _resetLimitWindow.inMilliseconds;
+      final recent = existing
+          .split(',')
+          .map(int.tryParse)
+          .whereType<int>()
+          .where((t) => t >= cutoff)
+          .length;
+      return recent < _resetLimitMax;
+    } catch (_) {
+      // If we can't read storage, fail OPEN — better to let a real
+      // user reset their password than lock them out.
+      return true;
     }
   }
 
@@ -477,9 +547,12 @@ class AuthService {
       final current = user.userMetadata ?? const {};
       final next = <String, dynamic>{...current};
       // Empty string is the "remove" signal — callers pass '' to
-      // clear a photo (or bio etc). We write null to the DB and
-      // strip the metadata key so the field actually goes back to
-      // unset, not "set to empty string".
+      // clear a photo (or bio etc). Supabase auth updateUser MERGES
+      // the metadata patch into existing metadata, so removing a
+      // key from the patch leaves the old value in place. To
+      // actually clear a key we have to explicitly set it to null
+      // — that's the part the previous implementation missed,
+      // which is why "Remove profile photo" appeared to no-op.
       String? sentinelOrNull(String? v) =>
           (v != null && v.isEmpty) ? null : v;
       if (fullName != null) next['full_name'] = fullName.trim();
@@ -489,20 +562,13 @@ class AuthService {
         next['username'] = username.trim();
       }
       if (profilePhotoUrl != null) {
-        final v = sentinelOrNull(profilePhotoUrl);
-        if (v == null) {
-          next.remove('profile_photo_url');
-        } else {
-          next['profile_photo_url'] = v;
-        }
+        // Explicit null overwrites the existing key in Supabase
+        // metadata — this is the difference that makes the
+        // remove button actually take effect.
+        next['profile_photo_url'] = sentinelOrNull(profilePhotoUrl);
       }
       if (coverPhotoUrl != null) {
-        final v = sentinelOrNull(coverPhotoUrl);
-        if (v == null) {
-          next.remove('cover_photo_url');
-        } else {
-          next['cover_photo_url'] = v;
-        }
+        next['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
       final response = await _client.auth.updateUser(
         UserAttributes(data: next),
@@ -604,30 +670,37 @@ class AuthService {
     if (user == null) return false;
     final meta = user.userMetadata ?? const {};
     // Primary signal: explicit "onboarding_completed" flag written by
-    // OnboardingFlowScreen._finish() when the user taps "Enter App".
-    // This is the authoritative marker — username alone wasn't enough
-    // because step 1 makes the username optional, so users who
-    // skipped it got re-onboarded forever.
+    // OnboardingFlowScreen._finish(). Set for everyone who finishes
+    // setup after the 2026-05 fix shipped.
     if (meta['onboarding_completed'] == true) return true;
-    // Fallback A (for users who onboarded before the flag existed):
-    // a non-empty username in metadata.
+    // Fallback A — username in metadata (older Google-signup path).
     final metaUsername = (meta['username'] as String?)?.trim() ?? '';
     if (metaUsername.isNotEmpty) return true;
-    // Fallback B: username on the profiles row.
+    // Fallback B — full_name in metadata. ANY user who finished
+    // onboarding has a full_name (step 1 of OnboardingFlowScreen
+    // requires it; signUp() persists it from the auth form). This
+    // catches the "I signed up months ago, never set a username,
+    // and now Google sign-in keeps re-onboarding me" case which
+    // the username-only check couldn't.
+    final metaFullName = (meta['full_name'] as String?)?.trim() ?? '';
+    if (metaFullName.isNotEmpty) return true;
+    // Fallback C — profile row, by any non-trivial column.
     try {
       final row = await _client
           .from('profiles')
-          .select('username')
+          .select('username, full_name, profile_photo_url')
           .eq('id', user.id)
           .maybeSingle();
       if (row == null) return false;
-      final username = (row['username'] as String?)?.trim();
-      return username != null && username.isNotEmpty;
+      final username = (row['username'] as String?)?.trim() ?? '';
+      final fullName = (row['full_name'] as String?)?.trim() ?? '';
+      final photo = (row['profile_photo_url'] as String?)?.trim() ?? '';
+      return username.isNotEmpty || fullName.isNotEmpty || photo.isNotEmpty;
     } catch (_) {
-      // Network error or RLS issue — fall back to assuming NOT set up
-      // so the user goes through onboarding rather than being silently
-      // dropped into the app with no profile.
-      return false;
+      // Network error or RLS issue — fail OPEN to home, not onboarding.
+      // The previous behaviour (fail-closed) trapped legacy users in
+      // the onboarding flow every time their network blipped.
+      return true;
     }
   }
 

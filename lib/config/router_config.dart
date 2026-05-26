@@ -9,7 +9,7 @@ import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/onboarding_flow_screen.dart';
 import '../screens/auth/reset_password_screen.dart';
 import '../screens/churches/church_announcements_screen.dart';
-import '../screens/churches/claim_church_screen.dart';
+import '../screens/churches/claim_church_coming_soon_screen.dart';
 import '../screens/churches/suggest_church_screen.dart';
 import '../screens/churches/suggest_edit_screen.dart';
 import '../screens/home/post_notice_screen.dart';
@@ -65,6 +65,7 @@ import '../screens/seller/manage_products_screen.dart';
 import '../screens/seller/seller_dashboard_screen.dart';
 import '../screens/seller/seller_profile_screen.dart';
 import '../screens/seller/setup_store_screen.dart';
+import '../screens/settings/about_screen.dart';
 import '../screens/settings/permissions_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/splash/splash_screen.dart';
@@ -189,7 +190,11 @@ final GoRouter appRouter = GoRouter(
               name: 'claim_church',
               builder: (context, state) {
                 final church = state.extra as Church;
-                return ClaimChurchScreen(church: church);
+                // The live admin dashboard claim flow is paused while
+                // the full Church Admin Dashboard is being built — the
+                // route now serves a coming-soon + sponsorship pitch
+                // so churches that want it sooner can fund the build.
+                return ClaimChurchComingSoonScreen(church: church);
               },
             ),
           ],
@@ -501,6 +506,11 @@ final GoRouter appRouter = GoRouter(
           path: 'permissions',
           name: 'permissions',
           builder: (context, state) => const PermissionsScreen(),
+        ),
+        GoRoute(
+          path: 'about',
+          name: 'about',
+          builder: (context, state) => const AboutScreen(),
         ),
       ],
     ),

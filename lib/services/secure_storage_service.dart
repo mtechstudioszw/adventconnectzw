@@ -39,5 +39,30 @@ class SecureStorageService {
   static Future<void> delete(String key) =>
       _storage.delete(key: key);
 
-  static Future<void> clearAll() => _storage.deleteAll();
+  /// Keys that survive [clearAll] / sign-out. The intro onboarding
+  /// flag and similar "device has seen X" markers shouldn't reset
+  /// when the user logs out — that's how a returning user ended up
+  /// seeing the first-launch intro again after a biometric cancel.
+  /// Add any new "device memory" keys here, not auth-related ones.
+  static const _preservedKeys = <String>{
+    'has_seen_onboarding',
+    'biometric_enabled',
+    'age_verified',
+    'birth_date',
+  };
+
+  static Future<void> clearAll() async {
+    // Snapshot the keys we want to keep, wipe everything, then write
+    // them back. flutter_secure_storage doesn't have a native
+    // selective-clear so this is the cheapest robust approach.
+    final preserved = <String, String>{};
+    for (final key in _preservedKeys) {
+      final value = await _storage.read(key: key);
+      if (value != null) preserved[key] = value;
+    }
+    await _storage.deleteAll();
+    for (final entry in preserved.entries) {
+      await _storage.write(key: entry.key, value: entry.value);
+    }
+  }
 }

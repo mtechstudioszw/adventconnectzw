@@ -268,6 +268,12 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
 
   Future<void> _finish() async {
     HapticFeedback.mediumImpact();
+    // Explicit "I'm done" marker so the splash routing knows not to
+    // bounce the user back here on next launch. The old check relied
+    // on profiles.username — but username is OPTIONAL on step 1, so
+    // users who skipped it got asked to set up again every cold
+    // start. The flag is the authoritative signal.
+    await AuthService.updateMetadataDirect({'onboarding_completed': true});
     if (!mounted) return;
     context.goNamed('home');
   }

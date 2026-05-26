@@ -658,14 +658,21 @@ class MessagingService {
   /// someone other than the current user as read. Called when the user
   /// opens the chat — the other party will then see the double-tick
   /// (via streamMessages picking up the updated rows).
+  ///
+  /// IMPORTANT: we always flip `read = true` regardless of whether the
+  /// viewer has read receipts on or off. Previous behaviour was to
+  /// skip the UPDATE entirely when receipts were off, but that ALSO
+  /// meant the viewer's own inbox unread badge never cleared (the
+  /// badge counts `read = false` rows from the other sender). The
+  /// receipt opt-out should hide the blue tick from the SENDER, not
+  /// disable the viewer's own bookkeeping. If the user wants the
+  /// sender to never see read state, omit the `read_at` timestamp
+  /// — `read = true` still resets the badge locally, and the sender's
+  /// chat tick only flips blue when `read_at` is non-null.
   static Future<void> markConversationRead(String conversationId) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
     try {
-      // Respect the viewer's read-receipts opt-out (WhatsApp parity):
-      // if they've turned off read receipts in chat privacy settings,
-      // we DON'T flip the read flag — the other party stays on two
-      // grey ticks and never gets the blue.
       final profileRow = await _client
           .from('profiles')
           .select('show_read_receipts')
@@ -673,13 +680,13 @@ class MessagingService {
           .maybeSingle();
       final wantsReceipts = profileRow == null ||
           profileRow['show_read_receipts'] != false;
-      if (!wantsReceipts) return;
+      final patch = <String, dynamic>{'read': true};
+      if (wantsReceipts) {
+        patch['read_at'] = DateTime.now().toUtc().toIso8601String();
+      }
       await _client
           .from(_messagesTable)
-          .update({
-            'read': true,
-            'read_at': DateTime.now().toUtc().toIso8601String(),
-          })
+          .update(patch)
           .eq('conversation_id', conversationId)
           .eq('read', false)
           .neq('sender_id', user.id);

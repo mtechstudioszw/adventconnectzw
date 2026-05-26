@@ -602,12 +602,18 @@ class AuthService {
   static Future<bool> hasCompletedProfileSetup() async {
     final user = currentUser;
     if (user == null) return false;
-    // Fallback: users who onboarded BEFORE username was persisted to
-    // the profiles table have it only in user_metadata. Treat that as
-    // "completed" too so they're not re-onboarded after this fix ships.
-    final metaUsername =
-        (user.userMetadata?['username'] as String?)?.trim() ?? '';
+    final meta = user.userMetadata ?? const {};
+    // Primary signal: explicit "onboarding_completed" flag written by
+    // OnboardingFlowScreen._finish() when the user taps "Enter App".
+    // This is the authoritative marker — username alone wasn't enough
+    // because step 1 makes the username optional, so users who
+    // skipped it got re-onboarded forever.
+    if (meta['onboarding_completed'] == true) return true;
+    // Fallback A (for users who onboarded before the flag existed):
+    // a non-empty username in metadata.
+    final metaUsername = (meta['username'] as String?)?.trim() ?? '';
     if (metaUsername.isNotEmpty) return true;
+    // Fallback B: username on the profiles row.
     try {
       final row = await _client
           .from('profiles')

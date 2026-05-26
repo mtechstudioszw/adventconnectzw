@@ -568,8 +568,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             return _ConversationTile(
               conversation: c,
               isLastFromMe: c.lastSenderId == _currentUserId,
-              isOutgoingPending: c.requestStatus == 'pending' &&
-                  c.initiatorId == _currentUserId,
               onTap: () async {
                 await context.pushNamed(
                   'chat',
@@ -845,14 +843,12 @@ class _ConversationTile extends StatelessWidget {
   const _ConversationTile({
     required this.conversation,
     required this.isLastFromMe,
-    required this.isOutgoingPending,
     required this.onTap,
     this.onLongPress,
   });
 
   final Conversation conversation;
   final bool isLastFromMe;
-  final bool isOutgoingPending;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -971,14 +967,14 @@ class _ConversationTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        if (isLastFromMe) ...[
-                          const Icon(
-                            Icons.done_all,
-                            size: 14,
-                            color: Color.fromRGBO(26, 26, 46, 0.5),
-                          ),
-                          const SizedBox(width: 4),
-                        ],
+                        // Inbox tick was always showing done_all for any
+                        // outgoing last message, which made it look
+                        // "delivered" even when the recipient was offline
+                        // and the chat screen still showed a single grey
+                        // tick. Hidden here intentionally — the in-chat
+                        // tick remains accurate. Will reinstate once we
+                        // surface per-conversation last-message status on
+                        // the conversations row.
                         Expanded(
                           child: Text(
                             conversation.lastMessage.isEmpty
@@ -1019,28 +1015,6 @@ class _ConversationTile extends StatelessWidget {
                         ],
                       ],
                     ),
-                    if (isOutgoingPending) ...[
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.goldAccent.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Awaiting reply',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.goldAccent,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),

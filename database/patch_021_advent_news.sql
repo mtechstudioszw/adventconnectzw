@@ -77,10 +77,15 @@ CREATE POLICY "advent_news_select_authenticated"
   USING (auth.role() = 'authenticated');
 
 -- Authors are limited to anyone the project has approved as a
--- church admin or conference admin. The expressions reference
--- tables that already exist (patch_002 + patch_010); if those
--- aren't installed the WHERE clause just returns no rows and
--- writes go through service_role only.
+-- church admin (patch_002 / patch_010). The conference_admins
+-- table from the original master reference is not yet installed
+-- in this project, so we keep the policy single-source for now.
+-- When that table ships, extend this policy with a second
+-- EXISTS clause referencing it.
+--
+-- Until then, the service_role still bypasses RLS entirely, so
+-- the Supabase dashboard / pg_cron / Edge Functions can publish
+-- editorial content even without an in-app admin role.
 DROP POLICY IF EXISTS "advent_news_insert_admin" ON public.advent_news;
 CREATE POLICY "advent_news_insert_admin"
   ON public.advent_news
@@ -91,35 +96,16 @@ CREATE POLICY "advent_news_insert_admin"
        WHERE user_id = auth.uid()
          AND status = 'approved'
     )
-    OR EXISTS (
-      SELECT 1 FROM public.conference_admins
-       WHERE user_id = auth.uid()
-         AND is_active = TRUE
-    )
   );
 
 DROP POLICY IF EXISTS "advent_news_update_admin" ON public.advent_news;
 CREATE POLICY "advent_news_update_admin"
   ON public.advent_news
   FOR UPDATE
-  USING (
-    author_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM public.conference_admins
-       WHERE user_id = auth.uid()
-         AND is_active = TRUE
-    )
-  );
+  USING (author_id = auth.uid());
 
 DROP POLICY IF EXISTS "advent_news_delete_admin" ON public.advent_news;
 CREATE POLICY "advent_news_delete_admin"
   ON public.advent_news
   FOR DELETE
-  USING (
-    author_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM public.conference_admins
-       WHERE user_id = auth.uid()
-         AND is_active = TRUE
-    )
-  );
+  USING (author_id = auth.uid());

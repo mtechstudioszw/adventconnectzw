@@ -55,7 +55,6 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
 
   // -------------- personalization ---------------
   final Set<String> _interests = <String>{};
-  final Set<String> _contentTypes = <String>{};
   bool _notifPrayers = true;
   bool _notifEvents = true;
   bool _notifMarketplace = false;
@@ -187,7 +186,6 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
       setState(() => _saving = true);
       await _writeMetadata({
         'interests': _interests.toList(),
-        'content_types': _contentTypes.toList(),
         'notif_prefs': {
           'prayers': _notifPrayers,
           'events': _notifEvents,
@@ -314,16 +312,12 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
                   ),
                   _PersonalizationPage(
                     interests: _interests,
-                    contentTypes: _contentTypes,
                     notifPrayers: _notifPrayers,
                     notifEvents: _notifEvents,
                     notifMarketplace: _notifMarketplace,
                     notifChat: _notifChat,
                     onInterestToggle: (k) => setState(() {
                       if (!_interests.add(k)) _interests.remove(k);
-                    }),
-                    onContentToggle: (k) => setState(() {
-                      if (!_contentTypes.add(k)) _contentTypes.remove(k);
                     }),
                     onNotifChanged: (key, v) => setState(() {
                       switch (key) {
@@ -1189,44 +1183,37 @@ class _ChurchPickRow extends StatelessWidget {
 class _PersonalizationPage extends StatelessWidget {
   const _PersonalizationPage({
     required this.interests,
-    required this.contentTypes,
     required this.notifPrayers,
     required this.notifEvents,
     required this.notifMarketplace,
     required this.notifChat,
     required this.onInterestToggle,
-    required this.onContentToggle,
     required this.onNotifChanged,
   });
 
   final Set<String> interests;
-  final Set<String> contentTypes;
   final bool notifPrayers;
   final bool notifEvents;
   final bool notifMarketplace;
   final bool notifChat;
   final ValueChanged<String> onInterestToggle;
-  final ValueChanged<String> onContentToggle;
   final void Function(String key, bool value) onNotifChanged;
 
+  /// Aligned to actual app features so the picks can be used as
+  /// real weighting signals for the home feed (e.g. boost events
+  /// for users who picked "Events", surface marketplace cards for
+  /// users who picked "Marketplace"). Replaces the previous
+  /// abstract "Interests" + "Content" split which couldn't be
+  /// mapped back to any concrete feed signal.
   static const _interestOptions = <_TileOption>[
-    _TileOption('Bible study', Icons.menu_book_outlined),
-    _TileOption('Youth ministry', Icons.groups_2_outlined),
-    _TileOption('Music & worship', Icons.music_note_outlined),
-    _TileOption('Outreach', Icons.volunteer_activism_outlined),
-    _TileOption('Health', Icons.favorite_border),
-    _TileOption('Family', Icons.family_restroom_outlined),
-    _TileOption('Prophecy', Icons.auto_stories_outlined),
-    _TileOption('Sabbath school', Icons.school_outlined),
-  ];
-
-  static const _contentOptions = <_TileOption>[
-    _TileOption('Devotionals', Icons.brightness_5_outlined),
-    _TileOption('Sermons', Icons.record_voice_over_outlined),
-    _TileOption('Events near me', Icons.event_outlined),
+    _TileOption('Events', Icons.event_outlined),
+    _TileOption('Prayer requests', Icons.front_hand_outlined),
     _TileOption('Marketplace', Icons.shopping_bag_outlined),
     _TileOption('Jobs', Icons.work_outline),
-    _TileOption('Prayer requests', Icons.front_hand_outlined),
+    _TileOption('Church announcements', Icons.campaign_outlined),
+    _TileOption('Youth content', Icons.groups_2_outlined),
+    _TileOption('Music', Icons.music_note_outlined),
+    _TileOption('Evangelism', Icons.volunteer_activism_outlined),
   ];
 
   @override
@@ -1240,10 +1227,10 @@ class _PersonalizationPage extends StatelessWidget {
             tagline: 'Step 3',
             title: 'What interests you?',
             subtitle:
-                'Pick a few — we\'ll tailor your feed and suggestions.',
+                'Pick a few — we\'ll prioritise these in your feed.',
           ),
           const SizedBox(height: 22),
-          _SectionLabel('Interests'),
+          _SectionLabel('Show me more of'),
           const SizedBox(height: 10),
           Wrap(
             spacing: 10,
@@ -1254,21 +1241,6 @@ class _PersonalizationPage extends StatelessWidget {
                   option: opt,
                   selected: interests.contains(opt.label),
                   onTap: () => onInterestToggle(opt.label),
-                ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          _SectionLabel('Content you want to see'),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final opt in _contentOptions)
-                _ChipTile(
-                  option: opt,
-                  selected: contentTypes.contains(opt.label),
-                  onTap: () => onContentToggle(opt.label),
                 ),
             ],
           ),

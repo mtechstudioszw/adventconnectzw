@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/notification_preferences_service.dart';
@@ -179,6 +180,37 @@ class _SettingsScreenState extends State<SettingsScreen>
           backgroundColor: AppColors.successGreen,
           content: Text(
             'Password updated.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// PayNow Zimbabwe payment link for ministry support. External
+  /// (not in-app billing) because App Store / Play Store forbid IAP
+  /// for nonprofit donations, and PayNow covers EcoCash, OneMoney,
+  /// ZIPIT, and bank cards in one flow — the right primitive for
+  /// Zim users.
+  ///
+  /// Replace this constant with the actual PayNow Express Checkout
+  /// or Pay Link URL once the merchant account is provisioned. The
+  /// format is usually:
+  ///   https://www.paynow.co.zw/Payment/Link/?q=<merchant-token>
+  static const _paynowDonationUrl =
+      'https://www.paynow.co.zw/Payment/Link/?q=REPLACE_WITH_MERCHANT_TOKEN';
+
+  Future<void> _openDonation() async {
+    final uri = Uri.parse(_paynowDonationUrl);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('launch returned false');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open the donation page. Try again later.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -400,6 +432,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ],
                     ),
                     const SizedBox(height: 18),
+                    _DonationCard(onTap: _openDonation),
+                    const SizedBox(height: 18),
                     _Section(
                       title: 'Support',
                       children: [
@@ -521,6 +555,89 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DonationCard extends StatelessWidget {
+  const _DonationCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withValues(alpha: 0.28),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.goldAccent, width: 1.5),
+                ),
+                child: const Icon(
+                  Icons.favorite,
+                  color: AppColors.goldAccent,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Support this ministry',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15.5,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Donate via PayNow — EcoCash, OneMoney, ZIPIT '
+                      'or card. Every contribution keeps the app '
+                      'free for the Adventist community.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.white.withValues(alpha: 0.85),
+                        fontSize: 12.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.open_in_new,
+                color: AppColors.white,
+                size: 18,
+              ),
+            ],
           ),
         ),
       ),

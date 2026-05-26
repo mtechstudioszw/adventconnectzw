@@ -1,3 +1,28 @@
+/// Coarse topical category for a prayer request. Keeps the screen
+/// from feeling like an undifferentiated firehose as the corpus
+/// grows. Persisted in `prayers.category` (patch_020) — any value
+/// outside the seven allowed codes is rejected by the DB CHECK.
+enum PrayerCategory {
+  healing('healing', 'Healing'),
+  family('family', 'Family'),
+  spiritual('spiritual', 'Spiritual'),
+  provision('provision', 'Provision'),
+  thanksgiving('thanksgiving', 'Thanksgiving'),
+  ministry('ministry', 'Ministry'),
+  other('other', 'Other');
+
+  const PrayerCategory(this.code, this.label);
+  final String code;
+  final String label;
+
+  static PrayerCategory fromCode(String? code) {
+    for (final c in PrayerCategory.values) {
+      if (c.code == code) return c;
+    }
+    return PrayerCategory.other;
+  }
+}
+
 class Prayer {
   const Prayer({
     required this.id,
@@ -7,6 +32,7 @@ class Prayer {
     required this.prayerCount,
     required this.createdAt,
     this.commentCount = 0,
+    this.category = PrayerCategory.other,
   });
 
   final String id;
@@ -16,6 +42,7 @@ class Prayer {
   final int prayerCount;
   final int commentCount;
   final DateTime createdAt;
+  final PrayerCategory category;
 
   factory Prayer.fromJson(Map<String, dynamic> json) {
     return Prayer(
@@ -25,6 +52,7 @@ class Prayer {
       content: (json['content'] ?? '') as String,
       prayerCount: _readInt(json['prayer_count']),
       commentCount: _readInt(json['comment_count']),
+      category: PrayerCategory.fromCode(json['category'] as String?),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );
@@ -38,6 +66,7 @@ class Prayer {
       content: content,
       prayerCount: prayerCount ?? this.prayerCount,
       commentCount: commentCount ?? this.commentCount,
+      category: category,
       createdAt: createdAt,
     );
   }

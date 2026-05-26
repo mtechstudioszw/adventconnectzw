@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/friendship_model.dart';
 import '../models/post_comment_model.dart';
@@ -25,10 +27,23 @@ class FeedService {
   // POSTS
   // ===================================================================
 
-  /// Newest-first page of posts. Each row joins the author profile and
-  /// embeds likes + comments so the card has everything it needs in one
-  /// round-trip.
+  /// Personalised home-feed page. We OVER-fetch from the server in
+  /// chronological order, then re-rank client-side by a composite
+  /// score so two users on the same content pool don't see the same
+  /// feed order. No ML — just transparent weights:
+  ///
+  ///   score = recency_decay
+  ///         + log(1 + likes + 2*comments) * 0.30   (engagement)
+  ///         + viewer-specific jitter (0..0.20)
+  ///         + own_post penalty (-1, so your own post sinks)
+  ///
+  /// After scoring we apply a diversity pass that prevents 3+
+  /// consecutive posts from the same author — splits clusters by
+  /// pushing later posts down the list.
   static Future<List<Post>> fetchFeed({int limit = 40}) async {
+    final viewer = _viewerId;
+    // Over-fetch so the re-rank has actual signal to work with.
+    final overfetch = limit * 2;
     final response = await _client
         .from(_postsTable)
         .select(
@@ -38,13 +53,63 @@ class FeedService {
           'post_comments(id)',
         )
         .order('created_at', ascending: false)
-        .limit(limit);
-    return (response as List)
+        .limit(overfetch);
+    final posts = (response as List)
         .map((row) => Post.fromJson(
               row as Map<String, dynamic>,
-              viewerId: _viewerId,
+              viewerId: viewer,
             ))
         .toList();
+    if (viewer == null || posts.length <= 1) {
+      return posts.take(limit).toList();
+    }
+    posts.sort(
+      (a, b) => _personalisedScore(b, viewer).compareTo(
+        _personalisedScore(a, viewer),
+      ),
+    );
+    return _diversify(posts).take(limit).toList();
+  }
+
+  /// Composite ranking score — higher = nearer the top of the feed.
+  /// Pure function of post + viewer id; no DB call, no state.
+  static double _personalisedScore(Post p, String viewerId) {
+    final ageHours =
+        DateTime.now().difference(p.createdAt).inHours.toDouble();
+    // Smooth decay: 1.0 at 0h, ~0.5 at 24h, ~0.25 at 72h.
+    final recency = 1.0 / (1.0 + (ageHours / 24.0));
+    final engagement =
+        math.log(1 + p.likeCount + (p.commentCount * 2)) * 0.30;
+    // Deterministic per-viewer jitter so the order is stable within
+    // a session but different between accounts. Two different users
+    // looking at the same 40 posts see meaningfully different orders.
+    final seed = '${viewerId}_${p.id}'.hashCode.abs();
+    final jitter = ((seed % 1000) / 1000.0) * 0.20;
+    final ownPenalty = p.authorId == viewerId ? -1.0 : 0.0;
+    return recency + engagement + jitter + ownPenalty;
+  }
+
+  /// Prevent the top of the feed from being dominated by a single
+  /// author. Walks the sorted list and demotes a post by N slots
+  /// whenever it'd make a third consecutive run from the same
+  /// authorId. Cheap, deterministic, no allocation per item.
+  static List<Post> _diversify(List<Post> sorted) {
+    if (sorted.length < 3) return sorted;
+    final out = <Post>[];
+    final deferred = <Post>[];
+    String? prev1;
+    String? prev2;
+    for (final p in sorted) {
+      if (p.authorId == prev1 && prev1 == prev2) {
+        deferred.add(p);
+        continue;
+      }
+      out.add(p);
+      prev2 = prev1;
+      prev1 = p.authorId;
+    }
+    out.addAll(deferred);
+    return out;
   }
 
   static Future<Post> createPost({

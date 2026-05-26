@@ -25,6 +25,9 @@ class _PrayerScreenState extends State<PrayerScreen>
   Set<String> _prayedIds = <String>{};
   Set<String> _busyIds = <String>{};
   bool _loading = true;
+  /// null = "All" chip. Otherwise a PrayerCategory whose .code is
+  /// passed to fetchPrayers() to narrow the server-side query.
+  PrayerCategory? _activeCategory;
 
   @override
   void initState() {
@@ -50,7 +53,7 @@ class _PrayerScreenState extends State<PrayerScreen>
     setState(() => _loading = true);
     try {
       final results = await Future.wait([
-        PrayerService.fetchPrayers(),
+        PrayerService.fetchPrayers(category: _activeCategory?.code),
         PrayerService.fetchUserPrayedIds(),
       ]);
       if (!mounted) return;
@@ -63,6 +66,12 @@ class _PrayerScreenState extends State<PrayerScreen>
       if (!mounted) return;
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _selectCategory(PrayerCategory? next) async {
+    if (next == _activeCategory) return;
+    setState(() => _activeCategory = next);
+    await _bootstrap();
   }
 
   Future<void> _togglePray(Prayer prayer) async {
@@ -125,19 +134,54 @@ class _PrayerScreenState extends State<PrayerScreen>
         tooltip: 'Share a prayer',
         icon: Icons.volunteer_activism,
       ),
-      body: RefreshIndicator(
-        color: AppColors.primaryBlue,
-        onRefresh: _bootstrap,
-        child: AnimatedBuilder(
-          animation: _entrance,
-          builder: (context, child) => Opacity(
-            opacity: _fade.value,
-            child: Transform.translate(
-              offset: Offset(0, _slide.value),
-              child: child,
+      body: Column(
+        children: [
+          _buildCategoryChips(),
+          Expanded(
+            child: RefreshIndicator(
+              color: AppColors.primaryBlue,
+              onRefresh: _bootstrap,
+              child: AnimatedBuilder(
+                animation: _entrance,
+                builder: (context, child) => Opacity(
+                  opacity: _fade.value,
+                  child: Transform.translate(
+                    offset: Offset(0, _slide.value),
+                    child: child,
+                  ),
+                ),
+                child: _buildList(),
+              ),
             ),
           ),
-          child: _buildList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryChips() {
+    return Container(
+      color: AppColors.lightGrey,
+      child: SizedBox(
+        height: 50,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          children: [
+            _CategoryChip(
+              label: 'All',
+              selected: _activeCategory == null,
+              onTap: () => _selectCategory(null),
+            ),
+            for (final c in PrayerCategory.values) ...[
+              const SizedBox(width: 8),
+              _CategoryChip(
+                label: c.label,
+                selected: _activeCategory == c,
+                onTap: () => _selectCategory(c),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -221,6 +265,49 @@ class _PrayerScreenState extends State<PrayerScreen>
           },
         );
       },
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.primaryBlue : AppColors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primaryBlue
+                  : const Color.fromRGBO(26, 26, 46, 0.1),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: selected ? AppColors.white : AppColors.textDark,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -175,28 +175,56 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       case _ChurchFilter.nearby:
         final pos = _position;
         if (pos == null) return _churches;
-        final geo = _churches.where((c) => c.hasLocation).toList();
-        if (geo.isEmpty) {
-          // No mapped churches yet — show the first few so the list
-          // still feels alive. The banner above explains the situation.
-          return _churches.take(_nearMeLimit).toList();
+        // Lightweight, offline-friendly fallback chain so we always
+        // return up to 5 results even when the dataset has little
+        // GPS coverage:
+        //
+        //   1. Real GPS-tagged churches sorted by distance.
+        //   2. If too few, top up with churches in the viewer's
+        //      province (using profiles.province if we have it).
+        //   3. If still empty, top up with whatever else is loaded
+        //      so the chip never returns an empty list.
+        //
+        // Avoids any external geocoding (no Google Maps API) — pure
+        // client-side filter over data we already have on screen.
+        final geo = _churches.where((c) => c.hasLocation).toList()
+          ..sort((a, b) {
+            final ad = LocationService.distanceMeters(
+              fromLat: pos.latitude,
+              fromLng: pos.longitude,
+              toLat: a.latitude!,
+              toLng: a.longitude!,
+            );
+            final bd = LocationService.distanceMeters(
+              fromLat: pos.latitude,
+              fromLng: pos.longitude,
+              toLat: b.latitude!,
+              toLng: b.longitude!,
+            );
+            return ad.compareTo(bd);
+          });
+        final picked = <Church>[...geo.take(_nearMeLimit)];
+        final seen = picked.map((c) => c.id).toSet();
+        if (picked.length < _nearMeLimit && _myProvince != null) {
+          for (final c in _churches) {
+            if (picked.length >= _nearMeLimit) break;
+            if (seen.contains(c.id)) continue;
+            if ((c.province ?? '').toLowerCase() ==
+                _myProvince!.toLowerCase()) {
+              picked.add(c);
+              seen.add(c.id);
+            }
+          }
         }
-        geo.sort((a, b) {
-          final ad = LocationService.distanceMeters(
-            fromLat: pos.latitude,
-            fromLng: pos.longitude,
-            toLat: a.latitude!,
-            toLng: a.longitude!,
-          );
-          final bd = LocationService.distanceMeters(
-            fromLat: pos.latitude,
-            fromLng: pos.longitude,
-            toLat: b.latitude!,
-            toLng: b.longitude!,
-          );
-          return ad.compareTo(bd);
-        });
-        return geo.take(_nearMeLimit).toList();
+        if (picked.length < _nearMeLimit) {
+          for (final c in _churches) {
+            if (picked.length >= _nearMeLimit) break;
+            if (seen.contains(c.id)) continue;
+            picked.add(c);
+            seen.add(c.id);
+          }
+        }
+        return picked;
       case _ChurchFilter.verified:
         return _churches.where((c) => c.isVerified).toList();
       case _ChurchFilter.myProvince:
@@ -315,7 +343,24 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   }
 
   Widget _buildNearModeBanner() {
+    // Pick a label that matches whatever fallback level the
+    // _visibleChurches getter is actually using right now — so the
+    // user knows whether they're seeing real GPS distances or a
+    // province-based estimate.
     final hasGeo = _churches.any((c) => c.hasLocation);
+    final hasProvincePool = _myProvince != null &&
+        _churches.any((c) =>
+            (c.province ?? '').toLowerCase() == _myProvince!.toLowerCase());
+    final String label;
+    if (hasGeo) {
+      label = 'Showing the 5 churches closest to you';
+    } else if (hasProvincePool) {
+      label = 'No mapped churches in your area yet — '
+          'showing nearby ones in $_myProvince';
+    } else {
+      label = 'We\'re showing churches near your region based on '
+          'available data.';
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Container(
@@ -341,9 +386,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                hasGeo
-                    ? 'Showing the 5 churches closest to you'
-                    : 'No mapped churches in your area yet — showing all',
+                label,
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.white,
                   fontWeight: FontWeight.w600,

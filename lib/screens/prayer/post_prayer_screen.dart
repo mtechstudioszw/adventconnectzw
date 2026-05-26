@@ -31,6 +31,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
 
   String _visibility = 'public';
   bool _isUrgent = false;
+  PrayerCategory _category = PrayerCategory.other;
   bool _saving = false;
   String? _error;
 
@@ -50,6 +51,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
     final existing = widget.existing;
     if (existing != null) {
       _contentController.text = existing.content;
+      _category = existing.category;
     }
   }
 
@@ -73,6 +75,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
           visibility: _visibility,
           isUrgent: _isUrgent,
           title: _titleController.text,
+          category: _category.code,
         );
       } else {
         await PrayerService.postPrayer(
@@ -80,6 +83,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
           visibility: _visibility,
           isUrgent: _isUrgent,
           title: _titleController.text,
+          category: _category.code,
         );
       }
       if (!mounted) return;
@@ -187,6 +191,8 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
                         ),
                       ),
                       const SizedBox(height: 16),
+                      _buildCategoryCard(),
+                      const SizedBox(height: 16),
                       _buildVisibilityCard(),
                       const SizedBox(height: 16),
                       _buildUrgentToggle(),
@@ -209,6 +215,66 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryCard() {
+    return PostFormCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CATEGORY',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final c in PrayerCategory.values)
+                Material(
+                  color: c == _category
+                      ? AppColors.primaryBlue
+                      : AppColors.lightGrey,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => setState(() => _category = c),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: c == _category
+                              ? AppColors.primaryBlue
+                              : const Color.fromRGBO(26, 26, 46, 0.08),
+                        ),
+                      ),
+                      child: Text(
+                        c.label,
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: c == _category
+                              ? AppColors.white
+                              : AppColors.textDark,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

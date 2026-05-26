@@ -24,10 +24,15 @@ class PrayerService {
 
   static const _authorEmbed = 'author:author_id(full_name)';
 
-  static Future<List<Prayer>> fetchPrayers() async {
-    final response = await _client
-        .from(_readTable)
-        .select('*, $_authorEmbed')
+  /// Optionally filter by [category] code ('healing', 'family',
+  /// 'spiritual', 'provision', 'thanksgiving', 'ministry', 'other').
+  /// Null = all categories. Drives the chip filter on prayer_screen.
+  static Future<List<Prayer>> fetchPrayers({String? category}) async {
+    var query = _client.from(_readTable).select('*, $_authorEmbed');
+    if (category != null && category.isNotEmpty) {
+      query = query.eq('category', category);
+    }
+    final response = await query
         .order('created_at', ascending: false)
         .limit(100);
     return (response as List)
@@ -150,6 +155,7 @@ class PrayerService {
     bool isUrgent = false,
     String? title,
     String? churchId,
+    String category = 'other',
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -165,6 +171,7 @@ class PrayerService {
           'content': content.trim(),
           'visibility': visibility,
           'is_urgent': isUrgent,
+          'category': category,
           if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
           if (churchId != null) 'church_id': int.tryParse(churchId),
         })
@@ -182,6 +189,7 @@ class PrayerService {
     String visibility = 'public',
     bool isUrgent = false,
     String? title,
+    String? category,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -192,6 +200,7 @@ class PrayerService {
       'visibility': visibility,
       'is_urgent': isUrgent,
       'title': title?.trim().isNotEmpty == true ? title!.trim() : null,
+      if (category != null) 'category': category,
     }).eq('id', prayerId).eq('author_id', user.id);
   }
 

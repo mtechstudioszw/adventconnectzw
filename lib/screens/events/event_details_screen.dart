@@ -206,6 +206,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                   _buildRsvpButton(event),
                   const SizedBox(height: 24),
                   _buildOrganizer(event),
+                  _buildContactActions(event),
                   const SizedBox(height: 16),
                   _buildAbout(event),
                   if (event.location != null && event.location!.isNotEmpty) ...[
@@ -565,6 +566,80 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         ),
       ),
     );
+  }
+
+  /// WhatsApp + Call actions, shown beneath the organizer card when
+  /// the event row carries a contact_phone. Mirrors the jobs detail
+  /// screen pattern so users can always reach the poster outside
+  /// the in-app chat.
+  Widget _buildContactActions(Event event) {
+    final phone = (event.contactPhone ?? '').trim();
+    if (phone.isEmpty || _isOrganizer(event)) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ContactActionButton(
+              icon: Icons.chat,
+              label: 'WhatsApp',
+              tint: const Color(0xFF25D366),
+              onTap: () => _openWhatsApp(phone, event),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ContactActionButton(
+              icon: Icons.call,
+              label: 'Call',
+              tint: AppColors.primaryBlue,
+              onTap: () => _placeCall(phone),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openWhatsApp(String phone, Event event) async {
+    final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final text = Uri.encodeComponent(
+      'Hi, I saw your event on Advent Connect ZW: ${event.title}',
+    );
+    final url = Uri.parse('https://wa.me/$cleaned?text=$text');
+    try {
+      final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('launch failed');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open WhatsApp.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _placeCall(String phone) async {
+    final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final url = Uri.parse('tel:$cleaned');
+    try {
+      final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('launch failed');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not start the call.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _shareEvent(Event event) async {
@@ -1113,4 +1188,52 @@ class _MapGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ContactActionButton extends StatelessWidget {
+  const _ContactActionButton({
+    required this.icon,
+    required this.label,
+    required this.tint,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color tint;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: tint.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: tint.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: tint, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: tint,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

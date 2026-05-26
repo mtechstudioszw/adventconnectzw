@@ -72,6 +72,13 @@ class _HomeScreenState extends State<HomeScreen>
   final Set<String> _dismissedBannerIds = <String>{};
   bool _loading = true;
   StreamSubscription<AuthState>? _authSub;
+  // Realtime watcher on messages so the chat-bubble badge clears
+  // when the user reads messages inside the chat and bounces back
+  // here, and lights up when a new inbound message arrives without
+  // requiring a manual pull-to-refresh. Debounced so a burst of
+  // events doesn't hammer the inbox count query.
+  StreamSubscription<List<Map<String, dynamic>>>? _msgActivitySub;
+  Timer? _unreadRefreshDebounce;
 
   @override
   void initState() {
@@ -83,6 +90,18 @@ class _HomeScreenState extends State<HomeScreen>
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
+    );
+    _msgActivitySub = MessagingService.streamInboxActivity().listen(
+      (_) {
+        _unreadRefreshDebounce?.cancel();
+        _unreadRefreshDebounce = Timer(
+          const Duration(milliseconds: 600),
+          () {
+            if (mounted) _refreshUnreadBadge();
+          },
+        );
+      },
+      onError: (_) {},
     );
     // Rebuild whenever the user's profile metadata changes (e.g. after a
     // save in Edit Profile) so the greeting / welcome card refresh without
@@ -97,7 +116,25 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _entrance.dispose();
     _authSub?.cancel();
+    _unreadRefreshDebounce?.cancel();
+    _msgActivitySub?.cancel();
     super.dispose();
+  }
+
+  /// Lightweight refetch — just the conversation list (for the
+  /// chat-bubble badge), without touching events / feed / etc.
+  Future<void> _refreshUnreadBadge() async {
+    try {
+      final convos = await MessagingService.fetchConversations();
+      if (!mounted) return;
+      var unread = 0;
+      for (final c in convos) {
+        unread += c.unreadCount;
+      }
+      setState(() => _unreadMessages = unread);
+    } catch (_) {
+      // Silent — badge accuracy is best-effort.
+    }
   }
 
   Future<void> _bootstrap() async {

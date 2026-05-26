@@ -12,6 +12,7 @@ class Event {
     this.churchId,
     this.organizerId,
     this.organizerName,
+    this.contactPhone,
     this.capacity,
     this.coverPhotoUrl,
     this.createdAt,
@@ -34,6 +35,10 @@ class Event {
   /// the joined profile in EventService.fetchEvents / fetchEventById.
   /// May be null on cached payloads written by older builds.
   final String? organizerName;
+  /// Direct contact phone for the event (optional). When present we
+  /// surface a WhatsApp + Call button on the details screen so users
+  /// can reach the organizer outside the in-app chat.
+  final String? contactPhone;
   final int? capacity;
   final int rsvpCount;
   final String? coverPhotoUrl;
@@ -131,6 +136,9 @@ class Event {
       organizerName: (organizerName == null || organizerName.isEmpty)
           ? (json['contact_name'] as String?)?.trim()
           : organizerName,
+      contactPhone: (json['contact_phone'] as String?)?.trim().isNotEmpty == true
+          ? (json['contact_phone'] as String).trim()
+          : null,
       capacity: _readNullableInt(json['capacity']),
       rsvpCount: _readInt(json['rsvp_count']),
       coverPhotoUrl: json['cover_photo_url'] as String?,
@@ -151,6 +159,7 @@ class Event {
         'location': location,
         'church_id': churchId,
         'organizer_id': organizerId,
+        'contact_phone': contactPhone,
         'capacity': capacity,
         'rsvp_count': rsvpCount,
         'cover_photo_url': coverPhotoUrl,
@@ -173,6 +182,7 @@ class Event {
       churchId: churchId,
       organizerId: organizerId,
       organizerName: organizerName,
+      contactPhone: contactPhone,
       capacity: capacity,
       rsvpCount: rsvpCount ?? this.rsvpCount,
       coverPhotoUrl: coverPhotoUrl,

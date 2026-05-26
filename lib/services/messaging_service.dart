@@ -348,10 +348,14 @@ class MessagingService {
     if (resolvedOtherName.isEmpty) resolvedOtherName = 'Member';
 
     // Reuse an existing conversation between us if one already exists,
-    // regardless of which side seeded it (a/b ordering).
+    // regardless of which side seeded it (a/b ordering). We pull the
+    // joined participant photo URLs (_conversationSelect) so the
+    // returned Conversation carries a usable avatar — without that
+    // the chat screen header opened from search / profile fell back
+    // to grey initials even when both users had profile photos.
     final existingRows = await _client
         .from(_conversationsTable)
-        .select()
+        .select(_conversationSelect)
         .or(
           'and(participant_a_id.eq.${user.id},participant_b_id.eq.$otherUserId),'
           'and(participant_a_id.eq.$otherUserId,participant_b_id.eq.${user.id})',
@@ -382,7 +386,7 @@ class MessagingService {
             'is_business': isBusiness,
             // request_status defaults to 'pending' (patch_005).
           })
-          .select()
+          .select(_conversationSelect)
           .single();
       convoRow = (inserted as Map).cast<String, dynamic>();
     }

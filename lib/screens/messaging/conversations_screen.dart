@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/message_model.dart';
@@ -35,6 +37,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   String? _error;
   _ConversationsTab _tab = _ConversationsTab.inbox;
 
+  // Realtime subscription to messages — fires whenever ANY message
+  // visible to the current user (per RLS) is inserted/updated, so
+  // unread badges and last-message previews can refresh without a
+  // pull-to-refresh from the user.
+  StreamSubscription<List<Map<String, dynamic>>>? _activitySub;
+  Timer? _refreshDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -47,12 +56,49 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _bootstrap();
+    _startActivityWatcher();
   }
 
   @override
   void dispose() {
+    _refreshDebounce?.cancel();
+    _activitySub?.cancel();
     _entrance.dispose();
     super.dispose();
+  }
+
+  /// Listen for any message activity (insert / status change) and
+  /// debounce-trigger a conversations refetch + unread recompute.
+  /// A 600ms debounce coalesces bursts (e.g. someone pasting a long
+  /// message that the realtime layer delivers as several events).
+  void _startActivityWatcher() {
+    _activitySub?.cancel();
+    _activitySub = MessagingService.streamInboxActivity().listen(
+      (_) {
+        _refreshDebounce?.cancel();
+        _refreshDebounce = Timer(
+          const Duration(milliseconds: 600),
+          () {
+            if (mounted) _refreshFromRealtime();
+          },
+        );
+      },
+      onError: (_) {
+        // Realtime hiccups should never blank the inbox.
+      },
+    );
+  }
+
+  /// Lightweight refresh — re-fetches conversations + unread counts,
+  /// without toggling the loading spinner. Used when realtime fires.
+  Future<void> _refreshFromRealtime() async {
+    try {
+      final fresh = await MessagingService.fetchConversations();
+      if (!mounted) return;
+      setState(() => _conversations = fresh);
+    } catch (_) {
+      // Background refresh — silent failure is fine.
+    }
   }
 
   Future<void> _bootstrap() async {

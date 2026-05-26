@@ -181,11 +181,22 @@ class MessagingService {
     unawaited(_writeInboxCache(
       response.map((r) => Map<String, dynamic>.from(r as Map)).toList(),
     ));
+    // Pull unread counts in parallel — single RPC roundtrip via
+    // get_my_unread_counts() (patch_018). RLS is participant-scoped
+    // so the count is naturally limited to the caller's threads.
+    final unreadById = await fetchUnreadCounts();
     final list = response
-        .map((row) => Conversation.fromJson(
-              row as Map<String, dynamic>,
-              currentUserId: user.id,
-            ))
+        .map((row) {
+          final raw = row as Map<String, dynamic>;
+          final id = raw['id'].toString();
+          // Splice the RPC-computed unread count into the JSON before
+          // the model parses it — keeps the rest of the pipeline
+          // (cache restore, copyWith, etc.) unchanged.
+          return Conversation.fromJson(
+            {...raw, 'unread_count': unreadById[id] ?? 0},
+            currentUserId: user.id,
+          );
+        })
         .toList();
     list.sort((a, b) {
       if (a.isSelfChat && !b.isSelfChat) return -1;
@@ -193,6 +204,47 @@ class MessagingService {
       return b.lastMessageAt.compareTo(a.lastMessageAt);
     });
     return list;
+  }
+
+  /// Returns a map from conversation_id → unread message count for
+  /// the current user. Uses the `get_my_unread_counts` SQL function
+  /// (patch_018) so the database does the GROUP BY instead of the
+  /// client scanning every thread.
+  static Future<Map<String, int>> fetchUnreadCounts() async {
+    try {
+      final rows = await _client.rpc('get_my_unread_counts');
+      if (rows is! List) return const {};
+      final result = <String, int>{};
+      for (final raw in rows) {
+        if (raw is Map) {
+          final id = raw['conversation_id']?.toString();
+          final count = raw['unread_count'];
+          if (id == null) continue;
+          if (count is int) {
+            result[id] = count;
+          } else if (count is num) {
+            result[id] = count.toInt();
+          }
+        }
+      }
+      return result;
+    } catch (_) {
+      // RPC missing or RLS error — degrade gracefully to zero badges
+      // rather than blanking the whole inbox.
+      return const {};
+    }
+  }
+
+  /// Realtime stream of INSERTs on the messages table, scoped to the
+  /// current user's conversations by RLS. The conversations screen
+  /// uses this to bump unread badges and refresh last-message
+  /// previews without a full re-fetch on every keystroke from peers.
+  static Stream<List<Map<String, dynamic>>> streamInboxActivity() {
+    return _client
+        .from(_messagesTable)
+        .stream(primaryKey: ['id'])
+        .order('created_at')
+        .map((rows) => rows.cast<Map<String, dynamic>>());
   }
 
   /// Finds (or lazily creates) the signed-in user's "Notes to self"

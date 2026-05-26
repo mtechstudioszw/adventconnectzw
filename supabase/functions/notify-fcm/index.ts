@@ -166,6 +166,32 @@ async function sendFcm({
   }
 }
 
+// Map a `notifications.type` value to one of the five category keys
+// stored in `profiles.notif_categories`. Returns null when the type
+// doesn't map (we fall through and send by default in that case).
+function mapTypeToCategory(type: string): string | null {
+  const t = (type || "").toLowerCase();
+  if (t.includes("event")) return "events";
+  if (t.includes("prayer")) return "prayers";
+  if (t.includes("message") || t === "chat") return "messages";
+  if (
+    t.includes("market") ||
+    t.includes("product") ||
+    t.includes("seller") ||
+    t.includes("job")
+  ) {
+    return "marketplace";
+  }
+  if (
+    t.includes("announce") ||
+    t.includes("urgent") ||
+    t.includes("church_admin")
+  ) {
+    return "announcements";
+  }
+  return null;
+}
+
 // ---------- handler --------------------------------------------------
 
 Deno.serve(async (req: Request) => {
@@ -205,7 +231,7 @@ Deno.serve(async (req: Request) => {
   );
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("fcm_token")
+    .select("fcm_token, notif_categories")
     .eq("id", userId)
     .maybeSingle();
   if (error) {
@@ -218,6 +244,17 @@ Deno.serve(async (req: Request) => {
     // Not an error — user just hasn't installed the app or signed in
     // anywhere yet. The in-app inbox still shows the notification.
     return new Response("No device token; skipped", { status: 200 });
+  }
+
+  // Honour per-category opt-outs from Settings. Map the notification
+  // row's `type` to a category key matching profiles.notif_categories
+  // (events / prayers / messages / marketplace / announcements).
+  // Anything that doesn't map cleanly falls through as "on" so we
+  // don't silently swallow new notification types.
+  const category = mapTypeToCategory(notifType);
+  const prefs = (profile?.notif_categories ?? {}) as Record<string, unknown>;
+  if (category && prefs[category] === false) {
+    return new Response(`Skipped: ${category} muted`, { status: 200 });
   }
 
   let account: ServiceAccount;

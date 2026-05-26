@@ -184,11 +184,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Branded square mark — same shape used in the auth screen
-          // logo so the whole pre-signup journey feels like one app.
+          // Real brand mark — the actual logo PNG so the pre-signup
+          // intro slides match the launcher icon and splash logo.
           Container(
             width: 44,
             height: 44,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               gradient: AppColors.primaryGradient,
               borderRadius: BorderRadius.circular(14),
@@ -200,11 +201,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 ),
               ],
             ),
-            child: const Center(
-              child: Icon(
-                Icons.church_rounded,
-                color: AppColors.goldAccent,
-                size: 22,
+            child: Padding(
+              padding: const EdgeInsets.all(5),
+              child: Image.asset(
+                'assets/icon/logo.png',
+                fit: BoxFit.contain,
               ),
             ),
           ),

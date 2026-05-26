@@ -69,6 +69,11 @@ dependencies:
   # a mechanical search-and-replace.
   cached_network_image: ^3.4.0
 
+  # Native share sheet for event / app-invite links. The links point
+  # at the event-share Supabase Edge Function which serves Open Graph
+  # tags so WhatsApp / Facebook render a rich thumbnail preview.
+  share_plus: ^10.1.4
+
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale
 # hasPermission signature, which breaks compilation even for Android builds.
@@ -93,8 +98,10 @@ flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
   remove_alpha_ios: true
-  image_path: "assets/icon/app_icon.png"
+  image_path: "assets/icon/logo.png"
   # Adaptive icon background matches the dark navy from CLAUDE.md.
+  # Use the same logo as the foreground — the system overlays it on
+  # the navy background for round / squircle launchers.
   adaptive_icon_background: "#0D1B3E"
-  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  adaptive_icon_foreground: "assets/icon/logo.png"
   min_sdk_android: 21

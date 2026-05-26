@@ -90,27 +90,58 @@ class PrayerService {
     }).toList();
   }
 
-  static Future<void> pray(String prayerId) async {
+  /// Insert the "praying" reaction. Returns the authoritative
+  /// post-insert prayer_count so the caller doesn't have to trust its
+  /// own optimistic increment (which can drift when the DB trigger
+  /// lags or a unique-violation re-tap is swallowed).
+  static Future<int> pray(String prayerId) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw const AuthException('Sign in to pray with the community.');
     }
-    await _client.from(_responsesTable).insert({
-      'user_id': user.id,
-      'prayer_id': prayerId,
-      'response_type': 'praying',
-    });
+    try {
+      await _client.from(_responsesTable).insert({
+        'user_id': user.id,
+        'prayer_id': prayerId,
+        'response_type': 'praying',
+      });
+    } on PostgrestException catch (e) {
+      // Already praying — unique constraint (prayer_id,user_id,
+      // response_type). Treat as success so the caller's "isPraying"
+      // state matches what the DB has, and re-read the canonical count.
+      if (e.code != '23505') rethrow;
+    }
+    return _readPrayerCount(prayerId);
   }
 
-  static Future<void> unpray(String prayerId) async {
+  /// Delete the "praying" reaction. Returns the authoritative
+  /// post-delete prayer_count.
+  static Future<int> unpray(String prayerId) async {
     final user = _client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return 0;
     await _client
         .from(_responsesTable)
         .delete()
         .eq('user_id', user.id)
         .eq('prayer_id', prayerId)
         .eq('response_type', 'praying');
+    return _readPrayerCount(prayerId);
+  }
+
+  static Future<int> _readPrayerCount(String prayerId) async {
+    try {
+      final row = await _client
+          .from(_readTable)
+          .select('prayer_count')
+          .eq('id', prayerId)
+          .maybeSingle();
+      final raw = row?['prayer_count'];
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+      return int.tryParse('$raw') ?? 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   static Future<Prayer> postPrayer(

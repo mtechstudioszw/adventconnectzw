@@ -13,6 +13,17 @@
     <!-- Android 13+ runtime notification prompt — without this declared,
          FCM pushes silently never arrive on devices ≥ API 33. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- image_picker (camera path) + profile/cover photo capture flows.
+         Without this declared, Permission.camera.request() returns
+         "granted" immediately on Android without ever showing the
+         native dialog — which looks like a broken button to the user. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Gallery / photo access. Android 13+ uses the granular media
+         permission, Android 12 and below use READ_EXTERNAL_STORAGE.
+         Declaring both keeps Permission.photos working across versions. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+                     android:maxSdkVersion="32"/>
     <application
         android:label="Advent Connect ZW"
         android:name="${applicationName}"
@@ -61,6 +72,17 @@
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
+        <!-- FCM default channel — used if a push arrives before the
+             Flutter side has called createNotificationChannel(). Must
+             match the channel id created in PushService.initialize. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="advent_connect_zw_default" />
+        <!-- Monochrome notification icon for the status bar. Falls back
+             to the launcher icon if missing. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

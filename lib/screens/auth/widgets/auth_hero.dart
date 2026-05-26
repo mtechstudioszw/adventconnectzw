@@ -137,6 +137,7 @@ class _LogoTile extends StatelessWidget {
     return Container(
       width: 64,
       height: 64,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(20),
@@ -152,10 +153,12 @@ class _LogoTile extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(
-        Icons.church,
-        color: AppColors.goldAccent,
-        size: 32,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Image.asset(
+          'assets/icon/logo.png',
+          fit: BoxFit.contain,
+        ),
       ),
     );
   }

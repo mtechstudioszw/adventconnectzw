@@ -818,6 +818,7 @@ class _LogoMark extends StatelessWidget {
       child: Container(
         width: 72,
         height: 72,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           gradient: AppColors.primaryGradient,
           borderRadius: BorderRadius.circular(22),
@@ -829,10 +830,12 @@ class _LogoMark extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(
-          Icons.church,
-          color: AppColors.goldAccent,
-          size: 34,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Image.asset(
+            'assets/icon/logo.png',
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );

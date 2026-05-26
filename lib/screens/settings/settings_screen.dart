@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
+import '../../services/notification_preferences_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/theme_service.dart';
 import '../../theme/app_colors.dart';
@@ -21,10 +22,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   late final Animation<double> _fade;
   late final Animation<double> _slide;
 
-  bool _notifyEvents = true;
-  bool _notifyPrayers = true;
-  bool _notifyMessages = true;
-  bool _notifyMarketplace = false;
+  NotificationCategoryPrefs _categoryPrefs =
+      NotificationCategoryPrefs.defaults;
   String _language = 'English';
   bool _biometricEnabled = false;
   bool _biometricAvailable = false;
@@ -44,6 +43,25 @@ class _SettingsScreenState extends State<SettingsScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _loadBiometricState();
+    _loadCategoryPrefs();
+  }
+
+  Future<void> _loadCategoryPrefs() async {
+    final prefs = await NotificationPreferencesService.fetchCategories();
+    if (!mounted) return;
+    setState(() => _categoryPrefs = prefs);
+  }
+
+  /// Optimistic write — flip the local toggle immediately so the
+  /// Switch animates, then fire-and-forget the persist call. The
+  /// service swallows network errors silently; if the write fails
+  /// the toggle simply doesn't survive a reload, and the user can
+  /// retry by flipping again. This is what makes the toggles feel
+  /// snappy AND survive killing the app (previous behaviour was
+  /// ephemeral local state that defaulted on every fresh open).
+  void _setCategory(NotificationCategoryPrefs next) {
+    setState(() => _categoryPrefs = next);
+    NotificationPreferencesService.saveCategories(next);
   }
 
   Future<void> _loadBiometricState() async {
@@ -279,33 +297,47 @@ class _SettingsScreenState extends State<SettingsScreen>
                         _ToggleRow(
                           icon: Icons.event_outlined,
                           label: 'Event reminders',
-                          value: _notifyEvents,
-                          onChanged: (v) =>
-                              setState(() => _notifyEvents = v),
+                          value: _categoryPrefs.events,
+                          onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(events: v)),
                         ),
                         const _Divider(),
                         _ToggleRow(
                           icon: Icons.volunteer_activism_outlined,
                           label: 'Prayer updates',
-                          value: _notifyPrayers,
-                          onChanged: (v) =>
-                              setState(() => _notifyPrayers = v),
+                          value: _categoryPrefs.prayers,
+                          onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(prayers: v)),
                         ),
                         const _Divider(),
                         _ToggleRow(
                           icon: Icons.chat_bubble_outline,
                           label: 'New messages',
-                          value: _notifyMessages,
-                          onChanged: (v) =>
-                              setState(() => _notifyMessages = v),
+                          value: _categoryPrefs.messages,
+                          onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(messages: v)),
                         ),
                         const _Divider(),
                         _ToggleRow(
                           icon: Icons.storefront_outlined,
                           label: 'Marketplace alerts',
-                          value: _notifyMarketplace,
-                          onChanged: (v) =>
-                              setState(() => _notifyMarketplace = v),
+                          value: _categoryPrefs.marketplace,
+                          onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(marketplace: v)),
+                        ),
+                        const _Divider(),
+                        _ToggleRow(
+                          icon: Icons.campaign_outlined,
+                          label: 'Church announcements',
+                          value: _categoryPrefs.announcements,
+                          onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(announcements: v)),
+                        ),
+                        const _Divider(),
+                        _NavRow(
+                          icon: Icons.shield_moon_outlined,
+                          label: 'Permissions',
+                          onTap: () => context.pushNamed('permissions'),
                         ),
                         const _Divider(),
                         _NavRow(

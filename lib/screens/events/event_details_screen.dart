@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/event_model.dart';
@@ -274,7 +275,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                 ],
                 _CircleIconButton(
                   icon: Icons.share_outlined,
-                  onTap: () {},
+                  onTap: () => _shareEvent(event),
                 ),
               ],
             ),
@@ -564,6 +565,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _shareEvent(Event event) async {
+    // Share the Edge Function URL (not a raw deep link) — that page
+    // serves Open Graph tags so WhatsApp / Facebook / X render the
+    // event's title, description, and cover-photo thumbnail. Tapping
+    // the link deep-links into the app (or the Play Store) via the
+    // page's redirect script.
+    final shareUrl =
+        'https://eqbyvasteolqyktbqbem.functions.supabase.co/event-share?id=${event.id}';
+    final text = '${event.title}\n\n'
+        'Join me at this event on Advent Connect ZW:\n$shareUrl';
+    await Share.share(text, subject: event.title);
   }
 
   Future<void> _messageOrganizer(Event event) async {

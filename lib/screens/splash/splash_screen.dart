@@ -101,11 +101,18 @@ class _SplashScreenState extends State<SplashScreen>
           return;
         }
       }
-      // Already signed in -> straight to the home tab. The
-      // standalone age-verification screen is no longer part of the
-      // first-launch flow; the in-form birthday picker on
-      // AuthScreen's signup stage handles it once, at signup time.
+      // Gate the home tab behind profile completion. A user can sign
+      // up, start onboarding, kill the app halfway, then re-open — the
+      // session still exists but their profile is empty. Sending them
+      // to home in that state lets them bypass onboarding entirely.
+      // hasCompletedProfileSetup() checks profiles.username (the
+      // authoritative "finished onboarding" flag — see auth_service).
+      final completed = await AuthService.hasCompletedProfileSetup();
       if (!mounted) return;
+      if (!completed) {
+        context.goNamed('profile_setup');
+        return;
+      }
       context.goNamed('home');
       return;
     }
@@ -210,17 +217,16 @@ class _SplashScreenState extends State<SplashScreen>
           opacity: _logoOpacity.value,
           child: Transform.scale(
             scale: _logoScale.value,
-            // Premium circular emblem: white disc, thin gold ring, soft
-            // blue glow. Cleaner and more "brand mark" than the old
-            // rounded-square gradient tile.
+            // The actual brand logo (assets/icon/logo.png) — same
+            // image as the launcher icon so the splash → app handoff
+            // feels continuous. The disc / ring / glow framing keeps
+            // the premium feel on the white splash canvas.
             child: Container(
               width: 116,
               height: 116,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                // Navy→blue gradient disc so the emblem stands out on
-                // the white canvas; gold ring + white icon keep the
-                // blue/white/gold brand palette.
                 gradient: AppColors.primaryGradient,
                 border: Border.all(
                   color: AppColors.goldAccent,
@@ -239,11 +245,11 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ],
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.church_rounded,
-                  size: 52,
-                  color: AppColors.white,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Image.asset(
+                  'assets/icon/logo.png',
+                  fit: BoxFit.contain,
                 ),
               ),
             ),

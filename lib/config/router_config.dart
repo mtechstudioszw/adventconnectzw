@@ -65,6 +65,7 @@ import '../screens/seller/manage_products_screen.dart';
 import '../screens/seller/seller_dashboard_screen.dart';
 import '../screens/seller/seller_profile_screen.dart';
 import '../screens/seller/setup_store_screen.dart';
+import '../screens/settings/permissions_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
@@ -495,6 +496,13 @@ final GoRouter appRouter = GoRouter(
       path: '/settings',
       name: 'settings',
       builder: (context, state) => const SettingsScreen(),
+      routes: [
+        GoRoute(
+          path: 'permissions',
+          name: 'permissions',
+          builder: (context, state) => const PermissionsScreen(),
+        ),
+      ],
     ),
     GoRoute(
       path: '/terms',

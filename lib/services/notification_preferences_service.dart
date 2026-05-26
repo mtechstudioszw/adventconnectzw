@@ -40,6 +40,113 @@ class NotificationPreferencesService {
       'none': level == 'none',
     }, onConflict: 'user_id,church_id');
   }
+
+  /// Fetch the signed-in user's per-category toggles from
+  /// `profiles.notif_categories` (patch_018). Falls back to all-on
+  /// when the row is missing or the column hasn't been migrated yet.
+  static Future<NotificationCategoryPrefs> fetchCategories() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return NotificationCategoryPrefs.defaults;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('notif_categories')
+          .eq('id', user.id)
+          .maybeSingle();
+      final raw = row?['notif_categories'];
+      if (raw is Map) {
+        return NotificationCategoryPrefs.fromJson(
+          Map<String, dynamic>.from(raw),
+        );
+      }
+      return NotificationCategoryPrefs.defaults;
+    } catch (_) {
+      return NotificationCategoryPrefs.defaults;
+    }
+  }
+
+  /// Save the full per-category bundle. Best-effort — failures are
+  /// swallowed so a flaky network doesn't fight the user's toggle.
+  static Future<void> saveCategories(NotificationCategoryPrefs prefs) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    try {
+      await _client
+          .from('profiles')
+          .update({'notif_categories': prefs.toJson()})
+          .eq('id', user.id);
+    } catch (_) {
+      // best-effort; UI keeps the optimistic value either way.
+    }
+  }
+}
+
+/// Per-category notification preferences stored on the auth user's
+/// profile row (`profiles.notif_categories`, patch_018). Distinct
+/// from per-church levels above — this is the Settings screen's
+/// global "events / prayers / messages / marketplace / announcements"
+/// toggles. The `notify-fcm` Edge Function reads the same column to
+/// short-circuit pushes for muted categories.
+class NotificationCategoryPrefs {
+  const NotificationCategoryPrefs({
+    this.events = true,
+    this.prayers = true,
+    this.messages = true,
+    this.marketplace = true,
+    this.announcements = true,
+  });
+
+  final bool events;
+  final bool prayers;
+  final bool messages;
+  final bool marketplace;
+  final bool announcements;
+
+  static const defaults = NotificationCategoryPrefs();
+
+  factory NotificationCategoryPrefs.fromJson(Map<String, dynamic> json) {
+    bool read(String key, bool fallback) {
+      final value = json[key];
+      if (value is bool) return value;
+      if (value is num) return value != 0;
+      if (value is String) {
+        if (value.toLowerCase() == 'false') return false;
+        if (value.toLowerCase() == 'true') return true;
+      }
+      return fallback;
+    }
+    return NotificationCategoryPrefs(
+      events: read('events', true),
+      prayers: read('prayers', true),
+      messages: read('messages', true),
+      marketplace: read('marketplace', true),
+      announcements: read('announcements', true),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'events': events,
+        'prayers': prayers,
+        'messages': messages,
+        'marketplace': marketplace,
+        'announcements': announcements,
+      };
+
+  NotificationCategoryPrefs copyWith({
+    bool? events,
+    bool? prayers,
+    bool? messages,
+    bool? marketplace,
+    bool? announcements,
+  }) {
+    return NotificationCategoryPrefs(
+      events: events ?? this.events,
+      prayers: prayers ?? this.prayers,
+      messages: messages ?? this.messages,
+      marketplace: marketplace ?? this.marketplace,
+      announcements: announcements ?? this.announcements,
+    );
+  }
 }
 
 class NotificationPreference {

@@ -70,11 +70,13 @@ class _PrayerScreenState extends State<PrayerScreen>
     setState(() => _busyIds = {..._busyIds, prayer.id});
     final wasPraying = _prayedIds.contains(prayer.id);
     try {
-      if (wasPraying) {
-        await PrayerService.unpray(prayer.id);
-      } else {
-        await PrayerService.pray(prayer.id);
-      }
+      // The service returns the authoritative post-write prayer_count
+      // (computed by the bump_prayer_count DB trigger). Trust that
+      // instead of our local +1 / -1 so quick re-taps, duplicate
+      // inserts, and trigger-lag never leave the badge out of sync.
+      final newCount = wasPraying
+          ? await PrayerService.unpray(prayer.id)
+          : await PrayerService.pray(prayer.id);
       if (!mounted) return;
       setState(() {
         if (wasPraying) {
@@ -83,13 +85,8 @@ class _PrayerScreenState extends State<PrayerScreen>
           _prayedIds = {..._prayedIds, prayer.id};
         }
         _prayers = _prayers
-            .map((p) => p.id == prayer.id
-                ? p.copyWith(
-                    prayerCount: wasPraying
-                        ? (p.prayerCount - 1).clamp(0, 1 << 31)
-                        : p.prayerCount + 1,
-                  )
-                : p)
+            .map((p) =>
+                p.id == prayer.id ? p.copyWith(prayerCount: newCount) : p)
             .toList();
       });
     } catch (_) {

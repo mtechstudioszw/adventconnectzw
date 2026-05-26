@@ -55,13 +55,24 @@ class ChurchService {
         .from(_table)
         .select('city')
         .order('city');
+    // Some church rows have malformed `city` values from earlier
+    // imports — bare punctuation like "(", whitespace-only strings,
+    // or fragments of a parenthesised suburb that leaked into the
+    // city column. Filter to entries that actually look like a place
+    // name (at least one letter, length >= 2) so the filter chip row
+    // doesn't get polluted.
     final cities = (response as List)
-        .map((row) => (row['city'] ?? '').toString())
-        .where((c) => c.isNotEmpty)
+        .map((row) => (row['city'] ?? '').toString().trim())
+        .where(_looksLikeCity)
         .toSet()
         .toList()
       ..sort();
     return cities;
+  }
+
+  static bool _looksLikeCity(String value) {
+    if (value.length < 2) return false;
+    return RegExp(r'[A-Za-z]').hasMatch(value);
   }
 
   static Future<Set<String>> fetchUserFollowedChurchIds() async {

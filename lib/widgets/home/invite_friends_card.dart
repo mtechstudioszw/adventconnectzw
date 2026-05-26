@@ -14,14 +14,16 @@ class InviteFriendsCard extends StatelessWidget {
   /// edge padding so the card doesn't double-indent.
   final double horizontalMargin;
 
-  // Adjust this once a marketing site or Play Store listing exists.
-  // Until then the message points at the GitHub readme so curious
-  // recipients still land somewhere meaningful.
+  // Points at the event-share Edge Function with no id, which serves
+  // the app-invite Open Graph page (title + description + Play Store
+  // redirect). Once a hosted app-icon URL is wired as that page's
+  // og:image, the invite link will also render the app-icon thumbnail
+  // on WhatsApp / Facebook.
   static const _inviteMessage =
       'Join me on Advent Connect ZW — the Adventist community app '
       'for Zimbabwe. Connect with members, find churches, share '
       'updates, and chat with friends. Download it here: '
-      'https://github.com/mtechstudioszw/adventconnectzw';
+      'https://eqbyvasteolqyktbqbem.functions.supabase.co/event-share';
 
   @override
   Widget build(BuildContext context) {

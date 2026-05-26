@@ -96,23 +96,16 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     if (prayer == null) return;
     setState(() => _prayBusy = true);
     try {
-      if (_isPraying) {
-        await PrayerService.unpray(prayer.id);
-        if (!mounted) return;
-        setState(() {
-          _isPraying = false;
-          _prayer = prayer.copyWith(
-            prayerCount: (prayer.prayerCount - 1).clamp(0, 1 << 31),
-          );
-        });
-      } else {
-        await PrayerService.pray(prayer.id);
-        if (!mounted) return;
-        setState(() {
-          _isPraying = true;
-          _prayer = prayer.copyWith(prayerCount: prayer.prayerCount + 1);
-        });
-      }
+      // Service returns the authoritative prayer_count after the
+      // trigger has fired — trust that instead of doing local +/-1.
+      final newCount = _isPraying
+          ? await PrayerService.unpray(prayer.id)
+          : await PrayerService.pray(prayer.id);
+      if (!mounted) return;
+      setState(() {
+        _isPraying = !_isPraying;
+        _prayer = prayer.copyWith(prayerCount: newCount);
+      });
       final users = await PrayerService.fetchPrayingUsers(prayer.id);
       if (mounted) setState(() => _prayingUsers = users);
     } catch (_) {

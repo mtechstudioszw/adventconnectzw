@@ -128,8 +128,9 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+      backgroundColor: AppColors.white,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(color: AppColors.white),
         child: Stack(
           children: [
             _buildAtmosphereOverlay(),
@@ -162,7 +163,7 @@ class _SplashScreenState extends State<SplashScreen>
                         Text(
                           'MTECH STUDIOS ZW',
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.white.withValues(alpha: 0.35),
+                            color: AppColors.textDark.withValues(alpha: 0.35),
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 2.0,
@@ -181,6 +182,9 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _buildAtmosphereOverlay() {
+    // Subtle blue halo behind the emblem on the white canvas — gives
+    // depth without the "busy" feel. Very low alpha so it reads as a
+    // soft premium glow, not a gradient.
     return IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -188,8 +192,8 @@ class _SplashScreenState extends State<SplashScreen>
             center: const Alignment(0, -0.25),
             radius: 0.9,
             colors: [
-              AppColors.white.withValues(alpha: 0.06),
-              AppColors.white.withValues(alpha: 0.0),
+              AppColors.primaryBlue.withValues(alpha: 0.06),
+              AppColors.primaryBlue.withValues(alpha: 0.0),
             ],
           ),
         ),
@@ -214,16 +218,19 @@ class _SplashScreenState extends State<SplashScreen>
               height: 116,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.white,
+                // Navy→blue gradient disc so the emblem stands out on
+                // the white canvas; gold ring + white icon keep the
+                // blue/white/gold brand palette.
+                gradient: AppColors.primaryGradient,
                 border: Border.all(
                   color: AppColors.goldAccent,
                   width: 2.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.goldAccent.withValues(alpha: 0.28),
-                    blurRadius: 30,
-                    spreadRadius: 2,
+                    color: AppColors.goldAccent.withValues(alpha: 0.30),
+                    blurRadius: 28,
+                    spreadRadius: 1,
                   ),
                   BoxShadow(
                     color: AppColors.primaryBlue.withValues(alpha: 0.35),
@@ -236,7 +243,7 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Icon(
                   Icons.church_rounded,
                   size: 52,
-                  color: AppColors.primaryBlue,
+                  color: AppColors.white,
                 ),
               ),
             ),
@@ -257,7 +264,7 @@ class _SplashScreenState extends State<SplashScreen>
             child: Text(
               'Advent Connect ZW',
               style: AppTextStyles.displayMedium.copyWith(
-                color: AppColors.white,
+                color: AppColors.darkNavy,
                 fontSize: 32,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.2,
@@ -279,9 +286,9 @@ class _SplashScreenState extends State<SplashScreen>
           child: Text(
             'COMMUNITY  •  FAITH  •  ZIMBABWE',
             style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.white.withValues(alpha: 0.65),
+              color: AppColors.primaryBlue.withValues(alpha: 0.75),
               fontSize: 12,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
               letterSpacing: 2.4,
             ),
           ),
@@ -299,7 +306,7 @@ class _SplashScreenState extends State<SplashScreen>
             width: 140,
             height: 3,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.10),
+              color: AppColors.primaryBlue.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(2),
             ),
             child: Align(
@@ -308,16 +315,16 @@ class _SplashScreenState extends State<SplashScreen>
                 widthFactor: Curves.easeInOut.transform(_progress.value),
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [
-                        AppColors.goldAccent.withValues(alpha: 0.85),
-                        AppColors.white.withValues(alpha: 0.95),
+                        AppColors.primaryBlue,
+                        AppColors.goldAccent,
                       ],
                     ),
                     borderRadius: BorderRadius.circular(2),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.goldAccent.withValues(alpha: 0.45),
+                        color: AppColors.goldAccent.withValues(alpha: 0.40),
                         blurRadius: 6,
                       ),
                     ],

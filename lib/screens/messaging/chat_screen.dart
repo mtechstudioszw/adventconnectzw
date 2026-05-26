@@ -36,10 +36,50 @@ class _ChatScreenState extends State<ChatScreen>
   final _scrollController = ScrollController();
 
   StreamSubscription<List<Message>>? _stream;
-  List<Message> _messages = [];
+
+  // --- Unified message pipeline (single source of truth) ------------
+  // _serverMessages: the authoritative list from Supabase (realtime
+  //   stream + initial fetch). Always what the backend says exists.
+  // _pending: optimistic messages we've shown locally but the server
+  //   hasn't echoed back yet. Pruned as soon as a matching server row
+  //   arrives.
+  // The rendered list (_messages getter) is ALWAYS the union of the
+  // two, sorted strictly by createdAt — so ordering is deterministic
+  // and nothing reorders after the server confirms.
+  List<Message> _serverMessages = [];
+  final List<Message> _pending = [];
   bool _loading = true;
   bool _sending = false;
   String? _error;
+
+  /// The single, strictly-chronological list the UI renders. Server
+  /// rows + still-unconfirmed optimistic rows, merged and sorted by
+  /// createdAt (ties broken by id so equal-timestamp rows are stable).
+  List<Message> get _messages {
+    final merged = <Message>[..._serverMessages, ..._pending];
+    merged.sort((a, b) {
+      final c = a.createdAt.compareTo(b.createdAt);
+      if (c != 0) return c;
+      return a.id.compareTo(b.id);
+    });
+    return merged;
+  }
+
+  /// Replace the server list and drop any optimistic rows the server
+  /// has now echoed back (matched on sender + content + type within a
+  /// 2-minute window — enough to catch clock skew without colliding
+  /// with a genuinely repeated message).
+  void _applyServerMessages(List<Message> list) {
+    _serverMessages = list;
+    _pending.removeWhere((p) {
+      return list.any((s) =>
+          s.senderId == p.senderId &&
+          s.content == p.content &&
+          s.messageType == p.messageType &&
+          s.createdAt.difference(p.createdAt).abs() <
+              const Duration(minutes: 2));
+    });
+  }
 
   // Resolved conversation — starts as widget.initialConversation (may
   // be null when arriving via a notification tap with only the id),
@@ -184,7 +224,7 @@ class _ChatScreenState extends State<ChatScreen>
         MessagingService.readCachedMessages(widget.conversationId);
     if (cached.isNotEmpty) {
       setState(() {
-        _messages = cached;
+        _applyServerMessages(cached);
         _loading = false;
       });
       _scrollToBottom();
@@ -194,7 +234,7 @@ class _ChatScreenState extends State<ChatScreen>
           await MessagingService.fetchMessages(widget.conversationId);
       if (!mounted) return;
       setState(() {
-        _messages = list;
+        _applyServerMessages(list);
         _loading = false;
       });
       _scrollToBottom();
@@ -203,12 +243,19 @@ class _ChatScreenState extends State<ChatScreen>
       _stream =
           MessagingService.streamMessages(widget.conversationId).listen((list) {
         if (!mounted) return;
-        setState(() => _messages = list);
-        _scrollToBottom();
+        // Stream is authoritative. Merge into the unified pipeline —
+        // _applyServerMessages drops any optimistic rows the server
+        // has now echoed, and the _messages getter re-sorts strictly
+        // by createdAt so nothing jumps position.
+        final wasAtBottom = _isNearBottom();
+        setState(() => _applyServerMessages(list));
+        // Only auto-scroll if the user was already at the bottom — so
+        // an incoming message doesn't yank them away from older
+        // messages they're reading.
+        if (wasAtBottom) _scrollToBottom();
         // Any new inbound rows that haven't been marked delivered?
         // Hit them with delivered_at FIRST so the sender sees two
-        // grey ticks the moment our app receives the message — even
-        // before the user opens this screen / scrolls to it. THEN
+        // grey ticks the moment our app receives the message. THEN
         // mark them read (blue double-tick) since this screen being
         // mounted means they're being viewed.
         final me = AuthService.currentUser?.id;
@@ -216,7 +263,6 @@ class _ChatScreenState extends State<ChatScreen>
           final undelivered = list
               .where((m) => m.senderId != me && m.deliveredAt == null)
               .map((m) => m.id)
-              .where((id) => !id.startsWith('pending-'))
               .toList();
           if (undelivered.isNotEmpty) {
             unawaited(
@@ -384,10 +430,13 @@ class _ChatScreenState extends State<ChatScreen>
       content: '🎙️ Voice note',
       messageType: 'voice',
       mediaDurationSeconds: duration,
-      createdAt: DateTime.now(),
+      // UTC so optimistic rows sort correctly against server UTC
+      // timestamps — a local-time createdAt was placing fresh sends
+      // out of order relative to incoming server rows.
+      createdAt: DateTime.now().toUtc(),
     );
     setState(() {
-      _messages = [..._messages, optimistic];
+      _pending.add(optimistic);
       _sending = true;
     });
     _scrollToBottom();
@@ -398,7 +447,7 @@ class _ChatScreenState extends State<ChatScreen>
         localFilePath: path,
         durationSeconds: duration,
       );
-      // Stream picks up the canonical row and drops our temp bubble.
+      // Stream picks up the canonical row and prunes our temp bubble.
     } on PostgrestException catch (e) {
       // Silent block parity for voice notes too — RLS rejection keeps
       // the optimistic bubble in place, no toast.
@@ -406,18 +455,12 @@ class _ChatScreenState extends State<ChatScreen>
       final isRlsBlock = e.code == '42501' ||
           e.message.toLowerCase().contains('row-level security');
       if (!isRlsBlock) {
-        setState(() {
-          _messages =
-              _messages.where((m) => m.id != tempId).toList(growable: false);
-        });
+        setState(() => _pending.removeWhere((m) => m.id == tempId));
         _toast('Could not send voice note. Please try again.');
       }
     } catch (_) {
       if (mounted) {
-        setState(() {
-          _messages =
-              _messages.where((m) => m.id != tempId).toList(growable: false);
-        });
+        setState(() => _pending.removeWhere((m) => m.id == tempId));
         _toast('Could not send voice note. Please try again.');
       }
     } finally {
@@ -451,17 +494,25 @@ class _ChatScreenState extends State<ChatScreen>
     });
   }
 
+  /// True when the view is scrolled at (or within 120px of) the
+  /// bottom. Used to decide whether an incoming realtime message
+  /// should auto-scroll — we don't yank the user down if they've
+  /// scrolled up to read history.
+  bool _isNearBottom() {
+    if (!_scrollController.hasClients) return true;
+    final pos = _scrollController.position;
+    return pos.maxScrollExtent - pos.pixels < 120;
+  }
+
   Future<void> _send() async {
     final text = _inputController.text.trim();
     if (text.isEmpty || _sending) return;
     final me = AuthService.currentUser?.id ?? '';
 
-    // Optimistic UI — show the bubble immediately so the user gets
-    // feedback even on a slow network. Previously `_send` awaited the
-    // round-trip silently, so tapping the send button "did nothing"
-    // until the server acknowledged. We give the local message a
-    // temporary negative id; the stream subscription replaces it
-    // with the real row when it arrives a moment later.
+    // Optimistic UI — show the bubble immediately in the _pending
+    // list. The realtime stream echoes the real row a moment later
+    // and _applyServerMessages prunes this optimistic copy. createdAt
+    // is UTC so it sorts correctly against server timestamps.
     final tempId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     final optimistic = Message(
       id: tempId,
@@ -469,10 +520,10 @@ class _ChatScreenState extends State<ChatScreen>
       senderId: me,
       senderName: 'You',
       content: text,
-      createdAt: DateTime.now(),
+      createdAt: DateTime.now().toUtc(),
     );
     setState(() {
-      _messages = [..._messages, optimistic];
+      _pending.add(optimistic);
       _sending = true;
     });
     _inputController.clear();
@@ -483,9 +534,8 @@ class _ChatScreenState extends State<ChatScreen>
         conversationId: widget.conversationId,
         content: text,
       );
-      // Stream picks up the real row and replaces _messages — the
-      // optimistic one drops out because its temp id won't be in
-      // the server response. Nothing else to do here.
+      // Realtime stream picks up the real row and prunes the
+      // optimistic copy. Nothing else to do here.
     } on OutboxQueuedException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -512,10 +562,7 @@ class _ChatScreenState extends State<ChatScreen>
         return; // bubble stays, single tick stays, no toast
       }
       // Any other Postgrest error → existing rollback + retry path.
-      setState(() {
-        _messages =
-            _messages.where((m) => m.id != tempId).toList(growable: false);
-      });
+      setState(() => _pending.removeWhere((m) => m.id == tempId));
       _inputController.text = text;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -529,10 +576,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       // Send failed — roll back the optimistic bubble and put the
       // text back in the input so the user can retry.
-      setState(() {
-        _messages =
-            _messages.where((m) => m.id != tempId).toList(growable: false);
-      });
+      setState(() => _pending.removeWhere((m) => m.id == tempId));
       _inputController.text = text;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -848,7 +892,10 @@ class _ChatScreenState extends State<ChatScreen>
       ),
     );
     if (confirmed != true || !mounted) return;
-    setState(() => _messages = const []);
+    setState(() {
+      _serverMessages = const [];
+      _pending.clear();
+    });
   }
 
   Future<void> _confirmDeleteConversation() async {

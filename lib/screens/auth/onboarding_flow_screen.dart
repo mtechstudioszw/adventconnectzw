@@ -140,6 +140,10 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
       final result = await AuthService.updateProfile(
         fullName: name,
         bio: _bioController.text.trim(),
+        // Persist username to the profiles table (not just metadata) so
+        // hasCompletedProfileSetup() sees it — otherwise Google users
+        // get re-onboarded on every sign-in.
+        username: username.isNotEmpty ? username : null,
         profilePhotoUrl: _profilePhotoUrl ?? '',
         coverPhotoUrl: _coverPhotoUrl ?? '',
       );

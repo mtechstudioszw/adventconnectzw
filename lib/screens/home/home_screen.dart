@@ -394,9 +394,29 @@ class _HomeScreenState extends State<HomeScreen>
           Positioned(
             right: 16,
             bottom: 24,
-            child: AdventChatBubble(
-              hasUnread: _hasUnreadChat,
-              unreadCount: _chatBadgeCount,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Prayer quick-access — sits above the Advent Chat
+                // bubble. Tapping it opens the Prayer tab where the
+                // user posts their request (the in-prayer-screen FAB
+                // handles the actual compose).
+                FloatingActionButton(
+                  heroTag: 'home_prayer_fab',
+                  mini: true,
+                  backgroundColor: AppColors.white,
+                  foregroundColor: AppColors.primaryBlue,
+                  elevation: 4,
+                  tooltip: 'Prayer requests',
+                  onPressed: () => context.pushNamed('prayer'),
+                  child: const Icon(Icons.volunteer_activism_rounded),
+                ),
+                const SizedBox(height: 12),
+                AdventChatBubble(
+                  hasUnread: _hasUnreadChat,
+                  unreadCount: _chatBadgeCount,
+                ),
+              ],
             ),
           ),
         ],

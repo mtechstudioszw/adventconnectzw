@@ -108,7 +108,26 @@ class AuthService {
     if (lower.contains('weak password') || lower.contains('password should')) {
       return 'Choose a stronger password — at least 8 characters.';
     }
-    if (lower.contains('network') || lower.contains('failed host lookup')) {
+    // Broad net-failure detection — the raw error here can be a
+    // SocketException, ClientException, TimeoutException, TLS
+    // handshake failure, or a dozen platform-specific phrasings.
+    // Catch them all and show one friendly offline message instead of
+    // leaking "ClientException with SocketException: Failed host
+    // lookup 'eqby...supabase.co'" to the user.
+    if (lower.contains('network') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('socketexception') ||
+        lower.contains('clientexception') ||
+        lower.contains('connection refused') ||
+        lower.contains('connection closed') ||
+        lower.contains('connection reset') ||
+        lower.contains('connection timed out') ||
+        lower.contains('connection attempt failed') ||
+        lower.contains('unreachable') ||
+        lower.contains('handshake') ||
+        lower.contains('timeout') ||
+        lower.contains('timed out') ||
+        lower.contains('xmlhttprequest')) {
       return 'You appear to be offline. Check your connection and try again.';
     }
     return raw;
@@ -445,6 +464,7 @@ class AuthService {
     String? fullName,
     String? bio,
     String? churchId,
+    String? username,
     String? profilePhotoUrl,
     String? coverPhotoUrl,
   }) async {
@@ -465,6 +485,9 @@ class AuthService {
       if (fullName != null) next['full_name'] = fullName.trim();
       if (bio != null) next['bio'] = bio.trim();
       if (churchId != null) next['church_id'] = churchId;
+      if (username != null && username.trim().isNotEmpty) {
+        next['username'] = username.trim();
+      }
       if (profilePhotoUrl != null) {
         final v = sentinelOrNull(profilePhotoUrl);
         if (v == null) {
@@ -488,6 +511,14 @@ class AuthService {
       final dbUpdates = <String, dynamic>{};
       if (fullName != null) dbUpdates['full_name'] = fullName.trim();
       if (bio != null) dbUpdates['bio'] = bio.trim();
+      // Persist username to the profiles table — this is the column
+      // hasCompletedProfileSetup() reads to decide "has this user
+      // finished onboarding". Writing it only to user_metadata (the
+      // old behaviour) meant the check never saw it, so Google users
+      // were re-onboarded on every sign-in.
+      if (username != null && username.trim().isNotEmpty) {
+        dbUpdates['username'] = username.trim();
+      }
       if (churchId != null) {
         dbUpdates['church_id'] =
             churchId.isEmpty ? null : int.tryParse(churchId);
@@ -571,6 +602,12 @@ class AuthService {
   static Future<bool> hasCompletedProfileSetup() async {
     final user = currentUser;
     if (user == null) return false;
+    // Fallback: users who onboarded BEFORE username was persisted to
+    // the profiles table have it only in user_metadata. Treat that as
+    // "completed" too so they're not re-onboarded after this fix ships.
+    final metaUsername =
+        (user.userMetadata?['username'] as String?)?.trim() ?? '';
+    if (metaUsername.isNotEmpty) return true;
     try {
       final row = await _client
           .from('profiles')

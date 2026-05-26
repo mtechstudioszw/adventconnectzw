@@ -26,8 +26,13 @@ class ChurchService {
       query = query.or('name.ilike.$term,city.ilike.$term');
     }
 
+    // Master reference Part 15: churches sort ALPHABETICALLY by name
+    // by default. (When the user grants location, churches_screen
+    // re-sorts nearest-first client-side via _sortByDistance.) The
+    // previous members_count ordering was the unintended "filter
+    // change" the user reported.
     final response = await query
-        .order('members_count', ascending: false)
+        .order('name', ascending: true)
         .limit(limit);
 
     return (response as List)

@@ -180,6 +180,37 @@ class _ProfileScreenState extends State<ProfileScreen>
     return AuthService.currentUser?.email ?? '';
   }
 
+  /// Parses the user's date of birth from metadata (stored as an ISO
+  /// string at signup / age-verification). Returns null if absent or
+  /// malformed.
+  DateTime? _birthDate() {
+    final meta = AuthService.currentUser?.userMetadata ?? const {};
+    final raw = (meta['date_of_birth'] ?? meta['birth_date'])?.toString();
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  /// Age in whole years, or null if no birth date / out of range.
+  int? _age() {
+    final dob = _birthDate();
+    if (dob == null) return null;
+    final now = DateTime.now();
+    var age = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      age -= 1;
+    }
+    return age < 0 || age > 120 ? null : age;
+  }
+
+  /// True when today (month + day) matches the user's birthday.
+  bool _isBirthdayToday() {
+    final dob = _birthDate();
+    if (dob == null) return false;
+    final now = DateTime.now();
+    return now.month == dob.month && now.day == dob.day;
+  }
+
   Future<void> _signOut() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -1000,6 +1031,51 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ],
           ),
+          if (_age() != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_age()} years old',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (_isBirthdayToday()) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.goldAccent.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '🎉 Happy Birthday!',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.goldAccent,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );

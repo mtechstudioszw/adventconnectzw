@@ -943,51 +943,75 @@ class _HomeScreenState extends State<HomeScreen>
   // breakers.
   static const _discoveryEveryNPosts = 3;
 
-  /// Builds the ordered list of "discovery" cards (suggested people,
-  /// upcoming events, prayer prompt, churches, invite friends, quick
-  /// stats) that get sprinkled between posts in the feed. Empty
-  /// sections are skipped so we don't waste a slot on, e.g., a "0
-  /// upcoming events" card.
+  /// Builds the discovery-card pool and shuffles it deterministically
+  /// per viewer. Same content, different order per account — so two
+  /// users on the same data don't see identical feeds. Invite + Quick
+  /// stats are pinned to the end (they're filler / always-show items,
+  /// not discovery) so the personalized portion stays at the top of
+  /// the interspersed slots where it has the most impact.
   List<Widget> _buildDiscoveryCards() {
-    final cards = <Widget>[];
+    final discoverable = <_DiscoverySlot>[];
     if (_hasNonFriendSuggestions) {
-      cards.add(_discoverySection(
-        title: 'People to meet',
-        child: _buildSuggestedMembersRow(),
+      discoverable.add(_DiscoverySlot(
+        key: 'people',
+        widget: _discoverySection(
+          title: 'People to meet',
+          child: _buildSuggestedMembersRow(),
+        ),
       ));
     }
     if (_events.isNotEmpty) {
-      cards.add(_discoverySection(
-        title: 'Upcoming events',
-        action: 'See all',
-        onAction: () => context.goNamed('events'),
-        child: _buildEventsRow(),
+      discoverable.add(_DiscoverySlot(
+        key: 'events',
+        widget: _discoverySection(
+          title: 'Upcoming events',
+          action: 'See all',
+          onAction: () => context.goNamed('events'),
+          child: _buildEventsRow(),
+        ),
       ));
     }
-    cards.add(_discoverySection(
-      title: 'Active prayers',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: _PrayersEmpty(onTap: () => context.pushNamed('prayer')),
+    discoverable.add(_DiscoverySlot(
+      key: 'prayers',
+      widget: _discoverySection(
+        title: 'Active prayers',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _PrayersEmpty(onTap: () => context.pushNamed('prayer')),
+        ),
       ),
     ));
     if (_churches.isNotEmpty) {
-      cards.add(_discoverySection(
-        title: 'Discover churches',
-        action: 'See all',
-        onAction: () => context.goNamed('churches'),
-        child: _buildChurchGrid(),
+      discoverable.add(_DiscoverySlot(
+        key: 'churches',
+        widget: _discoverySection(
+          title: 'Discover churches',
+          action: 'See all',
+          onAction: () => context.goNamed('churches'),
+          child: _buildChurchGrid(),
+        ),
       ));
     }
-    cards.add(const Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: InviteFriendsCard(),
-    ));
-    cards.add(_discoverySection(
-      title: 'Quick stats',
-      child: _buildQuickStats(),
-    ));
-    return cards;
+    // Stable per-viewer shuffle: same user always sees the same order
+    // within a session (no jumpy reshuffle on rebuild), but two
+    // different users see meaningfully different sequences.
+    final viewerId = AuthService.currentUser?.id ?? '';
+    discoverable.sort((a, b) {
+      final seedA = '${viewerId}_${a.key}'.hashCode;
+      final seedB = '${viewerId}_${b.key}'.hashCode;
+      return seedA.compareTo(seedB);
+    });
+    return [
+      for (final slot in discoverable) slot.widget,
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: InviteFriendsCard(),
+      ),
+      _discoverySection(
+        title: 'Quick stats',
+        child: _buildQuickStats(),
+      ),
+    ];
   }
 
   /// Wraps a discovery card body with its section header + consistent
@@ -2717,4 +2741,14 @@ class _EmptyTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Pairs a discovery card widget with a stable `key` so the
+/// per-viewer shuffle is reproducible. Two users hash the same
+/// pool differently, but the same user sees the same order on
+/// every rebuild (no jumpy reshuffle).
+class _DiscoverySlot {
+  const _DiscoverySlot({required this.key, required this.widget});
+  final String key;
+  final Widget widget;
 }

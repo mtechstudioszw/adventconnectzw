@@ -275,6 +275,26 @@ class MessagingService {
         ? (meta['full_name'] as String).trim()
         : 'Member';
 
+    // Resolve the other participant's REAL display name from their
+    // profile rather than trusting the caller-supplied name. Jobs /
+    // marketplace pass placeholders like "Job seeker" / "Recruiter"
+    // when they don't have the poster's identity loaded — but the
+    // chat must show the actual person. Falls back to the passed
+    // name (then "Member") if the lookup fails.
+    var resolvedOtherName = otherUserName.trim();
+    try {
+      final prof = await _client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', otherUserId)
+          .maybeSingle();
+      final realName = (prof?['full_name'] as String?)?.trim() ?? '';
+      if (realName.isNotEmpty) resolvedOtherName = realName;
+    } catch (_) {
+      // keep the caller-supplied name
+    }
+    if (resolvedOtherName.isEmpty) resolvedOtherName = 'Member';
+
     // Reuse an existing conversation between us if one already exists,
     // regardless of which side seeded it (a/b ordering).
     final existingRows = await _client
@@ -304,7 +324,7 @@ class MessagingService {
             'participant_a_id': user.id,
             'participant_b_id': otherUserId,
             'participant_a_name': myName,
-            'participant_b_name': otherUserName,
+            'participant_b_name': resolvedOtherName,
             'initiator_id': user.id,
             'conversation_source': source,
             'is_business': isBusiness,

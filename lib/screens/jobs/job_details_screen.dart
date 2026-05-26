@@ -408,7 +408,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                     _buildRequirements(job),
                     const SizedBox(height: 16),
                   ],
-                  _buildEmployerCard(job),
+                  // Poster identity card intentionally removed — per
+                  // request, the job screen must not reveal who posted
+                  // the job. Their real identity is only surfaced when
+                  // the viewer taps "Contact poster" and opens a chat.
                 ],
               ),
             ),
@@ -733,65 +736,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     );
   }
 
-  Widget _buildEmployerCard(Job job) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.business_center,
-              color: AppColors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  job.isSeeking ? 'POSTED BY JOB SEEKER' : 'POSTED BY RECRUITER',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.5),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  job.posterName,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // _buildEmployerCard removed — the job screen no longer reveals the
+  // poster's identity. The poster is only reachable via "Contact
+  // poster", which resolves their real name from their profile.
 }
 
 class _HeroClipper extends CustomClipper<Path> {

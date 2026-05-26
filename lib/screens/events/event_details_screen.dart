@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/event_model.dart';
 import '../../services/event_service.dart';
+import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
@@ -470,74 +471,131 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   }
 
   Widget _buildOrganizer(Event event) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
+    // Tappable to contact the organizer — unless the event is the
+    // viewer's own, or there's no organizer user id to message (some
+    // events only carry a contact name/phone, not a profile).
+    final canContact =
+        (event.organizerId ?? '').isNotEmpty && !_isOrganizer(event);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: canContact ? () => _messageOrganizer(event) : null,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: const Icon(
-              Icons.campaign_outlined,
-              color: AppColors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'ORGANIZED BY',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.4,
-                  ),
+                child: const Icon(
+                  Icons.campaign_outlined,
+                  color: AppColors.white,
+                  size: 22,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  _organizerLabel(event),
-                  style: AppTextStyles.titleMedium.copyWith(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                  ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'ORGANIZED BY',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _organizerLabel(event),
+                      style: AppTextStyles.titleMedium.copyWith(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (canContact) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Tap to message',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ),
+              ),
+              Icon(
+                canContact ? Icons.chat_bubble_outline : Icons.chevron_right,
+                color: canContact
+                    ? AppColors.primaryBlue
+                    : const Color.fromRGBO(26, 26, 46, 0.4),
+              ),
+            ],
           ),
-          const Icon(
-            Icons.chevron_right,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
-          ),
-        ],
+        ),
       ),
     );
+  }
+
+  Future<void> _messageOrganizer(Event event) async {
+    final organizerId = event.organizerId;
+    if (organizerId == null || organizerId.isEmpty) return;
+    try {
+      // createConversation resolves the organizer's real profile name,
+      // so even events that only stored a contact_name open a chat
+      // with the actual person.
+      final convo = await MessagingService.createConversation(
+        otherUserId: organizerId,
+        otherUserName: _organizerLabel(event),
+        source: 'direct',
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      context.pushNamed(
+        'chat',
+        pathParameters: {'id': convo.id},
+        extra: convo,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not open chat. Please try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildAbout(Event event) {

@@ -22,11 +22,19 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
   bool _loading = true;
   List<AdventNews> _items = const [];
   NewsCategory? _activeCategory;
+  bool _canPublish = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _resolveCanPublish();
+  }
+
+  Future<void> _resolveCanPublish() async {
+    final ok = await AdventNewsService.canPublish();
+    if (!mounted) return;
+    setState(() => _canPublish = ok);
   }
 
   Future<void> _load() async {
@@ -49,6 +57,23 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
+      // Admin-only FAB to open the in-app news publisher. Gated by
+      // AdventNewsService.canPublish (which mirrors the RLS rule:
+      // super admin OR approved church admin). Anyone else just sees
+      // the regular news feed with no Post button.
+      floatingActionButton: _canPublish
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                final published =
+                    await context.pushNamed<bool>('post_news');
+                if (published == true && mounted) await _load();
+              },
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: AppColors.white,
+              icon: const Icon(Icons.edit_note),
+              label: const Text('Post news'),
+            )
+          : null,
       body: Column(
         children: [
           _buildHero(context),

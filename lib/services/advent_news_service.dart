@@ -70,4 +70,89 @@ class AdventNewsService {
       return null;
     }
   }
+
+  /// True when the current viewer is allowed to publish news in-app —
+  /// gates the "Post news" entry button. The check mirrors the RLS
+  /// policy: super admin OR approved church admin.
+  static Future<bool> canPublish() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return false;
+    try {
+      final profile = await _client
+          .from('profiles')
+          .select('is_super_admin')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (profile?['is_super_admin'] == true) return true;
+    } catch (_) {
+      // Fall through and try church_admins.
+    }
+    try {
+      final adminRow = await _client
+          .from('church_admins')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('status', 'approved')
+          .limit(1);
+      return (adminRow as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Publish a new Advent News story. Server-side RLS rejects this
+  /// for anyone who isn't a super admin or approved church admin,
+  /// so we don't need a client-side gate beyond [canPublish] for
+  /// the UI affordance.
+  static Future<AdventNews> postNews({
+    required String title,
+    required String summary,
+    String? body,
+    String? coverPhotoUrl,
+    NewsCategory category = NewsCategory.general,
+    String? sourceUrl,
+    String? sourceLabel,
+    bool isPinned = false,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to publish news.');
+    }
+    final row = await _client
+        .from(_table)
+        .insert({
+          'title': title.trim(),
+          'summary': summary.trim(),
+          'body': body?.trim().isNotEmpty == true ? body!.trim() : null,
+          'cover_photo_url': coverPhotoUrl?.trim(),
+          'category': category.code,
+          'source_url': sourceUrl?.trim().isNotEmpty == true
+              ? sourceUrl!.trim()
+              : null,
+          'source_label': sourceLabel?.trim().isNotEmpty == true
+              ? sourceLabel!.trim()
+              : null,
+          'is_pinned': isPinned,
+          'author_id': user.id,
+          'published_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .select('*, $_authorEmbed')
+        .single();
+    return AdventNews.fromJson(row);
+  }
+
+  /// Toggle the pinned state of an existing news article. Reserved
+  /// for the same admins that can publish.
+  static Future<void> setPinned(String id, bool isPinned) async {
+    await _client
+        .from(_table)
+        .update({'is_pinned': isPinned})
+        .eq('id', id);
+  }
+
+  /// Delete a news article. RLS gates this to the author or a super
+  /// admin so accidental deletes by other admins are blocked.
+  static Future<void> deleteNews(String id) async {
+    await _client.from(_table).delete().eq('id', id);
+  }
 }

@@ -652,10 +652,11 @@ Future<void> _showSellerChooser(BuildContext context) {
               icon: Icons.add_business_outlined,
               title: 'Set up a new store',
               subtitle:
-                  'Apply to start selling within the SDA community.',
+                  'Open a store and start selling within the SDA community.',
               onTap: () {
                 Navigator.of(sheetContext).pop();
-                context.pushNamed('setup_store');
+                // Gate on the Marketplace Code of Conduct first.
+                context.pushNamed('marketplace_guidelines');
               },
             ),
           ],

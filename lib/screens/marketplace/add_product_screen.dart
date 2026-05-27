@@ -782,7 +782,9 @@ class _SellerGate extends StatelessWidget {
                   if (pending) {
                     context.goNamed('seller_dashboard');
                   } else {
-                    context.goNamed('setup_store');
+                    // Self-serve flow lands on the Code of Conduct
+                    // gate before the setup form (patch_022).
+                    context.goNamed('marketplace_guidelines');
                   }
                 },
                 borderRadius: BorderRadius.circular(14),

@@ -9,11 +9,16 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-/// The "Become a Seller" application form. Inserts a row into `sellers`
-/// with status='pending' and routes to the seller dashboard, which
-/// shows the pending banner until admin approves the application.
+/// The "Open a store" form. Self-serve as of patch_022 — anyone
+/// authenticated can publish a storefront after accepting the
+/// Marketplace Code of Conduct. The accepted code [termsVersion]
+/// MUST be forwarded from MarketplaceGuidelinesScreen via the
+/// route's `extra` arg; the DB constraint rejects approved-status
+/// inserts without a terms_accepted_at timestamp.
 class SetupStoreScreen extends StatefulWidget {
-  const SetupStoreScreen({super.key});
+  const SetupStoreScreen({super.key, required this.termsVersion});
+
+  final String termsVersion;
 
   @override
   State<SetupStoreScreen> createState() => _SetupStoreScreenState();
@@ -166,6 +171,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
         businessName: _businessNameController.text,
         category: _selectedCategory!,
         phone: _phoneController.text,
+        termsVersion: widget.termsVersion,
         description: _descriptionController.text,
         province: _selectedProvince,
         city: _cityController.text,

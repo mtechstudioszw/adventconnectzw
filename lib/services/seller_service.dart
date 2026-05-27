@@ -61,13 +61,20 @@ class SellerService {
     return Seller.fromJson(row);
   }
 
-  /// Insert the seller application. Status defaults to `pending` on the
-  /// server; admin moves it to `approved` or `rejected` from the web
-  /// dashboard. Returns the created row.
+  /// Open a storefront. Self-serve as of patch_022 — anyone authenticated
+  /// can publish immediately, gated by the Marketplace Code of Conduct
+  /// (acceptance enforced by the [termsVersion] arg + a CHECK on the
+  /// sellers table). Admin moderation is reactive (is_active = false /
+  /// status = 'banned') rather than gatekeeping.
+  ///
+  /// [termsVersion] MUST be the value the user accepted on
+  /// MarketplaceGuidelinesScreen — the DB constraint rejects insert
+  /// if terms_accepted_at is null on an approved row.
   static Future<Seller> applyAsSeller({
     required String businessName,
     required String category,
     required String phone,
+    required String termsVersion,
     String? description,
     String? province,
     String? city,
@@ -86,7 +93,7 @@ class SellerService {
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
-      throw const AuthException('Sign in to apply as a seller.');
+      throw const AuthException('Sign in to open a store.');
     }
     final row = <String, dynamic>{
       'auth_user_id': user.id,
@@ -108,7 +115,12 @@ class SellerService {
       'delivery_fee': deliveryFee?.trim(),
       'observes_sabbath': observesSabbath,
       'sabbath_notice_text': sabbathNoticeText?.trim(),
-      'status': 'pending',
+      // Self-serve: insert as already-approved + record the code of
+      // conduct version they accepted on the gate screen.
+      'status': 'approved',
+      'approved_at': DateTime.now().toUtc().toIso8601String(),
+      'terms_accepted_at': DateTime.now().toUtc().toIso8601String(),
+      'terms_version': termsVersion,
     };
     Map<String, dynamic> inserted;
     try {

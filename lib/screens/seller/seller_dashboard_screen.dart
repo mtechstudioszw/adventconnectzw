@@ -214,7 +214,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
             label: 'Start setup',
             icon: Icons.arrow_forward,
             onTap: () async {
-              await context.pushNamed('setup_store');
+              // Self-serve flow: route through the Code of Conduct
+              // gate first so the user agrees before we let them
+              // open a storefront (patch_022 enforces this at the
+              // DB layer too).
+              await context.pushNamed('marketplace_guidelines');
               if (mounted) _bootstrap();
             },
           ),

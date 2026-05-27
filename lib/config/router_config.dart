@@ -65,6 +65,7 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/users/user_profile_screen.dart';
 import '../screens/seller/edit_store_screen.dart';
 import '../screens/seller/manage_products_screen.dart';
+import '../screens/seller/marketplace_guidelines_screen.dart';
 import '../screens/seller/seller_dashboard_screen.dart';
 import '../screens/seller/seller_profile_screen.dart';
 import '../screens/seller/setup_store_screen.dart';
@@ -500,9 +501,26 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const SellerDashboardScreen(),
       routes: [
         GoRoute(
+          // Gate before the setup form — anyone authenticated lands
+          // here first, must accept the Code of Conduct, then taps
+          // Continue to push setup_store with the accepted version.
+          path: 'guidelines',
+          name: 'marketplace_guidelines',
+          builder: (context, state) => const MarketplaceGuidelinesScreen(),
+        ),
+        GoRoute(
           path: 'setup',
           name: 'setup_store',
-          builder: (context, state) => const SetupStoreScreen(),
+          builder: (context, state) {
+            // termsVersion is carried via `extra` from the guidelines
+            // gate. We default to "v1-2026-05" defensively so a code
+            // path that lands here without the gate (e.g. a deep
+            // link) still inserts a valid sellers row — but the
+            // intended path is always guidelines → setup.
+            final version =
+                state.extra is String ? state.extra as String : 'v1-2026-05';
+            return SetupStoreScreen(termsVersion: version);
+          },
         ),
         GoRoute(
           path: 'edit',

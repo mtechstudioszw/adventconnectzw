@@ -247,7 +247,11 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'post',
           name: 'post_news',
-          builder: (context, state) => const PostAdventNewsScreen(),
+          builder: (context, state) {
+            final existing =
+                state.extra is AdventNews ? state.extra as AdventNews : null;
+            return PostAdventNewsScreen(existing: existing);
+          },
         ),
         GoRoute(
           path: ':id',

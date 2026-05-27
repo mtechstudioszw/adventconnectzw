@@ -34,6 +34,7 @@ class AdventNews {
     this.sourceUrl,
     this.sourceLabel,
     this.authorName,
+    this.authorId,
     this.isPinned = false,
   });
 
@@ -49,6 +50,7 @@ class AdventNews {
   /// Display name for the source (e.g. "ANN", "ZUC press").
   final String? sourceLabel;
   final String? authorName;
+  final String? authorId;
   final bool isPinned;
   final DateTime publishedAt;
 
@@ -65,6 +67,7 @@ class AdventNews {
       sourceUrl: json['source_url'] as String?,
       sourceLabel: json['source_label'] as String?,
       authorName: (authorMap?['full_name'] as String?)?.trim(),
+      authorId: json['author_id']?.toString(),
       isPinned: json['is_pinned'] == true,
       publishedAt:
           DateTime.tryParse(json['published_at']?.toString() ?? '') ??

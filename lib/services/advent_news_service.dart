@@ -150,6 +150,41 @@ class AdventNewsService {
         .eq('id', id);
   }
 
+  /// Update an existing news article. RLS restricts this to the
+  /// author or a super admin, so the client gate is just a UX
+  /// affordance — the database is authoritative.
+  static Future<AdventNews> updateNews({
+    required String id,
+    required String title,
+    required String summary,
+    String? body,
+    String? coverPhotoUrl,
+    NewsCategory category = NewsCategory.general,
+    String? sourceUrl,
+    String? sourceLabel,
+  }) async {
+    final row = await _client
+        .from(_table)
+        .update({
+          'title': title.trim(),
+          'summary': summary.trim(),
+          'body': body?.trim().isNotEmpty == true ? body!.trim() : null,
+          'cover_photo_url': coverPhotoUrl?.trim(),
+          'category': category.code,
+          'source_url': sourceUrl?.trim().isNotEmpty == true
+              ? sourceUrl!.trim()
+              : null,
+          'source_label': sourceLabel?.trim().isNotEmpty == true
+              ? sourceLabel!.trim()
+              : null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', id)
+        .select('*, $_authorEmbed')
+        .single();
+    return AdventNews.fromJson(row);
+  }
+
   /// Delete a news article. RLS gates this to the author or a super
   /// admin so accidental deletes by other admins are blocked.
   static Future<void> deleteNews(String id) async {

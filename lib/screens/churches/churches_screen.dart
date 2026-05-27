@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/church_model.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
@@ -240,6 +242,14 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   /// user hasn't granted location yet, tapping the chip kicks off the
   /// permission request, then enables the filter only if granted.
   Future<void> _setFilter(_ChurchFilter filter) async {
+    // Nearby Churches is a paid-feature pitch while we finish the
+    // location-radius queries — tap shows a coming-soon sheet with
+    // an EcoCash sponsorship CTA. Doesn't change _activeFilter so
+    // the user stays on whatever they had selected.
+    if (filter == _ChurchFilter.nearby) {
+      _showNearbyComingSoon();
+      return;
+    }
     if (filter == _activeFilter) {
       // Tapping the active chip again just clears the location
       // error banner; otherwise it's a no-op.
@@ -251,46 +261,24 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       }
       return;
     }
-    if (filter == _ChurchFilter.nearby && _position == null) {
-      setState(() {
-        _locating = true;
-        _locationError = null;
-        _locationFailure = null;
-      });
-      final result = await LocationService.getCurrentPositionDetailed();
-      if (!mounted) return;
-      if (!result.isSuccess) {
-        setState(() {
-          _locating = false;
-          _locationFailure = result.failure;
-          _locationError = switch (result.failure!) {
-            LocationFailure.servicesDisabled =>
-              'Location is turned off on this device. Turn it on in Settings, then tap Nearby again.',
-            LocationFailure.permissionDenied =>
-              'Advent Connect needs location permission to find nearby churches. Tap Nearby again to grant access.',
-            LocationFailure.permissionDeniedForever =>
-              'Location permission is blocked for Advent Connect. Open Settings to allow it.',
-            LocationFailure.timeout =>
-              'Took too long to get a GPS fix. Move to a window or outdoors and try again.',
-            LocationFailure.unknown =>
-              'Couldn\'t get your location. Please try again.',
-          };
-        });
-        return;
-      }
-      setState(() {
-        _position = result.position;
-        _locating = false;
-        _activeFilter = filter;
-        _sortByDistance();
-      });
-      return;
-    }
     setState(() {
       _activeFilter = filter;
       _locationError = null;
       _locationFailure = null;
     });
+  }
+
+  void _showNearbyComingSoon() {
+    HapticFeedback.selectionClick();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => _NearbyComingSoonSheet(),
+    );
   }
 
   Future<void> _loadChurches() async {
@@ -767,6 +755,194 @@ class _FilterChip extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet shown when the Nearby filter chip is tapped. The
+/// feature is paused until we ship the location-radius backend, so
+/// we surface a coming-soon card with an EcoCash sponsorship CTA so
+/// readers who want it sooner can fund the build.
+class _NearbyComingSoonSheet extends StatelessWidget {
+  static const _ecoCashNumber = '0778 092 494';
+  static const _supportWhatsApp = '+263778092494';
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(26, 26, 46, 0.12),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.goldAccent.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(20),
+                  border:
+                      Border.all(color: AppColors.goldAccent, width: 1),
+                ),
+                child: Text(
+                  'COMING SOON',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.goldAccent,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10.5,
+                    letterSpacing: 1.6,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Nearby Churches',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.headlineSmall.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'We\'re building location-aware church discovery so you can find the closest SDA church wherever you are. Want it sooner? Sponsor the build.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: const Color.fromRGBO(26, 26, 46, 0.7),
+                height: 1.45,
+                fontSize: 13.5,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.lightGrey,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.goldAccent.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.goldAccent.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.volunteer_activism,
+                        color: AppColors.goldAccent, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Sponsor via EcoCash',
+                          style: AppTextStyles.titleMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Dial *151# → Send Money → $_ecoCashNumber',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: const Color.fromRGBO(26, 26, 46, 0.7),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_outlined,
+                        color: AppColors.primaryBlue, size: 18),
+                    onPressed: () async {
+                      await Clipboard.setData(const ClipboardData(
+                          text: _ecoCashNumber));
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: AppColors.darkNavy,
+                          content: Text(
+                            'EcoCash number copied: $_ecoCashNumber',
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: AppColors.white),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () async {
+                    final uri = Uri.parse(
+                      'https://wa.me/${_supportWhatsApp.replaceAll("+", "")}'
+                      '?text=${Uri.encodeComponent("Hi, I'd like to help fund Nearby Churches in Advent Connect ZW.")}',
+                    );
+                    try {
+                      await launchUrl(uri,
+                          mode: LaunchMode.externalApplication);
+                    } catch (_) {}
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Center(
+                      child: Text(
+                        'Talk to us on WhatsApp',
+                        style: AppTextStyles.buttonText.copyWith(
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Maybe later',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

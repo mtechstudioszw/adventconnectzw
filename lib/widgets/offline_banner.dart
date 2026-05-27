@@ -6,12 +6,12 @@ import '../services/connectivity_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
-/// Facebook-style "no connection" strip. Slim grey bar that slides
-/// down from under the status bar when the device drops offline,
-/// slides back up when it reconnects. Doesn't overlap navigation,
-/// doesn't grab focus, doesn't animate aggressively. The previous
-/// dark-navy floating pill felt loud — this is invisible until it
-/// matters and then quietly self-removes.
+/// Silent-offline / brief-back-online overlay. The previous version
+/// kept a persistent grey strip pinned to the status bar while the
+/// device was offline; this version stays out of the way while
+/// offline (per-screen offline notices already speak up where data
+/// failed to load) and only surfaces a small "Back online" toast for
+/// three seconds when connectivity is restored.
 class OfflineBanner extends StatefulWidget {
   const OfflineBanner({super.key, required this.child});
 
@@ -23,20 +23,36 @@ class OfflineBanner extends StatefulWidget {
 
 class _OfflineBannerState extends State<OfflineBanner> {
   late bool _online;
+  bool _showRestored = false;
   StreamSubscription<bool>? _sub;
+  Timer? _restoreTimer;
 
   @override
   void initState() {
     super.initState();
     _online = ConnectivityService.isOnline;
     _sub = ConnectivityService.onChanged.listen((value) {
-      if (mounted) setState(() => _online = value);
+      if (!mounted) return;
+      final wasOffline = !_online;
+      setState(() => _online = value);
+      if (wasOffline && value) {
+        _flashRestored();
+      }
+    });
+  }
+
+  void _flashRestored() {
+    _restoreTimer?.cancel();
+    setState(() => _showRestored = true);
+    _restoreTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showRestored = false);
     });
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _restoreTimer?.cancel();
     super.dispose();
   }
 
@@ -53,25 +69,25 @@ class _OfflineBannerState extends State<OfflineBanner> {
             child: SafeArea(
               bottom: false,
               child: AnimatedSize(
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOut,
                 alignment: Alignment.topCenter,
-                child: _online
-                    ? const SizedBox(height: 0, width: double.infinity)
-                    : Container(
-                        height: 22,
-                        color: const Color(0xFF6B7280),
+                child: _showRestored
+                    ? Container(
+                        height: 24,
+                        color: AppColors.successGreen,
                         alignment: Alignment.center,
                         child: Text(
-                          'No Internet Connection',
+                          'Back online',
                           style: AppTextStyles.labelMedium.copyWith(
                             color: AppColors.white,
-                            fontSize: 11.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.1,
                           ),
                         ),
-                      ),
+                      )
+                    : const SizedBox(height: 0, width: double.infinity),
               ),
             ),
           ),

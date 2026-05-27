@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/advent_news_model.dart';
 import '../../services/advent_news_service.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
@@ -80,6 +81,146 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
         ),
       );
     }
+  }
+
+  bool get _isOwner {
+    final me = AuthService.currentUser;
+    final authorId = _item?.authorId;
+    if (me == null || authorId == null || authorId.isEmpty) return false;
+    return me.id == authorId;
+  }
+
+  Future<void> _editStory() async {
+    final item = _item;
+    if (item == null) return;
+    final updated = await context.pushNamed<AdventNews>(
+      'post_news',
+      extra: item,
+    );
+    if (!mounted) return;
+    if (updated != null) {
+      setState(() => _item = updated);
+    } else {
+      _refreshQuietly();
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final item = _item;
+    if (item == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(
+          'Delete this story?',
+          style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'It will be removed from the feed for everyone. This can\'t be undone.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.labelMedium
+                  .copyWith(color: AppColors.textDark),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Delete',
+              style:
+                  AppTextStyles.labelMedium.copyWith(color: AppColors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await AdventNewsService.deleteNews(item.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Story deleted.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.goNamed('news');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not delete. You may not have permission.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showOwnerMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(26, 26, 46, 0.12),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined,
+                    color: AppColors.primaryBlue),
+                title: Text('Edit story',
+                    style: AppTextStyles.bodyLarge
+                        .copyWith(fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editStory();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: AppColors.red),
+                title: Text('Delete story',
+                    style: AppTextStyles.bodyLarge
+                        .copyWith(color: AppColors.red, fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDelete();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _share() async {
@@ -299,6 +440,14 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                       : context.goNamed('news'),
                 ),
                 const Spacer(),
+                if (_isOwner)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _CircleIconButton(
+                      icon: Icons.more_horiz,
+                      onTap: _showOwnerMenu,
+                    ),
+                  ),
                 _CircleIconButton(
                   icon: Icons.ios_share,
                   onTap: _share,

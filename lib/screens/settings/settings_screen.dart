@@ -445,6 +445,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                               _categoryPrefs.copyWith(announcements: v)),
                         ),
                         const _Divider(),
+                        _ToggleRow(
+                          icon: Icons.newspaper_outlined,
+                          label: 'Advent News updates',
+                          value: _categoryPrefs.news,
+                          onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(news: v)),
+                        ),
+                        const _Divider(),
                         _NavRow(
                           icon: Icons.shield_moon_outlined,
                           label: 'Permissions',

@@ -334,14 +334,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
                           : context.goNamed('profile'),
                     ),
                     const Spacer(),
-                    // Explicit way back to the buyer view of the
-                    // marketplace — makes the seller↔personal toggle
-                    // obvious instead of relying on bottom-nav memory.
-                    _PersonalViewPill(
-                      onTap: () => context.goNamed('marketplace'),
-                    ),
+                    // Account-mode switching lives on the Profile tab
+                    // now — this header keeps just the add-product CTA.
                     if (_seller != null && _seller!.isApproved) ...[
-                      const SizedBox(width: 8),
                       _CircleIconButton(
                         icon: Icons.add,
                         onTap: () async {

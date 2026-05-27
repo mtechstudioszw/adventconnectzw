@@ -15,7 +15,11 @@ import '../../widgets/cached_image.dart';
 /// gated by [AdventNewsService.canPublish] and RLS rejects writes
 /// from anyone else.
 class PostAdventNewsScreen extends StatefulWidget {
-  const PostAdventNewsScreen({super.key});
+  const PostAdventNewsScreen({super.key, this.existing});
+
+  /// When supplied, the screen runs in edit mode — fields are
+  /// pre-filled and Publish calls [AdventNewsService.updateNews].
+  final AdventNews? existing;
 
   @override
   State<PostAdventNewsScreen> createState() => _PostAdventNewsScreenState();
@@ -30,11 +34,27 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
   final _sourceLabelController = TextEditingController();
 
   NewsCategory _category = NewsCategory.general;
-  bool _isPinned = false;
   String? _coverPhotoUrl;
   bool _uploadingCover = false;
   bool _saving = false;
   String? _error;
+
+  bool get _isEdit => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final ex = widget.existing;
+    if (ex != null) {
+      _titleController.text = ex.title;
+      _summaryController.text = ex.summary;
+      _bodyController.text = ex.body ?? '';
+      _sourceUrlController.text = ex.sourceUrl ?? '';
+      _sourceLabelController.text = ex.sourceLabel ?? '';
+      _category = ex.category;
+      _coverPhotoUrl = ex.coverPhotoUrl;
+    }
+  }
 
   @override
   void dispose() {
@@ -71,33 +91,45 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await AdventNewsService.postNews(
-        title: _titleController.text,
-        summary: _summaryController.text,
-        body: _bodyController.text,
-        coverPhotoUrl: _coverPhotoUrl,
-        category: _category,
-        sourceUrl: _sourceUrlController.text,
-        sourceLabel: _sourceLabelController.text,
-        isPinned: _isPinned,
-      );
+      final result = _isEdit
+          ? await AdventNewsService.updateNews(
+              id: widget.existing!.id,
+              title: _titleController.text,
+              summary: _summaryController.text,
+              body: _bodyController.text,
+              coverPhotoUrl: _coverPhotoUrl,
+              category: _category,
+              sourceUrl: _sourceUrlController.text,
+              sourceLabel: _sourceLabelController.text,
+            )
+          : await AdventNewsService.postNews(
+              title: _titleController.text,
+              summary: _summaryController.text,
+              body: _bodyController.text,
+              coverPhotoUrl: _coverPhotoUrl,
+              category: _category,
+              sourceUrl: _sourceUrlController.text,
+              sourceLabel: _sourceLabelController.text,
+            );
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.successGreen,
           content: Text(
-            'Published. The community will see it on home.',
+            _isEdit
+                ? 'Story updated.'
+                : 'Published. The community will see it on home.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
       );
-      context.pop(true);
+      context.pop(result);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error = 'Could not publish. ${e is Exception ? '' : e.toString()}';
+        _error = 'Could not save. ${e is Exception ? '' : e.toString()}';
       });
     }
   }
@@ -211,8 +243,6 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
                         ).copyWith(counterText: ''),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    _buildPinnedToggle(),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       _ErrorBanner(message: _error!),
@@ -282,7 +312,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Publish news',
+                        _isEdit ? 'Edit story' : 'Publish news',
                         style: AppTextStyles.displayMedium.copyWith(
                           color: AppColors.white,
                           fontSize: 24,
@@ -292,7 +322,9 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Editorial coverage of the SDA community in Zimbabwe.',
+                        _isEdit
+                            ? 'Refine your story — readers will see the new version.'
+                            : 'Editorial coverage of the SDA community in Zimbabwe.',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.white.withValues(alpha: 0.78),
                         ),
@@ -506,67 +538,6 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
     );
   }
 
-  Widget _buildPinnedToggle() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.goldAccent.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.push_pin_outlined,
-              color: AppColors.goldAccent,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pin to top',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14.5,
-                  ),
-                ),
-                Text(
-                  'Pinned stories always appear first in the news feed.',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: _isPinned,
-            onChanged: (v) => setState(() => _isPinned = v),
-            activeThumbColor: AppColors.white,
-            activeTrackColor: AppColors.primaryBlue,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPublishButton() {
     return Opacity(
       opacity: _saving ? 0.6 : 1,
@@ -600,7 +571,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
                         ),
                       )
                     : Text(
-                        'Publish story',
+                        _isEdit ? 'Save changes' : 'Publish story',
                         style: AppTextStyles.buttonText.copyWith(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,

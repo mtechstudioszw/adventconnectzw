@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
@@ -193,18 +194,48 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     }
   }
 
-  Future<void> _copyContact(String label, String value) async {
-    await Clipboard.setData(ClipboardData(text: value));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.darkNavy,
-        content: Text(
-          '$label copied: $value',
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+  Future<void> _openWhatsApp(String number) async {
+    final digits = number.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return;
+    final uri = Uri.parse('https://wa.me/$digits');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('launch failed');
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: number));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.darkNavy,
+          content: Text(
+            'WhatsApp not installed. Number copied: $number',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
         ),
-      ),
-    );
+      );
+    }
+  }
+
+  Future<void> _callPhone(String number) async {
+    final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleaned.isEmpty) return;
+    final uri = Uri.parse('tel:$cleaned');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) throw Exception('launch failed');
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: number));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.darkNavy,
+          content: Text(
+            'Could not place call. Number copied: $number',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   void _showReport() {
@@ -216,20 +247,56 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
       ),
       builder: (ctx) => _ReportSheet(
         sellerName: _seller?.businessName ?? 'this seller',
-        onSubmit: () {
+        onSubmit: (reason) async {
           Navigator.pop(ctx);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: AppColors.successGreen,
-              content: Text(
-                'Report submitted. Thank you.',
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.white),
-              ),
-            ),
-          );
+          await _sendReportToAdmin(reason);
         },
+      ),
+    );
+  }
+
+  /// Reports route to the admin's WhatsApp (with email fallback) until
+  /// the admin dashboard ships. The pre-filled message includes seller
+  /// name + reason + reporter id so we can act on it from the inbox.
+  Future<void> _sendReportToAdmin(String reason) async {
+    final seller = _seller;
+    if (seller == null) return;
+    final me = AuthService.currentUser;
+    final reporterId = me?.id ?? 'anonymous';
+    final body =
+        'Report: ${seller.businessName}\nReason: $reason\nSeller id: ${seller.authUserId}\nReporter: $reporterId';
+
+    const adminPhone = '263778092494';
+    const adminEmail = 'tanatswamichaelmikuwa@gmail.com';
+
+    final waUri =
+        Uri.parse('https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}');
+    try {
+      final ok = await launchUrl(waUri, mode: LaunchMode.externalApplication);
+      if (ok) return;
+    } catch (_) {}
+
+    final mailUri = Uri(
+      scheme: 'mailto',
+      path: adminEmail,
+      queryParameters: {
+        'subject': 'Marketplace report: ${seller.businessName}',
+        'body': body,
+      },
+    );
+    try {
+      final ok = await launchUrl(mailUri, mode: LaunchMode.externalApplication);
+      if (ok) return;
+    } catch (_) {}
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.darkNavy,
+        content: Text(
+          'Could not open WhatsApp or email. Reach us at +263 778 092 494.',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
       ),
     );
   }
@@ -299,16 +366,12 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                   const SizedBox(height: 16),
                   _ContactRow(
                     seller: seller,
-                    onWhatsApp: () => _copyContact(
-                      'WhatsApp number',
+                    onWhatsApp: () => _openWhatsApp(
                       (seller.whatsapp?.trim().isNotEmpty == true
                               ? seller.whatsapp
                               : seller.phone)!,
                     ),
-                    onCall: () => _copyContact(
-                      'Phone number',
-                      seller.phone,
-                    ),
+                    onCall: () => _callPhone(seller.phone),
                     onMessage: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -1155,7 +1218,7 @@ class _ReportSheet extends StatefulWidget {
   const _ReportSheet({required this.sellerName, required this.onSubmit});
 
   final String sellerName;
-  final VoidCallback onSubmit;
+  final void Function(String reason) onSubmit;
 
   @override
   State<_ReportSheet> createState() => _ReportSheetState();
@@ -1276,7 +1339,9 @@ class _ReportSheetState extends State<_ReportSheet> {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: _selected == null ? null : widget.onSubmit,
+                  onTap: _selected == null
+                      ? null
+                      : () => widget.onSubmit(_selected!),
                   borderRadius: BorderRadius.circular(14),
                   child: Opacity(
                     opacity: _selected == null ? 0.6 : 1,

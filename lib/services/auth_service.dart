@@ -755,33 +755,26 @@ class AuthService {
     // OnboardingFlowScreen._finish(). Set for everyone who finishes
     // setup after the 2026-05 fix shipped.
     if (meta['onboarding_completed'] == true) return true;
-    // Fallback A — username in metadata (older Google-signup path).
+    // Fallback — username in metadata (older path). Username is the
+    // only field that is NEVER auto-populated — Google OAuth ships
+    // full_name + avatar in user_metadata on first sign-in, and the
+    // handle_new_user trigger copies full_name into profiles too, so
+    // neither of those is a trustworthy "they finished onboarding"
+    // signal. Username only ever comes from the in-app onboarding form.
     final metaUsername = (meta['username'] as String?)?.trim() ?? '';
     if (metaUsername.isNotEmpty) return true;
-    // Fallback B — full_name in metadata. ANY user who finished
-    // onboarding has a full_name (step 1 of OnboardingFlowScreen
-    // requires it; signUp() persists it from the auth form). This
-    // catches the "I signed up months ago, never set a username,
-    // and now Google sign-in keeps re-onboarding me" case which
-    // the username-only check couldn't.
-    final metaFullName = (meta['full_name'] as String?)?.trim() ?? '';
-    if (metaFullName.isNotEmpty) return true;
-    // Fallback C — profile row, by any non-trivial column.
     try {
       final row = await _client
           .from('profiles')
-          .select('username, full_name, profile_photo_url')
+          .select('username')
           .eq('id', user.id)
           .maybeSingle();
-      if (row == null) return false;
-      final username = (row['username'] as String?)?.trim() ?? '';
-      final fullName = (row['full_name'] as String?)?.trim() ?? '';
-      final photo = (row['profile_photo_url'] as String?)?.trim() ?? '';
-      return username.isNotEmpty || fullName.isNotEmpty || photo.isNotEmpty;
+      final username = (row?['username'] as String?)?.trim() ?? '';
+      return username.isNotEmpty;
     } catch (_) {
-      // Network error or RLS issue — fail OPEN to home, not onboarding.
-      // The previous behaviour (fail-closed) trapped legacy users in
-      // the onboarding flow every time their network blipped.
+      // Network error or RLS issue — fail OPEN to home, not onboarding,
+      // so legacy users aren't trapped in the flow if their network
+      // blips on launch.
       return true;
     }
   }

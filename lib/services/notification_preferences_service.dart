@@ -94,6 +94,7 @@ class NotificationCategoryPrefs {
     this.messages = true,
     this.marketplace = true,
     this.announcements = true,
+    this.news = true,
   });
 
   final bool events;
@@ -101,6 +102,7 @@ class NotificationCategoryPrefs {
   final bool messages;
   final bool marketplace;
   final bool announcements;
+  final bool news;
 
   static const defaults = NotificationCategoryPrefs();
 
@@ -121,6 +123,7 @@ class NotificationCategoryPrefs {
       messages: read('messages', true),
       marketplace: read('marketplace', true),
       announcements: read('announcements', true),
+      news: read('news', true),
     );
   }
 
@@ -130,6 +133,7 @@ class NotificationCategoryPrefs {
         'messages': messages,
         'marketplace': marketplace,
         'announcements': announcements,
+        'news': news,
       };
 
   NotificationCategoryPrefs copyWith({
@@ -138,6 +142,7 @@ class NotificationCategoryPrefs {
     bool? messages,
     bool? marketplace,
     bool? announcements,
+    bool? news,
   }) {
     return NotificationCategoryPrefs(
       events: events ?? this.events,
@@ -145,6 +150,7 @@ class NotificationCategoryPrefs {
       messages: messages ?? this.messages,
       marketplace: marketplace ?? this.marketplace,
       announcements: announcements ?? this.announcements,
+      news: news ?? this.news,
     );
   }
 }

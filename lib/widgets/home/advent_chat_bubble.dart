@@ -13,17 +13,24 @@ class AdventChatBubble extends StatelessWidget {
     super.key,
     required this.hasUnread,
     this.unreadCount,
+    this.onTap,
   });
 
   final bool hasUnread;
   final int? unreadCount;
+  /// Optional override of the default "push /messages" tap action.
+  /// Home uses it to await the navigation + refresh the unread
+  /// badge counts after the user returns from the inbox — without
+  /// the override, accepting requests / reading chats and bouncing
+  /// back left the badge stuck at the pre-tap count.
+  final Future<void> Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => context.pushNamed('messages'),
+        onTap: onTap ?? () => context.pushNamed('messages'),
         customBorder: const CircleBorder(),
         child: Stack(
           clipBehavior: Clip.none,

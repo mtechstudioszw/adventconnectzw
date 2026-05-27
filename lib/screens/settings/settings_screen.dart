@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
-import '../../services/biometric_service.dart';
 import '../../services/notification_preferences_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/theme_service.dart';
@@ -27,8 +26,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   NotificationCategoryPrefs _categoryPrefs =
       NotificationCategoryPrefs.defaults;
   String _language = 'English';
-  bool _biometricEnabled = false;
-  bool _biometricAvailable = false;
   bool _sabbathEnabled = SabbathService.isEnabled();
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
   ThemeMode _themeMode = ThemeService.current;
@@ -44,7 +41,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
-    _loadBiometricState();
     _loadCategoryPrefs();
   }
 
@@ -66,26 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     NotificationPreferencesService.saveCategories(next);
   }
 
-  Future<void> _loadBiometricState() async {
-    final available = await BiometricService.isAvailable();
-    final enabled = await BiometricService.isEnabled();
-    if (!mounted) return;
-    setState(() {
-      _biometricAvailable = available;
-      _biometricEnabled = enabled;
-    });
-  }
-
-  Future<void> _toggleBiometric(bool value) async {
-    final ok = await BiometricService.setEnabled(value);
-    if (!mounted) return;
-    setState(() => _biometricEnabled = ok && value);
-    if (!ok && value) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Biometric setup failed. Try again.')),
-      );
-    }
-  }
+  // Biometric loader + toggle handler removed in this build (revisit
+  // ~2 months post-launch). Restore from git history if re-enabling.
 
   @override
   void dispose() {
@@ -408,15 +386,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                           label: 'Change password',
                           onTap: _changePassword,
                         ),
-                        if (_biometricAvailable) ...[
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.fingerprint,
-                            label: 'Biometric unlock',
-                            value: _biometricEnabled,
-                            onChanged: _toggleBiometric,
-                          ),
-                        ],
+                        // Biometric unlock toggle is intentionally
+                        // hidden in this build per user direction —
+                        // revisit ~2 months post-launch. The
+                        // BiometricService still exists; unhide this
+                        // block + restore the resume/splash checks
+                        // to enable.
                         const _Divider(),
                         _NavRow(
                           icon: Icons.delete_outline,

@@ -10,8 +10,6 @@ import 'config/supabase_config.dart';
 import 'config/router_config.dart';
 import 'services/account_mode_service.dart';
 import 'services/analytics_service.dart';
-import 'services/auth_service.dart';
-import 'services/biometric_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/messaging_service.dart';
@@ -164,78 +162,14 @@ void main() async {
   runApp(const AdventConnectApp());
 }
 
-class AdventConnectApp extends StatefulWidget {
+class AdventConnectApp extends StatelessWidget {
   const AdventConnectApp({super.key});
 
-  @override
-  State<AdventConnectApp> createState() => _AdventConnectAppState();
-}
-
-class _AdventConnectAppState extends State<AdventConnectApp>
-    with WidgetsBindingObserver {
-  /// Anything shorter than this is treated as "the user just glanced
-  /// at something" and doesn't re-prompt for biometric unlock. The
-  /// previous "fail if app left for 1 second" behaviour was caused
-  /// by the absence of any threshold at all — we now require at
-  /// least this long in the background before re-locking.
-  static const _biometricThreshold = Duration(minutes: 2);
-
-  DateTime? _backgroundedAt;
-  bool _biometricPromptInFlight = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      // Stamp the moment the app went background. We compute the
-      // away-time on resume and compare against _biometricThreshold.
-      _backgroundedAt = DateTime.now();
-      return;
-    }
-    if (state == AppLifecycleState.resumed) {
-      _maybeRequireBiometric();
-    }
-  }
-
-  Future<void> _maybeRequireBiometric() async {
-    if (_biometricPromptInFlight) return;
-    final at = _backgroundedAt;
-    _backgroundedAt = null;
-    if (at == null) return;
-    final awayFor = DateTime.now().difference(at);
-    if (awayFor < _biometricThreshold) return;
-    if (!AuthService.isSignedIn) return;
-    final enabled = await BiometricService.isEnabled();
-    if (!enabled) return;
-    _biometricPromptInFlight = true;
-    try {
-      final ok = await BiometricService.authenticate(
-        reason: 'Unlock Advent Connect ZW',
-      );
-      if (!ok) {
-        // Failed (or cancelled) biometric → sign out + bounce to
-        // login, same security model as the splash on cold start.
-        await AuthService.signOut();
-        if (!mounted) return;
-        appRouter.goNamed('login');
-      }
-    } finally {
-      _biometricPromptInFlight = false;
-    }
-  }
+  // Biometric resume re-prompt was wired here but is intentionally
+  // disabled in this build per user direction (revisit ~2 months
+  // post-launch). When re-enabling, restore the WidgetsBindingObserver
+  // pattern from git history (commit 606a714) — it stamped a paused
+  // timestamp and re-prompted on resume past a 2-minute threshold.
 
   @override
   Widget build(BuildContext context) {

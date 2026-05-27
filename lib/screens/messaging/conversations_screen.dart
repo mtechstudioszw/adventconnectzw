@@ -36,6 +36,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   bool _loading = true;
   String? _error;
   _ConversationsTab _tab = _ConversationsTab.inbox;
+  /// Once we've auto-jumped to the Requests tab on first load (because
+  /// inbox was empty but friend requests existed), we stop doing it so
+  /// the user can navigate freely afterwards.
+  bool _autoTabResolved = false;
 
   // Realtime subscription to messages — fires whenever ANY message
   // visible to the current user (per RLS) is inserted/updated, so
@@ -129,6 +133,23 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _stories = results[1] as List<Story>;
         _friendRequests = results[2] as List<PendingFriendRequest>;
         _loading = false;
+        // Auto-route to Requests tab on first paint if the inbox is
+        // empty but there are pending requests. Fixes the "chat icon
+        // shows 6, but inbox is empty when I tap it" complaint —
+        // the 6 was friend requests, and the user couldn't tell.
+        if (!_autoTabResolved) {
+          _autoTabResolved = true;
+          final inboxHasContent = _conversations.any(
+            (c) => !c.isIncomingRequestFor(_currentUserId),
+          );
+          final hasRequests = _friendRequests.isNotEmpty ||
+              _conversations.any(
+                (c) => c.isIncomingRequestFor(_currentUserId),
+              );
+          if (!inboxHasContent && hasRequests) {
+            _tab = _ConversationsTab.requests;
+          }
+        }
       });
     } catch (_) {
       if (!mounted) return;

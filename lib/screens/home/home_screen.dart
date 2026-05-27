@@ -124,17 +124,29 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  /// Lightweight refetch — just the conversation list (for the
-  /// chat-bubble badge), without touching events / feed / etc.
+  /// Lightweight refetch for the chat-bubble badge. Refreshes BOTH
+  /// the unread-messages sum AND the pending-friend-request count
+  /// — otherwise the badge stayed stuck on a stale total whenever
+  /// the user accepted / declined requests from another screen and
+  /// bounced back to home. Source of the "chat shows 6 but inbox
+  /// is empty" complaint.
   Future<void> _refreshUnreadBadge() async {
     try {
-      final convos = await MessagingService.fetchConversations();
+      final results = await Future.wait([
+        MessagingService.fetchConversations(),
+        FeedService.pendingRequestCount(),
+      ]);
       if (!mounted) return;
+      final convos = results[0] as List<Conversation>;
+      final pending = results[1] as int;
       var unread = 0;
       for (final c in convos) {
         unread += c.unreadCount;
       }
-      setState(() => _unreadMessages = unread);
+      setState(() {
+        _unreadMessages = unread;
+        _pendingFriendRequests = pending;
+      });
     } catch (_) {
       // Silent — badge accuracy is best-effort.
     }
@@ -464,19 +476,28 @@ class _HomeScreenState extends State<HomeScreen>
                 AdventChatBubble(
                   hasUnread: _hasUnreadChat,
                   unreadCount: _chatBadgeCount,
+                  onTap: () async {
+                    await context.pushNamed('messages');
+                    // Returning from the inbox refreshes the badge
+                    // — covers the case where the user read every
+                    // unread message inside the chat and the FAB
+                    // would otherwise stay red until the next
+                    // realtime activity event.
+                    if (mounted) await _refreshUnreadBadge();
+                  },
                 ),
               ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: MainBottomNav(
+      bottomNavigationBar: const MainBottomNav(
         currentIndex: 0,
-        badges: {
-          // Profile tab surfaces chat + friend-request badges because
-          // messaging lives inside the Profile menu.
-          if (_hasUnreadChat) 4: _unreadMessages + _pendingFriendRequests,
-        },
+        // No chat badge on the Profile tab — the floating Advent Chat
+        // bubble (bottom-right) already surfaces unread counts, and
+        // tapping Profile doesn't actually take the user to messages,
+        // which made the badge misleading ("6 unread shown but
+        // nothing in profile when I open it").
       ),
     );
   }

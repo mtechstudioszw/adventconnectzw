@@ -139,12 +139,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       'apply_business',
     );
     if (!mounted || result == null) return;
-    // After a fresh application the latest row is `pending` — refresh
-    // local state so the badge updates without a manual reload.
+    // Auto-approved on insert (patch_029) — flip the local flag so the
+    // business affordances unlock immediately without a manual reload.
     setState(() {
       _accountState = AccountState(
         userId: _accountState?.userId ?? '',
-        isBusiness: _accountState?.isBusiness ?? false,
+        isBusiness: result.isApproved,
         latestApplication: result,
       );
     });

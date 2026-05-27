@@ -16,7 +16,11 @@ import '../../widgets/home/story_viewer.dart';
 import '../../widgets/cached_image.dart';
 
 class ConversationsScreen extends StatefulWidget {
-  const ConversationsScreen({super.key});
+  const ConversationsScreen({super.key, this.initialTab});
+
+  /// When set to 'requests' the screen opens straight on the Requests
+  /// tab. Used by deep links from friend-request notification taps.
+  final String? initialTab;
 
   @override
   State<ConversationsScreen> createState() => _ConversationsScreenState();
@@ -51,6 +55,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   @override
   void initState() {
     super.initState();
+    if (widget.initialTab == 'requests') {
+      _tab = _ConversationsTab.requests;
+      // Caller asked for Requests tab explicitly — don't let the
+      // "auto-pick" heuristic in _bootstrap override that choice.
+      _autoTabResolved = true;
+    }
     _entrance = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),

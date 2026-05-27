@@ -118,6 +118,12 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
           context.pushNamed('chat', pathParameters: {'id': id});
         }
         break;
+      case 'friend_request':
+        context.pushNamed(
+          'messages',
+          queryParameters: {'tab': 'requests'},
+        );
+        break;
       case 'seller':
         context.pushNamed('seller_dashboard');
         break;

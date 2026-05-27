@@ -642,11 +642,53 @@ class _CircleIconButton extends StatelessWidget {
 }
 
 String _relative(DateTime then) {
+  // Real timestamp first, relative label second — readers can tell at
+  // a glance both *when* the story was posted and how recent that is.
+  final local = then.toLocal();
+  final absolute = _absolute(local);
   final diff = DateTime.now().difference(then);
-  if (diff.inMinutes < 1) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-  if (diff.inHours < 24) return '${diff.inHours} hr ago';
-  if (diff.inDays < 7) return '${diff.inDays} d ago';
-  if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} wk ago';
-  return '${(diff.inDays / 30).floor()} mo ago';
+  final String relative;
+  if (diff.inMinutes < 1) {
+    relative = 'just now';
+  } else if (diff.inMinutes < 60) {
+    relative = '${diff.inMinutes} min ago';
+  } else if (diff.inHours < 24) {
+    relative = '${diff.inHours} hr ago';
+  } else if (diff.inDays < 7) {
+    relative = '${diff.inDays} d ago';
+  } else if (diff.inDays < 30) {
+    relative = '${(diff.inDays / 7).floor()} wk ago';
+  } else {
+    relative = '${(diff.inDays / 30).floor()} mo ago';
+  }
+  return '$absolute · $relative';
+}
+
+String _absolute(DateTime t) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final now = DateTime.now();
+  final isSameDay =
+      t.year == now.year && t.month == now.month && t.day == now.day;
+  final time = _formatTime12(t);
+  if (isSameDay) return 'Today $time';
+  final yesterday = now.subtract(const Duration(days: 1));
+  final isYesterday = t.year == yesterday.year &&
+      t.month == yesterday.month &&
+      t.day == yesterday.day;
+  if (isYesterday) return 'Yesterday $time';
+  if (t.year == now.year) {
+    return '${months[t.month - 1]} ${t.day} · $time';
+  }
+  return '${months[t.month - 1]} ${t.day}, ${t.year}';
+}
+
+String _formatTime12(DateTime t) {
+  final hour24 = t.hour;
+  final hour12 = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+  final minutes = t.minute.toString().padLeft(2, '0');
+  final suffix = hour24 < 12 ? 'AM' : 'PM';
+  return '$hour12:$minutes $suffix';
 }

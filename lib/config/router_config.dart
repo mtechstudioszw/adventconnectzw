@@ -368,7 +368,9 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/messages',
       name: 'messages',
-      builder: (context, state) => const ConversationsScreen(),
+      builder: (context, state) => ConversationsScreen(
+        initialTab: state.uri.queryParameters['tab'],
+      ),
       routes: [
         GoRoute(
           path: 'privacy',

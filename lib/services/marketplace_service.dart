@@ -107,6 +107,36 @@ class MarketplaceService {
     final response =
         await _client.from(_table).select().eq('id', id).maybeSingle();
     if (response == null) return null;
+    // products has no seller_phone / seller_name column — those live on
+    // the sellers row keyed by auth_user_id. Hydrate them here so the
+    // product details screen can render the WhatsApp + name affordances
+    // without a second round-trip on the screen side.
+    final sellerId = (response['seller_id'] ?? '').toString();
+    if (sellerId.isNotEmpty) {
+      try {
+        final sellerRow = await _client
+            .from('sellers')
+            .select(
+              'business_name, phone, whatsapp, contact_name, verified, sda_verified',
+            )
+            .eq('auth_user_id', sellerId)
+            .maybeSingle();
+        if (sellerRow != null) {
+          response['seller_phone'] =
+              (sellerRow['whatsapp'] as String?)?.trim().isNotEmpty == true
+                  ? sellerRow['whatsapp']
+                  : sellerRow['phone'];
+          response['seller_name'] =
+              sellerRow['business_name'] ?? response['seller_name'];
+          response['seller_verified'] =
+              sellerRow['verified'] == true ||
+                  sellerRow['sda_verified'] == true;
+        }
+      } catch (_) {
+        // Don't fail product load if seller lookup hiccups — buyer can
+        // still see the product, just without the WhatsApp shortcut.
+      }
+    }
     return Product.fromJson(response);
   }
 

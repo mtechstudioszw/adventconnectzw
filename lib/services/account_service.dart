@@ -27,10 +27,9 @@ class AccountState {
 
 /// Reads + writes the personal-vs-business account state.
 ///
-/// Approvals are not done from the app — only the external admin
-/// panel can flip `profiles.is_business` and update the application
-/// row. The app surface here is read-only for status and write-only
-/// for submitting / re-submitting an application.
+/// As of patch_029 the application is self-serve: submitting the form
+/// flips `profiles.is_business` and stamps the application as approved
+/// in the same RPC. No admin review step.
 class AccountService {
   AccountService._();
 
@@ -72,9 +71,10 @@ class AccountService {
     );
   }
 
-  /// Submit a business-account application. Throws if there's already
-  /// a pending application (server-side partial unique index rejects
-  /// duplicates). Returns the freshly inserted row.
+  /// Submit a business-account application. Auto-approved in the same
+  /// call (patch_029 RPC `apply_for_business_auto_approve` flips
+  /// `profiles.is_business` to TRUE and stamps the row as `approved`).
+  /// Returns the freshly created row so callers can refresh local state.
   static Future<BusinessApplication> applyForBusiness({
     required String businessName,
     required String category,
@@ -85,19 +85,24 @@ class AccountService {
     if (user == null) {
       throw const AuthException('Sign in to apply.');
     }
-    final inserted = await _client
-        .from(_appsTable)
-        .insert({
-          'user_id': user.id,
-          'business_name': businessName.trim(),
-          'category': category.trim(),
-          if (description != null && description.trim().isNotEmpty)
-            'description': description.trim(),
-          if (whatsapp != null && whatsapp.trim().isNotEmpty)
-            'applicant_whatsapp': whatsapp.trim(),
-        })
-        .select()
-        .single();
-    return BusinessApplication.fromJson(inserted);
+    final inserted = await _client.rpc(
+      'apply_for_business_auto_approve',
+      params: {
+        'p_business_name': businessName.trim(),
+        'p_category': category.trim(),
+        'p_description':
+            (description != null && description.trim().isNotEmpty)
+                ? description.trim()
+                : null,
+        'p_applicant_whatsapp':
+            (whatsapp != null && whatsapp.trim().isNotEmpty)
+                ? whatsapp.trim()
+                : null,
+      },
+    );
+    final row = inserted is List
+        ? (inserted.first as Map<String, dynamic>)
+        : inserted as Map<String, dynamic>;
+    return BusinessApplication.fromJson(row);
   }
 }

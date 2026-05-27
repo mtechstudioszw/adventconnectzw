@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/product_model.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
@@ -116,17 +117,30 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
       );
       return;
     }
-    await Clipboard.setData(ClipboardData(text: phone));
     AnalyticsService.marketplaceContact(int.tryParse(widget.productId) ?? 0);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'WhatsApp number copied: $phone',
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-        ),
-      ),
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final message =
+        'Hi, I\'m interested in "${_product?.title ?? 'your listing'}" on Advent Connect ZW.';
+    final waUri = Uri.parse(
+      'https://wa.me/$digits?text=${Uri.encodeComponent(message)}',
     );
+    try {
+      final ok = await launchUrl(waUri, mode: LaunchMode.externalApplication);
+      if (ok) return;
+      throw Exception('launch failed');
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: phone));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.darkNavy,
+          content: Text(
+            'WhatsApp not installed. Number copied: $phone',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _chatInApp() async {

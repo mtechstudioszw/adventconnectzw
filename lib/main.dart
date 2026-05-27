@@ -147,6 +147,12 @@ Future<void> _initBackgroundServices() async {
               appRouter.pushNamed('chat', pathParameters: {'id': id});
             }
             break;
+          case 'friend_request':
+            appRouter.pushNamed(
+              'messages',
+              queryParameters: {'tab': 'requests'},
+            );
+            break;
           case 'seller':
             appRouter.pushNamed('seller_dashboard');
             break;

@@ -175,8 +175,8 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Review usually takes 1-2 days. We\'ll let you know in '
-                  'the app once your account is upgraded.',
+                  'Your account is upgraded instantly — you can start '
+                  'listing products as soon as you submit.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodySmall.copyWith(
                     color: const Color.fromRGBO(26, 26, 46, 0.6),
@@ -271,7 +271,8 @@ class _IntroCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'A business account lets you list products in the '
-                  'marketplace and claim ownership of a church listing.',
+                  'marketplace and claim ownership of a church listing. '
+                  'Activated instantly — no waiting on a reviewer.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.white.withValues(alpha: 0.9),
                     height: 1.35,

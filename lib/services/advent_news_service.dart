@@ -85,33 +85,11 @@ class AdventNewsService {
     }
   }
 
-  /// True when the current viewer is allowed to publish news in-app —
-  /// gates the "Post news" entry button. The check mirrors the RLS
-  /// policy: super admin OR approved church admin.
+  /// True when the current viewer can publish news. Open to every
+  /// signed-in user as of patch_030 — authoring is no longer
+  /// admin-gated. Returns false only when there is no session.
   static Future<bool> canPublish() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return false;
-    try {
-      final profile = await _client
-          .from('profiles')
-          .select('is_super_admin')
-          .eq('id', user.id)
-          .maybeSingle();
-      if (profile?['is_super_admin'] == true) return true;
-    } catch (_) {
-      // Fall through and try church_admins.
-    }
-    try {
-      final adminRow = await _client
-          .from('church_admins')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('status', 'approved')
-          .limit(1);
-      return (adminRow as List).isNotEmpty;
-    } catch (_) {
-      return false;
-    }
+    return _client.auth.currentUser != null;
   }
 
   /// Publish a new Advent News story. Server-side RLS rejects this

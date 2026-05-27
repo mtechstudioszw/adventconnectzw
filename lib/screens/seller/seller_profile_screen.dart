@@ -9,6 +9,7 @@ import '../../models/seller_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/seller_rating_service.dart';
 import '../../services/seller_service.dart';
+import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/product_card.dart';
@@ -47,6 +48,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
   late final Animation<double> _slide;
 
   Seller? _seller;
+  PublicUserProfile? _owner;
   List<Product> _products = const [];
   List<SellerRating> _reviews = const [];
   SellerRating? _myReview;
@@ -92,12 +94,14 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
       final results = await Future.wait([
         SellerService.fetchSellerByAuthUserId(widget.authUserId),
         SellerService.fetchPublicProductsByAuthUserId(widget.authUserId),
+        UserProfileService.fetch(widget.authUserId),
       ]);
       if (!mounted) return;
       final seller = (results[0] as Seller?) ?? _seller;
       setState(() {
         _seller = seller;
         _products = results[1] as List<Product>;
+        _owner = results[2] as PublicUserProfile?;
         _loading = false;
       });
       // Ratings depend on the seller row's BIGSERIAL id, so they
@@ -363,6 +367,17 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _IdentityCard(seller: seller, productCount: _products.length),
+                  if (_owner != null) ...[
+                    const SizedBox(height: 12),
+                    _OwnerBadge(
+                      owner: _owner!,
+                      fallbackName: seller.contactName,
+                      onTap: () => context.pushNamed(
+                        'user_profile',
+                        pathParameters: {'userId': _owner!.id},
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   _ContactRow(
                     seller: seller,
@@ -1749,6 +1764,123 @@ class _ErrorCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OwnerBadge extends StatelessWidget {
+  const _OwnerBadge({
+    required this.owner,
+    required this.onTap,
+    this.fallbackName,
+  });
+
+  final PublicUserProfile owner;
+  final String? fallbackName;
+  final VoidCallback onTap;
+
+  String get _displayName {
+    final raw = owner.fullName.trim();
+    if (raw.isNotEmpty && raw.toLowerCase() != 'member') return raw;
+    final fb = fallbackName?.trim();
+    if (fb != null && fb.isNotEmpty) return fb;
+    return 'a verified member';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final photo = owner.profilePhotoUrl;
+    final hasPhoto = photo != null && photo.isNotEmpty;
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.18),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  gradient: hasPhoto ? null : AppColors.primaryGradient,
+                  color: hasPhoto ? AppColors.lightGrey : null,
+                  shape: BoxShape.circle,
+                  image: hasPhoto
+                      ? DecorationImage(
+                          image: CachedNetworkImageProvider(photo),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: hasPhoto
+                    ? null
+                    : const Icon(
+                        Icons.person,
+                        color: AppColors.white,
+                        size: 18,
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'OWNED BY',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.titleSmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ),
+                        if (owner.isVerified) ...[
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.verified,
+                            size: 14,
+                            color: AppColors.goldAccent,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: Color.fromRGBO(26, 26, 46, 0.4),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -9,11 +9,9 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 
-/// In-app posting flow for Advent News. Only authorised admins
-/// (profiles.is_super_admin = TRUE or approved church_admins row)
-/// can land here — the entry button on the Advent News screen is
-/// gated by [AdventNewsService.canPublish] and RLS rejects writes
-/// from anyone else.
+/// In-app posting flow for Advent News. Open to any signed-in
+/// member (patch_030) — the gate on the Advent News screen is now
+/// just "are you logged in?" and RLS enforces the same.
 class PostAdventNewsScreen extends StatefulWidget {
   const PostAdventNewsScreen({super.key, this.existing});
 

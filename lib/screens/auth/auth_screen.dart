@@ -131,8 +131,37 @@ class _AuthScreenState extends State<AuthScreen>
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final email = _emailController.text.trim();
     setState(() => _checking = true);
-    final exists = await AuthService.emailExists(email);
+    // Pull both presence + provider mix in parallel. The provider
+    // info is what makes the OAuth-only "password paradox" case
+    // detectable — without it, a user who signed up only with
+    // Google gets dead-ended at a password prompt they can't fill.
+    final results = await Future.wait([
+      AuthService.emailExists(email),
+      AuthService.emailAuthProviders(email),
+    ]);
     if (!mounted) return;
+    final exists = results[0] as bool?;
+    final providers = results[1] as List<String>?;
+
+    // OAuth-only case: account exists, but the user has NO email/
+    // password identity attached — they signed up with Google and
+    // don't have a password. Surface a friendly hint instead of
+    // forcing them through the password prompt.
+    final isOAuthOnly = exists == true &&
+        providers != null &&
+        providers.isNotEmpty &&
+        !providers.contains('email');
+    if (isOAuthOnly) {
+      setState(() {
+        _checking = false;
+        _stage = _Stage.email;
+        _error = 'This email is bound to Google. '
+            'Tap "Continue with Google" above to sign in.';
+      });
+      HapticFeedback.heavyImpact();
+      return;
+    }
+
     // Detection rules:
     //   true  -> account confirmed -> login stage
     //   false -> no account        -> signup stage

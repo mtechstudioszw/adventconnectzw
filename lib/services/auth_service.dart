@@ -173,6 +173,33 @@ class AuthService {
     }
   }
 
+  /// What auth providers is [email] bound to? Returns one of:
+  ///   - []                      → no account
+  ///   - ['email']               → email/password only
+  ///   - ['google']              → Google OAuth only  ← the password-paradox case
+  ///   - ['email','google']      → already linked, either works
+  ///   - null                    → RPC missing / network error
+  ///
+  /// Used by the auth screen to route OAuth-only users to
+  /// "Continue with Google" instead of dead-ending them at a
+  /// password prompt they can't satisfy.
+  static Future<List<String>?> emailAuthProviders(String email) async {
+    final trimmed = email.trim().toLowerCase();
+    if (trimmed.isEmpty) return null;
+    try {
+      final result = await _client.rpc(
+        'email_auth_providers',
+        params: {'p_email': trimmed},
+      );
+      if (result is List) {
+        return result.map((e) => e.toString()).toList();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Verify a signup using the 6-digit code Supabase emails to the
   /// user. On success, mints a real session and returns it. Caller
   /// should then route the user into profile setup.

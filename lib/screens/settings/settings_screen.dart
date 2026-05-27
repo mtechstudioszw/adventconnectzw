@@ -349,6 +349,25 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _openLegal(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (ok) return;
+      throw Exception('launch failed');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open the link. Visit adventconnectzw.netlify.app',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -502,13 +521,17 @@ class _SettingsScreenState extends State<SettingsScreen>
                         _NavRow(
                           icon: Icons.description_outlined,
                           label: 'Terms of service',
-                          onTap: () => context.pushNamed('terms'),
+                          onTap: () => _openLegal(
+                            'https://adventconnectzw.netlify.app/terms',
+                          ),
                         ),
                         const _Divider(),
                         _NavRow(
                           icon: Icons.privacy_tip_outlined,
                           label: 'Privacy policy',
-                          onTap: () => context.pushNamed('privacy'),
+                          onTap: () => _openLegal(
+                            'https://adventconnectzw.netlify.app/privacy',
+                          ),
                         ),
                         const _Divider(),
                         _NavRow(

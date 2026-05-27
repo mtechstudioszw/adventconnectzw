@@ -2,10 +2,21 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+
+/// External landing URLs for the legal pages (live Netlify site).
+/// Keeping them as top-level consts so both the signup checkbox and
+/// the footer line stay in sync if the host ever changes.
+const _termsUrl = 'https://adventconnectzw.netlify.app/terms';
+const _privacyUrl = 'https://adventconnectzw.netlify.app/privacy';
+
+Future<void> _openLegalUrl(String url) async {
+  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+}
 
 /// Unified login + signup surface, Claude-app style. The user enters
 /// an email; we ask Supabase whether an account exists for it; based
@@ -1204,10 +1215,9 @@ class _TermsCheckboxState extends State<_TermsCheckbox> {
   @override
   void initState() {
     super.initState();
-    _termsTap = TapGestureRecognizer()
-      ..onTap = () => context.pushNamed('terms');
+    _termsTap = TapGestureRecognizer()..onTap = () => _openLegalUrl(_termsUrl);
     _privacyTap = TapGestureRecognizer()
-      ..onTap = () => context.pushNamed('privacy');
+      ..onTap = () => _openLegalUrl(_privacyUrl);
   }
 
   @override
@@ -1407,10 +1417,9 @@ class _LegalLineState extends State<_LegalLine> {
   @override
   void initState() {
     super.initState();
-    _termsTap = TapGestureRecognizer()
-      ..onTap = () => context.pushNamed('terms');
+    _termsTap = TapGestureRecognizer()..onTap = () => _openLegalUrl(_termsUrl);
     _privacyTap = TapGestureRecognizer()
-      ..onTap = () => context.pushNamed('privacy');
+      ..onTap = () => _openLegalUrl(_privacyUrl);
   }
 
   @override

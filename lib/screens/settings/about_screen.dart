@@ -102,19 +102,28 @@ class AboutScreen extends StatelessWidget {
                       _NavTile(
                         icon: Icons.description_outlined,
                         label: 'Terms of service',
-                        onTap: () => context.pushNamed('terms'),
+                        onTap: () => _openLegal(
+                          context,
+                          'https://adventconnectzw.netlify.app/terms',
+                        ),
                       ),
                       const _Divider(),
                       _NavTile(
                         icon: Icons.privacy_tip_outlined,
                         label: 'Privacy policy',
-                        onTap: () => context.pushNamed('privacy'),
+                        onTap: () => _openLegal(
+                          context,
+                          'https://adventconnectzw.netlify.app/privacy',
+                        ),
                       ),
                       const _Divider(),
                       _NavTile(
                         icon: Icons.shield_outlined,
                         label: 'Community guidelines',
-                        onTap: () => context.pushNamed('guidelines'),
+                        onTap: () => _openLegal(
+                          context,
+                          'https://adventconnectzw.netlify.app/guidelines',
+                        ),
                       ),
                     ],
                   ),
@@ -342,6 +351,25 @@ class AboutScreen extends StatelessWidget {
       'https://wa.me/$cleaned?text=${Uri.encodeComponent("Hi $_developerName — ")}',
     );
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openLegal(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (ok) return;
+      throw Exception('launch failed');
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open the link. Visit adventconnectzw.netlify.app',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 }
 

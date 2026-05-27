@@ -20,8 +20,8 @@ support, no card required.
    - Build command: leave empty
    - **Publish directory: `docs`**  ← important
 5. **Site name** (under Site configuration → General → Change site
-   name): set it to exactly `advent-connect-zw` so the URL becomes
-   `https://advent-connect-zw.netlify.app/`. The Edge Functions in
+   name): set it to exactly `adventconnectzw` so the URL becomes
+   `https://adventconnectzw.netlify.app/`. The Edge Functions in
    this repo are already configured to point there.
 6. Click **Deploy**. First build takes ~30 seconds. Subsequent
    pushes that touch `docs/` re-deploy automatically.
@@ -30,7 +30,7 @@ support, no card required.
 
 | Page | URL |
 |---|---|
-| Home | https://advent-connect-zw.netlify.app/ |
+| Home | https://adventconnectzw.netlify.app/ |
 | **Terms of Service** | …/terms.html ← **Play Store listing field** |
 | **Privacy Policy** | …/privacy.html ← **Play Store listing field** |
 | Community Guidelines | …/guidelines.html |
@@ -38,7 +38,7 @@ support, no card required.
 | Download | …/download.html |
 
 The Privacy Policy URL is the one Google Play Console asks for at
-submission time — paste `https://advent-connect-zw.netlify.app/privacy.html`
+submission time — paste `https://adventconnectzw.netlify.app/privacy.html`
 into the listing form.
 
 ## Updating
@@ -55,7 +55,7 @@ the top of the affected page.
 The Edge Functions in `supabase/functions/event-share`,
 `job-share`, `product-share`, and `seller-share` each define a
 `DOWNLOAD_URL` constant pointing at
-`https://advent-connect-zw.netlify.app/download.html`. If you use a
+`https://adventconnectzw.netlify.app/download.html`. If you use a
 different Netlify site name (or wire up a custom domain), update
 that constant in all four files and re-deploy them.
 

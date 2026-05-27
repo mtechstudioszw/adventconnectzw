@@ -1,0 +1,211 @@
+/* Advent Connect ZW — shared site styles.
+   Brand palette mirrors the in-app theme:
+     Primary Blue  #1565C0
+     Dark Navy     #0D1B3E
+     Gold Accent   #C8A951
+     Light Grey    #F5F7FA
+     Text Dark     #1A1A2E
+   Font: system stack for fast load. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #F5F7FA;
+  color: #1A1A2E;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+a { color: #1565C0; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------- Hero ------------------------------------------------ */
+.hero {
+  background: linear-gradient(135deg, #0D1B3E 0%, #1565C0 100%);
+  color: #FFFFFF;
+  padding: 28px 0 64px;
+  position: relative;
+  overflow: hidden;
+}
+.hero::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -24px;
+  height: 48px;
+  background: #F5F7FA;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 44px;
+}
+.brand-badge {
+  width: 44px; height: 44px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.10);
+  border: 1.5px solid #C8A951;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; color: #C8A951; font-size: 18px;
+}
+.brand-name { font-weight: 700; font-size: 17px; }
+.brand-tag {
+  font-size: 10.5px; letter-spacing: 1.8px;
+  color: rgba(255,255,255,0.55); margin-top: 2px;
+}
+.hero h1 {
+  font-size: clamp(32px, 6vw, 52px);
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 16px;
+}
+.hero-sub {
+  font-size: clamp(15px, 2.3vw, 18px);
+  color: rgba(255,255,255,0.85);
+  max-width: 620px;
+  margin-bottom: 28px;
+}
+.cta-row {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  position: relative; z-index: 1;
+}
+.btn-primary, .btn-secondary {
+  display: inline-block;
+  padding: 14px 22px;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.btn-primary {
+  background: #C8A951; color: #0D1B3E;
+  box-shadow: 0 10px 28px rgba(200,169,81,0.45);
+}
+.btn-primary:hover { text-decoration: none; transform: translateY(-1px); }
+.btn-secondary {
+  background: rgba(255,255,255,0.12);
+  color: #FFFFFF;
+  border: 1px solid rgba(255,255,255,0.30);
+}
+.btn-secondary:hover { text-decoration: none; background: rgba(255,255,255,0.18); }
+
+/* ---------- Sections ------------------------------------------- */
+.section { padding: 56px 0; }
+.section h2 {
+  font-size: clamp(24px, 3.5vw, 32px);
+  font-weight: 800;
+  margin-bottom: 28px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.05);
+}
+.card .icon { font-size: 32px; margin-bottom: 10px; }
+.card h3 { font-size: 16px; font-weight: 800; margin-bottom: 6px; }
+.card p { font-size: 14px; color: rgba(26,26,46,0.72); line-height: 1.5; }
+
+/* ---------- Support card --------------------------------------- */
+.support-card {
+  display: flex; gap: 18px; align-items: flex-start;
+  background: linear-gradient(135deg, #0D1B3E 0%, #1565C0 100%);
+  color: #FFFFFF;
+  border-radius: 22px;
+  padding: 22px;
+  box-shadow: 0 10px 28px rgba(21,101,192,0.28);
+}
+.support-emoji { font-size: 36px; line-height: 1; }
+.support-card h3 { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+.support-card p { color: rgba(255,255,255,0.85); font-size: 14px; line-height: 1.55; }
+.support-card strong { color: #C8A951; }
+
+/* ---------- Article pages (terms / privacy / etc) -------------- */
+.article-hero {
+  background: linear-gradient(135deg, #0D1B3E 0%, #1565C0 100%);
+  color: #FFFFFF;
+  padding: 24px 0 44px;
+}
+.article-hero .back {
+  display: inline-block;
+  color: rgba(255,255,255,0.75);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.article-hero h1 {
+  font-size: clamp(26px, 4vw, 36px);
+  font-weight: 800;
+}
+.article-hero .updated {
+  font-size: 12.5px;
+  color: rgba(255,255,255,0.65);
+  margin-top: 6px;
+}
+.article {
+  max-width: 760px;
+  margin: -28px auto 0;
+  padding: 32px 28px;
+  background: #FFFFFF;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+.article h2 {
+  font-size: 19px; font-weight: 800;
+  margin: 28px 0 10px;
+}
+.article h2:first-child { margin-top: 0; }
+.article p, .article li {
+  font-size: 14.5px; color: rgba(26,26,46,0.85); line-height: 1.65;
+  margin-bottom: 12px;
+}
+.article ul, .article ol { padding-left: 22px; margin-bottom: 14px; }
+.article strong { color: #0D1B3E; }
+.article a { color: #1565C0; word-break: break-word; }
+
+/* ---------- Download page ------------------------------------- */
+.download-card {
+  background: #FFFFFF;
+  border-radius: 22px;
+  padding: 30px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  text-align: center;
+  margin-top: -30px;
+  position: relative;
+}
+.download-card h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+.download-card p { color: rgba(26,26,46,0.7); margin-bottom: 24px; }
+.download-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* ---------- Footer --------------------------------------------- */
+.footer {
+  background: #0D1B3E;
+  color: rgba(255,255,255,0.85);
+  padding: 36px 0;
+  margin-top: 56px;
+}
+.footer-links {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  margin-bottom: 18px;
+}
+.footer-links a {
+  color: rgba(255,255,255,0.85);
+  font-size: 14px;
+  font-weight: 600;
+}
+.footer-credit {
+  font-size: 12.5px;
+  color: rgba(255,255,255,0.6);
+}
+.footer-credit strong { color: #C8A951; }

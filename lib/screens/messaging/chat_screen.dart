@@ -178,7 +178,6 @@ class _ChatScreenState extends State<ChatScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _conversation = widget.initialConversation;
-    _enableScreenshotBlock();
     _bootstrap();
     _resolveConversation();
   }
@@ -250,19 +249,7 @@ class _ChatScreenState extends State<ChatScreen>
     _inputController.dispose();
     _scrollController.dispose();
     _entrance.dispose();
-    _disableScreenshotBlock();
     super.dispose();
-  }
-
-  // TODO: Re-wire screenshot blocking once a working FLAG_SECURE package
-  // is back in pubspec.yaml. Stubbed out for now so the build doesn't
-  // pull AGP 7.3.0 over a slow network.
-  void _enableScreenshotBlock() {
-    if (!Platform.isAndroid) return;
-  }
-
-  void _disableScreenshotBlock() {
-    if (!Platform.isAndroid) return;
   }
 
   Future<void> _bootstrap() async {

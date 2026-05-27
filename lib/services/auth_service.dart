@@ -395,18 +395,41 @@ class AuthService {
     if (normalised.isEmpty) {
       return AuthResult.failure('Enter your email to reset.');
     }
-    final allowed = await _checkResetThrottle(normalised);
-    if (!allowed) {
+    // Server-side rate limit FIRST (patch_026). Atomic check + consume
+    // via SECURITY DEFINER RPC — anyone bypassing the client throttle
+    // (e.g. by clearing secure storage or calling Supabase directly)
+    // still hits this gate. Default: 3 attempts / hour / email.
+    final serverOk = await _checkServerRateLimit(
+      identity: normalised,
+      action: 'password_reset',
+      max: 3,
+      windowSeconds: 3600,
+    );
+    if (serverOk == false) {
       return AuthResult.failure(
         'Too many reset attempts for this email in the last hour. '
         'Wait a bit before trying again.',
       );
+    }
+    // serverOk == null means the RPC isn't reachable; fall back to
+    // the client-side throttle so a brief network blip doesn't lock
+    // legitimate users out.
+    if (serverOk == null) {
+      final clientOk = await _checkResetThrottle(normalised);
+      if (!clientOk) {
+        return AuthResult.failure(
+          'Too many reset attempts for this email in the last hour. '
+          'Wait a bit before trying again.',
+        );
+      }
     }
     try {
       await _client.auth.resetPasswordForEmail(
         normalised,
         redirectTo: _passwordResetRedirectUrl,
       );
+      // Belt + braces — record on the client too so the soft
+      // throttle stays in sync if the server later goes unreachable.
       await _recordResetAttempt(normalised);
       return AuthResult.success(null);
     } on AuthException catch (e) {
@@ -417,6 +440,38 @@ class AuthService {
       // request couldn't even leave the device. Map the common
       // "network" cases the same way signIn does.
       return AuthResult.failure(_friendlyAuthError(e.toString()));
+    }
+  }
+
+  /// Calls the server-side rate-limit RPC (patch_026).
+  /// Returns:
+  ///   true  → allowed, slot consumed
+  ///   false → over limit, denied
+  ///   null  → RPC unreachable; caller should fall back to client
+  ///           throttle so a network blip doesn't block legit users.
+  static Future<bool?> _checkServerRateLimit({
+    required String identity,
+    required String action,
+    int max = 3,
+    int windowSeconds = 3600,
+  }) async {
+    try {
+      final result = await _client.rpc(
+        'check_and_consume_rate_limit',
+        params: {
+          'p_identity_key': identity,
+          'p_action_key': action,
+          'p_max': max,
+          'p_window_seconds': windowSeconds,
+        },
+      );
+      if (result is bool) return result;
+      if (result is List && result.isNotEmpty && result.first is bool) {
+        return result.first as bool;
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 

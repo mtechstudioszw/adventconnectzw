@@ -22,7 +22,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 // to main publishes a debug APK (.github/workflows/build-apk.yml).
 // Replace with the Play Store / web app URL once those exist.
 const DOWNLOAD_URL =
-  "https://github.com/mtechstudioszw/adventconnectzw/releases/latest";
+  "https://mtechstudioszw.github.io/adventconnectzw/download.html";
 
 function esc(s: string): string {
   return (s ?? "")

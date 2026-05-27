@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -107,6 +108,103 @@ class _ChatScreenState extends State<ChatScreen>
         _pending[i] = canonical;
         return;
       }
+    }
+  }
+
+  /// Long-press menu on a message bubble. Copy is always available;
+  /// Delete only shows for messages the current user sent (RLS rejects
+  /// deletes on incoming rows anyway, but hiding the menu item makes
+  /// the affordance honest).
+  Future<void> _showMessageActions(Message m, bool isMine) async {
+    HapticFeedback.selectionClick();
+    final hasText = (m.content.trim().isNotEmpty) && m.messageType != 'voice';
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(26, 26, 46, 0.12),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              if (hasText)
+                ListTile(
+                  leading: const Icon(Icons.copy_outlined,
+                      color: AppColors.primaryBlue),
+                  title: Text('Copy',
+                      style: AppTextStyles.bodyLarge
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  onTap: () => Navigator.pop(ctx, 'copy'),
+                ),
+              if (isMine)
+                ListTile(
+                  leading:
+                      const Icon(Icons.delete_outline, color: AppColors.red),
+                  title: Text('Delete for everyone',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                          color: AppColors.red,
+                          fontWeight: FontWeight.w600)),
+                  subtitle: Text(
+                    'Removes the message from this chat for both of you.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(ctx, 'delete'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: m.content));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.darkNavy,
+            content: Text(
+              'Message copied.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            ),
+          ),
+        );
+      case 'delete':
+        // Optimistic removal so the bubble vanishes immediately; the
+        // realtime stream will replay the DELETE for the other party.
+        setState(() {
+          _serverMessages.removeWhere((x) => x.id == m.id);
+          _pending.removeWhere((x) => x.id == m.id);
+        });
+        try {
+          await MessagingService.deleteMessage(m.id);
+        } catch (_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.red,
+              content: Text(
+                'Could not delete. Please try again.',
+                style:
+                    AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+              ),
+            ),
+          );
+        }
     }
   }
 
@@ -274,8 +372,11 @@ class _ChatScreenState extends State<ChatScreen>
         _loading = false;
       });
       _scrollToBottom();
-      // Mark anything they sent us as read — best-effort, fire and forget.
-      unawaited(MessagingService.markConversationRead(widget.conversationId));
+      // Mark anything they sent us as read. Awaited (not fire-and-
+      // forget) so when the user pops back to the inbox the badge
+      // refresh sees the new state instead of the pre-read snapshot —
+      // that race was the "open chat, go back, badge still red" bug.
+      await MessagingService.markConversationRead(widget.conversationId);
       _stream =
           MessagingService.streamMessages(widget.conversationId).listen((list) {
         if (!mounted) return;
@@ -1087,7 +1188,11 @@ class _ChatScreenState extends State<ChatScreen>
               crossAxisAlignment:
                   isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                _MessageBubble(message: m, isMine: isMine),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onLongPress: () => _showMessageActions(m, isMine),
+                  child: _MessageBubble(message: m, isMine: isMine),
+                ),
                 if (showStamp)
                   Padding(
                     padding: EdgeInsets.fromLTRB(

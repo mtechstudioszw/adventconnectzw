@@ -174,29 +174,25 @@ class MessagingService {
       // surfacing a generic failure on the inbox.
       return readCachedInbox();
     }
-    // Persist the raw rows for the next offline session BEFORE we
-    // map them into the model — we want exactly what the server
-    // returned (including the joined participant_a/b photo objects)
-    // so a cache restore is indistinguishable from a live fetch.
-    unawaited(_writeInboxCache(
-      response.map((r) => Map<String, dynamic>.from(r as Map)).toList(),
-    ));
     // Pull unread counts in parallel — single RPC roundtrip via
     // get_my_unread_counts() (patch_018). RLS is participant-scoped
     // so the count is naturally limited to the caller's threads.
     final unreadById = await fetchUnreadCounts();
-    final list = response
-        .map((row) {
-          final raw = row as Map<String, dynamic>;
+    // Splice the unread count into each raw row BEFORE caching so a
+    // cache-restore preserves badges accurately — caching the raw
+    // server response (without counts) was the source of the
+    // "open chat, refresh, message reverts to unread" bug.
+    final enriched = response
+        .map((r) {
+          final raw = Map<String, dynamic>.from(r as Map);
           final id = raw['id'].toString();
-          // Splice the RPC-computed unread count into the JSON before
-          // the model parses it — keeps the rest of the pipeline
-          // (cache restore, copyWith, etc.) unchanged.
-          return Conversation.fromJson(
-            {...raw, 'unread_count': unreadById[id] ?? 0},
-            currentUserId: user.id,
-          );
+          raw['unread_count'] = unreadById[id] ?? 0;
+          return raw;
         })
+        .toList();
+    unawaited(_writeInboxCache(enriched));
+    final list = enriched
+        .map((raw) => Conversation.fromJson(raw, currentUserId: user.id))
         .toList();
     list.sort((a, b) {
       if (a.isSelfChat && !b.isSelfChat) return -1;
@@ -646,6 +642,15 @@ class MessagingService {
   /// The list is built client-side from the realtime stream so we
   /// only issue an UPDATE for genuinely-new inbound rows, not every
   /// frame.
+  /// Hard-delete a message the current user sent. RLS rejects deletes
+  /// on anyone else's row, so callers don't need a client-side guard
+  /// beyond hiding the menu for incoming messages — the database is
+  /// authoritative. The realtime stream propagates the DELETE event
+  /// to the other party so the bubble disappears on their side too.
+  static Future<void> deleteMessage(String messageId) async {
+    await _client.from(_messagesTable).delete().eq('id', messageId);
+  }
+
   static Future<void> markMessagesDelivered(List<String> messageIds) async {
     if (messageIds.isEmpty) return;
     try {

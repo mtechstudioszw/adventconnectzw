@@ -10,6 +10,7 @@ import '../../models/friendship_model.dart';
 import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
 import '../../models/post_model.dart';
+import '../../models/prayer_model.dart';
 import '../../models/story_model.dart';
 import '../../services/advent_news_service.dart';
 import '../../services/auth_service.dart';
@@ -22,6 +23,7 @@ import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/prayer_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
@@ -58,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Church> _churches = [];
   List<MemberDirectoryEntry> _suggestedMembers = [];
   List<AdventNews> _topNews = const [];
+  List<Prayer> _prayers = const [];
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
   int _unreadNotifications = 0;
@@ -182,6 +185,7 @@ class _HomeScreenState extends State<HomeScreen>
         FeedService.pendingRequestCount(),
         MessagingService.fetchConversations(),
         AdventNewsService.fetchTopNews(limit: 3),
+        PrayerService.fetchPrayers(),
       ]);
       if (!mounted) return;
       // Drop events whose start time is more than a few hours in the
@@ -228,6 +232,7 @@ class _HomeScreenState extends State<HomeScreen>
         _pendingFriendRequests = results[10] as int;
         _unreadMessages = unreadMessages;
         _topNews = results[12] as List<AdventNews>;
+        _prayers = (results[13] as List<Prayer>).take(5).toList();
         _loading = false;
       });
       // Best-effort cache write — failures here must never surface.
@@ -851,6 +856,29 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _buildPrayersStrip() {
+    return SizedBox(
+      height: 132,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _prayers.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, i) {
+          final p = _prayers[i];
+          return _PrayerHomeCard(
+            prayer: p,
+            onTap: () => context.pushNamed(
+              'prayer_details',
+              pathParameters: {'id': p.id},
+              extra: p,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildChurchGrid() {
     if (_loading && _churches.isEmpty) {
       return SizedBox(
@@ -1022,10 +1050,17 @@ class _HomeScreenState extends State<HomeScreen>
       key: 'prayers',
       widget: _discoverySection(
         title: 'Active prayers',
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: _PrayersEmpty(onTap: () => context.pushNamed('prayer')),
-        ),
+        action: _prayers.isEmpty ? null : 'See all',
+        onAction: _prayers.isEmpty
+            ? null
+            : () => context.pushNamed('prayer'),
+        child: _prayers.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child:
+                    _PrayersEmpty(onTap: () => context.pushNamed('prayer')),
+              )
+            : _buildPrayersStrip(),
       ),
     ));
     if (_churches.isNotEmpty) {
@@ -2448,6 +2483,99 @@ class _CoverImage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _PrayerHomeCard extends StatelessWidget {
+  const _PrayerHomeCard({required this.prayer, required this.onTap});
+
+  final Prayer prayer;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final author =
+        prayer.authorName.trim().isNotEmpty ? prayer.authorName.trim() : 'A member';
+    return SizedBox(
+      width: 260,
+      child: Material(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.front_hand_outlined,
+                        size: 18,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        author,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Text(
+                    prayer.content,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.75),
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.favorite_outline,
+                      size: 14,
+                      color: AppColors.primaryBlue,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${prayer.prayerCount} praying',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

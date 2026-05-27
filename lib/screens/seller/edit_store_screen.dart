@@ -47,12 +47,15 @@ class _EditStoreScreenState extends State<EditStoreScreen>
   Seller? _seller;
   String? _selectedProvince;
   String? _photoUrl;
+  String? _coverUrl;
   bool _offersDelivery = false;
   bool _observesSabbath = false;
   bool _isActive = true;
   bool _loading = true;
   bool _uploading = false;
+  bool _uploadingCover = false;
   bool _saving = false;
+  bool _deleting = false;
   String? _error;
 
   @override
@@ -119,6 +122,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
           '🕊️ This seller observes the Sabbath. Response times may be slower Friday sundown to Saturday sundown.';
       _selectedProvince = seller.province;
       _photoUrl = seller.profilePhotoUrl;
+      _coverUrl = seller.coverPhotoUrl;
       _offersDelivery = seller.offersDelivery;
       _observesSabbath = seller.observesSabbath;
       _isActive = seller.isActive;
@@ -152,6 +156,82 @@ class _EditStoreScreenState extends State<EditStoreScreen>
     }
   }
 
+  Future<void> _pickCover() async {
+    if (_uploadingCover) return;
+    setState(() {
+      _uploadingCover = true;
+      _error = null;
+    });
+    try {
+      final url = await StorageService.pickAndUploadCoverPhoto();
+      if (!mounted) return;
+      if (url != null) setState(() => _coverUrl = url);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not upload cover photo. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingCover = false);
+    }
+  }
+
+  Future<void> _confirmDeleteStore() async {
+    if (_deleting) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete this store?', style: AppTextStyles.headlineSmall),
+        content: Text(
+          'Your store and every product you listed will be removed from the marketplace. This cannot be undone.',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel',
+                style: AppTextStyles.labelMedium
+                    .copyWith(color: AppColors.textDark)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete store', style: AppTextStyles.labelLarge),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _deleting = true);
+    try {
+      await SellerService.deleteMySellerProfile();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Store deleted.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      // Bounce back to the marketplace — the seller dashboard would
+      // re-fetch and crash with "store not found" otherwise.
+      context.goNamed('marketplace');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _deleting = false;
+        _error = 'Could not delete store. Try again.';
+      });
+    }
+  }
+
   Future<void> _save() async {
     setState(() => _error = null);
     if (_seller == null) return;
@@ -175,6 +255,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
         whatsapp: _whatsappController.text,
         contactName: _contactNameController.text,
         profilePhotoUrl: _photoUrl,
+        coverPhotoUrl: _coverUrl,
         paymentMethods: _paymentMethodsController.text,
         offersDelivery: _offersDelivery,
         deliveryArea: _offersDelivery ? _deliveryAreaController.text : '',
@@ -285,6 +366,12 @@ class _EditStoreScreenState extends State<EditStoreScreen>
                   photoUrl: _photoUrl,
                   uploading: _uploading,
                   onTap: _pickPhoto,
+                ),
+                const SizedBox(height: 14),
+                _CoverPhotoTile(
+                  coverUrl: _coverUrl,
+                  uploading: _uploadingCover,
+                  onTap: _pickCover,
                 ),
                 const SizedBox(height: 18),
                 _LabeledField(
@@ -521,6 +608,11 @@ class _EditStoreScreenState extends State<EditStoreScreen>
             label: _saving ? 'Saving...' : 'Save changes',
             busy: _saving,
             onTap: _saving ? null : _save,
+          ),
+          const SizedBox(height: 22),
+          _DeleteStoreButton(
+            busy: _deleting,
+            onTap: (_deleting || _saving) ? null : _confirmDeleteStore,
           ),
         ],
       ),
@@ -1087,6 +1179,160 @@ class _PhotoTile extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CoverPhotoTile extends StatelessWidget {
+  const _CoverPhotoTile({
+    required this.coverUrl,
+    required this.uploading,
+    required this.onTap,
+  });
+
+  final String? coverUrl;
+  final bool uploading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCover = coverUrl != null && coverUrl!.isNotEmpty;
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: uploading ? null : onTap,
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (hasCover)
+                CachedNetworkImage(
+                  imageUrl: coverUrl!,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    color: AppColors.lightGrey,
+                  ),
+                  errorWidget: (_, __, ___) => const DecoratedBox(
+                    decoration:
+                        BoxDecoration(gradient: AppColors.appBarGradient),
+                  ),
+                )
+              else
+                const DecoratedBox(
+                  decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+                ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.45),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (uploading)
+                const Center(
+                  child:
+                      CircularProgressIndicator(color: AppColors.white),
+                )
+              else
+                Positioned(
+                  left: 12,
+                  bottom: 10,
+                  right: 12,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.image_outlined,
+                          color: AppColors.white,
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          hasCover
+                              ? 'Tap to change cover photo'
+                              : 'Add a cover photo (16:9)',
+                          style: AppTextStyles.titleSmall.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeleteStoreButton extends StatelessWidget {
+  const _DeleteStoreButton({required this.busy, required this.onTap});
+
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onTap == null && !busy ? 0.6 : 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.red.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Center(
+              child: busy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: AppColors.red,
+                      ),
+                    )
+                  : Text(
+                      'Delete store',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: AppColors.red,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

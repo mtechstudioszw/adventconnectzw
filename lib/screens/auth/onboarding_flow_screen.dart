@@ -1208,6 +1208,7 @@ class _PersonalizationPage extends StatelessWidget {
   static const _interestOptions = <_TileOption>[
     _TileOption('Events', Icons.event_outlined),
     _TileOption('Prayer requests', Icons.front_hand_outlined),
+    _TileOption('Advent News', Icons.newspaper_outlined),
     _TileOption('Marketplace', Icons.shopping_bag_outlined),
     _TileOption('Jobs', Icons.work_outline),
     _TileOption('Church announcements', Icons.campaign_outlined),

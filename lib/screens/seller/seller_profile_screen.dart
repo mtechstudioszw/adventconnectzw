@@ -437,10 +437,48 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
   Widget _buildHero() {
     final seller = _seller;
     final photo = seller?.profilePhotoUrl;
+    final cover = seller?.coverPhotoUrl;
     final hasPhoto = photo != null && photo.isNotEmpty;
-    return Container(
-      decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-      child: SafeArea(
+    final hasCover = cover != null && cover.isNotEmpty;
+    return Stack(
+      children: [
+        // Cover photo banner (or gradient fallback) sits behind the
+        // hero content; a translucent dark overlay keeps the white
+        // text + circle avatar legible no matter how bright the cover.
+        Positioned.fill(
+          child: hasCover
+              ? CachedNetworkImage(
+                  imageUrl: cover,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => const DecoratedBox(
+                    decoration:
+                        BoxDecoration(gradient: AppColors.appBarGradient),
+                  ),
+                  errorWidget: (_, __, ___) => const DecoratedBox(
+                    decoration:
+                        BoxDecoration(gradient: AppColors.appBarGradient),
+                  ),
+                )
+              : const DecoratedBox(
+                  decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+                ),
+        ),
+        if (hasCover)
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.30),
+                    Colors.black.withValues(alpha: 0.65),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        SafeArea(
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
@@ -547,6 +585,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
           ),
         ),
       ),
+      ],
     );
   }
 }

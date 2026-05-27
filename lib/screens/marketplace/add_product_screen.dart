@@ -387,7 +387,7 @@ class _AddProductScreenState extends State<AddProductScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                width: 110,
+                width: 132,
                 child: PostFormLabeledField(
                   label: 'Currency',
                   child: _Dropdown<String>(
@@ -395,8 +395,14 @@ class _AddProductScreenState extends State<AddProductScreen>
                     hint: 'USD',
                     value: _currency,
                     items: _currencies
-                        .map((c) =>
-                            DropdownMenuItem(value: c, child: Text(c)))
+                        .map((c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(
+                                c,
+                                overflow: TextOverflow.fade,
+                                softWrap: false,
+                              ),
+                            ))
                         .toList(),
                     onChanged: (v) => setState(() => _currency = v ?? 'USD'),
                   ),

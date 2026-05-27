@@ -1207,50 +1207,6 @@ class _HeroClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
-class _PersonalViewPill extends StatelessWidget {
-  const _PersonalViewPill({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border:
-                Border.all(color: AppColors.white.withValues(alpha: 0.16)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.person_outline,
-                color: AppColors.white,
-                size: 16,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Personal view',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CircleIconButton extends StatelessWidget {
   const _CircleIconButton({required this.icon, required this.onTap});
   final IconData icon;

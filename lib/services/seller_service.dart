@@ -274,6 +274,20 @@ class SellerService {
         .eq('seller_id', user.id);
   }
 
+  /// Permanently delete the current user's seller row + every product
+  /// they listed. RLS limits this to the owning user. The cascading
+  /// product wipe is explicit (not relying on FK ON DELETE CASCADE) so
+  /// callers can show progress and fail fast if any product can't be
+  /// removed (e.g. RLS race after handing the store off).
+  static Future<void> deleteMySellerProfile() async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to delete your store.');
+    }
+    await _client.from(_productsTable).delete().eq('seller_id', user.id);
+    await _client.from(_sellersTable).delete().eq('auth_user_id', user.id);
+  }
+
   /// Aggregate stats shown at the top of the dashboard. Computed
   /// client-side from a single product list fetch — cheaper than three
   /// separate count queries and the lists are small.

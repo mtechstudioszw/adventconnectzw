@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/advent_news_model.dart';
@@ -12,8 +14,11 @@ class AdventNewsService {
   static const _table = 'advent_news';
   static const _authorEmbed = 'profiles!advent_news_author_id_fkey(full_name)';
 
-  /// Top news for the home hero card — pinned first, then newest.
-  /// Limit is small (3-5) so the cold-start payload stays light.
+  /// Top news for the home hero card. Fetches a larger candidate
+  /// pool (default 12) then shuffles with a per-user seed so each
+  /// reader sees a different slice on home, but their own order is
+  /// stable within a session. Pinned stories always rise to the top
+  /// regardless of the shuffle so editorial overrides still work.
   static Future<List<AdventNews>> fetchTopNews({int limit = 5}) async {
     try {
       final response = await _client
@@ -21,13 +26,22 @@ class AdventNewsService {
           .select('*, $_authorEmbed')
           .order('is_pinned', ascending: false)
           .order('published_at', ascending: false)
-          .limit(limit);
-      return (response as List)
+          .limit(limit * 4);
+      final all = (response as List)
           .map((row) => AdventNews.fromJson(row as Map<String, dynamic>))
           .toList();
+      if (all.length <= limit) return all;
+      final pinned = all.where((n) => n.isPinned).toList();
+      final rest = all.where((n) => !n.isPinned).toList();
+      final user = _client.auth.currentUser;
+      final seed = user?.id.hashCode ?? 0;
+      rest.shuffle(Random(seed));
+      final mixed = <AdventNews>[
+        ...pinned,
+        ...rest,
+      ].take(limit).toList();
+      return mixed;
     } catch (_) {
-      // Empty list rather than throwing — a missing news table or
-      // RLS hiccup shouldn't break the home screen.
       return const [];
     }
   }

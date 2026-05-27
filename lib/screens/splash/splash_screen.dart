@@ -17,8 +17,11 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   // Keep the loader visible for at least this long so the brand
   // animation lands and the loading bar can run end-to-end. Must be
-  // >= the progress bar duration below.
-  static const Duration _minLoaderDuration = Duration(milliseconds: 3200);
+  // >= the entrance animation duration. Previously 3200ms — the
+  // user reported the splash dragged, so trimmed to ~1100ms (the
+  // entrance fade finishes at 1800ms but the user can already see
+  // logo+wordmark by ~900ms because of the staggered intervals).
+  static const Duration _minLoaderDuration = Duration(milliseconds: 1100);
 
   late final AnimationController _entrance;
   late final AnimationController _progress;

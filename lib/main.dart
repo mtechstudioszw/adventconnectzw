@@ -23,26 +23,25 @@ import 'widgets/offline_banner.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Offline cache + connectivity stream — must come up before any
-  // service that wants to read cached payloads on cold start.
-  await CacheService.initialize();
-  await ConnectivityService.initialize();
-  // Drain any messages queued from the previous session and watch for
-  // online transitions to retry. Outbox uses Hive, so this must come
-  // after CacheService.initialize() (which runs Hive.initFlutter()).
-  await MessagingService.startOutboxFlusher();
+  // Cold-start path is split into "must finish before first paint"
+  // vs "do in background after runApp". Sequential awaits add up —
+  // splash used to drag because we serialised every disk read + the
+  // Firebase native init even though most of them don't depend on
+  // each other.
 
-  // AdMob removed for v1 launch — re-add when monetization is wired up.
+  // Phase 1: cheap disk reads that several services read SYNCHRONOUSLY
+  // on first build. Parallelised so the slowest one bounds total
+  // latency instead of summing them.
+  await Future.wait([
+    CacheService.initialize(),
+    ConnectivityService.initialize(),
+    AccountModeService.init(),
+    ThemeService.init(),
+  ]);
 
-  // Read the user's last chosen view mode (personal / business). Cheap
-  // disk read, must finish before the first widget builds because the
-  // profile screen reads it synchronously.
-  await AccountModeService.init();
-
-  // Same — load the chosen ThemeMode (system/light/dark) before the
-  // first build so we don't flash the wrong theme.
-  await ThemeService.init();
-
+  // Phase 2: Supabase MUST be ready before the splash routes anywhere
+  // (it reads currentUser to decide home vs login). Kept on the
+  // critical path; everything else moves to the background.
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
@@ -55,16 +54,71 @@ void main() async {
     ),
   );
 
-  // Firebase initialise. Wrapped in a try so a missing/broken
-  // google-services.json (e.g. before the developer has finished setup)
-  // doesn't blow up the whole app — Supabase still works and the user
-  // just doesn't get push.
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.white,
+    ),
+  );
+
+  // Don't block the first frame on the orientation lock — it has no
+  // effect on the splash render either way and just adds a hop to
+  // the platform channel.
+  unawaited(SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]));
+
+  runApp(const AdventConnectApp());
+
+  // Anything that doesn't gate the splash's routing decision happens
+  // here. The splash sits on a ~1100ms brand animation; by the time it
+  // pops these are usually done, but if not the app still works (push
+  // just registers a few seconds later, outbox flushes when the user
+  // hits home).
+  unawaited(_initBackgroundServices());
+}
+
+Future<void> _initBackgroundServices() async {
+  // Outbox flusher needs Hive from Phase 1 above. Fire and forget.
+  unawaited(MessagingService.startOutboxFlusher());
+
+  // Mirror sign-in / sign-out into presence + analytics. Wired up here
+  // (not inline in main) so it doesn't add to first-frame latency.
+  Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    if (data.event == AuthChangeEvent.passwordRecovery) {
+      appRouter.goNamed('reset_password');
+    }
+    AnalyticsService.setUserId(data.session?.user.id);
+    switch (data.event) {
+      case AuthChangeEvent.signedIn:
+      case AuthChangeEvent.initialSession:
+      case AuthChangeEvent.tokenRefreshed:
+        if (data.session?.user != null) {
+          unawaited(PresenceService.start());
+        }
+        break;
+      case AuthChangeEvent.signedOut:
+        unawaited(PresenceService.stop());
+        break;
+      default:
+        break;
+    }
+  });
+
+  // Kick off presence immediately if we already have a session (warm
+  // start). The auth-state listener above also covers later sign-ins.
+  if (Supabase.instance.client.auth.currentUser != null) {
+    unawaited(PresenceService.start());
+  }
+
+  // Firebase + Crashlytics + Push. Wrapped in a try so a missing /
+  // broken google-services.json doesn't kill the whole app — Supabase
+  // still works and the user just doesn't get push.
   try {
     await Firebase.initializeApp();
 
-    // Crashlytics — route Flutter framework + async errors here so a
-    // null check or RenderFlex overflow in the field shows up in the
-    // console instead of dying silently on a user's device.
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
@@ -73,8 +127,6 @@ void main() async {
 
     AnalyticsService.markReady();
     await PushService.initialize();
-    // Push taps deep-link into the source content. The mapping mirrors
-    // notification_centre_screen._routeFor.
     PushService.onMessageTap.listen((msg) {
       final type = (msg.data['reference_type'] ?? '').toString();
       final id = (msg.data['reference_id'] ?? '').toString();
@@ -109,57 +161,8 @@ void main() async {
       }
     });
   } catch (e, st) {
-    // Stay alive so the rest of the app still launches.
     debugPrint('Firebase init failed (push disabled): $e\n$st');
   }
-
-  // Route password-recovery deep links straight to the reset screen.
-  // Supabase fires this event when the user opens the link from their
-  // recovery email, regardless of whether the app was already running.
-  // Also keeps Analytics + Crashlytics user identity in sync.
-  Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-    if (data.event == AuthChangeEvent.passwordRecovery) {
-      appRouter.goNamed('reset_password');
-    }
-    AnalyticsService.setUserId(data.session?.user.id);
-    // Mirror sign-in / sign-out into the presence channel so other
-    // users see "online" green dots and accurate last-seen times.
-    switch (data.event) {
-      case AuthChangeEvent.signedIn:
-      case AuthChangeEvent.initialSession:
-      case AuthChangeEvent.tokenRefreshed:
-        if (data.session?.user != null) {
-          unawaited(PresenceService.start());
-        }
-        break;
-      case AuthChangeEvent.signedOut:
-        unawaited(PresenceService.stop());
-        break;
-      default:
-        break;
-    }
-  });
-
-  // Kick off presence immediately if we already have a session (warm
-  // start). The auth-state listener above also covers later sign-ins.
-  if (Supabase.instance.client.auth.currentUser != null) {
-    unawaited(PresenceService.start());
-  }
-
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Colors.white,
-    ),
-  );
-
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
-  runApp(const AdventConnectApp());
 }
 
 class AdventConnectApp extends StatelessWidget {

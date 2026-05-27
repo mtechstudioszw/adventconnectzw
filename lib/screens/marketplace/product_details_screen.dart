@@ -77,17 +77,17 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
     }
   }
 
-  /// Share the product with the in-app text + download CTA. No
-  /// dedicated product-share Open Graph page exists yet, so the
-  /// link points at the GitHub Releases page where the APK lives.
+  /// Share the product via the product-share Open Graph Edge
+  /// Function so the link renders a thumbnail + title preview on
+  /// WhatsApp / Facebook / X, then deep-links into the app (or
+  /// falls back to the GitHub Releases APK).
   Future<void> _shareProduct() async {
     final product = _product;
     if (product == null) return;
-    const downloadUrl =
-        'https://github.com/mtechstudioszw/adventconnectzw/releases/latest';
+    final shareUrl =
+        'https://eqbyvasteolqyktbqbem.functions.supabase.co/product-share?id=${product.id}';
     final text = '${product.title}\n\n'
-        'For sale on Advent Connect ZW marketplace. '
-        'Get the app to see details + message the seller: $downloadUrl';
+        'For sale on Advent Connect ZW marketplace:\n$shareUrl';
     try {
       await Share.share(text, subject: product.title);
     } catch (_) {

@@ -163,19 +163,21 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     }
   }
 
-  /// Share the seller's storefront with the app download link.
-  /// No dedicated Open Graph share page exists for seller profiles
-  /// yet, so we share a text intro + the GitHub Releases URL.
+  /// Share the seller's storefront via the seller-share Open Graph
+  /// Edge Function — gives a thumbnail + title preview on
+  /// WhatsApp / Facebook / X, deep-links into the app, falls back
+  /// to the GitHub Releases APK.
   Future<void> _shareSeller() async {
     final seller = _seller;
     if (seller == null) return;
-    const downloadUrl =
-        'https://github.com/mtechstudioszw/adventconnectzw/releases/latest';
     final name = seller.businessName.trim().isNotEmpty
         ? seller.businessName.trim()
         : 'this seller';
-    final text = 'Check out $name on Advent Connect ZW marketplace. '
-        'Get the app to browse the store + message the seller: $downloadUrl';
+    // Seller routes use auth_user_id (consistent with how products
+    // reference their seller).
+    final shareUrl =
+        'https://eqbyvasteolqyktbqbem.functions.supabase.co/seller-share?id=${seller.authUserId}';
+    final text = 'Check out $name on Advent Connect ZW marketplace:\n$shareUrl';
     try {
       await Share.share(text, subject: name);
     } catch (_) {

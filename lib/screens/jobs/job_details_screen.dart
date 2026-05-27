@@ -299,19 +299,18 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   }
 
   /// Share the job posting with a friendly invite to the app.
-  /// Jobs don't have a dedicated Open Graph share page yet (events
-  /// do — see supabase/functions/event-share/), so we share a text
-  /// summary + the GitHub Releases APK link as the call-to-action.
-  /// Replace with a job-share Edge Function URL when one exists.
+  /// Routes through the job-share Supabase Edge Function so social
+  /// crawlers (WhatsApp, Facebook, X) can pull title + description
+  /// from the page's Open Graph meta tags and render a rich link
+  /// preview. The page itself deep-links into the app or falls
+  /// back to the GitHub Releases APK download.
   Future<void> _shareJob() async {
     final job = _job;
     if (job == null) return;
-    const downloadUrl =
-        'https://github.com/mtechstudioszw/adventconnectzw/releases/latest';
+    final shareUrl =
+        'https://eqbyvasteolqyktbqbem.functions.supabase.co/job-share?id=${job.id}';
     final text = '${job.title}\n\n'
-        'I saw this on Advent Connect ZW — '
-        'a community job board for Adventist members in Zimbabwe. '
-        'Download the app: $downloadUrl';
+        'Job opportunity on Advent Connect ZW:\n$shareUrl';
     try {
       await Share.share(text, subject: job.title);
     } catch (_) {

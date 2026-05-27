@@ -78,15 +78,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
     }
   }
 
-  /// Share the product via the product-share Open Graph Edge
-  /// Function so the link renders a thumbnail + title preview on
-  /// WhatsApp / Facebook / X, then deep-links into the app (or
-  /// falls back to the GitHub Releases APK).
+  /// Share the product. Points everyone at the canonical Netlify
+  /// landing page — no per-record deep-link page yet.
   Future<void> _shareProduct() async {
     final product = _product;
     if (product == null) return;
-    final shareUrl =
-        'https://eqbyvasteolqyktbqbem.functions.supabase.co/product-share?id=${product.id}';
+    const shareUrl = 'https://adventconnectzw.netlify.app/';
     final text = '${product.title}\n\n'
         'For sale on Advent Connect ZW marketplace:\n$shareUrl';
     try {

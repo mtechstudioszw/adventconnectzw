@@ -178,10 +178,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     final name = seller.businessName.trim().isNotEmpty
         ? seller.businessName.trim()
         : 'this seller';
-    // Seller routes use auth_user_id (consistent with how products
-    // reference their seller).
-    final shareUrl =
-        'https://eqbyvasteolqyktbqbem.functions.supabase.co/seller-share?id=${seller.authUserId}';
+    // Single canonical landing page — Netlify hosts the branded site
+    // recipients land on when they tap a share link.
+    const shareUrl = 'https://adventconnectzw.netlify.app/';
     final text = 'Check out $name on Advent Connect ZW marketplace:\n$shareUrl';
     try {
       await Share.share(text, subject: name);

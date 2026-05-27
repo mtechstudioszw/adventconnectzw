@@ -299,16 +299,12 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   }
 
   /// Share the job posting with a friendly invite to the app.
-  /// Routes through the job-share Supabase Edge Function so social
-  /// crawlers (WhatsApp, Facebook, X) can pull title + description
-  /// from the page's Open Graph meta tags and render a rich link
-  /// preview. The page itself deep-links into the app or falls
-  /// back to the GitHub Releases APK download.
+  /// Points at the canonical Netlify landing page recipients can use
+  /// to download the app.
   Future<void> _shareJob() async {
     final job = _job;
     if (job == null) return;
-    final shareUrl =
-        'https://eqbyvasteolqyktbqbem.functions.supabase.co/job-share?id=${job.id}';
+    const shareUrl = 'https://adventconnectzw.netlify.app/';
     final text = '${job.title}\n\n'
         'Job opportunity on Advent Connect ZW:\n$shareUrl';
     try {

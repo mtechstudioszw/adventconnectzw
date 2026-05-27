@@ -226,10 +226,10 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
   Future<void> _share() async {
     final item = _item;
     if (item == null) return;
-    final url = item.sourceUrl;
-    final body = url != null && url.isNotEmpty
-        ? '${item.title}\n\n${item.summary}\n\n$url'
-        : '${item.title}\n\n${item.summary}\n\nSeen on Advent Connect ZW.';
+    // All share buttons land on the same canonical Netlify site.
+    const appUrl = 'https://adventconnectzw.netlify.app/';
+    final body =
+        '${item.title}\n\n${item.summary}\n\nRead more on Advent Connect ZW: $appUrl';
     try {
       await Share.share(body, subject: item.title);
     } catch (_) {

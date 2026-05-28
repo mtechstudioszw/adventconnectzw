@@ -464,11 +464,11 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
               ? CachedNetworkImage(
                   imageUrl: cover,
                   fit: BoxFit.cover,
-                  placeholder: (_, __) => const DecoratedBox(
+                  placeholder: (_, _p) => const DecoratedBox(
                     decoration:
                         BoxDecoration(gradient: AppColors.appBarGradient),
                   ),
-                  errorWidget: (_, __, ___) => const DecoratedBox(
+                  errorWidget: (_, _u, _e) => const DecoratedBox(
                     decoration:
                         BoxDecoration(gradient: AppColors.appBarGradient),
                   ),

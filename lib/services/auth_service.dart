@@ -530,7 +530,7 @@ class AuthService {
         method: HttpMethod.post,
       );
       // functions.invoke throws on non-2xx, but guard anyway.
-      if (response.status != null && response.status! >= 300) {
+      if (response.status >= 300) {
         edgeFunctionError =
             'Edge Function returned status ${response.status}';
       }

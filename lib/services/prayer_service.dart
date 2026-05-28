@@ -200,7 +200,7 @@ class PrayerService {
       'visibility': visibility,
       'is_urgent': isUrgent,
       'title': title?.trim().isNotEmpty == true ? title!.trim() : null,
-      if (category != null) 'category': category,
+      if (category != null) 'category': category!,
     }).eq('id', prayerId).eq('author_id', user.id);
   }
 

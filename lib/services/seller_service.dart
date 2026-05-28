@@ -257,7 +257,8 @@ class SellerService {
       'currency': currency,
       'category': category,
       'description': description?.trim(),
-      if (imageUrls != null) 'image_urls': imageUrls!,
+      // ignore: use_null_aware_elements
+      if (imageUrls != null) 'image_urls': imageUrls,
     };
     final updated = await _client
         .from(_productsTable)

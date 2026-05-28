@@ -44,7 +44,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
 
   List<Church> _churches = [];
   bool _loading = true;
-  bool _locating = false;
+  final bool _locating = false;
   String? _error;
   String? _locationError;
   LocationFailure? _locationFailure;

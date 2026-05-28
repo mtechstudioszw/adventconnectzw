@@ -863,7 +863,7 @@ class _HomeScreenState extends State<HomeScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: _prayers.length,
-        separatorBuilder: (_, _i) => const SizedBox(width: 12),
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
           final p = _prayers[i];
           return _PrayerHomeCard(

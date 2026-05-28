@@ -325,7 +325,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
                 ? CachedNetworkImage(
                     imageUrl: cover,
                     fit: BoxFit.cover,
-                    placeholder: (_, _p) => const DecoratedBox(
+                    placeholder: (context, url) => const DecoratedBox(
                       decoration:
                           BoxDecoration(gradient: AppColors.appBarGradient),
                     ),

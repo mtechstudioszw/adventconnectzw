@@ -1212,10 +1212,10 @@ class _CoverPhotoTile extends StatelessWidget {
                 CachedNetworkImage(
                   imageUrl: coverUrl!,
                   fit: BoxFit.cover,
-                  placeholder: (_, _p) => Container(
+                  placeholder: (context, url) => Container(
                     color: AppColors.lightGrey,
                   ),
-                  errorWidget: (_, _u, _e) => const DecoratedBox(
+                  errorWidget: (context, url, error) => const DecoratedBox(
                     decoration:
                         BoxDecoration(gradient: AppColors.appBarGradient),
                   ),

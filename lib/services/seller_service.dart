@@ -256,7 +256,7 @@ class SellerService {
       'price': price,
       'currency': currency,
       'category': category,
-      if (description != null) 'description': description.trim(),
+      'description': description?.trim(),
       if (imageUrls != null) 'image_urls': imageUrls,
     };
     final updated = await _client
@@ -266,7 +266,7 @@ class SellerService {
         .eq('seller_id', user.id) // security: owner-only
         .select()
         .single();
-    return Product.fromJson(updated as Map<String, dynamic>);
+    return Product.fromJson(updated);
   }
 
   /// Toggle a product between visible/hidden on the public marketplace.

@@ -329,7 +329,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
                       decoration:
                           BoxDecoration(gradient: AppColors.appBarGradient),
                     ),
-                    errorWidget: (_, __, ___) => const DecoratedBox(
+                    errorWidget: (context, url, error) => const DecoratedBox(
                       decoration:
                           BoxDecoration(gradient: AppColors.appBarGradient),
                     ),
@@ -356,7 +356,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
               ),
             ),
           // Hero content
-          Container(
+          SizedBox(
             width: double.infinity,
             child: SafeArea(
               bottom: false,

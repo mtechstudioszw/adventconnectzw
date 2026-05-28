@@ -75,7 +75,7 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Business account activated!',
+                  'Business account activated! Press back & come again You all set',
                   style: AppTextStyles.bodyMedium
                       .copyWith(color: AppColors.white),
                 ),
@@ -199,7 +199,9 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
                 const SizedBox(height: 14),
                 Text(
                   'Your account is upgraded instantly — you can start '
-                  'listing products as soon as you submit.',
+                  'listing products as soon as you submit. Once you click submit'
+                  'it might look like it ddnt work dont apply again just go back and come again'
+                  'it you will be all set and be asked to set up ur store.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodySmall.copyWith(
                     color: const Color.fromRGBO(26, 26, 46, 0.6),
@@ -295,7 +297,10 @@ class _IntroCard extends StatelessWidget {
                 Text(
                   'A business account lets you list products in the '
                   'marketplace and claim ownership of a church listing. '
-                  'Activated instantly — no waiting on a reviewer.',
+                  'Activated instantly — no waiting on a reviewer.'
+                  'once you click submit application and see confirmation'
+                  'that you approved dont apply again just click back and click'
+                  'the icon you be ready to setup ur store',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.white.withValues(alpha: 0.9),
                     height: 1.35,

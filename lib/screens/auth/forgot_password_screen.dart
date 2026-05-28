@@ -83,7 +83,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           children: [
             AuthHero(
               title: 'Forgot password?',
-              subtitle: 'Enter your email and we\'ll send you a reset link.',
+              subtitle: 'Enter your email and we\'ll send you a reset link.\n if dosent work contact us at +263 778092494',
               tagline: 'Account recovery',
               onBack: () => context.canPop()
                   ? context.pop()

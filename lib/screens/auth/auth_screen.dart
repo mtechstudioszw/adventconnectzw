@@ -580,7 +580,7 @@ class _AuthScreenState extends State<AuthScreen>
     switch (_stage) {
       case _Stage.email:
         return 'Sign in or create an account — we\'ll figure out which '
-            'from your email.';
+            'from your email. But we recommend sign in or up with Google';
       case _Stage.login:
         return 'Enter your password to keep going.';
       case _Stage.signup:

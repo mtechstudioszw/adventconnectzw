@@ -526,7 +526,7 @@ class _SponsorCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Account name: $accountName',
+                  'Account name: Tanatswa Michael Mikuwa',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.white.withValues(alpha: 0.78),
                     fontWeight: FontWeight.w600,

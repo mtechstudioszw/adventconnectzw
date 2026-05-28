@@ -61,6 +61,29 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
             : _whatsappController.text,
       );
       if (!mounted) return;
+      // Show instant approval feedback before handing control back
+      // to the caller (profile_screen handles the "set up store" CTA).
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF2E7D32),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_outline,
+                  color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Business account activated!',
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: AppColors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
       Navigator.of(context).pop<BusinessApplication>(app);
     } catch (e) {
       if (!mounted) return;

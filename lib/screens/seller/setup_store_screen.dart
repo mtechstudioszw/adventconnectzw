@@ -194,7 +194,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
         SnackBar(
           backgroundColor: AppColors.successGreen,
           content: Text(
-            'Application submitted — we\'ll review it shortly.',
+            'Your store is live! Welcome to the marketplace.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -715,7 +715,7 @@ class _IntroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Fill the form. We review within 1–3 days. Once approved your dashboard unlocks and you can list products.',
+                  'Fill the form and submit. Your store goes live instantly — no waiting on a reviewer. You can list products right away.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: const Color.fromRGBO(26, 26, 46, 0.65),
                     height: 1.5,

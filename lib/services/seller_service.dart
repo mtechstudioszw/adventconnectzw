@@ -247,14 +247,15 @@ class SellerService {
     if (user == null) {
       throw const AuthException('Sign in to update your products.');
     }
-    // The schema carries both `status` (string) and `is_available` (bool)
-    // from earlier migrations; keep them in sync so the public listing
-    // query and the model's `isAvailable` getter agree.
+    // 'status' is the only availability column in the DB.
+    // Valid values: 'available', 'sold', 'reserved', 'removed'.
+    // 'removed' = hidden from public marketplace but still visible to
+    // the owner (RLS: status <> 'removed' OR seller_id = auth.uid()).
+    // There is NO is_available column — do not reference it.
     await _client
         .from(_productsTable)
         .update({
-          'status': available ? 'available' : 'unavailable',
-          'is_available': available,
+          'status': available ? 'available' : 'removed',
         })
         .eq('id', productId)
         .eq('seller_id', user.id);

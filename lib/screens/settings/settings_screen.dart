@@ -537,7 +537,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         _NavRow(
                           icon: Icons.shield_outlined,
                           label: 'Community guidelines',
-                          onTap: () => context.pushNamed('guidelines'),
+                          onTap: () => _openLegal('https://adventconnectzw.netlify.app/guidelines'),
                         ),
                       ],
                     ),
@@ -922,7 +922,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Account name: $recipientName',
+                    'Account name: Tanatswa Michael Mikuwa',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: const Color.fromRGBO(26, 26, 46, 0.70),
                       fontWeight: FontWeight.w600,

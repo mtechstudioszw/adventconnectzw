@@ -13,6 +13,7 @@ class Product {
     this.sellerPhone,
     this.sellerVerified = false,
     this.isAvailable = true,
+    this.status = 'available',
   });
 
   final String id;
@@ -27,6 +28,7 @@ class Product {
   final String? category;
   final List<String> imageUrls;
   final bool isAvailable;
+  final String status;
   final DateTime createdAt;
 
   String get firstImage => imageUrls.isEmpty ? '' : imageUrls.first;
@@ -36,6 +38,10 @@ class Product {
     final images = raw is List
         ? raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
         : <String>[];
+    // status is the real source of truth in the DB.
+    // Valid values: 'available', 'sold', 'reserved', 'removed'.
+    // is_available does NOT exist as a column — never read it.
+    final status = (json['status'] as String?) ?? 'available';
     return Product(
       id: json['id'].toString(),
       sellerId: (json['seller_id'] ?? '').toString(),
@@ -48,7 +54,8 @@ class Product {
       currency: (json['currency'] ?? 'USD') as String,
       category: json['category'] as String?,
       imageUrls: images,
-      isAvailable: json['is_available'] != false,
+      status: status,
+      isAvailable: status == 'available',
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );
@@ -68,7 +75,7 @@ class Product {
         'currency': currency,
         'category': category,
         'image_urls': imageUrls,
-        'is_available': isAvailable,
+        'status': status,
         'created_at': createdAt.toIso8601String(),
       };
 

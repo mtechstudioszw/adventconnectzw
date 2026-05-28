@@ -272,16 +272,36 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     try {
       final convo = await MessagingService.openSelfChat();
       if (!mounted) return;
-      await context.pushNamed(
-        'chat',
-        pathParameters: {'id': convo.id},
-        extra: convo,
-      );
-      if (mounted) _bootstrap();
+      await _openChat(convo);
     } catch (_) {
       if (!mounted) return;
       _toast('Could not open Notes to self. Try again.');
     }
+  }
+
+  /// BUG 4 FIX — Open a conversation with an optimistic badge clear.
+  /// We zero out the unread count before navigating so the badge
+  /// disappears instantly instead of persisting until the async
+  /// _bootstrap() network call completes after the user pops back.
+  /// The full _bootstrap() refresh still runs on return to sync any
+  /// new messages that arrived while the chat was open.
+  Future<void> _openChat(Conversation c) async {
+    // Optimistically clear the unread count before entering the chat.
+    // Even if the network _bootstrap() takes a second, the user never
+    // sees the badge on the way back in from the chat screen.
+    if (c.unreadCount > 0) {
+      setState(() {
+        _conversations = _conversations.map((x) {
+          return x.id == c.id ? x.copyWith(unreadCount: 0) : x;
+        }).toList();
+      });
+    }
+    await context.pushNamed(
+      'chat',
+      pathParameters: {'id': c.id},
+      extra: c,
+    );
+    if (mounted) _bootstrap();
   }
 
   Future<void> _decline(Conversation c) async {
@@ -562,14 +582,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 conversation: c,
                 onAccept: () => _accept(c),
                 onDecline: () => _decline(c),
-                onPreview: () async {
-                  await context.pushNamed(
-                    'chat',
-                    pathParameters: {'id': c.id},
-                    extra: c,
-                  );
-                  if (mounted) _bootstrap();
-                },
+                onPreview: () => _openChat(c),
               ),
               const SizedBox(height: 10),
             ],
@@ -599,14 +612,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             return _ConversationTile(
               conversation: c,
               isLastFromMe: c.lastSenderId == _currentUserId,
-              onTap: () async {
-                await context.pushNamed(
-                  'chat',
-                  pathParameters: {'id': c.id},
-                  extra: c,
-                );
-                if (mounted) _bootstrap();
-              },
+              onTap: () => _openChat(c),
               onLongPress: () => _openConversationActions(c),
             );
           },
@@ -1583,3 +1589,4 @@ class _CircleIconButton extends StatelessWidget {
     );
   }
 }
+

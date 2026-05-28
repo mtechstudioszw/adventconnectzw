@@ -194,12 +194,17 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
         SnackBar(
           backgroundColor: AppColors.successGreen,
           content: Text(
-            'Your store is live! Welcome to the marketplace.',
+            'Store created — your dashboard is ready!',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
       );
-      context.goNamed('seller_dashboard');
+      // Use go() instead of goNamed() so the dashboard is always
+      // rebuilt fresh. setup_store is a child of /seller, so
+      // goNamed('seller_dashboard') would reuse the existing parent
+      // widget without re-running initState — the store status would
+      // stay as "no seller row" until the user navigated away.
+      context.go('/seller');
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
@@ -715,7 +720,7 @@ class _IntroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Fill the form and submit. Your store goes live instantly — no waiting on a reviewer. You can list products right away.',
+                  'Fill the form. We review within 1–3 days. Once approved your dashboard unlocks and you can list products.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: const Color.fromRGBO(26, 26, 46, 0.65),
                     height: 1.5,

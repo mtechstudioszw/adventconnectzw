@@ -235,6 +235,40 @@ class SellerService {
         .toList();
   }
 
+  /// Update an existing product's editable fields. Only the owning
+  /// seller can call this — the `.eq('seller_id', user.id)` is
+  /// belt-and-braces on top of the RLS policy.
+  static Future<Product> updateProduct({
+    required String productId,
+    required String title,
+    required double price,
+    required String currency,
+    required String category,
+    String? description,
+    List<String>? imageUrls,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to update your products.');
+    }
+    final updates = <String, dynamic>{
+      'title': title.trim(),
+      'price': price,
+      'currency': currency,
+      'category': category,
+      if (description != null) 'description': description.trim(),
+      if (imageUrls != null) 'image_urls': imageUrls,
+    };
+    final updated = await _client
+        .from(_productsTable)
+        .update(updates)
+        .eq('id', productId)
+        .eq('seller_id', user.id) // security: owner-only
+        .select()
+        .single();
+    return Product.fromJson(updated as Map<String, dynamic>);
+  }
+
   /// Toggle a product between visible/hidden on the public marketplace.
   /// We use `status` because the marketplace query already filters by
   /// `status = 'available'`; flipping it to `unavailable` hides it
@@ -247,15 +281,14 @@ class SellerService {
     if (user == null) {
       throw const AuthException('Sign in to update your products.');
     }
-    // 'status' is the only availability column in the DB.
-    // Valid values: 'available', 'sold', 'reserved', 'removed'.
-    // 'removed' = hidden from public marketplace but still visible to
-    // the owner (RLS: status <> 'removed' OR seller_id = auth.uid()).
-    // There is NO is_available column — do not reference it.
+    // The schema carries both `status` (string) and `is_available` (bool)
+    // from earlier migrations; keep them in sync so the public listing
+    // query and the model's `isAvailable` getter agree.
     await _client
         .from(_productsTable)
         .update({
-          'status': available ? 'available' : 'removed',
+          'status': available ? 'available' : 'unavailable',
+          'is_available': available,
         })
         .eq('id', productId)
         .eq('seller_id', user.id);

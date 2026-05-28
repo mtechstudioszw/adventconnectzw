@@ -201,10 +201,12 @@ class StorageService {
 
     List<XFile> picked;
     try {
+      // Do NOT pass `limit` to pickMultiImage. On some Android versions
+      // limit=1 freezes the picker entirely instead of opening in
+      // single-select mode. We enforce the cap ourselves by slicing below.
       picked = await _picker.pickMultiImage(
         maxWidth: 1600,
         imageQuality: 80,
-        limit: max,
       );
     } catch (e, st) {
       debugPrint('StorageService.pickMultiImage failed: $e\n$st');
@@ -212,6 +214,7 @@ class StorageService {
     }
     if (picked.isEmpty) return const [];
 
+    // Silently drop anything over the caller's cap so we never exceed 4.
     final urls = <String>[];
     for (final file in picked.take(max)) {
       try {

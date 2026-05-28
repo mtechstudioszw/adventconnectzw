@@ -313,80 +313,122 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   }
 
   Widget _buildHero() {
+    final cover = _seller?.coverPhotoUrl;
+    final hasCover = cover != null && cover.isNotEmpty;
     return ClipPath(
       clipper: _HeroClipper(),
-      child: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 36),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _CircleIconButton(
-                      icon: Icons.arrow_back_ios_new,
-                      onTap: () => context.canPop()
-                          ? context.pop()
-                          : context.goNamed('profile'),
+      child: Stack(
+        children: [
+          // Background: cover photo when set, gradient fallback
+          Positioned.fill(
+            child: hasCover
+                ? CachedNetworkImage(
+                    imageUrl: cover,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => const DecoratedBox(
+                      decoration:
+                          BoxDecoration(gradient: AppColors.appBarGradient),
                     ),
-                    const Spacer(),
-                    // Account-mode switching lives on the Profile tab
-                    // now — this header keeps just the add-product CTA.
-                    if (_seller != null && _seller!.isApproved) ...[
-                      _CircleIconButton(
-                        icon: Icons.add,
-                        onTap: () async {
-                          await context.pushNamed('add_product');
-                          if (mounted) _bootstrap();
-                        },
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SELLER DASHBOARD',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.55),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.8,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _seller?.businessName.isNotEmpty == true
-                            ? _seller!.businessName
-                            : 'Your store',
-                        style: AppTextStyles.displayMedium.copyWith(
-                          color: AppColors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _heroSubtitle(),
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.7),
-                        ),
-                      ),
+                    errorWidget: (_, __, ___) => const DecoratedBox(
+                      decoration:
+                          BoxDecoration(gradient: AppColors.appBarGradient),
+                    ),
+                  )
+                : const DecoratedBox(
+                    decoration:
+                        BoxDecoration(gradient: AppColors.appBarGradient),
+                  ),
+          ),
+          // Dark overlay so text stays readable over bright photos
+          if (hasCover)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.30),
+                      Colors.black.withValues(alpha: 0.65),
                     ],
                   ),
                 ),
-              ],
+              ),
+            ),
+          // Hero content
+          Container(
+            width: double.infinity,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 36),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _CircleIconButton(
+                          icon: Icons.arrow_back_ios_new,
+                          onTap: () => context.canPop()
+                              ? context.pop()
+                              : context.goNamed('profile'),
+                        ),
+                        const Spacer(),
+                        // Account-mode switching lives on the Profile tab
+                        // now — this header keeps just the add-product CTA.
+                        if (_seller != null && _seller!.isApproved) ...[
+                          _CircleIconButton(
+                            icon: Icons.add,
+                            onTap: () async {
+                              await context.pushNamed('add_product');
+                              if (mounted) _bootstrap();
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'SELLER DASHBOARD',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.white.withValues(alpha: 0.55),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.8,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _seller?.businessName.isNotEmpty == true
+                                ? _seller!.businessName
+                                : 'Your store',
+                            style: AppTextStyles.displayMedium.copyWith(
+                              color: AppColors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _heroSubtitle(),
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

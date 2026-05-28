@@ -548,6 +548,15 @@ final GoRouter appRouter = GoRouter(
           name: 'manage_products',
           builder: (context, state) => const ManageProductsScreen(),
         ),
+        GoRoute(
+          path: 'products/edit',
+          name: 'edit_product',
+          builder: (context, state) {
+            final product =
+                state.extra is Product ? state.extra as Product : null;
+            return AddProductScreen(initialProduct: product);
+          },
+        ),
       ],
     ),
     GoRoute(

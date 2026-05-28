@@ -260,6 +260,13 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
                 busy: _busyIds.contains(p.id),
                 onToggle: () => _toggle(p),
                 onDelete: () => _confirmDelete(p),
+                onEdit: () async {
+                  await context.pushNamed(
+                    'edit_product',
+                    extra: p,
+                  );
+                  if (mounted) _load();
+                },
                 onOpen: () => context.pushNamed(
                   'product_details',
                   pathParameters: {'id': p.id},
@@ -552,6 +559,7 @@ class _ProductRow extends StatelessWidget {
     required this.onToggle,
     required this.onDelete,
     required this.onOpen,
+    required this.onEdit,
   });
 
   final Product product;
@@ -559,6 +567,7 @@ class _ProductRow extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onDelete;
   final VoidCallback onOpen;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -643,6 +652,7 @@ class _ProductRow extends StatelessWidget {
                     busy: busy,
                     onToggle: onToggle,
                     onDelete: onDelete,
+                    onEdit: onEdit,
                   ),
                 ],
               ),
@@ -660,12 +670,14 @@ class _RowMenu extends StatelessWidget {
     required this.busy,
     required this.onToggle,
     required this.onDelete,
+    required this.onEdit,
   });
 
   final Product product;
   final bool busy;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -693,6 +705,9 @@ class _RowMenu extends StatelessWidget {
       ),
       onSelected: (value) {
         switch (value) {
+          case 'edit':
+            onEdit();
+            break;
           case 'toggle':
             onToggle();
             break;
@@ -702,6 +717,23 @@ class _RowMenu extends StatelessWidget {
         }
       },
       itemBuilder: (context) => [
+        PopupMenuItem<String>(
+          value: 'edit',
+          child: Row(
+            children: [
+              const Icon(
+                Icons.edit_outlined,
+                color: AppColors.primaryBlue,
+                size: 18,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Edit',
+                style: AppTextStyles.bodyMedium,
+              ),
+            ],
+          ),
+        ),
         PopupMenuItem<String>(
           value: 'toggle',
           child: Row(

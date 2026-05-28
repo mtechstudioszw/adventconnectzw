@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/seller_model.dart';
 import '../../services/account_mode_service.dart';
 import '../../services/account_service.dart';
+import '../../models/product_model.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
@@ -12,7 +13,13 @@ import '../widgets/post_form_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class AddProductScreen extends StatefulWidget {
-  const AddProductScreen({super.key});
+  /// Pass an existing [Product] to pre-fill the form and switch to
+  /// edit mode. Leave null for a fresh listing.
+  const AddProductScreen({super.key, this.initialProduct});
+
+  final Product? initialProduct;
+
+  bool get isEditing => initialProduct != null;
 
   @override
   State<AddProductScreen> createState() => _AddProductScreenState();
@@ -89,6 +96,18 @@ class _AddProductScreenState extends State<AddProductScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _loadSeller();
+    // Pre-fill form when editing an existing product
+    final p = widget.initialProduct;
+    if (p != null) {
+      _titleController.text = p.title;
+      _descriptionController.text = p.description ?? '';
+      _priceController.text = p.price == p.price.roundToDouble()
+          ? p.price.toStringAsFixed(0)
+          : p.price.toStringAsFixed(2);
+      _category = p.category ?? 'other';
+      _currency = p.currency;
+      if (p.imageUrls.isNotEmpty) _photoUrls.addAll(p.imageUrls);
+    }
   }
 
   Future<void> _loadSeller() async {
@@ -126,39 +145,66 @@ class _AddProductScreenState extends State<AddProductScreen>
     setState(() => _saving = true);
     try {
       final price = double.parse(_priceController.text);
-      await MarketplaceService.postProduct(
-        title: _titleController.text,
-        price: price,
-        category: _category,
-        priceCurrency: _currency,
-        description: _descriptionController.text.isEmpty
-            ? null
-            : _descriptionController.text,
-        subcategory: _subcategoryController.text.isEmpty
-            ? null
-            : _subcategoryController.text,
-        condition: _condition,
-        province: _province,
-        location: _locationController.text.isEmpty
-            ? null
-            : _locationController.text,
-        imageUrls: List.unmodifiable(_photoUrls),
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Product listed.',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+      if (widget.isEditing) {
+        // --- Edit mode: update existing product ---
+        await SellerService.updateProduct(
+          productId: widget.initialProduct!.id,
+          title: _titleController.text,
+          price: price,
+          currency: _currency,
+          category: _category,
+          description: _descriptionController.text.isEmpty
+              ? null
+              : _descriptionController.text,
+          imageUrls: List.unmodifiable(_photoUrls),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Product updated.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        // --- Add mode: create new product ---
+        await MarketplaceService.postProduct(
+          title: _titleController.text,
+          price: price,
+          category: _category,
+          priceCurrency: _currency,
+          description: _descriptionController.text.isEmpty
+              ? null
+              : _descriptionController.text,
+          subcategory: _subcategoryController.text.isEmpty
+              ? null
+              : _subcategoryController.text,
+          condition: _condition,
+          province: _province,
+          location: _locationController.text.isEmpty
+              ? null
+              : _locationController.text,
+          imageUrls: List.unmodifiable(_photoUrls),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Product listed.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            ),
+          ),
+        );
+      }
       context.pop(true);
     } catch (_) {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Could not list the product. Please try again.';
+          _error = widget.isEditing
+              ? 'Could not update the product. Please try again.'
+              : 'Could not list the product. Please try again.';
         });
       }
     }

@@ -108,12 +108,6 @@ class AuthService {
     if (lower.contains('weak password') || lower.contains('password should')) {
       return 'Choose a stronger password — at least 8 characters.';
     }
-    // Broad net-failure detection — the raw error here can be a
-    // SocketException, ClientException, TimeoutException, TLS
-    // handshake failure, or a dozen platform-specific phrasings.
-    // Catch them all and show one friendly offline message instead of
-    // leaking "ClientException with SocketException: Failed host
-    // lookup 'eqby...supabase.co'" to the user.
     if (lower.contains('network') ||
         lower.contains('failed host lookup') ||
         lower.contains('socketexception') ||
@@ -139,17 +133,6 @@ class AuthService {
   /// tell (network error, RPC not provisioned, etc.) — the caller
   /// should then default to attempting a sign-in and reacting to the
   /// error.
-  ///
-  /// Recommended Supabase RPC (run once in SQL editor):
-  /// ```
-  /// create or replace function public.email_exists(p_email text)
-  /// returns boolean
-  /// language sql security definer set search_path = public, auth
-  /// as $$
-  ///   select exists(select 1 from auth.users where email = lower(p_email));
-  /// $$;
-  /// grant execute on function public.email_exists(text) to anon, authenticated;
-  /// ```
   static Future<bool?> emailExists(String email) async {
     final trimmed = email.trim().toLowerCase();
     if (trimmed.isEmpty) return null;
@@ -176,13 +159,9 @@ class AuthService {
   /// What auth providers is [email] bound to? Returns one of:
   ///   - []                      → no account
   ///   - ['email']               → email/password only
-  ///   - ['google']              → Google OAuth only  ← the password-paradox case
+  ///   - ['google']              → Google OAuth only
   ///   - ['email','google']      → already linked, either works
   ///   - null                    → RPC missing / network error
-  ///
-  /// Used by the auth screen to route OAuth-only users to
-  /// "Continue with Google" instead of dead-ending them at a
-  /// password prompt they can't satisfy.
   static Future<List<String>?> emailAuthProviders(String email) async {
     final trimmed = email.trim().toLowerCase();
     if (trimmed.isEmpty) return null;
@@ -249,44 +228,57 @@ class AuthService {
     }
   }
 
-  /// Sign in via Google. Hands the Google ID + access tokens to
-  /// Supabase so it can mint a session. Returns failure if the user
-  /// cancels the picker (no error message — that's a normal cancel).
-  ///
-  /// Requires `GoogleService-Info.plist` / `google-services.json` to
-  /// reference the right OAuth client IDs — see Supabase Auth → Google
-  /// provider settings.
-  /// Web OAuth client ID from Google Cloud Console → APIs & Services
-  /// → Credentials. Must be the **Web** client (not Android/iOS) — the
-  /// google_sign_in plugin uses it as the audience for the ID token so
-  /// Supabase can verify it via signInWithIdToken.
-  ///
-  /// Leave as the placeholder for builds where Google sign-in is not
-  /// expected to work; the catch-all error in this method will surface
-  /// the misconfig clearly to the user.
   static const _googleWebClientId =
       '13892017929-sn69ofm9c8bvb46qtj9m3qac4aajuk57.apps.googleusercontent.com';
 
+  /// Sign in via Google.
+  ///
+  /// BUG 2 FIX — before signing in, we check whether this Google
+  /// email is already registered as an email/password account. If it
+  /// is, we block the sign-in and tell the user to log in with their
+  /// password first, then link Google from Settings. This prevents
+  /// Supabase from silently creating a second parallel account for the
+  /// same email address.
   static Future<AuthResult> signInWithGoogle() async {
     try {
       final google = GoogleSignIn(serverClientId: _googleWebClientId);
-      // Clear any cached Google account from a previous session so the
-      // picker actually shows up. Without this, signIn() silently
-      // returns the last-used account — users who signed out can't
-      // switch to a different Google account on the same device.
+      // Clear any cached Google account so the picker always shows up.
       await google.signOut();
       final account = await google.signIn();
       if (account == null) {
         return AuthResult.failure('Sign in cancelled.');
       }
+
+      // ── BUG 2 FIX ──────────────────────────────────────────────────
+      // Check what providers are already attached to this email before
+      // we hand the ID token to Supabase. If the email exists as
+      // email-only, Supabase would create a NEW separate auth.users row
+      // (a second account) instead of merging — which is the duplicate-
+      // account bug. Block it here and guide the user to link instead.
+      final googleEmail = account.email.trim().toLowerCase();
+      final providers = await emailAuthProviders(googleEmail);
+      if (providers != null &&
+          providers.isNotEmpty &&
+          providers.contains('email') &&
+          !providers.contains('google')) {
+        // Account exists as email/password only. We cannot auto-link
+        // without the user being signed in first. Tell them to log in
+        // with their password, then link Google from Settings.
+        try {
+          await google.signOut();
+        } catch (_) {}
+        return AuthResult.failure(
+          'An account with this email already exists. '
+          'Sign in with your email and password instead. '
+          'You can then link Google in Settings → Account.',
+        );
+      }
+      // ── END BUG 2 FIX ───────────────────────────────────────────────
+
       final auth = await account.authentication;
       final idToken = auth.idToken;
       final accessToken = auth.accessToken;
       if (idToken == null) {
-        // Almost always means the Web client ID is missing from the
-        // GoogleSignIn configuration. Without it Google's native SDK
-        // returns an access token but no ID token — Supabase needs the
-        // ID token to mint a session.
         return AuthResult.failure(
           'Google didn\'t return an ID token. The app may be missing a '
           'Web OAuth client ID — contact support.',
@@ -305,19 +297,55 @@ class AuthService {
     } on AuthException catch (e) {
       return AuthResult.failure(e.message);
     } catch (e) {
-      // Surface the underlying message rather than a generic string so
-      // misconfiguration (e.g. PlatformException: sign_in_failed, code
-      // 10 / DEVELOPER_ERROR) is visible to the user and to support.
       return AuthResult.failure('Google sign in failed: $e');
     }
   }
 
-  /// Verify the current password by re-running signInWithPassword
-  /// against the active user's email. Supabase doesn't expose a
-  /// "reauthenticate" RPC, so we use a sign-in attempt as the
-  /// authoritative check. Doesn't change the session — on success
-  /// we just return AuthResult.success and the caller proceeds with
-  /// the password change flow.
+  /// Link a Google identity to the currently signed-in account.
+  ///
+  /// BUG 2 FIX — call this from Settings after the user is already
+  /// signed in with email/password. Once linked, both Google and
+  /// email+password work for the same account going forward.
+  static Future<AuthResult> linkGoogleAccount() async {
+    final user = currentUser;
+    if (user == null) {
+      return AuthResult.failure('Sign in to link Google.');
+    }
+    try {
+      final google = GoogleSignIn(serverClientId: _googleWebClientId);
+      await google.signOut();
+      final account = await google.signIn();
+      if (account == null) {
+        return AuthResult.failure('Sign in cancelled.');
+      }
+      // Verify the Google email matches the signed-in account's email
+      // so we don't accidentally link a different Google account.
+      final googleEmail = account.email.trim().toLowerCase();
+      final userEmail = (user.email ?? '').trim().toLowerCase();
+      if (googleEmail.isNotEmpty &&
+          userEmail.isNotEmpty &&
+          googleEmail != userEmail) {
+        try {
+          await google.signOut();
+        } catch (_) {}
+        return AuthResult.failure(
+          'That Google account uses a different email ($googleEmail). '
+          'Sign in with the Google account that matches $userEmail.',
+        );
+      }
+      // supabase_flutter's linkIdentity opens a browser OAuth flow.
+      // The result comes back via the deep-link handler the same way
+      // a normal OAuth sign-in does. The caller should listen to
+      // authStateChanges for the identityLinked event to confirm.
+      await _client.auth.linkIdentity(OAuthProvider.google);
+      return AuthResult.success(_client.auth.currentUser);
+    } on AuthException catch (e) {
+      return AuthResult.failure(e.message);
+    } catch (e) {
+      return AuthResult.failure('Could not link Google: $e');
+    }
+  }
+
   static Future<AuthResult> verifyCurrentPassword(String password) async {
     final user = currentUser;
     final email = user?.email;
@@ -334,9 +362,6 @@ class AuthService {
       }
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
-      // Supabase emits "Invalid login credentials" for wrong password;
-      // re-phrase it for the change-password context so the user knows
-      // exactly which field is wrong.
       if (e.message.toLowerCase().contains('credentials')) {
         return AuthResult.failure('Current password is incorrect.');
       }
@@ -346,10 +371,6 @@ class AuthService {
     }
   }
 
-  /// Change the signed-in user's password. Caller is responsible for
-  /// asking the user to confirm the new value twice and (for the
-  /// settings flow) for verifying the current password first via
-  /// [verifyCurrentPassword].
   static Future<AuthResult> changePassword(String newPassword) async {
     try {
       if (newPassword.length < 8) {
@@ -369,24 +390,9 @@ class AuthService {
     }
   }
 
-  /// Custom URL scheme our app intercepts via AndroidManifest /
-  /// CFBundleURLTypes. Supabase will replace the default Site URL with
-  /// this in the recovery email; tapping it relaunches the app and
-  /// fires AuthChangeEvent.passwordRecovery so main.dart can route to
-  /// the reset screen.
-  ///
-  /// You must also add this URL to the Supabase dashboard at
-  /// Auth → URL Configuration → Redirect URLs, otherwise the link will
-  /// still resolve to the Site URL (defaults to localhost in dev).
   static const _passwordResetRedirectUrl =
       'io.supabase.adventconnect://login-callback';
 
-  /// Client-side throttle to prevent abuse. Keyed by lowercased
-  /// email so the same user can't spam reset emails (or burn through
-  /// Supabase's default 3-emails-per-hour quota) from this device.
-  /// Server-side rate limiting still belongs in a Supabase Edge
-  /// Function / RPC for the production hardening pass — this is a
-  /// best-effort client guard that catches the common case.
   static const _resetLimitWindow = Duration(hours: 1);
   static const _resetLimitMax = 3;
 
@@ -395,10 +401,6 @@ class AuthService {
     if (normalised.isEmpty) {
       return AuthResult.failure('Enter your email to reset.');
     }
-    // Server-side rate limit FIRST (patch_026). Atomic check + consume
-    // via SECURITY DEFINER RPC — anyone bypassing the client throttle
-    // (e.g. by clearing secure storage or calling Supabase directly)
-    // still hits this gate. Default: 3 attempts / hour / email.
     final serverOk = await _checkServerRateLimit(
       identity: normalised,
       action: 'password_reset',
@@ -411,9 +413,6 @@ class AuthService {
         'Wait a bit before trying again.',
       );
     }
-    // serverOk == null means the RPC isn't reachable; fall back to
-    // the client-side throttle so a brief network blip doesn't lock
-    // legitimate users out.
     if (serverOk == null) {
       final clientOk = await _checkResetThrottle(normalised);
       if (!clientOk) {
@@ -428,27 +427,15 @@ class AuthService {
         normalised,
         redirectTo: _passwordResetRedirectUrl,
       );
-      // Belt + braces — record on the client too so the soft
-      // throttle stays in sync if the server later goes unreachable.
       await _recordResetAttempt(normalised);
       return AuthResult.success(null);
     } on AuthException catch (e) {
       return AuthResult.failure(_friendlyAuthError(e.message));
     } catch (e) {
-      // Supabase commonly returns success even when SMTP fails on
-      // the server, so a thrown error here usually means the
-      // request couldn't even leave the device. Map the common
-      // "network" cases the same way signIn does.
       return AuthResult.failure(_friendlyAuthError(e.toString()));
     }
   }
 
-  /// Calls the server-side rate-limit RPC (patch_026).
-  /// Returns:
-  ///   true  → allowed, slot consumed
-  ///   false → over limit, denied
-  ///   null  → RPC unreachable; caller should fall back to client
-  ///           throttle so a network blip doesn't block legit users.
   static Future<bool?> _checkServerRateLimit({
     required String identity,
     required String action,
@@ -475,16 +462,12 @@ class AuthService {
     }
   }
 
-  /// Records a reset attempt timestamp. Stored as a CSV of unix-ms
-  /// in secure storage so attempts older than the window self-purge
-  /// on the next read.
   static Future<void> _recordResetAttempt(String email) async {
     try {
       final key = 'pwreset_log_$email';
       final existing = (await SecureStorageService.read(key)) ?? '';
       final now = DateTime.now().millisecondsSinceEpoch;
-      final cutoff =
-          now - _resetLimitWindow.inMilliseconds;
+      final cutoff = now - _resetLimitWindow.inMilliseconds;
       final kept = existing
           .split(',')
           .map(int.tryParse)
@@ -493,10 +476,7 @@ class AuthService {
           .toList()
         ..add(now);
       await SecureStorageService.write(key, kept.join(','));
-    } catch (_) {
-      // Throttle is best-effort; storage failures shouldn't block
-      // legitimate reset requests.
-    }
+    } catch (_) {}
   }
 
   static Future<bool> _checkResetThrottle(String email) async {
@@ -514,101 +494,102 @@ class AuthService {
           .length;
       return recent < _resetLimitMax;
     } catch (_) {
-      // If we can't read storage, fail OPEN — better to let a real
-      // user reset their password than lock them out.
       return true;
     }
   }
 
-  /// Best-effort delete of the current account. Tries a server-side
-  /// `delete_my_account` RPC first (which can call auth.admin.deleteUser
-  /// from a SECURITY DEFINER function); if that's not provisioned yet,
-  /// falls back to wiping the user's own `profiles` row. Either way the
-  /// user is signed out at the end so the device no longer has a session.
+  /// Delete the current account completely.
   ///
-  /// Recommended server-side RPC (run once in SQL editor):
-  /// ```
-  /// create or replace function public.delete_my_account()
-  /// returns void
-  /// language plpgsql security definer set search_path = public, auth
-  /// as $$
-  /// begin
-  ///   delete from profiles where id = auth.uid();
-  ///   delete from auth.users where id = auth.uid();
-  /// end;
-  /// $$;
-  /// grant execute on function public.delete_my_account() to authenticated;
-  /// ```
+  /// BUG 1 FIX — the old implementation deleted the profiles row and
+  /// called GoogleSignIn.disconnect(), but it never deleted the
+  /// auth.users row. Supabase kept the auth.users entry alive, so
+  /// tapping "Continue with Google" again found the existing row and
+  /// restored the full session — making account deletion appear broken.
+  ///
+  /// This version calls a Supabase Edge Function (`delete-account`)
+  /// that runs under the service_role key and calls
+  /// auth.admin.deleteUser(), which is the only way to remove an
+  /// auth.users row from application code. See the Edge Function
+  /// source in supabase/functions/delete-account/index.ts.
+  ///
+  /// If the Edge Function is not yet deployed, the method falls back
+  /// to the old profile-only deletion and returns a soft-warning
+  /// failure so the UI can tell the user to contact support.
   static Future<AuthResult> deleteAccount() async {
     final user = currentUser;
     if (user == null) {
       return AuthResult.failure('Sign in to delete your account.');
     }
-    Object? rpcError;
+
+    Object? edgeFunctionError;
+
+    // ── BUG 1 FIX: call Edge Function to delete auth.users row ───────
     try {
-      await _client.rpc('delete_my_account');
+      final response = await _client.functions.invoke(
+        'delete-account',
+        method: HttpMethod.post,
+      );
+      // functions.invoke throws on non-2xx, but guard anyway.
+      if (response.status != null && response.status! >= 300) {
+        edgeFunctionError =
+            'Edge Function returned status ${response.status}';
+      }
     } catch (e) {
-      rpcError = e;
+      edgeFunctionError = e;
     }
-    // Even if the RPC succeeded, clear the local profile row defensively;
-    // if it failed (e.g. function not yet created), this gives us at
-    // least client-driven data removal.
+    // ── END BUG 1 FIX ─────────────────────────────────────────────────
+
+    // Belt-and-braces: delete the profiles row too in case the Edge
+    // Function failed after writing but before cascading, or the RLS
+    // lets us clean up what we can client-side.
     try {
       await _client.from('profiles').delete().eq('id', user.id);
     } catch (_) {
-      // ignore — RLS may reject if RPC already removed the row
+      // Ignore — RLS may reject if Edge Function already removed the row.
     }
+
+    // Sign out of Supabase session.
     try {
       await _client.auth.signOut();
-    } catch (_) {
-      // ignore
-    }
-    // Disconnect (not just sign out) the Google session so even if the
-    // RPC failed and auth.users still exists, the next Google sign-in
-    // tap shows the picker — letting the user pick a different account
-    // rather than silently re-linking the same Google identity to the
-    // un-deleted auth user.
+    } catch (_) {}
+
+    // Revoke the Google token so the next "Continue with Google" tap
+    // shows the account picker rather than silently signing back in.
+    // disconnect() removes the OAuth grant entirely, not just the
+    // local cache — this is what prevents the "deleted but came back"
+    // symptom on the Google side.
     try {
       await GoogleSignIn(serverClientId: _googleWebClientId).disconnect();
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
+
     await SecureStorageService.clearAll();
-    if (rpcError != null) {
-      // RPC missing — surface a soft warning so the caller can tell the
-      // user that auth-level removal is still pending.
+
+    if (edgeFunctionError != null) {
+      // Edge Function not deployed yet, or a transient error.
+      // Profile data is gone but the auth.users row may still exist.
       return AuthResult.failure(
-        'Your profile data has been removed. Full account removal is '
-        'pending — contact support if you log back in.',
+        'Your profile data has been removed, but full account deletion '
+        'requires the delete-account Edge Function to be deployed. '
+        'Contact support if you can still sign back in.',
       );
     }
+
     return AuthResult.success(null);
   }
 
   static Future<void> signOut() async {
-    // Clear the FCM token first so the next user on this device doesn't
-    // inherit pushes addressed to the previous one. Best-effort —
-    // failures here must not block the sign-out itself.
     try {
       final user = _client.auth.currentUser;
       if (user != null) {
         await _client
             .from('profiles')
-            .update({'fcm_token': null})
-            .eq('id', user.id);
+            .update({'fcm_token': null}).eq('id', user.id);
       }
-    } catch (_) {
-      // ignore — user may already be offline
-    }
+    } catch (_) {}
     await _client.auth.signOut();
-    // Also clear Google's native sign-in cache so next time the user
-    // hits "Continue with Google" they see the account picker instead
-    // of being auto-signed-in with the previous account.
     try {
       await GoogleSignIn(serverClientId: _googleWebClientId).signOut();
-    } catch (_) {
-      // ignore — no cached Google session is fine
-    }
+    } catch (_) {}
     await SecureStorageService.clearAll();
   }
 
@@ -628,13 +609,6 @@ class AuthService {
 
       final current = user.userMetadata ?? const {};
       final next = <String, dynamic>{...current};
-      // Empty string is the "remove" signal — callers pass '' to
-      // clear a photo (or bio etc). Supabase auth updateUser MERGES
-      // the metadata patch into existing metadata, so removing a
-      // key from the patch leaves the old value in place. To
-      // actually clear a key we have to explicitly set it to null
-      // — that's the part the previous implementation missed,
-      // which is why "Remove profile photo" appeared to no-op.
       String? sentinelOrNull(String? v) =>
           (v != null && v.isEmpty) ? null : v;
       if (fullName != null) next['full_name'] = fullName.trim();
@@ -644,9 +618,6 @@ class AuthService {
         next['username'] = username.trim();
       }
       if (profilePhotoUrl != null) {
-        // Explicit null overwrites the existing key in Supabase
-        // metadata — this is the difference that makes the
-        // remove button actually take effect.
         next['profile_photo_url'] = sentinelOrNull(profilePhotoUrl);
       }
       if (coverPhotoUrl != null) {
@@ -659,11 +630,6 @@ class AuthService {
       final dbUpdates = <String, dynamic>{};
       if (fullName != null) dbUpdates['full_name'] = fullName.trim();
       if (bio != null) dbUpdates['bio'] = bio.trim();
-      // Persist username to the profiles table — this is the column
-      // hasCompletedProfileSetup() reads to decide "has this user
-      // finished onboarding". Writing it only to user_metadata (the
-      // old behaviour) meant the check never saw it, so Google users
-      // were re-onboarded on every sign-in.
       if (username != null && username.trim().isNotEmpty) {
         dbUpdates['username'] = username.trim();
       }
@@ -678,10 +644,6 @@ class AuthService {
         dbUpdates['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
       if (dbUpdates.isNotEmpty) {
-        // Best-effort mirror to the profiles table. If the column doesn't
-        // exist yet (e.g. before the cover_photo_url migration is run)
-        // fall back to writing only the columns the table understands so
-        // the metadata write isn't lost.
         try {
           await _client
               .from('profiles')
@@ -705,11 +667,6 @@ class AuthService {
     }
   }
 
-  /// Best-effort write of arbitrary key/value pairs into the auth
-  /// user's metadata. Used for onboarding preferences (interests,
-  /// content types, notif prefs) that don't have first-class columns
-  /// on the profiles table. Failures are swallowed — callers should
-  /// treat this as fire-and-forget.
   static Future<void> updateMetadataDirect(Map<String, dynamic> patch) async {
     try {
       final user = currentUser;
@@ -719,9 +676,7 @@ class AuthService {
         ...patch,
       };
       await _client.auth.updateUser(UserAttributes(data: next));
-    } catch (_) {
-      // ignore — these writes are best-effort
-    }
+    } catch (_) {}
   }
 
   static Future<void> markAgeVerified(DateTime birthDate) async {
@@ -737,30 +692,11 @@ class AuthService {
     return value == 'true';
   }
 
-  /// Returns true if the signed-in user has FINISHED the onboarding
-  /// flow. We can't just check "has a row in profiles" because the
-  /// `on_auth_user_created` trigger (patch_001) inserts an empty
-  /// profiles row the moment auth.users gets a new entry — so every
-  /// brand-new account would look "completed".
-  ///
-  /// We check `username` instead: the onboarding flow (step 1) requires
-  /// a username before letting the user continue, so a non-empty
-  /// username is the authoritative "this user has been through the
-  /// onboarding setup" signal.
   static Future<bool> hasCompletedProfileSetup() async {
     final user = currentUser;
     if (user == null) return false;
     final meta = user.userMetadata ?? const {};
-    // Primary signal: explicit "onboarding_completed" flag written by
-    // OnboardingFlowScreen._finish(). Set for everyone who finishes
-    // setup after the 2026-05 fix shipped.
     if (meta['onboarding_completed'] == true) return true;
-    // Fallback — username in metadata (older path). Username is the
-    // only field that is NEVER auto-populated — Google OAuth ships
-    // full_name + avatar in user_metadata on first sign-in, and the
-    // handle_new_user trigger copies full_name into profiles too, so
-    // neither of those is a trustworthy "they finished onboarding"
-    // signal. Username only ever comes from the in-app onboarding form.
     final metaUsername = (meta['username'] as String?)?.trim() ?? '';
     if (metaUsername.isNotEmpty) return true;
     try {
@@ -772,9 +708,6 @@ class AuthService {
       final username = (row?['username'] as String?)?.trim() ?? '';
       return username.isNotEmpty;
     } catch (_) {
-      // Network error or RLS issue — fail OPEN to home, not onboarding,
-      // so legacy users aren't trapped in the flow if their network
-      // blips on launch.
       return true;
     }
   }
@@ -785,10 +718,6 @@ class AuthService {
       if (stored == null) return null;
       return DateTime.tryParse(stored);
     } catch (_) {
-      // Secure storage can throw a MissingPluginException in unit /
-      // widget tests where the platform channel isn't mocked. Treat
-      // that the same as "no stored value" so the caller falls back
-      // to the route-extra birth date.
       return null;
     }
   }

@@ -9,8 +9,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
 /// External landing URLs for the legal pages (live Netlify site).
-/// Keeping them as top-level consts so both the signup checkbox and
-/// the footer line stay in sync if the host ever changes.
 const _termsUrl = 'https://adventconnectzw.netlify.app/terms';
 const _privacyUrl = 'https://adventconnectzw.netlify.app/privacy';
 
@@ -18,10 +16,9 @@ Future<void> _openLegalUrl(String url) async {
   await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
 }
 
-/// Unified login + signup surface, Claude-app style. The user enters
-/// an email; we ask Supabase whether an account exists for it; based
-/// on that we reveal either the login password field or the full
-/// signup form. One screen, one decision point.
+/// Unified login + signup surface. The user enters an email; we ask
+/// Supabase whether an account exists for it; based on that we reveal
+/// either the login password field or the full signup form.
 ///
 /// `birthDate` is forwarded from the age-verification step. It's
 /// required to *create* a new account but ignored for logins.
@@ -61,10 +58,6 @@ class _AuthScreenState extends State<AuthScreen>
   bool _acceptedTerms = false;
   String? _error;
 
-  // The birth date we'll attach to the signUp call. Seeded from the
-  // route extra (`widget.birthDate`) and topped up from secure storage
-  // if the user reaches this screen via a path that doesn't carry it
-  // (deep link, hot restart, "Change email" mid-flow, etc).
   DateTime? _birthDate;
 
   @override
@@ -142,6 +135,7 @@ class _AuthScreenState extends State<AuthScreen>
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final email = _emailController.text.trim();
     setState(() => _checking = true);
+
     // Pull both presence + provider mix in parallel. The provider
     // info is what makes the OAuth-only "password paradox" case
     // detectable — without it, a user who signed up only with
@@ -154,10 +148,7 @@ class _AuthScreenState extends State<AuthScreen>
     final exists = results[0] as bool?;
     final providers = results[1] as List<String>?;
 
-    // OAuth-only case: account exists, but the user has NO email/
-    // password identity attached — they signed up with Google and
-    // don't have a password. Surface a friendly hint instead of
-    // forcing them through the password prompt.
+    // OAuth-only case: account exists but no email/password identity.
     final isOAuthOnly = exists == true &&
         providers != null &&
         providers.isNotEmpty &&
@@ -166,23 +157,13 @@ class _AuthScreenState extends State<AuthScreen>
       setState(() {
         _checking = false;
         _stage = _Stage.email;
-        _error = 'This email is bound to Google. '
+        _error = 'This email is linked to Google. '
             'Tap "Continue with Google" above to sign in.';
       });
       HapticFeedback.heavyImpact();
       return;
     }
 
-    // Detection rules:
-    //   true  -> account confirmed -> login stage
-    //   false -> no account        -> signup stage
-    //   null  -> RPC missing       -> default to SIGNUP so we don't
-    //                                 dead-end a new user on a password
-    //                                 prompt for an account they don't
-    //                                 have. If they actually had an
-    //                                 account, Supabase will reject the
-    //                                 signup with "already registered"
-    //                                 and _onSignup auto-swaps to login.
     final next = switch (exists) {
       true => _Stage.login,
       false => _Stage.signup,
@@ -220,19 +201,12 @@ class _AuthScreenState extends State<AuthScreen>
     }
     final message = (result.errorMessage ?? '').toLowerCase();
     if (message.contains('email') && message.contains('confirm')) {
-      // Existing account but never verified — push them back to the OTP
-      // surface so they can finish.
       context.goNamed(
         'email_verification',
         extra: _emailController.text.trim(),
       );
       return;
     }
-    // OAuth-only paradox: if the account exists (emailExists returned
-    // true earlier) but signInWithPassword fails with invalid creds,
-    // it's almost certainly a Google-only account. Surface a hint
-    // pointing at "Continue with Google" instead of just "wrong
-    // password" — that's the dead-end the user reported.
     if (message.contains('incorrect') || message.contains('invalid')) {
       setState(() => _error =
           'That password didn\'t match. If you signed up with Google, '
@@ -250,8 +224,6 @@ class _AuthScreenState extends State<AuthScreen>
           'Please accept the Terms & Conditions to create your account.');
       return;
     }
-    // Prefer the in-form picker; fall back to whatever's stored from
-    // a previous signup attempt.
     final birthDate = _birthDate ?? await AuthService.getStoredBirthDate();
     if (!mounted) return;
     if (birthDate == null) {
@@ -267,8 +239,6 @@ class _AuthScreenState extends State<AuthScreen>
       _submitting = true;
       _birthDate = birthDate;
     });
-    // Persist regardless — even if signup later fails, the picked
-    // value should survive the next attempt.
     await AuthService.markAgeVerified(birthDate);
     final result = await AuthService.signUp(
       email: _emailController.text.trim(),
@@ -286,9 +256,6 @@ class _AuthScreenState extends State<AuthScreen>
       );
       return;
     }
-    // If Supabase tells us the email is already registered, flip the
-    // screen to the login stage so the user can just sign in instead
-    // of seeing a generic error.
     final message = (result.errorMessage ?? '').toLowerCase();
     if (message.contains('already exists') ||
         message.contains('already registered') ||
@@ -309,6 +276,10 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _error = result.errorMessage);
   }
 
+  /// BUG 2 FIX — _onGoogle now receives meaningful errors from
+  /// AuthService.signInWithGoogle() when the email already exists as
+  /// an email/password account. Those errors are surfaced directly so
+  /// the user knows to sign in with their password instead.
   Future<void> _onGoogle() async {
     setState(() {
       _error = null;
@@ -318,17 +289,14 @@ class _AuthScreenState extends State<AuthScreen>
     if (!mounted) return;
     if (!result.isSuccess) {
       setState(() => _googleBusy = false);
+      // Silent cancel — user dismissed the Google picker, not an error.
       if (result.errorMessage == 'Sign in cancelled.') return;
       setState(() => _error = result.errorMessage);
       return;
     }
 
     // Returning user (already has a profiles row) → straight to home.
-    // New Google user → age verification (date-of-birth picker) →
-    // profile-setup onboarding. Checking the auth user_metadata isn't
-    // enough because Google auto-fills full_name on sign-in, so the
-    // old check sent every new Google user straight to home and
-    // bypassed onboarding.
+    // New Google user → age verification → profile-setup onboarding.
     final hasProfile = await AuthService.hasCompletedProfileSetup();
     if (!mounted) return;
     if (hasProfile) {
@@ -339,8 +307,7 @@ class _AuthScreenState extends State<AuthScreen>
     }
 
     // New user — collect birth date for age verification before the
-    // profile setup flow. If they cancel or are under 13, sign them
-    // back out so we don't leak an unverified account into the app.
+    // profile setup flow. Cancel or underage → sign back out.
     final dob = await _pickBirthDateForGoogleSignup();
     if (!mounted) return;
     if (dob == null) {
@@ -440,12 +407,10 @@ class _AuthScreenState extends State<AuthScreen>
     if (picked == null || !mounted) return;
     setState(() {
       _birthDate = picked;
-      // Clear any prior age-related error so the form looks fresh.
       if (_error != null && _error!.toLowerCase().contains('birth')) {
         _error = null;
       }
     });
-    // Persist so a hot restart / Change-email cycle doesn't drop it.
     await AuthService.markAgeVerified(picked);
   }
 
@@ -535,12 +500,6 @@ class _AuthScreenState extends State<AuthScreen>
                     onTap: _submitting || _checking ? null : _onPrimary,
                   ),
                   const SizedBox(height: 18),
-                  // Single secondary action — "Use a different email"
-                  // — visible on both login + signup stages. The old
-                  // manual Login/Signup toggles are gone: the email
-                  // auto-detect on Continue already picks the right
-                  // stage, and if it gets it wrong, the user can
-                  // simply tap here and re-enter the email.
                   if (_stage != _Stage.email)
                     Center(
                       child: TextButton(
@@ -580,7 +539,7 @@ class _AuthScreenState extends State<AuthScreen>
     switch (_stage) {
       case _Stage.email:
         return 'Sign in or create an account — we\'ll figure out which '
-            'from your email. But we recommend sign in or up with Google';
+            'from your email.';
       case _Stage.login:
         return 'Enter your password to keep going.';
       case _Stage.signup:
@@ -790,18 +749,8 @@ class _BirthDateField extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _months = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
   @override

@@ -696,20 +696,7 @@ class AuthService {
     final user = currentUser;
     if (user == null) return false;
     final meta = user.userMetadata ?? const {};
-    if (meta['onboarding_completed'] == true) return true;
-    final metaUsername = (meta['username'] as String?)?.trim() ?? '';
-    if (metaUsername.isNotEmpty) return true;
-    try {
-      final row = await _client
-          .from('profiles')
-          .select('username')
-          .eq('id', user.id)
-          .maybeSingle();
-      final username = (row?['username'] as String?)?.trim() ?? '';
-      return username.isNotEmpty;
-    } catch (_) {
-      return true;
-    }
+    return meta['onboarding_completed'] == true;
   }
 
   static Future<DateTime?> getStoredBirthDate() async {

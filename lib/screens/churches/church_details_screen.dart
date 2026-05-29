@@ -179,7 +179,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
               : CachedImage(
                   church.coverPhotoUrl!,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+                  errorBuilder: (context, error, stackTrace) => Container(
                     color: AppColors.lightGrey,
                     child: const Icon(
                       Icons.broken_image_outlined,

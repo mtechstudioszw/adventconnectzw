@@ -1044,7 +1044,7 @@ class _ChurchPageState extends State<_ChurchPage> {
                     : ListView.separated(
                         padding: const EdgeInsets.only(top: 8, bottom: 16),
                         itemCount: filtered.length,
-                        separatorBuilder: (_, _) =>
+                        separatorBuilder: (context, index) =>
                             const SizedBox(height: 8),
                         itemBuilder: (ctx, i) {
                           final c = filtered[i];

@@ -606,7 +606,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           itemCount: list.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          separatorBuilder: (context, index) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
             final c = list[i];
             return _ConversationTile(
@@ -1523,7 +1523,7 @@ class _Avatar extends StatelessWidget {
                   fit: BoxFit.cover,
                   width: 50,
                   height: 50,
-                  errorBuilder: (_, _, _) => Text(
+                  errorBuilder: (context, error, stackTrace) => Text(
                     initials,
                     style: AppTextStyles.titleMedium.copyWith(
                       color: AppColors.white,

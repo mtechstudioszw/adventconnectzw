@@ -836,7 +836,7 @@ class _HomeScreenState extends State<HomeScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: _events.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
           final e = _events[i];
           return _HomeEventCard(
@@ -906,7 +906,7 @@ class _HomeScreenState extends State<HomeScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: _churches.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
           final c = _churches[i];
           return SizedBox(
@@ -1313,7 +1313,7 @@ class _HomeScreenState extends State<HomeScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: visibleSuggestions.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
         itemBuilder: (context, i) {
           final m = visibleSuggestions[i];
           final friendship = _friendshipsByUser[m.userId];
@@ -1777,7 +1777,7 @@ class _MemberAvatar extends StatelessWidget {
         child: CachedImage(
           photoUrl!,
           fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _initialsBox(initials),
+          errorBuilder: (context, error, stackTrace) => _initialsBox(initials),
         ),
       );
     }
@@ -2019,7 +2019,7 @@ class _WelcomeCard extends StatelessWidget {
                 : CachedImage(
                     photoUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Text(
+                    errorBuilder: (context, error, stackTrace) => Text(
                       initials,
                       style: AppTextStyles.titleLarge.copyWith(
                         color: AppColors.white,
@@ -2461,7 +2461,7 @@ class _CoverImage extends StatelessWidget {
     return CachedImage(
       url!,
       fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Container(
+      errorBuilder: (context, error, stackTrace) => Container(
         decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
         child: Center(
           child: Icon(
@@ -2820,7 +2820,7 @@ class _ComposerEntry extends StatelessWidget {
                     : CachedImage(
                         photoUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Text(
+                        errorBuilder: (context, error, stackTrace) => Text(
                           initial,
                           style: AppTextStyles.titleMedium.copyWith(
                             color: AppColors.white,

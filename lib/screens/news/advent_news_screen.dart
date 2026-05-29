@@ -263,7 +263,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       itemCount: _items.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
         final item = _items[i];
         // The first card renders as a hero (taller cover) — like a

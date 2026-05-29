@@ -170,7 +170,7 @@ class PostCard extends StatelessWidget {
               child: CachedImage(
                 post.imageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
+                errorBuilder: (context, error, stackTrace) => Container(
                   color: AppColors.lightGrey,
                   alignment: Alignment.center,
                   child: const Icon(
@@ -318,7 +318,7 @@ class _Avatar extends StatelessWidget {
               fit: BoxFit.cover,
               width: 42,
               height: 42,
-              errorBuilder: (_, _, _) => Text(
+              errorBuilder: (context, error, stackTrace) => Text(
                 initial,
                 style: AppTextStyles.titleMedium.copyWith(
                   color: AppColors.white,

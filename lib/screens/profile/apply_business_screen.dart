@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/business_application_model.dart';
 import '../../services/account_service.dart';
+import '../../services/account_mode_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -23,6 +23,7 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
   final _descriptionController = TextEditingController();
   String _category = _categories.first;
   bool _submitting = false;
+  bool _approved = false;
   String? _errorMessage;
 
   static const _categories = [
@@ -50,7 +51,7 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
       _errorMessage = null;
     });
     try {
-      final app = await AccountService.applyForBusiness(
+      await AccountService.applyForBusiness(
         businessName: _nameController.text,
         category: _category,
         description: _descriptionController.text.trim().isEmpty
@@ -61,30 +62,10 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
             : _whatsappController.text,
       );
       if (!mounted) return;
-      // Show instant approval feedback before handing control back
-      // to the caller (profile_screen handles the "set up store" CTA).
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF2E7D32),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_outline,
-                  color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Business account activated! Press back & come again You all set',
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.white),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-      Navigator.of(context).pop<BusinessApplication>(app);
+      // Auto-switch to business mode so user lands on seller dashboard
+      await AccountModeService.setMode(AppViewMode.business);
+      if (!mounted) return;
+      setState(() => _approved = true);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -97,6 +78,7 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_approved) return _ApprovedScreen();
     return Scaffold(
       backgroundColor: AppColors.lightGrey,
       appBar: AppBar(
@@ -198,10 +180,7 @@ class _ApplyBusinessScreenState extends State<ApplyBusinessScreen> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Your account is upgraded instantly — you can start '
-                  'listing products as soon as you submit. Once you click submit'
-                  'it might look like it ddnt work dont apply again just go back and come again'
-                  'it you will be all set and be asked to set up ur store.',
+                  'Your account is upgraded instantly. You can list products as soon as you submit.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodySmall.copyWith(
                     color: const Color.fromRGBO(26, 26, 46, 0.6),
@@ -297,10 +276,7 @@ class _IntroCard extends StatelessWidget {
                 Text(
                   'A business account lets you list products in the '
                   'marketplace and claim ownership of a church listing. '
-                  'Activated instantly — no waiting on a reviewer.'
-                  'once you click submit application and see confirmation'
-                  'that you approved dont apply again just click back and click'
-                  'the icon you be ready to setup ur store',
+                  'Activated instantly.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.white.withValues(alpha: 0.9),
                     height: 1.35,
@@ -411,6 +387,134 @@ class _SubmitButton extends StatelessWidget {
                         letterSpacing: 0.4,
                       ),
                     ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Full-screen success state shown after business account is approved.
+/// Replaces the form so the user cannot re-submit. Offers a single CTA
+/// to go set up their store.
+class _ApprovedScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.lightGrey,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.check_circle_outline,
+                  color: AppColors.white,
+                  size: 52,
+                ),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                "You're a business!",
+                style: AppTextStyles.headlineMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Your business account is active. Set up your store to start listing products on the marketplace.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 36),
+              _ApprovedButton(
+                label: 'Set up my store',
+                icon: Icons.storefront_outlined,
+                onTap: () => context.goNamed('marketplace_guidelines'),
+              ),
+              const SizedBox(height: 14),
+              TextButton(
+                onPressed: () => context.goNamed('seller_dashboard'),
+                child: Text(
+                  'Go to seller dashboard',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ApprovedButton extends StatelessWidget {
+  const _ApprovedButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withValues(alpha: 0.28),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: AppColors.white, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  label,
+                  style: AppTextStyles.buttonText.copyWith(fontSize: 15),
+                ),
+              ],
             ),
           ),
         ),

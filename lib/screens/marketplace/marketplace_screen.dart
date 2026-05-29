@@ -280,7 +280,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: ProductCategory.all.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final cat = ProductCategory.all[i];
           final selected = _selectedCategory == cat.id;

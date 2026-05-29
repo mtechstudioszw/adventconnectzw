@@ -373,7 +373,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ? CachedImage(
                           _profile!.profilePhotoUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => _initialAvatar(),
+                          errorBuilder: (context, error, stackTrace) => _initialAvatar(),
                         )
                       : _initialAvatar(),
                 ),

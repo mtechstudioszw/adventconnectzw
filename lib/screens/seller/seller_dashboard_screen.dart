@@ -1000,7 +1000,7 @@ class _ProductPreviewRow extends StatelessWidget {
                   ? CachedImage(
                       firstImage,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const Icon(
+                      errorBuilder: (context, error, stackTrace) => const Icon(
                         Icons.image_not_supported_outlined,
                         color: Color.fromRGBO(26, 26, 46, 0.4),
                       ),

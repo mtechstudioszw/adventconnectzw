@@ -122,7 +122,7 @@ class _YourStoryCard extends StatelessWidget {
                                 ownStories!.first.mediaUrl,
                                 fit: BoxFit.cover,
                                 width: double.infinity,
-                                errorBuilder: (_, _, _) =>
+                                errorBuilder: (context, error, stackTrace) =>
                                     _avatarBackground(),
                               )
                             : _avatarBackground(),
@@ -203,7 +203,7 @@ class _YourStoryCard extends StatelessWidget {
         viewerPhotoUrl!,
         fit: BoxFit.cover,
         width: double.infinity,
-        errorBuilder: (_, _, _) => _initialFill(),
+        errorBuilder: (context, error, stackTrace) => _initialFill(),
       );
     }
     return _initialFill();
@@ -252,7 +252,7 @@ class _FriendStoryCard extends StatelessWidget {
                 CachedImage(
                   story.mediaUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+                  errorBuilder: (context, error, stackTrace) => Container(
                     color: AppColors.darkNavy,
                   ),
                 ),
@@ -298,7 +298,7 @@ class _FriendStoryCard extends StatelessWidget {
                               : CachedImage(
                                   story.authorPhotoUrl!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
+                                  errorBuilder: (context, error, stackTrace) =>
                                       _initialAvatar(story.authorName),
                                 ),
                         ),

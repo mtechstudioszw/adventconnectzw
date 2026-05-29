@@ -891,7 +891,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       CachedImage(
                         coverUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
+                        errorBuilder: (context, error, stackTrace) => Container(
                           decoration: const BoxDecoration(
                             gradient: AppColors.appBarGradient,
                           ),
@@ -983,7 +983,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     : CachedImage(
                         photoUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Text(
+                        errorBuilder: (context, error, stackTrace) => Text(
                           _initials(),
                           style: AppTextStyles.displayMedium.copyWith(
                             color: AppColors.white,

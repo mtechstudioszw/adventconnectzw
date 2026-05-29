@@ -18,8 +18,8 @@ class ShimmerLoaders {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: count,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (_, _) => _CardSkeleton(),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      itemBuilder: (context, index) => _CardSkeleton(),
     );
   }
 
@@ -34,7 +34,7 @@ class ShimmerLoaders {
         childAspectRatio: 0.72,
       ),
       itemCount: count,
-      itemBuilder: (_, _) => _ProductSkeleton(),
+      itemBuilder: (context, index) => _ProductSkeleton(),
     );
   }
 }

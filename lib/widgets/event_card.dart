@@ -201,7 +201,7 @@ class _CoverHero extends StatelessWidget {
             CachedImage(
               url!,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
+              errorBuilder: (context, error, stackTrace) => Container(
                 color: AppColors.lightGrey,
                 child: const Center(
                   child: Icon(

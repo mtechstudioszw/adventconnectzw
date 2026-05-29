@@ -246,7 +246,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       controller: controller,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       itemCount: _tree.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 14),
+      separatorBuilder: (context, index) => const SizedBox(height: 14),
       itemBuilder: (ctx, i) {
         final root = _tree[i];
         return Column(
@@ -439,7 +439,7 @@ class _CommentRow extends StatelessWidget {
               : CachedImage(
                   url,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Text(
+                  errorBuilder: (context, error, stackTrace) => Text(
                     initial,
                     style: AppTextStyles.titleMedium.copyWith(
                       color: AppColors.white,

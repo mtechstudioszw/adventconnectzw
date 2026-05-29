@@ -21,7 +21,7 @@ class StoryViewer extends StatefulWidget {
       PageRouteBuilder(
         opaque: false,
         barrierColor: Colors.black87,
-        pageBuilder: (_, _, _) => StoryViewer(stories: stories),
+        pageBuilder: (context, animation, secondaryAnimation) => StoryViewer(stories: stories),
         transitionsBuilder: (_, anim, _, child) => FadeTransition(
           opacity: anim,
           child: child,
@@ -215,7 +215,7 @@ class _StoryViewerState extends State<StoryViewer>
               child: CachedImage(
                 story.mediaUrl,
                 fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Center(
+                errorBuilder: (context, error, stackTrace) => const Center(
                   child: Icon(
                     Icons.broken_image_outlined,
                     size: 48,
@@ -439,7 +439,7 @@ class _StoryViewerState extends State<StoryViewer>
               : CachedImage(
                   story.authorPhotoUrl!,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Text(
+                  errorBuilder: (context, error, stackTrace) => Text(
                     initial,
                     style: AppTextStyles.titleMedium.copyWith(
                       color: AppColors.white,
@@ -599,7 +599,7 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
                                           width: 44,
                                           height: 44,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, _, _) => _InitialBadge(
+                                          errorBuilder: (context, error, stackTrace) => _InitialBadge(
                                             name: name,
                                           ),
                                         ),

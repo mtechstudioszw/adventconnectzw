@@ -261,7 +261,7 @@ class _JobsScreenState extends State<JobsScreen>
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: JobCategory.all.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final cat = JobCategory.all[i];
           final selected = _selectedCategory == cat.id;

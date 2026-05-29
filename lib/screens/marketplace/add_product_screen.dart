@@ -356,7 +356,7 @@ class _AddProductScreenState extends State<AddProductScreen>
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _photoUrls.length + (canAddMore ? 1 : 0),
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              separatorBuilder: (context, index) => const SizedBox(width: 10),
               itemBuilder: (context, i) {
                 if (i < _photoUrls.length) {
                   return _PhotoThumb(

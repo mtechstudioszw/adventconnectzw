@@ -195,7 +195,7 @@ class _CompanyLogo extends StatelessWidget {
           ? CachedImage(
               logoUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _initialsView(),
+              errorBuilder: (context, error, stackTrace) => _initialsView(),
             )
           : _initialsView(),
     );

@@ -143,9 +143,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     }
 
     if (mounted) {
-      setState(() => _info =
-          'Couldn\'t open your inbox automatically — open your email '
-          'app and look for the code if dont see it try sign up or in with google.');
+      setState(() => _error =
+          'Couldn\'t open your email app automatically. Open your email app manually and look for the verification code. Check your spam folder if you don\'t see it.');
     }
   }
 
@@ -282,8 +281,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Text(
-                    'We sent a 6-digit verification code to your email '
-                    'address.\n if you dont recieve the code check your spam folder \n if it persist try sign up or in by Google',
+                    'We sent a 6-digit verification code to your email address. If you don\'t see it, check your spam folder.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: const Color.fromRGBO(26, 26, 46, 0.65),

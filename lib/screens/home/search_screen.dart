@@ -434,7 +434,7 @@ class _SearchScreenState extends State<SearchScreen> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           itemCount: chips.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          separatorBuilder: (context, index) => const SizedBox(width: 8),
           itemBuilder: (ctx, i) {
             final c = chips[i];
             final active = c.filter == _filter;

@@ -495,7 +495,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                             ? CachedImage(
                                 job.companyLogoUrl!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) =>
+                                errorBuilder: (context, error, stackTrace) =>
                                     _logoFallback(job.company),
                               )
                             : _logoFallback(job.company),

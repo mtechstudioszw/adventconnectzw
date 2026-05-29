@@ -1897,7 +1897,7 @@ class _Avatar extends StatelessWidget {
               fit: BoxFit.cover,
               width: size,
               height: size,
-              errorBuilder: (_, _, _) => Text(
+              errorBuilder: (context, error, stackTrace) => Text(
                 initials,
                 style: AppTextStyles.titleMedium.copyWith(
                   color: AppColors.white,

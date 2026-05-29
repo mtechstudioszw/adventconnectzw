@@ -426,7 +426,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                 ? CachedImage(
                     _coverPhotoUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                    errorBuilder: (context, error, stackTrace) => Container(
                       color: AppColors.lightGrey,
                       alignment: Alignment.center,
                       child: const Icon(
@@ -932,7 +932,7 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                           padding: const EdgeInsets.fromLTRB(
                               8, 4, 8, 24),
                           itemCount: filtered.length + 1,
-                          separatorBuilder: (_, _) =>
+                          separatorBuilder: (context, index) =>
                               const SizedBox(height: 2),
                           itemBuilder: (ctx, i) {
                             if (i == 0) {

@@ -1153,7 +1153,7 @@ class _CoverImage extends StatelessWidget {
     return CachedImage(
       url!,
       fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Container(
+      errorBuilder: (context, error, stackTrace) => Container(
         decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
         child: Center(
           child: Icon(

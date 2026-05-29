@@ -123,7 +123,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                     ? CachedImage(
                         coverUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
+                        errorBuilder: (context, error, stackTrace) => Container(
                           color: AppColors.primaryBlue.withValues(alpha: 0.08),
                         ),
                       )
@@ -262,7 +262,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
               fit: BoxFit.cover,
               width: 96,
               height: 96,
-              errorBuilder: (_, _, _) => _initialsLabel(initials),
+              errorBuilder: (context, error, stackTrace) => _initialsLabel(initials),
             )
           : _initialsLabel(initials),
     );

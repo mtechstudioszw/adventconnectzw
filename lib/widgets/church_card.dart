@@ -183,7 +183,7 @@ class _CoverImage extends StatelessWidget {
     return CachedImage(
       url!,
       fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Container(
+      errorBuilder: (context, error, stackTrace) => Container(
         color: AppColors.lightGrey,
         child: const Icon(
           Icons.broken_image_outlined,

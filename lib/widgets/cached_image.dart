@@ -55,7 +55,7 @@ class CachedImage extends StatelessWidget {
         }
         return _defaultErrorTile(width: width, height: height);
       },
-      placeholder: (_, _) => _placeholderTile(width: width, height: height),
+      placeholder: (context, url) => _placeholderTile(width: width, height: height),
     );
   }
 

@@ -57,6 +57,7 @@ class _AuthScreenState extends State<AuthScreen>
   bool _obscureConfirm = true;
   bool _acceptedTerms = false;
   String? _error;
+  String? _googleLinkedEmail;
 
   DateTime? _birthDate;
 
@@ -260,6 +261,24 @@ class _AuthScreenState extends State<AuthScreen>
     if (message.contains('already exists') ||
         message.contains('already registered') ||
         message.contains('try logging in')) {
+      // Check if this email is Google-only before pushing to login
+      final providers = await AuthService.emailAuthProviders(
+        _emailController.text.trim(),
+      );
+      if (!mounted) return;
+      final isGoogleOnly = providers != null &&
+          providers.contains('google') &&
+          !providers.contains('email');
+      if (isGoogleOnly) {
+        setState(() {
+          _stage = _Stage.email;
+          _passwordController.clear();
+          _confirmController.clear();
+          _googleLinkedEmail = _emailController.text.trim();
+          _error = null;
+        });
+        return;
+      }
       setState(() {
         _stage = _Stage.login;
         _passwordController.clear();
@@ -379,6 +398,7 @@ class _AuthScreenState extends State<AuthScreen>
       _nameController.clear();
       _acceptedTerms = false;
       _error = null;
+      _googleLinkedEmail = null;
     });
     Future.delayed(const Duration(milliseconds: 280), () {
       if (mounted) _emailFocus.requestFocus();
@@ -600,6 +620,14 @@ class _AuthScreenState extends State<AuthScreen>
           validator: _validateEmail,
           onSubmitted: (_) => _onContinue(),
         ),
+        if (_googleLinkedEmail != null) ...[
+          const SizedBox(height: 16),
+          _GoogleLinkedBanner(
+            email: _googleLinkedEmail!,
+            onGoogleTap: _onGoogle,
+            googleBusy: _googleBusy,
+          ),
+        ],
       ],
     );
   }
@@ -1415,6 +1443,70 @@ class _LegalLineState extends State<_LegalLine> {
           ),
           textAlign: TextAlign.center,
         ),
+      ),
+    );
+  }
+}
+
+
+/// Shown when user tries to sign up with an email already tied to Google.
+/// Replaces the generic error with a clear, actionable prompt.
+class _GoogleLinkedBanner extends StatelessWidget {
+  const _GoogleLinkedBanner({
+    required this.email,
+    required this.onGoogleTap,
+    required this.googleBusy,
+  });
+
+  final String email;
+  final VoidCallback onGoogleTap;
+  final bool googleBusy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.link_rounded,
+                color: AppColors.primaryBlue,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'This email is linked to Google',
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '$email is already signed in with Google. '
+            'Tap below to continue with your Google account.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.7),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _GoogleButton(busy: googleBusy, onTap: googleBusy ? null : onGoogleTap),
+        ],
       ),
     );
   }

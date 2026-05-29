@@ -247,7 +247,7 @@ class _PrayerScreenState extends State<PrayerScreen>
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       itemCount: _prayers.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
         final p = _prayers[i];
         return PrayerCard(

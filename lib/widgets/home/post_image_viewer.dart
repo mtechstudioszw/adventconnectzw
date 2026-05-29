@@ -27,7 +27,7 @@ class PostImageViewer extends StatelessWidget {
         barrierColor: Colors.black,
         transitionDuration: const Duration(milliseconds: 220),
         reverseTransitionDuration: const Duration(milliseconds: 220),
-        pageBuilder: (_, _, _) => PostImageViewer(
+        pageBuilder: (context, animation, secondaryAnimation) => PostImageViewer(
           imageUrl: imageUrl,
           heroTag: heroTag,
         ),
@@ -57,7 +57,7 @@ class PostImageViewer extends StatelessWidget {
                     child: CachedImage(
                       imageUrl,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => const Center(
+                      errorBuilder: (context, error, stackTrace) => const Center(
                         child: Icon(
                           Icons.broken_image_outlined,
                           color: AppColors.white,

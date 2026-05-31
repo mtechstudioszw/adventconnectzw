@@ -85,6 +85,18 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
           );
         });
       }
+      // Pull the authoritative follower_count back from the server
+      // so a stale cached count plus the optimistic +/- 1 doesn't
+      // leave the visible number wrong. The trigger updates the row
+      // in the same transaction as the follower insert/delete, so by
+      // the time this resolves the count is correct.
+      try {
+        final fresh = await ChurchService.fetchChurchById(church.id);
+        if (!mounted || fresh == null) return;
+        setState(() => _church = fresh);
+      } catch (_) {
+        // Best-effort.
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

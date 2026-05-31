@@ -124,6 +124,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           _event = event.copyWith(rsvpCount: event.rsvpCount + 1);
         });
       }
+      // Pull the authoritative rsvp_count back from the server so the
+      // optimistic +/- 1 above doesn't drift when the user enters
+      // the screen with a stale cached count. Trigger updates the
+      // count in the same transaction as the rsvp insert/delete, so
+      // by the time this refetch resolves the row is correct.
+      try {
+        final fresh = await EventService.fetchEventById(event.id);
+        if (!mounted || fresh == null) return;
+        setState(() => _event = fresh);
+      } catch (_) {
+        // Best-effort — the optimistic count still stands if the
+        // refetch hiccups.
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

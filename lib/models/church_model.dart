@@ -48,7 +48,13 @@ class Church {
       id: json['id'].toString(),
       name: (json['name'] ?? '') as String,
       city: (json['city'] ?? '') as String,
-      membersCount: _readInt(json['members_count']),
+      // The DB column is `follower_count` (set by the
+      // bump_church_follower_count trigger in schema.sql). Earlier
+      // dev iterations called it `members_count` — read both so the
+      // model stays compatible while old caches drain. Without this
+      // the count never shows on church_details and the optimistic
+      // +1 in _toggleFollow never persists across reloads.
+      membersCount: _readInt(json['follower_count'] ?? json['members_count']),
       coverPhotoUrl: json['cover_photo_url'] as String?,
       description: json['description'] as String?,
       address: json['address'] as String?,
@@ -77,7 +83,9 @@ class Church {
         'id': id,
         'name': name,
         'city': city,
-        'members_count': membersCount,
+        // Write back under the canonical column name so a cache
+        // round-trip stays consistent with what fromJson reads.
+        'follower_count': membersCount,
         'cover_photo_url': coverPhotoUrl,
         'description': description,
         'address': address,

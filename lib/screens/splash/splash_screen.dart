@@ -25,6 +25,11 @@ class _SplashScreenState extends State<SplashScreen>
 
   late final AnimationController _entrance;
   late final AnimationController _progress;
+  // Reverse-only exit fader — runs immediately before we hand off to
+  // onboarding / login / home so the splash dissolves into the next
+  // screen instead of a hard cut. User reported the previous
+  // transition felt abrupt.
+  late final AnimationController _exit;
 
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
@@ -71,6 +76,12 @@ class _SplashScreenState extends State<SplashScreen>
       duration: _minLoaderDuration,
     )..forward();
 
+    _exit = AnimationController(
+      vsync: this,
+      value: 1.0,
+      duration: const Duration(milliseconds: 320),
+    );
+
     _navigate();
   }
 
@@ -78,7 +89,16 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _entrance.dispose();
     _progress.dispose();
+    _exit.dispose();
     super.dispose();
+  }
+
+  /// Fade the splash out, then perform the route hand-off so the new
+  /// screen comes up underneath as the brand panel dissolves.
+  Future<void> _fadeOutThen(VoidCallback go) async {
+    await _exit.reverse();
+    if (!mounted) return;
+    go();
   }
 
   Future<void> _navigate() async {
@@ -99,10 +119,10 @@ class _SplashScreenState extends State<SplashScreen>
       final completed = await AuthService.hasCompletedProfileSetup();
       if (!mounted) return;
       if (!completed) {
-        context.goNamed('profile_setup');
+        await _fadeOutThen(() => context.goNamed('profile_setup'));
         return;
       }
-      context.goNamed('home');
+      await _fadeOutThen(() => context.goNamed('home'));
       return;
     }
 
@@ -113,19 +133,25 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (!hasSeenOnboarding) {
-      context.goNamed('onboarding');
+      await _fadeOutThen(() => context.goNamed('onboarding'));
       return;
     }
 
     if (!mounted) return;
-    context.goNamed('login');
+    await _fadeOutThen(() => context.goNamed('login'));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
-      body: DecoratedBox(
+      body: AnimatedBuilder(
+        animation: _exit,
+        builder: (context, child) => Opacity(
+          opacity: Curves.easeOut.transform(_exit.value),
+          child: child,
+        ),
+        child: DecoratedBox(
         decoration: const BoxDecoration(color: AppColors.white),
         child: Stack(
           children: [
@@ -172,6 +198,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
           ],
+        ),
         ),
       ),
     );

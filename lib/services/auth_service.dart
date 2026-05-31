@@ -1,5 +1,6 @@
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'connectivity_service.dart';
 import 'secure_storage_service.dart';
 
 class AuthResult {
@@ -37,6 +38,32 @@ class AuthService {
     required DateTime birthDate,
   }) async {
     try {
+      if (!ConnectivityService.isOnline) {
+        return AuthResult.failure(
+          'You appear to be offline. Check your connection and try '
+          'again.',
+        );
+      }
+      // Mirror of the signInWithGoogle pre-check: if an account
+      // already exists on this email under Google, refuse the email
+      // signup and tell them to use "Continue with Google" — this
+      // surfaces the cross-provider collision before Supabase emits
+      // its generic "user already registered" error.
+      final providers = await emailAuthProviders(email);
+      if (providers != null && providers.isNotEmpty) {
+        if (providers.contains('google') && !providers.contains('email')) {
+          return AuthResult.failure(
+            'An account with this email already exists, signed in '
+            'with Google. Tap "Continue with Google" to sign in.',
+          );
+        }
+        if (providers.contains('email')) {
+          return AuthResult.failure(
+            'An account with this email already exists. '
+            'Try logging in instead.',
+          );
+        }
+      }
       final response = await _client.auth.signUp(
         email: email,
         password: password,
@@ -241,6 +268,18 @@ class AuthService {
   /// same email address.
   static Future<AuthResult> signInWithGoogle() async {
     try {
+      // Catch offline up-front so users see the same "you appear to
+      // be offline" copy as the email path, instead of the raw
+      // "PlatformException(sign_in_failed, ...network…)" Google emits.
+      // The provider picker, the ID-token exchange, AND the
+      // emailAuthProviders pre-check all need network — bailing here
+      // is the cleanest place.
+      if (!ConnectivityService.isOnline) {
+        return AuthResult.failure(
+          'You appear to be offline. Check your connection and try '
+          'again.',
+        );
+      }
       final google = GoogleSignIn(serverClientId: _googleWebClientId);
       // Clear any cached Google account so the picker always shows up.
       await google.signOut();
@@ -295,9 +334,12 @@ class AuthService {
       await _persistSession(response.session);
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
-      return AuthResult.failure(e.message);
+      return AuthResult.failure(_friendlyAuthError(e.message));
     } catch (e) {
-      return AuthResult.failure('Google sign in failed: $e');
+      // Run through the friendly mapper so offline / DNS / handshake
+      // failures from the Google SDK get the same human-readable
+      // copy as the email path instead of the raw exception toString.
+      return AuthResult.failure(_friendlyAuthError(e.toString()));
     }
   }
 

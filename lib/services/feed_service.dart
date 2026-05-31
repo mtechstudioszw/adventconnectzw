@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,6 +6,7 @@ import '../models/friendship_model.dart';
 import '../models/post_comment_model.dart';
 import '../models/post_model.dart';
 import '../models/story_model.dart';
+import 'messaging_service.dart';
 
 /// All Supabase calls behind the Facebook-style home feed:
 ///   - posts            (CRUD + likes + comments)
@@ -549,10 +551,62 @@ class FeedService {
     return Friendship.fromJson(inserted);
   }
 
+  /// Accept a pending friend request. Beyond flipping `status` to
+  /// 'accepted' this also seeds an empty conversation between the
+  /// two users so the chat lands in both inboxes immediately — the
+  /// user's spec: "once you accept a friend request that chat
+  /// should get to your inbox." The notification to the requester
+  /// ("X accepted your friend request") is fired server-side by the
+  /// trg_friendships_notify_accepter trigger (patch_033).
   static Future<void> acceptRequest(String friendshipId) async {
-    await _client
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to accept friend requests.');
+    }
+    // Flip the friendship FIRST so the conversation insert's
+    // auto-accept trigger sees an accepted friendship and lands the
+    // thread in Inbox rather than Requests.
+    final updated = await _client
         .from(_friendshipsTable)
-        .update({'status': 'accepted'}).eq('id', friendshipId);
+        .update({'status': 'accepted'})
+        .eq('id', friendshipId)
+        .select('requester_id, addressee_id')
+        .maybeSingle();
+    if (updated == null) return;
+    final requesterId = updated['requester_id']?.toString() ?? '';
+    final addresseeId = updated['addressee_id']?.toString() ?? '';
+    // We can only seed the conversation if the caller is one of the
+    // pair. Defensive — the RLS already ensures this, but skip if
+    // somehow not.
+    if (user.id != requesterId && user.id != addresseeId) return;
+    final otherId = user.id == addresseeId ? requesterId : addresseeId;
+    if (otherId.isEmpty) return;
+
+    // Best-effort: open / reuse the conversation row. createConversation
+    // is idempotent — it reuses an existing thread between the pair —
+    // so this is safe to call even when the chat already exists.
+    try {
+      final profile = await _client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', otherId)
+          .maybeSingle();
+      final otherName =
+          ((profile?['full_name'] as String?)?.trim().isNotEmpty == true)
+              ? (profile!['full_name'] as String).trim()
+              : 'Member';
+      unawaited(
+        MessagingService.createConversation(
+          otherUserId: otherId,
+          otherUserName: otherName,
+          // Empty opener → WhatsApp-style: the conversation row
+          // appears in both inboxes but no chat message is written.
+        ),
+      );
+    } catch (_) {
+      // Chat seeding is best-effort — the friendship update already
+      // succeeded so don't surface a secondary failure.
+    }
   }
 
   static Future<void> declineRequest(String friendshipId) async {

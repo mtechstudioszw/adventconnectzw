@@ -5,6 +5,7 @@ import '../../models/prayer_model.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/prayer_card.dart';
 
 class PrayerDetailsScreen extends StatefulWidget {
@@ -37,6 +38,11 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
 
   final _commentController = TextEditingController();
   bool _commentBusy = false;
+  // patch_035: when the viewer taps "Reply" on a comment we stash the
+  // target here so the next post becomes a reply rather than a new
+  // top-level comment. Cleared after a successful send or when the
+  // user taps the "×" on the reply chip.
+  PrayerComment? _replyTo;
 
   @override
   void initState() {
@@ -127,12 +133,18 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
     setState(() => _commentBusy = true);
+    final parentId = _replyTo?.id;
     try {
-      final comment = await PrayerService.postComment(widget.prayerId, text);
+      final comment = await PrayerService.postComment(
+        widget.prayerId,
+        text,
+        parentCommentId: parentId,
+      );
       if (!mounted) return;
       setState(() {
         _comments = [..._comments, comment];
         _commentController.clear();
+        _replyTo = null;
         if (_prayer != null) {
           _prayer = _prayer!.copyWith(commentCount: _prayer!.commentCount + 1);
         }
@@ -416,6 +428,8 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
   }
 
   Widget _buildComments() {
+    final ownerId = _prayer?.authorId ?? '';
+    final tree = PrayerComment.buildTree(_comments);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -439,7 +453,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
             ),
           ),
           const SizedBox(height: 12),
-          if (_comments.isEmpty)
+          if (tree.isEmpty)
             Text(
               'No comments yet. Be the first to encourage them.',
               style: AppTextStyles.bodySmall.copyWith(
@@ -447,9 +461,27 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
               ),
             )
           else
-            for (final c in _comments) ...[
-              _CommentTile(comment: c),
-              if (c != _comments.last)
+            for (var i = 0; i < tree.length; i++) ...[
+              _CommentTile(
+                comment: tree[i],
+                isOwner: tree[i].authorId.isNotEmpty &&
+                    tree[i].authorId == ownerId,
+                onReply: () =>
+                    setState(() => _replyTo = tree[i]),
+              ),
+              for (final reply in tree[i].replies) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 36, top: 10),
+                  child: _CommentTile(
+                    comment: reply,
+                    isOwner: reply.authorId.isNotEmpty &&
+                        reply.authorId == ownerId,
+                    onReply: () => setState(() => _replyTo = tree[i]),
+                    isReply: true,
+                  ),
+                ),
+              ],
+              if (i < tree.length - 1)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Divider(
@@ -478,7 +510,48 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
       ),
       child: SafeArea(
         top: false,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_replyTo != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.reply,
+                        size: 16,
+                        color: AppColors.primaryBlue,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Replying to ${_replyTo!.authorName}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 16),
+                        color: AppColors.primaryBlue,
+                        tooltip: 'Cancel reply',
+                        onPressed: () => setState(() => _replyTo = null),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            Row(
           children: [
             Expanded(
               child: TextField(
@@ -488,7 +561,9 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                 textCapitalization: TextCapitalization.sentences,
                 style: AppTextStyles.bodyMedium.copyWith(fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Write encouragement...',
+                  hintText: _replyTo == null
+                      ? 'Write encouragement...'
+                      : 'Reply to ${_replyTo!.authorName}...',
                   filled: true,
                   fillColor: AppColors.lightGrey,
                   contentPadding:
@@ -518,21 +593,58 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
             ),
           ],
         ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _CommentTile extends StatelessWidget {
-  const _CommentTile({required this.comment});
+  const _CommentTile({
+    required this.comment,
+    required this.isOwner,
+    required this.onReply,
+    this.isReply = false,
+  });
   final PrayerComment comment;
+  final bool isOwner;
+  final bool isReply;
+  final VoidCallback onReply;
+
+  void _openProfile(BuildContext context) {
+    if (comment.authorId.isEmpty) return;
+    context.pushNamed(
+      'user_profile',
+      pathParameters: {'userId': comment.authorId},
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final photo = comment.authorPhotoUrl;
+    final hasPhoto = photo != null && photo.isNotEmpty;
+    final size = isReply ? 30.0 : 36.0;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        PrayerAvatar(name: comment.authorName, size: 36),
+        GestureDetector(
+          onTap: () => _openProfile(context),
+          child: hasPhoto
+              ? ClipOval(
+                  child: SizedBox(
+                    width: size,
+                    height: size,
+                    child: CachedImage(
+                      photo,
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) =>
+                          PrayerAvatar(name: comment.authorName, size: size),
+                    ),
+                  ),
+                )
+              : PrayerAvatar(name: comment.authorName, size: size),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -541,15 +653,40 @@ class _CommentTile extends StatelessWidget {
               Row(
                 children: [
                   Flexible(
-                    child: Text(
-                      comment.authorName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleSmall.copyWith(
-                        fontWeight: FontWeight.w700,
+                    child: GestureDetector(
+                      onTap: () => _openProfile(context),
+                      child: Text(
+                        comment.authorName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
+                  if (isOwner) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.goldAccent.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Author',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.goldAccent,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 6),
                   Text(
                     formatTimeAgo(comment.createdAt),
@@ -566,6 +703,21 @@ class _CommentTile extends StatelessWidget {
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: const Color.fromRGBO(26, 26, 46, 0.85),
                   height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: onReply,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    'Reply',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
               ),
             ],

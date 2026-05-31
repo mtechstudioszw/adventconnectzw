@@ -209,11 +209,12 @@ class PrayerService {
     final response = await _client
         .from(_responsesTable)
         .select('id, prayer_id, user_id, message, created_at, '
-            'profiles:user_id(full_name)')
+            'parent_response_id, '
+            'profiles:user_id(full_name, profile_photo_url)')
         .eq('prayer_id', prayerId)
         .eq('response_type', 'message')
         .order('created_at', ascending: true)
-        .limit(200);
+        .limit(400);
     return (response as List).map((row) {
       final map = row as Map<String, dynamic>;
       final profile = map['profiles'] as Map<String, dynamic>?;
@@ -223,26 +224,42 @@ class PrayerService {
         'prayer_id': map['prayer_id'],
         'author_id': map['user_id'],
         'author_name': name?.isNotEmpty == true ? name : 'A friend',
+        'author_photo_url': profile?['profile_photo_url'],
         'content': map['message'] ?? '',
         'created_at': map['created_at'],
+        'parent_comment_id': map['parent_response_id'],
       });
     }).toList();
   }
 
   static Future<PrayerComment> postComment(
     String prayerId,
-    String content,
-  ) async {
+    String content, {
+    String? parentCommentId,
+  }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw const AuthException('Sign in to comment.');
     }
-    await _client.from(_responsesTable).insert({
+    final payload = <String, dynamic>{
       'prayer_id': prayerId,
       'user_id': user.id,
       'response_type': 'message',
       'message': content.trim(),
-    });
+    };
+    if (parentCommentId != null && parentCommentId.isNotEmpty) {
+      payload['parent_response_id'] =
+          int.tryParse(parentCommentId) ?? parentCommentId;
+    }
+    try {
+      await _client.from(_responsesTable).insert(payload);
+    } catch (_) {
+      // Older deployments without patch_035 don't have the
+      // parent_response_id column — retry without it so the comment
+      // still posts (as top-level).
+      payload.remove('parent_response_id');
+      await _client.from(_responsesTable).insert(payload);
+    }
 
     // Refresh the comment list so the caller sees its newest row.
     final comments = await fetchComments(prayerId);

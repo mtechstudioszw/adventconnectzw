@@ -403,6 +403,7 @@ class _HomeScreenState extends State<HomeScreen>
     return showCommentsSheet(
       context,
       postId: post.id,
+      postAuthorId: post.authorId,
       onCommentCountChanged: (newCount) {
         if (!mounted) return;
         setState(() {

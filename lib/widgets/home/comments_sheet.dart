@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/post_comment_model.dart';
 import '../../services/feed_service.dart';
 import '../../theme/app_colors.dart';
@@ -14,6 +15,7 @@ Future<void> showCommentsSheet(
   BuildContext context, {
   required String postId,
   required void Function(int newCommentCount) onCommentCountChanged,
+  String? postAuthorId,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -21,6 +23,7 @@ Future<void> showCommentsSheet(
     backgroundColor: Colors.transparent,
     builder: (ctx) => _CommentsSheet(
       postId: postId,
+      postAuthorId: postAuthorId,
       onCommentCountChanged: onCommentCountChanged,
     ),
   );
@@ -30,9 +33,11 @@ class _CommentsSheet extends StatefulWidget {
   const _CommentsSheet({
     required this.postId,
     required this.onCommentCountChanged,
+    this.postAuthorId,
   });
 
   final String postId;
+  final String? postAuthorId;
   final void Function(int newCommentCount) onCommentCountChanged;
 
   @override
@@ -254,6 +259,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
           children: [
             _CommentRow(
               comment: root,
+              isOwner: widget.postAuthorId != null &&
+                  root.authorId == widget.postAuthorId,
               onReply: () => _startReply(root),
               onLike: () => _react(root, 1),
               onDislike: () => _react(root, -1),
@@ -266,6 +273,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                     for (final reply in root.replies) ...[
                       _CommentRow(
                         comment: reply,
+                        isOwner: widget.postAuthorId != null &&
+                            reply.authorId == widget.postAuthorId,
                         onReply: () => _startReply(root),
                         onLike: () => _react(reply, 1),
                         onDislike: () => _react(reply, -1),
@@ -402,12 +411,22 @@ class _CommentRow extends StatelessWidget {
     required this.onReply,
     required this.onLike,
     required this.onDislike,
+    this.isOwner = false,
   });
 
   final PostComment comment;
+  final bool isOwner;
   final VoidCallback onReply;
   final VoidCallback onLike;
   final VoidCallback onDislike;
+
+  void _openProfile(BuildContext context) {
+    if (comment.authorId.isEmpty) return;
+    context.pushNamed(
+      'user_profile',
+      pathParameters: {'userId': comment.authorId},
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -418,36 +437,39 @@ class _CommentRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 32,
-          height: 32,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AppColors.primaryGradient,
-          ),
-          alignment: Alignment.center,
-          child: url == null || url.isEmpty
-              ? Text(
-                  initial,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                )
-              : CachedImage(
-                  url,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Text(
+        GestureDetector(
+          onTap: () => _openProfile(context),
+          child: Container(
+            width: 32,
+            height: 32,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: AppColors.primaryGradient,
+            ),
+            alignment: Alignment.center,
+            child: url == null || url.isEmpty
+                ? Text(
                     initial,
                     style: AppTextStyles.titleMedium.copyWith(
                       color: AppColors.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),
+                  )
+                : CachedImage(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Text(
+                      initial,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
-                ),
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -464,12 +486,46 @@ class _CommentRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      comment.authorName,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: GestureDetector(
+                            onTap: () => _openProfile(context),
+                            child: Text(
+                              comment.authorName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (isOwner) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  AppColors.goldAccent.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Author',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.goldAccent,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

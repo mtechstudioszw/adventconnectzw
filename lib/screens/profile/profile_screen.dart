@@ -516,6 +516,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     return showCommentsSheet(
       context,
       postId: post.id,
+      postAuthorId: post.authorId,
       onCommentCountChanged: (newCount) {
         if (!mounted) return;
         setState(() {

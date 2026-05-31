@@ -86,14 +86,40 @@ class PrayerComment {
     required this.authorName,
     required this.content,
     required this.createdAt,
+    this.authorPhotoUrl,
+    this.parentCommentId,
+    this.replies = const [],
   });
 
   final String id;
   final String prayerId;
   final String authorId;
   final String authorName;
+  final String? authorPhotoUrl;
   final String content;
   final DateTime createdAt;
+  // patch_035: NULL for top-level comments; otherwise the id of the
+  // comment this row replies to. Threading is rendered one level
+  // deep in the UI — replies-to-replies flatten to siblings.
+  final String? parentCommentId;
+  // Populated by [PrayerComment.buildTree] — direct children only.
+  final List<PrayerComment> replies;
+
+  bool get isReply => parentCommentId != null;
+
+  PrayerComment copyWith({List<PrayerComment>? replies}) {
+    return PrayerComment(
+      id: id,
+      prayerId: prayerId,
+      authorId: authorId,
+      authorName: authorName,
+      authorPhotoUrl: authorPhotoUrl,
+      content: content,
+      createdAt: createdAt,
+      parentCommentId: parentCommentId,
+      replies: replies ?? this.replies,
+    );
+  }
 
   factory PrayerComment.fromJson(Map<String, dynamic> json) {
     return PrayerComment(
@@ -101,9 +127,50 @@ class PrayerComment {
       prayerId: (json['prayer_id'] ?? '').toString(),
       authorId: (json['author_id'] ?? '').toString(),
       authorName: (json['author_name'] ?? 'A friend') as String,
+      authorPhotoUrl: json['author_photo_url'] as String?,
       content: (json['content'] ?? '') as String,
+      parentCommentId: json['parent_comment_id']?.toString(),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );
+  }
+
+  /// Re-shape a flat comment list into a 1-level tree: top-level
+  /// comments keep their server order, replies group under their
+  /// top-level ancestor. Deeper nesting flattens to siblings.
+  static List<PrayerComment> buildTree(List<PrayerComment> flat) {
+    final byId = {for (final c in flat) c.id: c};
+    final repliesByRoot = <String, List<PrayerComment>>{};
+    final roots = <PrayerComment>[];
+
+    String? rootIdOf(PrayerComment c) {
+      var cursor = c;
+      var hops = 0;
+      while (cursor.parentCommentId != null && hops < 16) {
+        final parent = byId[cursor.parentCommentId];
+        if (parent == null) return null;
+        if (parent.parentCommentId == null) return parent.id;
+        cursor = parent;
+        hops += 1;
+      }
+      return null;
+    }
+
+    for (final c in flat) {
+      if (c.parentCommentId == null) {
+        roots.add(c);
+      } else {
+        final root = rootIdOf(c);
+        if (root == null) {
+          roots.add(c);
+        } else {
+          repliesByRoot.putIfAbsent(root, () => []).add(c);
+        }
+      }
+    }
+
+    return roots
+        .map((r) => r.copyWith(replies: repliesByRoot[r.id] ?? const []))
+        .toList();
   }
 }

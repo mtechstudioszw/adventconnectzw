@@ -8,6 +8,28 @@ class MarketplaceService {
 
   static const _table = 'products';
   static const _savedTable = 'saved_listings';
+  static const _sellersTable = 'sellers';
+
+  /// Returns the auth_user_ids of every seller whose storefront is
+  /// approved AND active. Used to gate the marketplace product listing
+  /// so products from pending / rejected / banned sellers never reach
+  /// the buyer-facing surface (patch_031).
+  ///
+  /// Done as a separate query because PostgREST doesn't compose
+  /// subqueries cleanly — but the result set is small (one row per
+  /// seller) and we cache it for the lifetime of a single call so
+  /// callers that filter + fetch share the same lookup.
+  static Future<Set<String>> _fetchApprovedSellerIds() async {
+    final rows = await _client
+        .from(_sellersTable)
+        .select('auth_user_id')
+        .eq('status', 'approved')
+        .eq('is_active', true);
+    return (rows as List)
+        .map((r) => (r as Map<String, dynamic>)['auth_user_id'].toString())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+  }
 
   /// Returns the set of product ids the current user has saved. Used by
   /// the marketplace heart icon and the My Saved Listings screen.
@@ -58,7 +80,9 @@ class MarketplaceService {
 
   /// Returns the full Product rows for every listing the user saved.
   /// Joins via product_id IN (...) instead of a foreign-key embed so
-  /// it works regardless of how the RLS view is set up.
+  /// it works regardless of how the RLS view is set up. Hides items
+  /// from sellers that are no longer approved (patch_031) so the
+  /// saved-listings screen stays in sync with the public marketplace.
   static Future<List<Product>> fetchSavedProducts() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
@@ -70,6 +94,7 @@ class MarketplaceService {
         .map((row) => row['product_id'].toString())
         .toList();
     if (ids.isEmpty) return const [];
+    final approvedIds = await _fetchApprovedSellerIds();
     final response = await _client
         .from(_table)
         .select()
@@ -77,6 +102,7 @@ class MarketplaceService {
         .order('created_at', ascending: false);
     return (response as List)
         .map((row) => Product.fromJson(row as Map<String, dynamic>))
+        .where((p) => approvedIds.contains(p.sellerId))
         .toList();
   }
 
@@ -84,7 +110,14 @@ class MarketplaceService {
     String? search,
     String? category,
   }) async {
-    var query = _client.from(_table).select().eq('status', 'available');
+    final approvedIds = await _fetchApprovedSellerIds();
+    if (approvedIds.isEmpty) return const [];
+
+    var query = _client
+        .from(_table)
+        .select()
+        .eq('status', 'available')
+        .inFilter('seller_id', approvedIds.toList());
 
     if (category != null && category.isNotEmpty && category != 'all') {
       query = query.eq('category', category);
@@ -112,16 +145,24 @@ class MarketplaceService {
     // product details screen can render the WhatsApp + name affordances
     // without a second round-trip on the screen side.
     final sellerId = (response['seller_id'] ?? '').toString();
+    final viewerId = _client.auth.currentUser?.id;
     if (sellerId.isNotEmpty) {
       try {
         final sellerRow = await _client
             .from('sellers')
             .select(
-              'business_name, phone, whatsapp, contact_name, verified, sda_verified',
+              'business_name, phone, whatsapp, contact_name, verified, '
+                  'sda_verified, status, is_active',
             )
             .eq('auth_user_id', sellerId)
             .maybeSingle();
         if (sellerRow != null) {
+          // patch_031: hide products from non-approved storefronts
+          // from everyone except the owning seller (who needs to see
+          // their own listings in the dashboard).
+          final approved = sellerRow['status'] == 'approved' &&
+              sellerRow['is_active'] != false;
+          if (!approved && sellerId != viewerId) return null;
           response['seller_phone'] =
               (sellerRow['whatsapp'] as String?)?.trim().isNotEmpty == true
                   ? sellerRow['whatsapp']

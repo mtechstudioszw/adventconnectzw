@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
+import '../screens/admin/seller_approvals_screen.dart';
 import '../screens/auth/auth_screen.dart';
 import '../screens/auth/email_verification_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -60,7 +61,6 @@ import '../screens/home/home_screen.dart';
 import '../screens/prayer/prayer_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/feedback_screen.dart';
-import '../screens/profile/apply_business_screen.dart';
 import '../screens/profile/notification_centre_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/users/user_profile_screen.dart';
@@ -434,11 +434,6 @@ final GoRouter appRouter = GoRouter(
           name: 'feedback',
           builder: (context, state) => const FeedbackScreen(),
         ),
-        GoRoute(
-          path: 'apply-business',
-          name: 'apply_business',
-          builder: (context, state) => const ApplyBusinessScreen(),
-        ),
       ],
     ),
     GoRoute(
@@ -482,6 +477,15 @@ final GoRouter appRouter = GoRouter(
               },
             ),
           ],
+        ),
+        GoRoute(
+          // Super-admin seller approvals queue. Gated by the
+          // is_super_admin profile flag on the server (patch_031)
+          // and surfaced only from Settings → Admin → Seller
+          // approvals so non-admin users never see the entry.
+          path: 'sellers',
+          name: 'admin_seller_approvals',
+          builder: (context, state) => const SellerApprovalsScreen(),
         ),
       ],
     ),

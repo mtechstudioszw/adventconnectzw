@@ -61,15 +61,15 @@ class SellerService {
     return Seller.fromJson(row);
   }
 
-  /// Open a storefront. Self-serve as of patch_022 — anyone authenticated
-  /// can publish immediately, gated by the Marketplace Code of Conduct
-  /// (acceptance enforced by the [termsVersion] arg + a CHECK on the
-  /// sellers table). Admin moderation is reactive (is_active = false /
-  /// status = 'banned') rather than gatekeeping.
+  /// Open a storefront. As of patch_031 the row is inserted as
+  /// `pending` — a super admin must approve it once before products
+  /// from this seller appear on the public marketplace. After that
+  /// the seller can list / edit / hide products freely with no
+  /// further per-product review.
   ///
   /// [termsVersion] MUST be the value the user accepted on
-  /// MarketplaceGuidelinesScreen — the DB constraint rejects insert
-  /// if terms_accepted_at is null on an approved row.
+  /// MarketplaceGuidelinesScreen so the audit trail records which
+  /// version of the Code of Conduct they agreed to.
   static Future<Seller> applyAsSeller({
     required String businessName,
     required String category,
@@ -115,10 +115,10 @@ class SellerService {
       'delivery_fee': deliveryFee?.trim(),
       'observes_sabbath': observesSabbath,
       'sabbath_notice_text': sabbathNoticeText?.trim(),
-      // Self-serve: insert as already-approved + record the code of
-      // conduct version they accepted on the gate screen.
-      'status': 'approved',
-      'approved_at': DateTime.now().toUtc().toIso8601String(),
+      // patch_031: new sellers go in as pending and wait for a super
+      // admin to approve. terms_accepted_at is still recorded because
+      // the Code of Conduct gate runs before this screen.
+      'status': 'pending',
       'terms_accepted_at': DateTime.now().toUtc().toIso8601String(),
       'terms_version': termsVersion,
     };
@@ -321,6 +321,75 @@ class SellerService {
     }
     await _client.from(_productsTable).delete().eq('seller_id', user.id);
     await _client.from(_sellersTable).delete().eq('auth_user_id', user.id);
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // Super-admin operations (patch_031)
+  // ────────────────────────────────────────────────────────────────
+
+  /// True when the signed-in user has `profiles.is_super_admin = TRUE`.
+  /// Used to gate the Seller Approvals entry in Settings + the route.
+  /// Returns false on any error so a transient network blip never
+  /// accidentally surfaces admin UI.
+  static Future<bool> isCurrentUserSuperAdmin() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return false;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('is_super_admin')
+          .eq('id', user.id)
+          .maybeSingle();
+      return row?['is_super_admin'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// All pending seller rows — admin queue. Backed by the SECURITY
+  /// DEFINER RPC `admin_pending_sellers` which itself re-checks the
+  /// caller's super-admin flag.
+  static Future<List<Seller>> fetchPendingSellers() async {
+    final response = await _client.rpc('admin_pending_sellers');
+    if (response is List) {
+      return response
+          .map((row) => Seller.fromJson(row as Map<String, dynamic>))
+          .toList();
+    }
+    return const [];
+  }
+
+  /// Approve a pending seller. Flips status to approved + sends a
+  /// notification to the seller. Caller must be a super admin.
+  static Future<Seller> approveSeller(String sellerId) async {
+    final response = await _client.rpc(
+      'admin_approve_seller',
+      params: {'p_seller_id': sellerId},
+    );
+    final row = response is List
+        ? response.first as Map<String, dynamic>
+        : response as Map<String, dynamic>;
+    return Seller.fromJson(row);
+  }
+
+  /// Reject a pending seller with an optional human-readable reason.
+  /// The reason is surfaced back to the seller in the dashboard so
+  /// they know what to fix before re-submitting.
+  static Future<Seller> rejectSeller(
+    String sellerId, {
+    String? reason,
+  }) async {
+    final response = await _client.rpc(
+      'admin_reject_seller',
+      params: {
+        'p_seller_id': sellerId,
+        'p_reason': reason?.trim(),
+      },
+    );
+    final row = response is List
+        ? response.first as Map<String, dynamic>
+        : response as Map<String, dynamic>;
+    return Seller.fromJson(row);
   }
 
   /// Aggregate stats shown at the top of the dashboard. Computed

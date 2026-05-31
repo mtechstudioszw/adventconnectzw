@@ -638,11 +638,13 @@ class _ClaimBusinessGate extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                  if (pending) {
-                    context.pop();
-                  } else {
-                    context.pushNamed('apply_business');
-                  }
+                  // ClaimChurchScreen is currently routed to the
+                  // ClaimChurchComingSoonScreen — this branch is dead
+                  // until the full church-admin module ships. The old
+                  // apply_business jump went away with patch_031; we
+                  // just pop here so any leftover entry point still
+                  // does something sensible.
+                  context.pop();
                 },
                 borderRadius: BorderRadius.circular(14),
                 child: Padding(

@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
-import '../../services/account_mode_service.dart';
-import '../../services/account_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/marketplace_service.dart';
@@ -489,105 +487,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   }
 }
 
-/// Entry point for the "Become a seller" button. Mirrors the gating
-/// in add_product_screen so the marketplace doesn't push a personal
-/// account into a setup-store flow they aren't eligible for:
-///
-///   - no business yet      → "Apply for a business account" sheet
-///   - has business, in personal view  → "Switch to business" sheet
-///   - has business, in business view  → original chooser
-///
-/// Failure to load the account state falls through to the chooser so
-/// a transient network blip doesn't permanently lock the button.
+/// Entry point for the "Become a seller" button. patch_031 removed
+/// the business-account indirection — sellers apply directly. We just
+/// surface the chooser straight away; the seller dashboard handles
+/// the pending / rejected / approved branching itself.
 Future<void> _onBecomeSellerTapped(BuildContext context) async {
-  AccountState? account;
-  try {
-    account = await AccountService.fetchMyAccount();
-  } catch (_) {
-    account = null;
-  }
-  if (!context.mounted) return;
-  if (account != null && !account.isBusiness) {
-    await _showApplyForBusinessSheet(context, account: account);
-    return;
-  }
-  if (account != null &&
-      account.isBusiness &&
-      !AccountModeService.inBusinessMode) {
-    await _showSwitchToBusinessSheet(context);
-    return;
-  }
   await _showSellerChooser(context);
-}
-
-/// Sheet for users without an approved business account. Surfaces the
-/// pending / rejected states the same way the in-screen gate does and
-/// routes them to apply_business.
-Future<void> _showApplyForBusinessSheet(
-  BuildContext context, {
-  required AccountState account,
-}) {
-  final pending = account.hasPendingApplication;
-  final rejected = account.hasRejectedApplication;
-  final title = pending
-      ? 'Application in review'
-      : rejected
-          ? 'Application declined'
-          : 'Business account required';
-  final body = pending
-      ? 'Your business application is being reviewed. We\'ll notify '
-          'you the moment it\'s approved.'
-      : rejected
-          ? (account.latestApplication?.reviewerNote?.trim().isNotEmpty == true
-              ? '${account.latestApplication!.reviewerNote!.trim()}\n\nYou can edit your details and re-apply.'
-              : 'Your application was declined. You can edit your '
-                  'details and re-apply.')
-          : 'Selling on the marketplace is only available to business '
-              'accounts. Apply to start selling within the SDA '
-              'community.';
-  final cta = pending
-      ? 'OK'
-      : rejected
-          ? 'Re-apply'
-          : 'Apply for Business';
-
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (sheetContext) => _ChooserSheet(
-      icon: pending ? Icons.hourglass_top_rounded : Icons.business_center,
-      title: title,
-      subtitle: body,
-      primaryLabel: cta,
-      onPrimary: () {
-        Navigator.of(sheetContext).pop();
-        if (!pending) context.pushNamed('apply_business');
-      },
-    ),
-  );
-}
-
-/// Sheet for an approved business that's currently looking at the
-/// app in personal view. Sends them to their profile so they can
-/// flip the toggle.
-Future<void> _showSwitchToBusinessSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (sheetContext) => _ChooserSheet(
-      icon: Icons.swap_horiz,
-      title: 'Switch to Business mode',
-      subtitle:
-          'You\'re approved as a business, but the app is currently in '
-          'Personal mode. Switch to Business mode from your profile to '
-          'access your store.',
-      primaryLabel: 'Go to profile',
-      onPrimary: () {
-        Navigator.of(sheetContext).pop();
-        context.goNamed('profile');
-      },
-    ),
-  );
 }
 
 /// Bottom-sheet chooser fired when the user taps "Become a seller"
@@ -836,121 +741,6 @@ class _SellerStatusBanner extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Shared layout for the apply-for-business / switch-to-business
-/// explainer sheets. Single primary CTA + an implicit "Cancel" via
-/// dismissing the sheet.
-class _ChooserSheet extends StatelessWidget {
-  const _ChooserSheet({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.primaryLabel,
-    required this.onPrimary,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String primaryLabel;
-  final VoidCallback onPrimary;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.18),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Center(
-              child: Container(
-                width: 56,
-                height: 56,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: AppColors.white, size: 26),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.titleLarge.copyWith(
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.7),
-                height: 1.5,
-                fontSize: 13.5,
-              ),
-            ),
-            const SizedBox(height: 22),
-            Container(
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.28),
-                    blurRadius: 14,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onPrimary,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    child: Center(
-                      child: Text(
-                        primaryLabel,
-                        style: AppTextStyles.buttonText.copyWith(
-                          color: AppColors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

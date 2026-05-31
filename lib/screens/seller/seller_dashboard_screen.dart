@@ -233,9 +233,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
         _StatusBanner(
           tone: _BannerTone.info,
           icon: Icons.hourglass_top,
-          title: 'Application received',
+          title: 'Awaiting admin approval',
           message:
-              'We\'re reviewing your store. You\'ll get a notification once it\'s approved — usually within 1–3 days.',
+              'An admin is reviewing your store profile. You\'ll get a '
+              'notification the moment it\'s approved — usually within '
+              'a day or two. Once approved you can list products without '
+              'further per-product reviews.',
         ),
         const SizedBox(height: 16),
         _StoreSummaryCard(seller: seller),

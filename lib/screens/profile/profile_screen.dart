@@ -3,11 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/business_application_model.dart';
 import '../../models/church_model.dart';
 import '../../models/post_model.dart';
-import '../../services/account_mode_service.dart';
-import '../../services/account_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
@@ -41,7 +38,6 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   int _churchesFollowed = 0;
   int _eventsGoing = 0;
-  AccountState? _accountState;
   List<Post> _myPosts = const [];
   List<Church> _myChurches = const [];
   int _tabIndex = 0;
@@ -73,14 +69,13 @@ class _ProfileScreenState extends State<ProfileScreen>
       final results = await Future.wait([
         ChurchService.fetchUserFollowedChurchIds(),
         EventService.fetchUserRsvpedEventIds(),
-        AccountService.fetchMyAccount(),
         FeedService.fetchFeed(limit: 120),
         ChurchService.fetchChurches(),
       ]);
       if (!mounted) return;
       final followed = results[0] as Set<String>;
-      final allPosts = results[3] as List<Post>;
-      final allChurches = results[4] as List<Church>;
+      final allPosts = results[2] as List<Post>;
+      final allChurches = results[3] as List<Church>;
       final myPosts = viewerId == null
           ? const <Post>[]
           : allPosts.where((p) => p.authorId == viewerId).toList();
@@ -89,7 +84,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       setState(() {
         _churchesFollowed = followed.length;
         _eventsGoing = (results[1] as Set).length;
-        _accountState = results[2] as AccountState?;
         _myPosts = myPosts;
         _myChurches = myChurches;
       });
@@ -132,22 +126,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       });
       await CacheService.writeString(_cacheKey, payload);
     } catch (_) {}
-  }
-
-  Future<void> _openApplyBusiness() async {
-    final result = await context.pushNamed<BusinessApplication>(
-      'apply_business',
-    );
-    if (!mounted || result == null) return;
-    // Auto-approved on insert (patch_029) — flip the local flag so the
-    // business affordances unlock immediately without a manual reload.
-    setState(() {
-      _accountState = AccountState(
-        userId: _accountState?.userId ?? '',
-        isBusiness: result.isApproved,
-        latestApplication: result,
-      );
-    });
   }
 
   String _displayName() {
@@ -1125,12 +1103,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildAccountCard() {
-    final state = _accountState;
-    final isBusiness = state?.isBusiness ?? false;
-    final latest = state?.latestApplication;
-    final pending = latest != null && latest.isPending;
-    final rejected = !isBusiness && latest != null && latest.isRejected;
-
+    // Marketplace selling now goes through the seller flow directly —
+    // no business-account indirection. This card surfaces a single CTA
+    // into the seller dashboard / setup, and the dashboard handles
+    // the pending / rejected / approved branching itself.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -1156,19 +1132,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    gradient: isBusiness
-                        ? AppColors.primaryGradient
-                        : null,
-                    color: isBusiness
-                        ? null
-                        : AppColors.lightGrey,
+                    gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(
-                    isBusiness ? Icons.business_center : Icons.person,
-                    color: isBusiness
-                        ? AppColors.white
-                        : AppColors.primaryBlue,
+                  child: const Icon(
+                    Icons.storefront,
+                    color: AppColors.white,
                     size: 22,
                   ),
                 ),
@@ -1177,30 +1146,17 @@ class _ProfileScreenState extends State<ProfileScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            isBusiness
-                                ? 'Business account'
-                                : 'Personal account',
-                            style: AppTextStyles.titleMedium.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14.5,
-                            ),
-                          ),
-                          if (isBusiness) ...[
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.verified,
-                              color: AppColors.goldAccent,
-                              size: 16,
-                            ),
-                          ],
-                        ],
+                      Text(
+                        'Sell on the marketplace',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _accountSubtitle(isBusiness, pending, rejected),
+                        'Open a storefront in minutes — an admin reviews '
+                        'your store profile once before it goes live.',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: const Color.fromRGBO(26, 26, 46, 0.6),
                           fontSize: 12,
@@ -1212,95 +1168,36 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ],
             ),
-            if (isBusiness) ...[
-              const SizedBox(height: 14),
-              ValueListenableBuilder<AppViewMode>(
-                valueListenable: AccountModeService.notifier,
-                builder: (ctx, mode, _) => _ModeSwitch(
-                  mode: mode,
-                  onChanged: (newMode) async {
-                    await AccountModeService.setMode(newMode);
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: AppColors.primaryBlue,
-                        content: Text(
-                          newMode == AppViewMode.business
-                              ? 'Switched to Business view.'
-                              : 'Switched to Personal view. Business actions are hidden until you switch back.',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.white,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-            if (!isBusiness && !pending) ...[
-              const SizedBox(height: 14),
-              _ApplyBusinessButton(
-                rejected: rejected,
-                rejectionNote: rejected ? latest.reviewerNote : null,
-                onTap: _openApplyBusiness,
-              ),
-            ],
-            if (pending) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.goldAccent.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.goldAccent.withValues(alpha: 0.35),
+            const SizedBox(height: 14),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => context.pushNamed('seller_dashboard'),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Open seller dashboard',
+                    style: AppTextStyles.buttonText.copyWith(
+                      color: AppColors.white,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
+                    ),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.hourglass_empty_rounded,
-                      color: AppColors.goldAccent,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Your business application is under review.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.goldAccent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
-
-  String _accountSubtitle(bool isBusiness, bool pending, bool rejected) {
-    if (isBusiness) {
-      return 'You can sell in the marketplace and claim a church listing.';
-    }
-    if (pending) {
-      return 'We\'ll let you know in the app once your account is upgraded.';
-    }
-    if (rejected) {
-      return 'Your last application was declined. You can re-apply below.';
-    }
-    return 'Upgrade to a business account to sell or claim a church.';
-  }
-
 }
 
 class _CoverClipper extends CustomClipper<Path> {
@@ -1343,170 +1240,6 @@ class _CircleIconButton extends StatelessWidget {
             border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
           ),
           child: Icon(icon, color: AppColors.white, size: 22),
-        ),
-      ),
-    );
-  }
-}
-
-class _ApplyBusinessButton extends StatelessWidget {
-  const _ApplyBusinessButton({
-    required this.rejected,
-    required this.rejectionNote,
-    required this.onTap,
-  });
-
-  final bool rejected;
-  final String? rejectionNote;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (rejected && (rejectionNote ?? "").isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.red.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.red.withValues(alpha: 0.30)),
-            ),
-            child: Text(
-              rejectionNote!,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.red,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-        ],
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 11),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                rejected ? "Re-apply for Business" : "Apply for Business",
-                style: AppTextStyles.buttonText.copyWith(
-                  color: AppColors.white,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ModeSwitch extends StatelessWidget {
-  const _ModeSwitch({required this.mode, required this.onChanged});
-
-  final AppViewMode mode;
-  final ValueChanged<AppViewMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.lightGrey,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _ModeSegment(
-              label: 'Personal',
-              icon: Icons.person,
-              selected: mode == AppViewMode.personal,
-              onTap: () => onChanged(AppViewMode.personal),
-            ),
-          ),
-          Expanded(
-            child: _ModeSegment(
-              label: 'Business',
-              icon: Icons.business_center,
-              selected: mode == AppViewMode.business,
-              onTap: () => onChanged(AppViewMode.business),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeSegment extends StatelessWidget {
-  const _ModeSegment({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-          decoration: BoxDecoration(
-            gradient: selected ? AppColors.primaryGradient : null,
-            color: selected ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.30),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 15,
-                color: selected ? AppColors.white : AppColors.primaryBlue,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: selected ? AppColors.white : AppColors.primaryBlue,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12.5,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

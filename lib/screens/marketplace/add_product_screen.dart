@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/seller_model.dart';
-import '../../services/account_mode_service.dart';
-import '../../services/account_service.dart';
 import '../../models/product_model.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
@@ -49,7 +47,6 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   bool _loadingSeller = true;
   Seller? _seller;
-  AccountState? _account;
 
   static const _categories = <String, String>{
     'books': 'Bibles & Books',
@@ -112,14 +109,10 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   Future<void> _loadSeller() async {
     try {
-      final results = await Future.wait([
-        SellerService.fetchMySellerProfile(),
-        AccountService.fetchMyAccount(),
-      ]);
+      final seller = await SellerService.fetchMySellerProfile();
       if (!mounted) return;
       setState(() {
-        _seller = results[0] as Seller?;
-        _account = results[1] as AccountState?;
+        _seller = seller;
         _loadingSeller = false;
       });
     } catch (_) {
@@ -232,17 +225,6 @@ class _AddProductScreenState extends State<AddProductScreen>
                     color: AppColors.primaryBlue,
                   ),
                 ),
-              )
-            else if (_account != null && _account!.isBusiness &&
-                !AccountModeService.inBusinessMode)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, 32),
-                child: _PersonalModeGate(),
-              )
-            else if (_account != null && !_account!.isBusiness)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                child: _BusinessGate(account: _account!),
               )
             else if (_seller == null || !_seller!.isApproved)
               Padding(
@@ -882,241 +864,3 @@ class _SellerGate extends StatelessWidget {
   }
 }
 
-class _BusinessGate extends StatelessWidget {
-  const _BusinessGate({required this.account});
-
-  final AccountState account;
-
-  @override
-  Widget build(BuildContext context) {
-    final pending = account.hasPendingApplication;
-    final rejected = account.hasRejectedApplication;
-
-    final (String kicker, String title, String body, String cta, IconData icon) =
-        pending
-            ? (
-                'AWAITING APPROVAL',
-                'Your business application is in review',
-                'Your application is pending review. Once approved, you '
-                    'can list products and claim a church listing.',
-                'OK',
-                Icons.hourglass_top_rounded,
-              )
-            : rejected
-                ? (
-                    'NEEDS ATTENTION',
-                    'Your application was declined',
-                    account.latestApplication?.reviewerNote?.trim().isNotEmpty == true
-                        ? account.latestApplication!.reviewerNote!.trim()
-                        : 'Please review your details and reapply.',
-                    'Re-apply',
-                    Icons.error_outline_rounded,
-                  )
-                : (
-                    'BUSINESS ACCOUNT REQUIRED',
-                    'Selling needs a business account',
-                    'Only business accounts can list products on the '
-                        'marketplace. Apply for a business account from your '
-                        'profile to start selling.',
-                    'Apply for Business',
-                    Icons.business_center,
-                  );
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color.fromRGBO(26, 26, 46, 0.06),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(13, 27, 62, 0.06),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.darkNavy, Color(0xFF1A2F5A)],
-              ),
-            ),
-            child: Icon(icon, color: AppColors.goldAccent, size: 30),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            kicker,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.goldAccent,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.8,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.headlineMedium.copyWith(
-              color: AppColors.textDark,
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.70),
-              fontSize: 14,
-              height: 1.55,
-            ),
-          ),
-          const SizedBox(height: 22),
-          Container(
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  if (pending) {
-                    context.pop();
-                  } else {
-                    context.pushNamed('apply_business');
-                  }
-                },
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: Text(
-                      cta,
-                      style: AppTextStyles.buttonText.copyWith(
-                        color: AppColors.white,
-                        fontSize: 15,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Shown when a user IS approved as a business but currently in
-/// personal view mode. Different from the BusinessGate above (which
-/// is for non-business users) — points back to the profile so they
-/// can flip the switch.
-class _PersonalModeGate extends StatelessWidget {
-  const _PersonalModeGate();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color.fromRGBO(26, 26, 46, 0.06),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(13, 27, 62, 0.06),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: AppColors.primaryGradient,
-            ),
-            child: const Icon(
-              Icons.swap_horiz,
-              color: AppColors.white,
-              size: 30,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'You\'re in Personal mode',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.headlineMedium.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Selling is only available in Business mode. Open your '
-            'profile and flip the Business / Personal switch to take '
-            'this action.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.70),
-              fontSize: 14,
-              height: 1.55,
-            ),
-          ),
-          const SizedBox(height: 22),
-          Container(
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => context.goNamed('profile'),
-                borderRadius: BorderRadius.circular(14),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: Text(
-                      'Go to profile',
-                      style: TextStyle(
-                        color: AppColors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

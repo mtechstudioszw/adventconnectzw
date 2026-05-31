@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_preferences_service.dart';
 import '../../services/sabbath_service.dart';
+import '../../services/seller_service.dart';
 import '../../services/theme_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -29,6 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _sabbathEnabled = SabbathService.isEnabled();
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
   ThemeMode _themeMode = ThemeService.current;
+  bool _isSuperAdmin = false;
 
   @override
   void initState() {
@@ -42,12 +44,19 @@ class _SettingsScreenState extends State<SettingsScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _loadCategoryPrefs();
+    _loadSuperAdmin();
   }
 
   Future<void> _loadCategoryPrefs() async {
     final prefs = await NotificationPreferencesService.fetchCategories();
     if (!mounted) return;
     setState(() => _categoryPrefs = prefs);
+  }
+
+  Future<void> _loadSuperAdmin() async {
+    final isAdmin = await SellerService.isCurrentUserSuperAdmin();
+    if (!mounted) return;
+    setState(() => _isSuperAdmin = isAdmin);
   }
 
   /// Optimistic write — flip the local toggle immediately so the
@@ -572,6 +581,21 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ),
                       ],
                     ),
+                    if (_isSuperAdmin) ...[
+                      const SizedBox(height: 18),
+                      _Section(
+                        title: 'Super admin',
+                        children: [
+                          _NavRow(
+                            icon: Icons.verified_user_outlined,
+                            label: 'Seller approvals',
+                            onTap: () => context.pushNamed(
+                              'admin_seller_approvals',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     _Section(
                       title: 'App',

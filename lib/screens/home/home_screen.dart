@@ -1019,6 +1019,28 @@ class _HomeScreenState extends State<HomeScreen>
   // breakers.
   static const _discoveryEveryNPosts = 3;
 
+  /// Maps an onboarding-interest label (the user-facing strings from
+  /// _PersonalizationPage._interestOptions) to the discovery slot
+  /// keys it should boost. Unknown labels yield an empty list so the
+  /// neutral per-viewer shuffle still picks an order for them.
+  static List<String> _interestToSlotKeys(String label) {
+    switch (label) {
+      case 'Events':
+        return const ['events'];
+      case 'Prayer requests':
+        return const ['prayers'];
+      case 'Church announcements':
+        return const ['churches'];
+      case 'Youth content':
+      case 'Evangelism':
+      case 'Music':
+        // Social-leaning interests rank "people to meet" higher.
+        return const ['people'];
+      default:
+        return const [];
+    }
+  }
+
   /// Builds the discovery-card pool and shuffles it deterministically
   /// per viewer. Same content, different order per account — so two
   /// users on the same data don't see identical feeds. Invite + Quick
@@ -1075,11 +1097,24 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       ));
     }
-    // Stable per-viewer shuffle: same user always sees the same order
-    // within a session (no jumpy reshuffle on rebuild), but two
-    // different users see meaningfully different sequences.
+    // Stable per-viewer shuffle, weighted by onboarding interests so
+    // the rails the user said they wanted ("Show me more of Events /
+    // Prayer requests / Church announcements" in the onboarding
+    // personalization page) rise to the top. Cards the user didn't
+    // pick still appear, just lower. Within the same priority bucket
+    // we fall back to the previous viewer-deterministic shuffle so
+    // two users with identical interests still see different orders.
     final viewerId = AuthService.currentUser?.id ?? '';
+    final meta = AuthService.currentUser?.userMetadata ?? const {};
+    final rawInterests = (meta['interests'] as List?) ?? const [];
+    final interestKeys = <String>{
+      for (final i in rawInterests)
+        ..._interestToSlotKeys((i ?? '').toString()),
+    };
     discoverable.sort((a, b) {
+      final aWanted = interestKeys.contains(a.key) ? 0 : 1;
+      final bWanted = interestKeys.contains(b.key) ? 0 : 1;
+      if (aWanted != bWanted) return aWanted.compareTo(bWanted);
       final seedA = '${viewerId}_${a.key}'.hashCode;
       final seedB = '${viewerId}_${b.key}'.hashCode;
       return seedA.compareTo(seedB);
@@ -1974,20 +2009,31 @@ class _WelcomeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 0,
+      shadowColor: Colors.black.withValues(alpha: 0.08),
+      child: InkWell(
+        // Tapping the welcome card jumps the user into their profile —
+        // user spec: "If you tap the name card in home screen it should
+        // take you to profile screen."
+        onTap: () => context.goNamed('profile'),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
+          child: Row(
         children: [
           Container(
             width: 56,
@@ -2077,6 +2123,8 @@ class _WelcomeCard extends StatelessWidget {
             color: Color.fromRGBO(26, 26, 46, 0.4),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

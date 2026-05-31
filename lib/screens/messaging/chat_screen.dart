@@ -1058,8 +1058,8 @@ class _ChatScreenState extends State<ChatScreen>
       builder: (ctx) => AlertDialog(
         title: const Text('Delete conversation?'),
         content: const Text(
-          'This deletes the entire conversation and its messages for both sides. '
-          'This action cannot be undone.',
+          'This clears the conversation from your inbox. The other '
+          'person still keeps their copy — they won\'t be notified.',
         ),
         actions: [
           TextButton(

@@ -174,15 +174,41 @@ class MessagingService {
       // surfacing a generic failure on the inbox.
       return readCachedInbox();
     }
+    // patch_032: drop rows the viewer has soft-deleted (until a fresh
+    // inbound message arrives after the delete, in which case the
+    // thread reappears — WhatsApp parity). Done client-side so it
+    // stays correct even when the older `delete_by_*` columns aren't
+    // present yet.
+    final filteredResponse = response.where((r) {
+      final raw = r as Map;
+      final isA = raw['participant_a_id']?.toString() == user.id;
+      final isB = raw['participant_b_id']?.toString() == user.id;
+      final deletedAtRaw = isA
+          ? raw['deleted_by_a_at']
+          : isB
+              ? raw['deleted_by_b_at']
+              : null;
+      if (deletedAtRaw == null) return true;
+      final deletedAt = DateTime.tryParse(deletedAtRaw.toString());
+      if (deletedAt == null) return true;
+      final lastMsgRaw = raw['last_message_at'];
+      final lastMsg = lastMsgRaw == null
+          ? null
+          : DateTime.tryParse(lastMsgRaw.toString());
+      // Hide unless a newer message has arrived since the delete.
+      return lastMsg != null && lastMsg.isAfter(deletedAt);
+    }).toList();
+
     // Pull unread counts in parallel — single RPC roundtrip via
-    // get_my_unread_counts() (patch_018). RLS is participant-scoped
-    // so the count is naturally limited to the caller's threads.
+    // get_my_unread_counts() (patch_018, refined in patch_032 to
+    // honour the new soft-delete). RLS is participant-scoped so the
+    // count is naturally limited to the caller's threads.
     final unreadById = await fetchUnreadCounts();
     // Splice the unread count into each raw row BEFORE caching so a
     // cache-restore preserves badges accurately — caching the raw
     // server response (without counts) was the source of the
     // "open chat, refresh, message reverts to unread" bug.
-    final enriched = response
+    final enriched = filteredResponse
         .map((r) {
           final raw = Map<String, dynamic>.from(r as Map);
           final id = raw['id'].toString();
@@ -370,6 +396,12 @@ class MessagingService {
         convoRow['is_business'] = true;
       }
     } else {
+      // patch_032: if these two users are already friends, the thread
+      // should land in the recipient's main inbox, not Requests. The
+      // DB trigger conversations_auto_accept_friends covers this
+      // server-side too — this is a client-side belt-and-braces so
+      // the right behaviour kicks in even before the migration runs.
+      final areFriends = await _areAcceptedFriends(user.id, otherUserId);
       final inserted = await _client
           .from(_conversationsTable)
           .insert({
@@ -380,7 +412,7 @@ class MessagingService {
             'initiator_id': user.id,
             'conversation_source': source,
             'is_business': isBusiness,
-            // request_status defaults to 'pending' (patch_005).
+            if (areFriends) 'request_status': 'accepted',
           })
           .select(_conversationSelect)
           .single();
@@ -420,6 +452,27 @@ class MessagingService {
     );
   }
 
+  /// True when an `accepted` friendship row exists between the two
+  /// users (in either direction). Used by createConversation to skip
+  /// the message-request wall for established friends.
+  static Future<bool> _areAcceptedFriends(String a, String b) async {
+    if (a.isEmpty || b.isEmpty || a == b) return false;
+    try {
+      final rows = await _client
+          .from('friendships')
+          .select('id')
+          .eq('status', 'accepted')
+          .or(
+            'and(requester_id.eq.$a,addressee_id.eq.$b),'
+            'and(requester_id.eq.$b,addressee_id.eq.$a)',
+          )
+          .limit(1);
+      return (rows as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Promotes a pending request to a normal conversation. Idempotent.
   static Future<void> acceptRequest(String conversationId) async {
     await _client
@@ -428,14 +481,30 @@ class MessagingService {
         .eq('id', conversationId);
   }
 
-  /// Declines a pending request by deleting the conversation row.
-  /// Messages cascade away. RLS (patch_005) permits this only for
-  /// participants.
+  /// Declines a pending request OR removes an accepted conversation
+  /// from the caller's inbox. patch_032: this no longer hard-deletes
+  /// the row when the OTHER party still has their copy — it stamps a
+  /// `deleted_by_{a|b}_at` timestamp instead, and the inbox query
+  /// filters those rows out for the caller. The DB RPC also hard-
+  /// deletes if both sides have soft-deleted, so we don't accumulate
+  /// orphaned threads forever.
   static Future<void> declineRequest(String conversationId) async {
-    await _client
-        .from(_conversationsTable)
-        .delete()
-        .eq('id', conversationId);
+    try {
+      await _client.rpc(
+        'soft_delete_conversation',
+        params: {
+          'p_conversation_id':
+              int.tryParse(conversationId) ?? conversationId,
+        },
+      );
+    } catch (_) {
+      // RPC missing or transient — fall back to the legacy hard delete
+      // so the caller's request to dismiss the thread isn't dropped.
+      await _client
+          .from(_conversationsTable)
+          .delete()
+          .eq('id', conversationId);
+    }
   }
 
   static Future<List<Message>> fetchMessages(String conversationId) async {
@@ -654,10 +723,13 @@ class MessagingService {
   static Future<void> markMessagesDelivered(List<String> messageIds) async {
     if (messageIds.isEmpty) return;
     try {
-      await _client
-          .from(_messagesTable)
-          .update({'delivered_at': DateTime.now().toUtc().toIso8601String()})
-          .inFilter('id', messageIds);
+      // patch_032: messages_update_sender RLS doesn't let the recipient
+      // touch the row, so we route through a SECURITY DEFINER RPC that
+      // only writes delivered_at on incoming messages.
+      await _client.rpc(
+        'mark_message_delivered',
+        params: {'p_ids': messageIds},
+      );
     } catch (_) {
       // Delivery receipts are best-effort — never block chat rendering.
     }
@@ -689,16 +761,18 @@ class MessagingService {
           .maybeSingle();
       final wantsReceipts = profileRow == null ||
           profileRow['show_read_receipts'] != false;
-      final patch = <String, dynamic>{'read': true};
-      if (wantsReceipts) {
-        patch['read_at'] = DateTime.now().toUtc().toIso8601String();
-      }
-      await _client
-          .from(_messagesTable)
-          .update(patch)
-          .eq('conversation_id', conversationId)
-          .eq('read', false)
-          .neq('sender_id', user.id);
+      // patch_032: same RLS reason as markMessagesDelivered — recipient
+      // cannot UPDATE the row directly, so we go through the SECURITY
+      // DEFINER RPC. p_with_timestamp=false leaves read_at NULL so the
+      // sender's blue tick never lights up when the viewer has read
+      // receipts disabled.
+      await _client.rpc(
+        'mark_conversation_read',
+        params: {
+          'p_conversation_id': int.tryParse(conversationId) ?? conversationId,
+          'p_with_timestamp': wantsReceipts,
+        },
+      );
     } catch (_) {
       // Read receipts are best-effort — never block chat rendering.
     }

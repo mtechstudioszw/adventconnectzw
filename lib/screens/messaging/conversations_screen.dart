@@ -88,7 +88,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   void _startActivityWatcher() {
     _activitySub?.cancel();
     _activitySub = MessagingService.streamInboxActivity().listen(
-      (_) {
+      (rows) {
+        // patch_032: fire the delivered receipt as soon as inbound
+        // messages arrive in the inbox stream — not just when the
+        // chat screen is mounted — so the sender sees two grey ticks
+        // even if the recipient never opens the chat. The chat screen
+        // still re-runs this on its own stream as a safety net.
+        final me = _currentUserId;
+        if (me.isNotEmpty) {
+          final undelivered = rows
+              .where((r) =>
+                  r['sender_id']?.toString() != me &&
+                  r['delivered_at'] == null)
+              .map((r) => r['id'].toString())
+              .where((id) => id.isNotEmpty)
+              .toList();
+          if (undelivered.isNotEmpty) {
+            unawaited(MessagingService.markMessagesDelivered(undelivered));
+          }
+        }
         _refreshDebounce?.cancel();
         _refreshDebounce = Timer(
           const Duration(milliseconds: 600),

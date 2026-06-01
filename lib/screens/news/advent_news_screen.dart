@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/advent_news_model.dart';
 import '../../services/advent_news_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 
@@ -56,7 +57,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       // Open to any signed-in member (patch_030). Tap "+" to open the
       // composer; if a story was published, refresh the feed so the
       // new card shows up at the top without a manual pull.
@@ -175,7 +176,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
 
   Widget _buildCategoryChips() {
     return Container(
-      color: AppColors.lightGrey,
+      color: context.palette.scaffoldBg,
       child: SizedBox(
         height: 52,
         child: ListView(
@@ -248,7 +249,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
                             'category or check back later.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                       height: 1.5,
                     ),
                   ),
@@ -305,7 +306,7 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primaryBlue : AppColors.white,
+      color: selected ? AppColors.primaryBlue : context.palette.card,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -317,14 +318,14 @@ class _CategoryChip extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.1),
+                  : context.palette.divider,
             ),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
-              color: selected ? AppColors.white : AppColors.textDark,
+              color: selected ? AppColors.white : context.palette.text,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -343,7 +344,7 @@ class _NewsHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -440,23 +441,23 @@ class _NewsHeroCard extends StatelessWidget {
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.78),
+                      color: context.palette.textMuted,
                       height: 1.5,
                     ),
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.schedule,
                         size: 13,
-                        color: Color.fromRGBO(26, 26, 46, 0.5),
+                        color: context.palette.textMuted,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         _relative(item.publishedAt),
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.55),
+                          color: context.palette.textMuted,
                           fontSize: 11.5,
                         ),
                       ),
@@ -496,7 +497,7 @@ class _NewsRowCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -550,7 +551,7 @@ class _NewsRowCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                        color: context.palette.textMuted,
                         fontSize: 12.5,
                         height: 1.4,
                       ),
@@ -559,7 +560,7 @@ class _NewsRowCard extends StatelessWidget {
                     Text(
                       _relative(item.publishedAt),
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.5),
+                        color: context.palette.textMuted,
                         fontSize: 11,
                       ),
                     ),

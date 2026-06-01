@@ -317,7 +317,7 @@ class _AddProductScreenState extends State<AddProductScreen>
               Text(
                 'PHOTOS',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.2,
@@ -327,7 +327,7 @@ class _AddProductScreenState extends State<AddProductScreen>
               Text(
                 '${_photoUrls.length}/4',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                 ),
               ),
@@ -359,7 +359,7 @@ class _AddProductScreenState extends State<AddProductScreen>
             Text(
               'Add at least one photo for the best results.',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.55),
+                color: context.palette.textMuted,
               ),
             ),
           ],
@@ -560,19 +560,19 @@ class _PhotoThumb extends StatelessWidget {
           height: 96,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             image: DecorationImage(
               image: CachedNetworkImageProvider(url),
               fit: BoxFit.cover,
             ),
-            border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+            border: Border.all(color: context.palette.divider),
           ),
         ),
         Positioned(
           top: -6,
           right: -6,
           child: Material(
-            color: AppColors.white,
+            color: context.palette.card,
             shape: const CircleBorder(),
             elevation: 2,
             child: InkWell(
@@ -667,16 +667,16 @@ class _Dropdown<T> extends StatelessWidget {
     return DropdownButtonFormField<T>(
       initialValue: value,
       isExpanded: true,
-      icon: const Icon(
+      icon: Icon(
         Icons.expand_more,
-        color: Color.fromRGBO(26, 26, 46, 0.5),
+        color: context.palette.textMuted,
       ),
       style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
       decoration: postFormFilledDecoration(icon: icon, hint: hint),
       hint: Text(
         hint,
         style: AppTextStyles.bodyLarge.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.5),
+          color: context.palette.textMuted,
           fontSize: 15,
         ),
       ),
@@ -732,7 +732,7 @@ class _SellerGate extends StatelessWidget {
         color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color.fromRGBO(26, 26, 46, 0.06),
+          color: context.palette.divider,
         ),
         boxShadow: const [
           BoxShadow(
@@ -782,7 +782,7 @@ class _SellerGate extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: AppTextStyles.headlineMedium.copyWith(
-              color: AppColors.textDark,
+              color: context.palette.text,
               fontWeight: FontWeight.w700,
               fontSize: 20,
             ),
@@ -792,7 +792,7 @@ class _SellerGate extends StatelessWidget {
             body,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.70),
+              color: context.palette.textMuted,
               fontSize: 14,
               height: 1.55,
             ),
@@ -854,7 +854,7 @@ class _SellerGate extends StatelessWidget {
             child: Text(
               'Not now',
               style: AppTextStyles.labelMedium.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                color: context.palette.textMuted,
                 fontWeight: FontWeight.w600,
               ),
             ),

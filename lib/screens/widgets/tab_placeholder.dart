@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 class TabPlaceholder extends StatelessWidget {
@@ -40,23 +41,23 @@ class TabPlaceholder extends StatelessWidget {
               subtitle,
               textAlign: TextAlign.center,
               style: AppTextStyles.bodyLarge.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.7),
+                color: context.palette.textMuted,
               ),
             ),
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: AppColors.lightGrey,
+                color: context.palette.chipBg,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: const Color.fromRGBO(26, 26, 46, 0.1),
+                  color: context.palette.divider,
                 ),
               ),
               child: Text(
                 'Coming soon',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: context.palette.textMuted,
                 ),
               ),
             ),

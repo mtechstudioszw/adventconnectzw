@@ -8,6 +8,7 @@ import '../../models/advent_news_model.dart';
 import '../../services/advent_news_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 
@@ -111,7 +112,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
+        backgroundColor: ctx.palette.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
           'Delete this story?',
@@ -127,7 +128,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
             child: Text(
               'Cancel',
               style: AppTextStyles.labelMedium
-                  .copyWith(color: AppColors.textDark),
+                  .copyWith(color: ctx.palette.text),
             ),
           ),
           TextButton(
@@ -176,7 +177,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
   void _showOwnerMenu() {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.white,
+      backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -191,7 +192,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.12),
+                  color: ctx.palette.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -242,20 +243,20 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
   Widget build(BuildContext context) {
     final item = _item;
     if (item == null && _loading) {
-      return const Scaffold(
-        backgroundColor: AppColors.lightGrey,
-        body: Center(
+      return Scaffold(
+        backgroundColor: context.palette.scaffoldBg,
+        body: const Center(
           child: CircularProgressIndicator(color: AppColors.primaryBlue),
         ),
       );
     }
     if (item == null) {
       return Scaffold(
-        backgroundColor: AppColors.lightGrey,
+        backgroundColor: context.palette.scaffoldBg,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textDark),
+            icon: Icon(Icons.arrow_back, color: context.palette.text),
             onPressed: () => context.canPop()
                 ? context.pop()
                 : context.goNamed('news'),
@@ -270,7 +271,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _buildHero(item, context)),
@@ -287,7 +288,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                       Text(
                         _relative(item.publishedAt),
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.55),
+                          color: context.palette.textMuted,
                           fontSize: 12,
                         ),
                       ),

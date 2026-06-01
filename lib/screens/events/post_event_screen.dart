@@ -4,6 +4,7 @@ import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -297,7 +298,7 @@ class _PostEventScreenState extends State<PostEventScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -387,7 +388,7 @@ class _PostEventScreenState extends State<PostEventScreen>
           Text(
             'EVENT FLYER',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: context.palette.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
@@ -552,10 +553,10 @@ class _PostEventScreenState extends State<PostEventScreen>
               trailing: _endDate == null
                   ? null
                   : IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.close,
                         size: 18,
-                        color: Color.fromRGBO(26, 26, 46, 0.5),
+                        color: context.palette.textMuted,
                       ),
                       onPressed: () => setState(() => _endDate = null),
                     ),
@@ -572,10 +573,10 @@ class _PostEventScreenState extends State<PostEventScreen>
               trailing: _endTime == null
                   ? null
                   : IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.close,
                         size: 18,
-                        color: Color.fromRGBO(26, 26, 46, 0.5),
+                        color: context.palette.textMuted,
                       ),
                       onPressed: () => setState(() => _endTime = null),
                     ),
@@ -721,9 +722,9 @@ class _PickerField extends StatelessWidget {
           padding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+            border: Border.all(color: context.palette.divider),
           ),
           child: Row(
             children: [
@@ -735,15 +736,15 @@ class _PickerField extends StatelessWidget {
                   style: AppTextStyles.bodyLarge.copyWith(
                     fontSize: 15,
                     color: isPlaceholder
-                        ? const Color.fromRGBO(26, 26, 46, 0.5)
-                        : AppColors.textDark,
+                        ? context.palette.textMuted
+                        : context.palette.text,
                   ),
                 ),
               ),
               ?trailing,
-              const Icon(
+              Icon(
                 Icons.expand_more,
-                color: Color.fromRGBO(26, 26, 46, 0.5),
+                color: context.palette.textMuted,
               ),
             ],
           ),
@@ -773,16 +774,16 @@ class _Dropdown<T> extends StatelessWidget {
     return DropdownButtonFormField<T>(
       initialValue: value,
       isExpanded: true,
-      icon: const Icon(
+      icon: Icon(
         Icons.expand_more,
-        color: Color.fromRGBO(26, 26, 46, 0.5),
+        color: context.palette.textMuted,
       ),
       style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
       decoration: postFormFilledDecoration(icon: icon, hint: hint),
       hint: Text(
         hint,
         style: AppTextStyles.bodyLarge.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.5),
+          color: context.palette.textMuted,
           fontSize: 15,
         ),
       ),

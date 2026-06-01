@@ -13,6 +13,7 @@ import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/gallery_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/edit_post_dialog.dart';
@@ -204,7 +205,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.labelMedium.copyWith(
-                color: AppColors.textDark,
+                color: context.palette.text,
               ),
             ),
           ),
@@ -229,7 +230,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,
@@ -285,7 +286,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         parts.join('  ·  '),
         textAlign: TextAlign.center,
         style: AppTextStyles.bodySmall.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.6),
+          color: context.palette.textMuted,
           fontSize: 12.5,
           fontWeight: FontWeight.w500,
         ),
@@ -326,9 +327,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       builder: (ctx) => SafeArea(
         top: false,
         child: Container(
-          decoration: const BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: context.palette.sheet,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.fromLTRB(8, 12, 8, 24),
           child: Column(
@@ -338,7 +339,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  color: context.palette.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -398,9 +399,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+        border: Border.all(color: context.palette.divider),
       ),
       padding: const EdgeInsets.all(4),
       child: Row(
@@ -437,7 +438,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           'You haven\'t posted anything yet.',
           textAlign: TextAlign.center,
           style: AppTextStyles.bodySmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            color: context.palette.textMuted,
             fontStyle: FontStyle.italic,
           ),
         ),
@@ -638,7 +639,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.buttonText.copyWith(
-                color: AppColors.textDark,
+                color: context.palette.text,
               ),
             ),
           ),
@@ -697,7 +698,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           'No photos yet — posts with images will show up here.',
           textAlign: TextAlign.center,
           style: AppTextStyles.bodySmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            color: context.palette.textMuted,
             fontStyle: FontStyle.italic,
           ),
         ),
@@ -740,7 +741,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           'You haven\'t followed any churches yet.',
           textAlign: TextAlign.center,
           style: AppTextStyles.bodySmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            color: context.palette.textMuted,
             fontStyle: FontStyle.italic,
           ),
         ),
@@ -754,10 +755,10 @@ class _ProfileScreenState extends State<ProfileScreen>
             Container(
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
-                color: AppColors.white,
+                color: context.palette.card,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: const Color.fromRGBO(26, 26, 46, 0.06),
+                  color: context.palette.divider,
                 ),
               ),
               child: Material(
@@ -805,7 +806,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 Text(
                                   church.city,
                                   style: AppTextStyles.bodySmall.copyWith(
-                                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                                    color: context.palette.textMuted,
                                   ),
                                 ),
                             ],
@@ -996,10 +997,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.email_outlined,
                 size: 14,
-                color: Color.fromRGBO(26, 26, 46, 0.55),
+                color: context.palette.textMuted,
               ),
               const SizedBox(width: 5),
               Flexible(
@@ -1008,7 +1009,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ),
@@ -1068,7 +1069,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -1084,7 +1085,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           Text(
             'ABOUT',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.5),
+              color: context.palette.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -1094,7 +1095,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           Text(
             _bio(),
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.85),
+              color: context.palette.text,
               height: 1.5,
             ),
           ),
@@ -1113,9 +1114,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+          border: Border.all(color: context.palette.divider),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
@@ -1159,7 +1160,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         'Open a storefront in minutes — an admin reviews '
                         'your store profile once before it goes live.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.6),
+                          color: context.palette.textMuted,
                           fontSize: 12,
                           height: 1.3,
                         ),
@@ -1272,11 +1273,11 @@ class _ToolbarButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: primary ? AppColors.primaryGradient : null,
-            color: primary ? null : AppColors.white,
+            color: primary ? null : context.palette.card,
             borderRadius: BorderRadius.circular(12),
             border: primary
                 ? null
-                : Border.all(color: const Color.fromRGBO(26, 26, 46, 0.10)),
+                : Border.all(color: context.palette.divider),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1336,7 +1337,7 @@ class _TabPill extends StatelessWidget {
             child: Text(
               label,
               style: AppTextStyles.labelMedium.copyWith(
-                color: selected ? AppColors.white : AppColors.textDark,
+                color: selected ? AppColors.white : context.palette.text,
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
               ),
@@ -1363,7 +1364,7 @@ class _MoreMenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = destructive ? AppColors.red : AppColors.textDark;
+    final color = destructive ? AppColors.red : context.palette.text;
     return Material(
       color: Colors.transparent,
       child: InkWell(

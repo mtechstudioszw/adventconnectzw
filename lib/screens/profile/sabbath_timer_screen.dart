@@ -87,7 +87,7 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
                         Text(
                           'PROVINCE',
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.55),
+                            color: context.palette.textMuted,
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.4,
@@ -114,7 +114,7 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
                         Text(
                           'Times are an approximation based on average sundown for the province. For exact local times consult a sundown calendar.',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.6),
+                            color: context.palette.textMuted,
                             height: 1.5,
                           ),
                         ),
@@ -390,7 +390,7 @@ class _SundownTimes extends StatelessWidget {
           Text(
             'NEXT SABBATH · ${province.toUpperCase()}',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -445,7 +445,7 @@ class _TimeRow extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  color: context.palette.textMuted,
                   fontSize: 10.5,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.4,
@@ -493,13 +493,13 @@ class _Chip extends StatelessWidget {
             border: Border.all(
               color: active
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.08),
+                  : context.palette.divider,
             ),
           ),
           child: Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
-              color: active ? AppColors.white : AppColors.textDark,
+              color: active ? AppColors.white : context.palette.text,
               fontWeight: FontWeight.w700,
               fontSize: 12.5,
             ),

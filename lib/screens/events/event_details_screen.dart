@@ -8,6 +8,7 @@ import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 
@@ -155,7 +156,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: _buildBody(),
     );
   }
@@ -345,7 +346,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -391,7 +392,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     return Container(
       width: 1,
       height: 36,
-      color: const Color.fromRGBO(26, 26, 46, 0.08),
+      color: context.palette.divider,
     );
   }
 
@@ -499,7 +500,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -540,7 +541,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                     Text(
                       'ORGANIZED BY',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        color: context.palette.textMuted,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.4,
@@ -572,7 +573,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                 canContact ? Icons.chat_bubble_outline : Icons.chevron_right,
                 color: canContact
                     ? AppColors.primaryBlue
-                    : const Color.fromRGBO(26, 26, 46, 0.4),
+                    : context.palette.textMuted,
               ),
             ],
           ),
@@ -703,7 +704,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -726,7 +727,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           Text(
             event.description!,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.8),
+              color: context.palette.text,
               height: 1.55,
             ),
           ),
@@ -779,7 +780,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   Widget _buildLocation(Event event) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -799,7 +800,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: Container(
-                  color: AppColors.lightGrey,
+                  color: context.palette.cardMuted,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -945,7 +946,7 @@ class _MetaTile extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.5),
+              color: context.palette.textMuted,
               fontSize: 9.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
@@ -1088,8 +1089,8 @@ class _SecondaryButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         side: BorderSide(
           color: onTap == null
-              ? const Color.fromRGBO(26, 26, 46, 0.18)
-              : const Color.fromRGBO(26, 26, 46, 0.4),
+              ? context.palette.divider
+              : context.palette.textMuted,
           width: 1.5,
         ),
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1098,20 +1099,20 @@ class _SecondaryButton extends StatelessWidget {
         ),
       ),
       child: busy
-          ? const SizedBox(
+          ? SizedBox(
               width: 22,
               height: 22,
               child: CircularProgressIndicator(
                 strokeWidth: 2.4,
-                color: AppColors.textDark,
+                color: context.palette.text,
               ),
             )
           : Text(
               label,
               style: AppTextStyles.titleMedium.copyWith(
                 color: onTap == null
-                    ? const Color.fromRGBO(26, 26, 46, 0.5)
-                    : AppColors.textDark,
+                    ? context.palette.textMuted
+                    : context.palette.text,
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
               ),

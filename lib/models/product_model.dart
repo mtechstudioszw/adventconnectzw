@@ -42,6 +42,10 @@ class Product {
     // Valid values: 'available', 'sold', 'reserved', 'removed'.
     // is_available does NOT exist as a column — never read it.
     final status = (json['status'] as String?) ?? 'available';
+    // DB column is `price_currency`; `currency` is kept as a fallback
+    // for offline-cached payloads written before the rename.
+    final currency =
+        (json['price_currency'] ?? json['currency'] ?? 'USD') as String;
     return Product(
       id: json['id'].toString(),
       sellerId: (json['seller_id'] ?? '').toString(),
@@ -51,7 +55,7 @@ class Product {
       title: (json['title'] ?? '') as String,
       description: json['description'] as String?,
       price: _readDouble(json['price']),
-      currency: (json['currency'] ?? 'USD') as String,
+      currency: currency,
       category: json['category'] as String?,
       imageUrls: images,
       status: status,

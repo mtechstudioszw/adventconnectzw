@@ -443,7 +443,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                       Text(
                         'SELLER',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.5),
+                          color: context.palette.textMuted,
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.4,
@@ -485,9 +485,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right,
-                  color: Color.fromRGBO(26, 26, 46, 0.4),
+                  color: context.palette.textMuted,
                 ),
               ],
             ),
@@ -610,7 +610,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
           Text(
             product.description!,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.85),
+              color: context.palette.textMuted,
               height: 1.55,
             ),
           ),
@@ -659,7 +659,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                 Text(
                   'Meet in a public place. Inspect items before paying. Never send money in advance to people you don\'t trust. Advent Connect ZW is not a party to any transaction.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.7),
+                    color: context.palette.textMuted,
                     height: 1.5,
                   ),
                 ),

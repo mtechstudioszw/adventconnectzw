@@ -961,7 +961,7 @@ class _HomeScreenState extends State<HomeScreen>
             'No updates yet — tap to share something.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -1301,7 +1301,7 @@ class _HomeScreenState extends State<HomeScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.buttonText.copyWith(
-                color: AppColors.textDark,
+                color: context.palette.text,
               ),
             ),
           ),
@@ -1591,7 +1591,7 @@ class _SuggestedMemberTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: context.palette.card,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+            border: Border.all(color: context.palette.divider),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -1627,7 +1627,7 @@ class _SuggestedMemberTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: context.palette.textMuted,
                   fontSize: 11.5,
                 ),
               ),
@@ -1924,7 +1924,7 @@ class _UrgentBannerCard extends StatelessWidget {
                 Text(
                   banner.body,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.85),
+                    color: context.palette.text,
                     height: 1.45,
                   ),
                 ),
@@ -2096,10 +2096,10 @@ class _WelcomeCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.church_outlined,
                       size: 14,
-                      color: Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                     ),
                     const SizedBox(width: 4),
                     Flexible(
@@ -2110,7 +2110,7 @@ class _WelcomeCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.65),
+                          color: context.palette.textMuted,
                         ),
                       ),
                     ),
@@ -2119,9 +2119,9 @@ class _WelcomeCard extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
+          Icon(
             Icons.chevron_right,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
+            color: context.palette.textMuted,
           ),
         ],
       ),
@@ -2301,10 +2301,10 @@ class _HomeEventCard extends StatelessWidget {
                         const SizedBox(height: 3),
                         Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.place_outlined,
                               size: 11,
-                              color: Color.fromRGBO(26, 26, 46, 0.6),
+                              color: context.palette.textMuted,
                             ),
                             const SizedBox(width: 3),
                             Flexible(
@@ -2315,7 +2315,7 @@ class _HomeEventCard extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                                  color: context.palette.textMuted,
                                   fontSize: 10.5,
                                 ),
                               ),
@@ -2596,7 +2596,7 @@ class _PrayerHomeCard extends StatelessWidget {
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.75),
+                      color: context.palette.textMuted,
                       fontSize: 12.5,
                       height: 1.4,
                     ),
@@ -2614,7 +2614,7 @@ class _PrayerHomeCard extends StatelessWidget {
                     Text(
                       '${prayer.prayerCount} praying',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        color: context.palette.textMuted,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -2680,7 +2680,7 @@ class _PrayersEmpty extends StatelessWidget {
                 Text(
                   'Pray together with the community.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ],
@@ -2764,7 +2764,7 @@ class _CompactStatTile extends StatelessWidget {
             color: context.palette.card,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.06),
+              color: context.palette.divider,
             ),
             boxShadow: [
               BoxShadow(
@@ -2784,7 +2784,7 @@ class _CompactStatTile extends StatelessWidget {
                 style: AppTextStyles.titleMedium.copyWith(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.textDark,
+                  color: context.palette.text,
                   height: 1.0,
                 ),
               ),
@@ -2795,7 +2795,7 @@ class _CompactStatTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -2837,7 +2837,7 @@ class _ComposerEntry extends StatelessWidget {
             color: context.palette.card,
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.08),
+              color: context.palette.divider,
             ),
             boxShadow: [
               BoxShadow(
@@ -2885,7 +2885,7 @@ class _ComposerEntry extends StatelessWidget {
                 child: Text(
                   'What\'s on your mind?',
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: context.palette.textMuted,
                     fontSize: 14,
                   ),
                 ),
@@ -2926,17 +2926,17 @@ class _EmptyTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color.fromRGBO(26, 26, 46, 0.08),
+          color: context.palette.divider,
         ),
       ),
       child: Row(
         children: [
           Icon(
             icon,
-            color: const Color.fromRGBO(26, 26, 46, 0.45),
+            color: context.palette.textMuted,
             size: 28,
           ),
           const SizedBox(width: 12),
@@ -2956,7 +2956,7 @@ class _EmptyTile extends StatelessWidget {
                 Text(
                   subtitle,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ],
@@ -2994,7 +2994,7 @@ class _AdventNewsHero extends StatelessWidget {
     final lead = items.first;
     final hasCover = (lead.coverPhotoUrl ?? '').isNotEmpty;
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       elevation: 0,

@@ -255,9 +255,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.close,
-                    color: Color.fromRGBO(26, 26, 46, 0.5),
+                    color: context.palette.textMuted,
                   ),
                   onPressed: () {
                     _searchController.clear();
@@ -315,7 +315,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                   'No products cached yet.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ),
@@ -332,17 +332,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.cloud_off_outlined,
                     size: 56,
-                    color: Color.fromRGBO(26, 26, 46, 0.4),
+                    color: context.palette.textMuted,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     _error!,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ],
@@ -388,7 +388,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                     'Know an SDA business owner? Tell them about us.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                       height: 1.5,
                     ),
                   ),
@@ -540,7 +540,7 @@ Future<void> _showSellerChooser(BuildContext context) {
             Text(
               'Already running a store, or starting a new one?',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: context.palette.textMuted,
               ),
             ),
             const SizedBox(height: 18),
@@ -598,7 +598,7 @@ class _SellerChoiceTile extends StatelessWidget {
             color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.05),
+              color: context.palette.divider,
             ),
           ),
           child: Row(
@@ -628,7 +628,7 @@ class _SellerChoiceTile extends StatelessWidget {
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                        color: context.palette.textMuted,
                         fontSize: 12.5,
                         height: 1.35,
                       ),
@@ -727,7 +727,7 @@ class _SellerStatusBanner extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.65),
+                          color: context.palette.textMuted,
                           fontSize: 11.5,
                         ),
                       ),
@@ -809,7 +809,7 @@ class _ShopJobsSegment extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.palette.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+          border: Border.all(color: context.palette.divider),
         ),
         child: Row(
           children: [
@@ -882,7 +882,7 @@ class _SegmentButton extends StatelessWidget {
                   size: 16,
                   color: selected
                       ? AppColors.white
-                      : const Color.fromRGBO(26, 26, 46, 0.6),
+                      : context.palette.textMuted,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -890,7 +890,7 @@ class _SegmentButton extends StatelessWidget {
                   style: AppTextStyles.labelMedium.copyWith(
                     color: selected
                         ? AppColors.white
-                        : const Color.fromRGBO(26, 26, 46, 0.7),
+                        : context.palette.textMuted,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
@@ -935,7 +935,7 @@ class _CategoryChip extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.08),
+                  : context.palette.divider,
             ),
             boxShadow: selected
                 ? [
@@ -955,7 +955,7 @@ class _CategoryChip extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: selected ? AppColors.white : AppColors.textDark,
+                  color: selected ? AppColors.white : context.palette.text,
                   fontWeight: FontWeight.w700,
                   fontSize: 12.5,
                 ),

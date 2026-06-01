@@ -356,9 +356,9 @@ class _SearchScreenState extends State<SearchScreen> {
                 context.goNamed('home');
               }
             },
-            icon: const Icon(
+            icon: Icon(
               Icons.arrow_back,
-              color: AppColors.textDark,
+              color: context.palette.text,
             ),
             splashRadius: 22,
           ),
@@ -379,20 +379,20 @@ class _SearchScreenState extends State<SearchScreen> {
                   hintText:
                       'Search for friends, churches, events, products...',
                   hintStyle: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.5),
+                    color: context.palette.textMuted,
                     fontSize: 14,
                   ),
-                  prefixIcon: const Icon(
+                  prefixIcon: Icon(
                     Icons.search,
-                    color: Color.fromRGBO(26, 26, 46, 0.55),
+                    color: context.palette.textMuted,
                     size: 20,
                   ),
                   suffixIcon: _controller.text.isEmpty
                       ? null
                       : IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.close,
-                            color: Color.fromRGBO(26, 26, 46, 0.55),
+                            color: context.palette.textMuted,
                             size: 18,
                           ),
                           onPressed: () {
@@ -458,7 +458,7 @@ class _SearchScreenState extends State<SearchScreen> {
           Text(
             'TRY SEARCHING FOR',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -524,14 +524,14 @@ class _SearchScreenState extends State<SearchScreen> {
                 TextButton(
                   onPressed: _clearRecent,
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color.fromRGBO(26, 26, 46, 0.6),
+                    foregroundColor: context.palette.textMuted,
                     minimumSize: const Size(0, 36),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
                   child: Text(
                     'Clear',
                     style: AppTextStyles.labelLarge.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -793,19 +793,19 @@ class _FilterChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: active
                 ? AppColors.primaryBlue
-                : const Color.fromRGBO(26, 26, 46, 0.05),
+                : context.palette.chipBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: active
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.08),
+                  : context.palette.divider,
             ),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
-              color: active ? AppColors.white : AppColors.textDark,
+              color: active ? AppColors.white : context.palette.text,
               fontWeight: FontWeight.w700,
               fontSize: 13,
             ),
@@ -841,12 +841,12 @@ class _RecentRow extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.05),
+                  color: context.palette.chipBg,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.history,
-                  color: AppColors.textDark,
+                  color: context.palette.text,
                   size: 18,
                 ),
               ),
@@ -864,9 +864,9 @@ class _RecentRow extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onRemove,
-                icon: const Icon(
+                icon: Icon(
                   Icons.close,
-                  color: Color.fromRGBO(26, 26, 46, 0.5),
+                  color: context.palette.textMuted,
                   size: 18,
                 ),
                 splashRadius: 18,
@@ -897,13 +897,13 @@ class _SuggestionTap extends StatelessWidget {
             color: context.palette.chipBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.08),
+              color: context.palette.divider,
             ),
           ),
           child: Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.textDark,
+              color: context.palette.text,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -935,7 +935,7 @@ class _Section extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.4,
@@ -1016,7 +1016,7 @@ class _PersonRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                        color: context.palette.textMuted,
                       ),
                     ),
                   ],
@@ -1091,7 +1091,7 @@ class _PostRow extends StatelessWidget {
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.7),
+                        color: context.palette.textMuted,
                         height: 1.35,
                       ),
                     ),
@@ -1284,15 +1284,15 @@ class _Row extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                        color: context.palette.textMuted,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right,
-                color: Color.fromRGBO(26, 26, 46, 0.4),
+                color: context.palette.textMuted,
               ),
             ],
           ),

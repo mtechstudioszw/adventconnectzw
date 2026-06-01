@@ -406,8 +406,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(Icons.close,
-                      color: Color.fromRGBO(26, 26, 46, 0.5)),
+                  icon: Icon(Icons.close, color: context.palette.textMuted),
                   onPressed: () {
                     _searchController.clear();
                     _loadChurches();
@@ -589,7 +588,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
                   'No churches cached yet.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ),

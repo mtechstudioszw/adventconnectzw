@@ -463,7 +463,7 @@ class _AuthScreenState extends State<AuthScreen>
                     _headlineForStage(),
                     textAlign: TextAlign.center,
                     style: AppTextStyles.displayMedium.copyWith(
-                      color: AppColors.darkNavy,
+                      color: context.palette.text,
                       fontSize: 26,
                       fontWeight: FontWeight.w700,
                       height: 1.2,
@@ -474,7 +474,7 @@ class _AuthScreenState extends State<AuthScreen>
                     _subheadlineForStage(),
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.65),
+                      color: context.palette.textMuted,
                       fontSize: 14,
                       height: 1.45,
                     ),
@@ -528,7 +528,7 @@ class _AuthScreenState extends State<AuthScreen>
                         child: Text(
                           'Use a different email',
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.7),
+                            color: context.palette.textMuted,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -658,7 +658,7 @@ class _AuthScreenState extends State<AuthScreen>
               _obscurePassword
                   ? Icons.visibility_outlined
                   : Icons.visibility_off_outlined,
-              color: const Color.fromRGBO(26, 26, 46, 0.5),
+              color: context.palette.textMuted,
               size: 20,
             ),
             onPressed: () => setState(
@@ -722,7 +722,7 @@ class _AuthScreenState extends State<AuthScreen>
               _obscurePassword
                   ? Icons.visibility_outlined
                   : Icons.visibility_off_outlined,
-              color: const Color.fromRGBO(26, 26, 46, 0.5),
+              color: context.palette.textMuted,
               size: 20,
             ),
             onPressed: () => setState(
@@ -744,7 +744,7 @@ class _AuthScreenState extends State<AuthScreen>
               _obscureConfirm
                   ? Icons.visibility_outlined
                   : Icons.visibility_off_outlined,
-              color: const Color.fromRGBO(26, 26, 46, 0.5),
+              color: context.palette.textMuted,
               size: 20,
             ),
             onPressed: () => setState(
@@ -799,16 +799,16 @@ class _BirthDateField extends StatelessWidget {
             color: context.palette.card,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.10),
+              color: context.palette.divider,
             ),
           ),
           child: Row(
             children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 4, right: 12),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, right: 12),
                 child: Icon(
                   Icons.cake_outlined,
-                  color: Color.fromRGBO(26, 26, 46, 0.5),
+                  color: context.palette.textMuted,
                   size: 20,
                 ),
               ),
@@ -818,8 +818,8 @@ class _BirthDateField extends StatelessWidget {
                   style: AppTextStyles.bodyLarge.copyWith(
                     fontSize: 15,
                     color: hasDate
-                        ? AppColors.textDark
-                        : const Color.fromRGBO(26, 26, 46, 0.5),
+                        ? context.palette.text
+                        : context.palette.textMuted,
                     fontWeight:
                         hasDate ? FontWeight.w600 : FontWeight.w400,
                   ),
@@ -879,7 +879,7 @@ class _OrDivider extends StatelessWidget {
     final line = Expanded(
       child: Container(
         height: 1,
-        color: const Color.fromRGBO(26, 26, 46, 0.10),
+        color: context.palette.divider,
       ),
     );
     return Row(
@@ -890,7 +890,7 @@ class _OrDivider extends StatelessWidget {
           child: Text(
             'OR',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.45),
+              color: context.palette.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -925,7 +925,7 @@ class _GoogleButton extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
-                color: const Color.fromRGBO(26, 26, 46, 0.12),
+                color: context.palette.divider,
               ),
               boxShadow: [
                 BoxShadow(
@@ -954,7 +954,7 @@ class _GoogleButton extends StatelessWidget {
                       Text(
                         'Continue with Google',
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.darkNavy,
+                          color: context.palette.text,
                           fontWeight: FontWeight.w700,
                           fontSize: 14.5,
                         ),
@@ -1069,7 +1069,7 @@ class _GlowFieldState extends State<_GlowField> {
         decoration: InputDecoration(
           hintText: widget.hint,
           hintStyle: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.5),
+            color: context.palette.textMuted,
           ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 18, right: 12),
@@ -1077,7 +1077,7 @@ class _GlowFieldState extends State<_GlowField> {
               widget.icon,
               color: _focused
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.5),
+                  : context.palette.textMuted,
               size: 20,
             ),
           ),
@@ -1090,14 +1090,14 @@ class _GlowFieldState extends State<_GlowField> {
               const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
-            borderSide: const BorderSide(
-              color: Color.fromRGBO(26, 26, 46, 0.10),
+            borderSide: BorderSide(
+              color: context.palette.divider,
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
-            borderSide: const BorderSide(
-              color: Color.fromRGBO(26, 26, 46, 0.10),
+            borderSide: BorderSide(
+              color: context.palette.divider,
             ),
           ),
           focusedBorder: OutlineInputBorder(
@@ -1136,17 +1136,17 @@ class _EmailRow extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: const Color.fromRGBO(26, 26, 46, 0.03),
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.10),
+              color: context.palette.divider,
             ),
           ),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.alternate_email,
-                color: Color.fromRGBO(26, 26, 46, 0.55),
+                color: context.palette.textMuted,
                 size: 20,
               ),
               const SizedBox(width: 10),
@@ -1156,7 +1156,7 @@ class _EmailRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.darkNavy,
+                    color: context.palette.text,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1233,7 +1233,7 @@ class _TermsCheckboxState extends State<_TermsCheckbox> {
                 border: Border.all(
                   color: widget.value
                       ? AppColors.primaryBlue
-                      : const Color.fromRGBO(26, 26, 46, 0.25),
+                      : context.palette.divider,
                   width: 1.5,
                 ),
               ),
@@ -1256,7 +1256,7 @@ class _TermsCheckboxState extends State<_TermsCheckbox> {
               child: Text.rich(
                 TextSpan(
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.7),
+                    color: context.palette.textMuted,
                     fontSize: 13,
                     height: 1.45,
                   ),
@@ -1414,7 +1414,7 @@ class _LegalLineState extends State<_LegalLine> {
   @override
   Widget build(BuildContext context) {
     final base = AppTextStyles.labelSmall.copyWith(
-      color: const Color.fromRGBO(26, 26, 46, 0.5),
+      color: context.palette.textMuted,
       fontSize: 11,
       height: 1.45,
     );
@@ -1505,7 +1505,7 @@ class _GoogleLinkedBanner extends StatelessWidget {
             '$email is already signed in with Google. '
             'Tap below to continue with your Google account.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.7),
+              color: context.palette.textMuted,
               height: 1.45,
             ),
           ),

@@ -5,6 +5,7 @@ import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -139,7 +140,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -316,7 +317,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -371,7 +372,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                       ? 'Looking good. Tap change to swap it.'
                       : 'Add a clear photo of yourself.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ],
@@ -406,7 +407,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
         _coverPhotoUrl != null && _coverPhotoUrl!.isNotEmpty;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -427,7 +428,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                     _coverPhotoUrl!,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => Container(
-                      color: AppColors.lightGrey,
+                      color: context.palette.cardMuted,
                       alignment: Alignment.center,
                       child: const Icon(
                         Icons.broken_image_outlined,
@@ -467,8 +468,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                             ? 'Looking good. Tap change to swap it.'
                             : 'Add a cover photo for the top of your profile.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color:
-                              const Color.fromRGBO(26, 26, 46, 0.6),
+                          color: context.palette.textMuted,
                         ),
                       ),
                     ],
@@ -507,7 +507,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -577,15 +577,15 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       ),
       prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 44),
       filled: true,
-      fillColor: AppColors.lightGrey,
+      fillColor: context.palette.cardMuted,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -644,7 +644,7 @@ class _LabeledField extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: context.palette.textMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
@@ -655,7 +655,7 @@ class _LabeledField extends StatelessWidget {
               Text(
                 helper!,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                 ),
               ),
@@ -687,9 +687,9 @@ class _ChurchDropdown extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
         decoration: BoxDecoration(
-          color: AppColors.lightGrey,
+          color: context.palette.cardMuted,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+          border: Border.all(color: context.palette.divider),
         ),
         child: Row(
           children: [
@@ -702,7 +702,7 @@ class _ChurchDropdown extends StatelessWidget {
             Text(
               'Loading churches...',
               style: AppTextStyles.bodyMedium.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                color: context.palette.textMuted,
               ),
             ),
           ],
@@ -743,10 +743,10 @@ class _ChurchDropdown extends StatelessWidget {
           padding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.06),
+              color: context.palette.divider,
             ),
           ),
           child: Row(
@@ -767,14 +767,14 @@ class _ChurchDropdown extends StatelessWidget {
                   style: AppTextStyles.bodyLarge.copyWith(
                     fontSize: 15,
                     color: hasSelection
-                        ? AppColors.textDark
-                        : const Color.fromRGBO(26, 26, 46, 0.5),
+                        ? context.palette.text
+                        : context.palette.textMuted,
                   ),
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.expand_more,
-                color: Color.fromRGBO(26, 26, 46, 0.5),
+                color: context.palette.textMuted,
               ),
             ],
           ),
@@ -835,10 +835,10 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
         expand: false,
         builder: (ctx, scrollController) {
           return Container(
-            decoration: const BoxDecoration(
-              color: AppColors.white,
+            decoration: BoxDecoration(
+              color: context.palette.sheet,
               borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24)),
+                  const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               children: [
@@ -847,7 +847,7 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    color: context.palette.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -875,8 +875,7 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                     decoration: InputDecoration(
                       hintText: 'Search by name or city',
                       hintStyle: AppTextStyles.bodyMedium.copyWith(
-                        color:
-                            const Color.fromRGBO(26, 26, 46, 0.45),
+                        color: context.palette.textMuted,
                       ),
                       prefixIcon: const Icon(
                         Icons.search,
@@ -885,10 +884,9 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                       suffixIcon: _query.isEmpty
                           ? null
                           : IconButton(
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.close,
-                                color: Color.fromRGBO(
-                                    26, 26, 46, 0.5),
+                                color: context.palette.textMuted,
                                 size: 18,
                               ),
                               onPressed: () {
@@ -897,7 +895,7 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                               },
                             ),
                       filled: true,
-                      fillColor: AppColors.lightGrey,
+                      fillColor: context.palette.cardMuted,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 14,
@@ -921,8 +919,7 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                                   : 'No matches for "$_query".',
                               textAlign: TextAlign.center,
                               style: AppTextStyles.bodyMedium.copyWith(
-                                color: const Color.fromRGBO(
-                                    26, 26, 46, 0.6),
+                                color: context.palette.textMuted,
                               ),
                             ),
                           ),
@@ -1005,7 +1002,7 @@ class _PickerRow extends StatelessWidget {
                   gradient: selected
                       ? AppColors.primaryGradient
                       : null,
-                  color: selected ? null : AppColors.lightGrey,
+                  color: selected ? null : context.palette.cardMuted,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -1035,8 +1032,7 @@ class _PickerRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(
-                              26, 26, 46, 0.6),
+                          color: context.palette.textMuted,
                         ),
                       ),
                   ],

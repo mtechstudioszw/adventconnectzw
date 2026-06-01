@@ -388,7 +388,7 @@ class _ProgressBar extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: i <= active
                       ? AppColors.primaryBlue
-                      : const Color.fromRGBO(26, 26, 46, 0.10),
+                      : context.palette.divider,
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
@@ -465,7 +465,7 @@ class _NavBar extends StatelessWidget {
                 child: Text(
                   'Skip for now',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: context.palette.textMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -497,10 +497,10 @@ class _BackButton extends StatelessWidget {
             width: 60,
             padding: const EdgeInsets.symmetric(vertical: 18),
             alignment: Alignment.center,
-            child: const Icon(
+            child: Icon(
               Icons.arrow_back_ios_new,
               size: 16,
-              color: AppColors.darkNavy,
+              color: context.palette.text,
             ),
           ),
         ),
@@ -645,7 +645,7 @@ class _WelcomePage extends StatelessWidget {
             'Welcome to\nAdvent Connect ZW',
             textAlign: TextAlign.center,
             style: AppTextStyles.displayLarge.copyWith(
-              color: AppColors.darkNavy,
+              color: context.palette.text,
               fontSize: 30,
               fontWeight: FontWeight.w800,
               height: 1.18,
@@ -657,7 +657,7 @@ class _WelcomePage extends StatelessWidget {
             'like home.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: context.palette.textMuted,
               height: 1.5,
               fontSize: 14.5,
             ),
@@ -1040,8 +1040,7 @@ class _ChurchPageState extends State<_ChurchPage> {
                                 : 'No matches for "$_query".',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.bodyMedium.copyWith(
-                              color:
-                                  const Color.fromRGBO(26, 26, 46, 0.6),
+                              color: context.palette.textMuted,
                             ),
                           ),
                         ),
@@ -1099,7 +1098,7 @@ class _ChurchPickRow extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.06),
+                  : context.palette.divider,
               width: selected ? 1.6 : 1.0,
             ),
           ),
@@ -1141,8 +1140,7 @@ class _ChurchPickRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color:
-                              const Color.fromRGBO(26, 26, 46, 0.6),
+                          color: context.palette.textMuted,
                         ),
                       ),
                   ],
@@ -1160,7 +1158,7 @@ class _ChurchPickRow extends StatelessWidget {
                   border: Border.all(
                     color: selected
                         ? AppColors.primaryBlue
-                        : const Color.fromRGBO(26, 26, 46, 0.25),
+                        : context.palette.divider,
                     width: 1.6,
                   ),
                 ),
@@ -1316,7 +1314,7 @@ class _ChipTile extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.10),
+                  : context.palette.divider,
               width: selected ? 1.6 : 1,
             ),
             boxShadow: selected

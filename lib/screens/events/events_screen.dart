@@ -271,7 +271,7 @@ class _EventsScreenState extends State<EventsScreen>
           dividerColor: Colors.transparent,
           indicatorSize: TabBarIndicatorSize.tab,
           labelColor: AppColors.white,
-          unselectedLabelColor: const Color.fromRGBO(26, 26, 46, 0.6),
+          unselectedLabelColor: context.palette.textMuted,
           indicator: BoxDecoration(
             gradient: AppColors.primaryGradient,
             borderRadius: BorderRadius.circular(11),
@@ -319,8 +319,7 @@ class _EventsScreenState extends State<EventsScreen>
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(Icons.close,
-                      color: Color.fromRGBO(26, 26, 46, 0.5)),
+                  icon: Icon(Icons.close, color: context.palette.textMuted),
                   onPressed: () {
                     _searchController.clear();
                     _refreshActive();
@@ -354,7 +353,7 @@ class _EventsScreenState extends State<EventsScreen>
                   border: Border.all(
                     color: _dateRange != null
                         ? AppColors.primaryBlue
-                        : const Color.fromRGBO(26, 26, 46, 0.1),
+                        : context.palette.divider,
                   ),
                 ),
                 child: Row(
@@ -364,7 +363,7 @@ class _EventsScreenState extends State<EventsScreen>
                       size: 18,
                       color: _dateRange != null
                           ? AppColors.primaryBlue
-                          : const Color.fromRGBO(26, 26, 46, 0.6),
+                          : context.palette.textMuted,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -376,8 +375,8 @@ class _EventsScreenState extends State<EventsScreen>
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: _dateRange != null
-                              ? AppColors.textDark
-                              : const Color.fromRGBO(26, 26, 46, 0.6),
+                              ? context.palette.text
+                              : context.palette.textMuted,
                           fontWeight: _dateRange != null
                               ? FontWeight.w600
                               : FontWeight.w400,
@@ -394,7 +393,7 @@ class _EventsScreenState extends State<EventsScreen>
             IconButton(
               onPressed: _clearDateRange,
               icon: const Icon(Icons.close, size: 20),
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
               tooltip: 'Clear date filter',
             ),
           ],
@@ -439,7 +438,7 @@ class _EventsScreenState extends State<EventsScreen>
                   'No events cached yet for this tab.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ),
@@ -456,17 +455,17 @@ class _EventsScreenState extends State<EventsScreen>
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.cloud_off_outlined,
                     size: 56,
-                    color: Color.fromRGBO(26, 26, 46, 0.4),
+                    color: context.palette.textMuted,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     _error!,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ],
@@ -492,7 +491,7 @@ class _EventsScreenState extends State<EventsScreen>
                         ? Icons.event_outlined
                         : Icons.history_toggle_off,
                     size: 56,
-                    color: const Color.fromRGBO(26, 26, 46, 0.3),
+                    color: context.palette.textMuted,
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -500,7 +499,7 @@ class _EventsScreenState extends State<EventsScreen>
                         ? 'No upcoming events'
                         : 'No past events',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.7),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ],

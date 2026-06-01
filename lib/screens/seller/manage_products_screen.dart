@@ -93,8 +93,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
         available: !product.isAvailable,
       );
       if (!mounted) return;
-      // Refresh from the server so the model state stays in sync with
-      // whatever the DB actually stored (both `status` + `is_available`).
+      // Refresh from the server so the local list reflects whatever
+      // the DB actually stored for `status`.
       await _load();
     } catch (_) {
       if (!mounted) return;
@@ -127,7 +127,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
         content: Text(
           '"${product.title}" will be removed from the marketplace permanently.',
           style: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            color: ctx.palette.textMuted,
             height: 1.5,
           ),
         ),
@@ -137,7 +137,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.labelMedium.copyWith(
-                color: AppColors.textDark,
+                color: ctx.palette.text,
               ),
             ),
           ),
@@ -336,7 +336,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
             'List your first product to start selling on the marketplace.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
               height: 1.5,
             ),
           ),
@@ -512,7 +512,7 @@ class _Chip extends StatelessWidget {
             border: Border.all(
               color: active
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.08),
+                  : context.palette.divider,
             ),
           ),
           child: Row(
@@ -521,7 +521,7 @@ class _Chip extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: active ? AppColors.white : AppColors.textDark,
+                  color: active ? AppColors.white : context.palette.text,
                   fontWeight: FontWeight.w700,
                   fontSize: 12.5,
                 ),
@@ -615,14 +615,14 @@ class _ProductRow extends StatelessWidget {
                               ? CachedImage(
                                   firstImage,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => const Icon(
+                                  errorBuilder: (context, error, stackTrace) => Icon(
                                     Icons.image_not_supported_outlined,
-                                    color: Color.fromRGBO(26, 26, 46, 0.4),
+                                    color: context.palette.textMuted,
                                   ),
                                 )
-                              : const Icon(
+                              : Icon(
                                   Icons.image_outlined,
-                                  color: Color.fromRGBO(26, 26, 46, 0.4),
+                                  color: context.palette.textMuted,
                                 ),
                         ),
                       ),
@@ -705,9 +705,9 @@ class _RowMenu extends StatelessWidget {
     }
     return PopupMenuButton<String>(
       tooltip: 'Actions',
-      icon: const Icon(
+      icon: Icon(
         Icons.more_vert,
-        color: Color.fromRGBO(26, 26, 46, 0.55),
+        color: context.palette.textMuted,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
@@ -790,7 +790,7 @@ class _AvailabilityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = available ? AppColors.successGreen : AppColors.textDark;
+    final color = available ? AppColors.successGreen : context.palette.text;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -824,17 +824,17 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.cloud_off_outlined,
             size: 48,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
+            color: context.palette.textMuted,
           ),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
             ),
           ),
         ],

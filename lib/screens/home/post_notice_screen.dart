@@ -111,7 +111,7 @@ class _PostNoticeScreenState extends State<PostNoticeScreen> {
                           Text(
                             'CATEGORY',
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.65),
+                              color: context.palette.textMuted,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
@@ -142,7 +142,7 @@ class _PostNoticeScreenState extends State<PostNoticeScreen> {
                           Text(
                             'TITLE',
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.65),
+                              color: context.palette.textMuted,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
@@ -165,7 +165,7 @@ class _PostNoticeScreenState extends State<PostNoticeScreen> {
                               Text(
                                 'DETAILS',
                                 style: AppTextStyles.labelSmall.copyWith(
-                                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                                  color: context.palette.textMuted,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 1.2,
@@ -175,8 +175,7 @@ class _PostNoticeScreenState extends State<PostNoticeScreen> {
                               Text(
                                 '${_bodyController.text.length}/600',
                                 style: AppTextStyles.labelSmall.copyWith(
-                                  color:
-                                      const Color.fromRGBO(26, 26, 46, 0.45),
+                                  color: context.palette.textMuted,
                                   fontSize: 11,
                                 ),
                               ),
@@ -215,7 +214,7 @@ class _PostNoticeScreenState extends State<PostNoticeScreen> {
                       'Keep it respectful. Posts violating community guidelines will be removed.',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        color: context.palette.textMuted,
                         height: 1.5,
                       ),
                     ),
@@ -247,11 +246,11 @@ class _PostNoticeScreenState extends State<PostNoticeScreen> {
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -296,7 +295,7 @@ class _CategoryChip extends StatelessWidget {
           border: Border.all(
             color: active
                 ? AppColors.primaryBlue
-                : const Color.fromRGBO(26, 26, 46, 0.08),
+                : context.palette.divider,
           ),
         ),
         child: Row(
@@ -307,7 +306,7 @@ class _CategoryChip extends StatelessWidget {
             Text(
               category.label,
               style: AppTextStyles.labelMedium.copyWith(
-                color: active ? AppColors.white : AppColors.textDark,
+                color: active ? AppColors.white : context.palette.text,
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
               ),

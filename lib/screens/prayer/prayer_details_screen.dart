@@ -380,7 +380,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                   Text(
                     '${formatTimeAgo(prayer.createdAt)}  •  ${prayer.prayerCount} praying',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ],
@@ -493,7 +493,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                       child: Text(
                         '+${_prayingUsers.length - visible.length}',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.textDark,
+                          color: context.palette.text,
                           fontWeight: FontWeight.w700,
                           fontSize: 11,
                         ),
@@ -538,7 +538,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
             Text(
               'No comments yet. Be the first to encourage them.',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.55),
+                color: context.palette.textMuted,
               ),
             )
           else
@@ -563,11 +563,11 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                 ),
               ],
               if (i < tree.length - 1)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Divider(
                     height: 1,
-                    color: Color.fromRGBO(26, 26, 46, 0.06),
+                    color: context.palette.divider,
                   ),
                 ),
             ],
@@ -772,7 +772,7 @@ class _CommentTile extends StatelessWidget {
                   Text(
                     formatTimeAgo(comment.createdAt),
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.5),
+                      color: context.palette.textMuted,
                       fontSize: 11,
                     ),
                   ),
@@ -782,7 +782,7 @@ class _CommentTile extends StatelessWidget {
               Text(
                 comment.content,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.85),
+                  color: context.palette.text,
                   height: 1.4,
                 ),
               ),

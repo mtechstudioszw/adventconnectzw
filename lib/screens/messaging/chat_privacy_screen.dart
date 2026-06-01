@@ -213,7 +213,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                 Text(
                   title,
                   style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.textDark,
+                    color: context.palette.text,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -222,7 +222,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                 Text(
                   subtitle,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textDark.withValues(alpha: 0.6),
+                    color: context.palette.textMuted,
                     height: 1.35,
                   ),
                 ),

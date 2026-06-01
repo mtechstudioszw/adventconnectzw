@@ -361,7 +361,7 @@ class _NotificationRow extends StatelessWidget {
                           Text(
                             _relative(item.createdAt),
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.55),
+                              color: context.palette.textMuted,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                             ),
@@ -374,7 +374,7 @@ class _NotificationRow extends StatelessWidget {
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.75),
+                          color: context.palette.text,
                           height: 1.5,
                         ),
                       ),

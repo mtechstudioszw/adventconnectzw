@@ -254,7 +254,10 @@ class SellerService {
     final updates = <String, dynamic>{
       'title': title.trim(),
       'price': price,
-      'currency': currency,
+      // DB column is `price_currency` (CHECK in 'USD','ZWL','ZAR') —
+      // writing to `currency` returns PGRST204 / 42703 and silently
+      // surfaces as "Could not edit product".
+      'price_currency': currency,
       'category': category,
       'description': description?.trim(),
       // ignore: use_null_aware_elements
@@ -272,8 +275,10 @@ class SellerService {
 
   /// Toggle a product between visible/hidden on the public marketplace.
   /// We use `status` because the marketplace query already filters by
-  /// `status = 'available'`; flipping it to `unavailable` hides it
-  /// without deleting the product or its photos.
+  /// `status = 'available'`; flipping it to `'removed'` hides it from
+  /// buyers (per the products_select_visible RLS policy) without
+  /// deleting the product or its photos. The owner still sees the
+  /// row in the seller dashboard and can flip it back.
   static Future<void> setProductAvailability({
     required String productId,
     required bool available,
@@ -282,14 +287,15 @@ class SellerService {
     if (user == null) {
       throw const AuthException('Sign in to update your products.');
     }
-    // The schema carries both `status` (string) and `is_available` (bool)
-    // from earlier migrations; keep them in sync so the public listing
-    // query and the model's `isAvailable` getter agree.
+    // The DB has only `status` (CHECK in 'available','sold','reserved',
+    // 'removed') — no `is_available` column. 'removed' is what the
+    // existing RLS treats as "hide from buyers, owner can still see"
+    // (see products_select_visible policy), so it's the right state
+    // for a paused listing the seller can flip back later.
     await _client
         .from(_productsTable)
         .update({
-          'status': available ? 'available' : 'unavailable',
-          'is_available': available,
+          'status': available ? 'available' : 'removed',
         })
         .eq('id', productId)
         .eq('seller_id', user.id);

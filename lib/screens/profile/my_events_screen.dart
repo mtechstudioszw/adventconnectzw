@@ -325,7 +325,7 @@ class _TabPill extends StatelessWidget {
                 Text(
                   label,
                   style: AppTextStyles.titleMedium.copyWith(
-                    color: selected ? AppColors.white : AppColors.textDark,
+                    color: selected ? AppColors.white : context.palette.text,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -340,7 +340,7 @@ class _TabPill extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: selected
                           ? AppColors.white.withValues(alpha: 0.22)
-                          : const Color.fromRGBO(26, 26, 46, 0.08),
+                          : context.palette.cardMuted,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -348,7 +348,7 @@ class _TabPill extends StatelessWidget {
                       style: AppTextStyles.labelSmall.copyWith(
                         color: selected
                             ? AppColors.white
-                            : const Color.fromRGBO(26, 26, 46, 0.65),
+                            : context.palette.textMuted,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -376,7 +376,7 @@ class _SectionLabel extends StatelessWidget {
         Text(
           label,
           style: AppTextStyles.labelSmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            color: context.palette.textMuted,
             fontSize: 10.5,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.4,
@@ -447,7 +447,7 @@ class _EventRow extends StatelessWidget {
                       _monthShort(event.eventDate.month).toUpperCase(),
                       style: AppTextStyles.labelSmall.copyWith(
                         color: isPast
-                            ? const Color.fromRGBO(26, 26, 46, 0.55)
+                            ? context.palette.textMuted
                             : AppColors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -457,7 +457,7 @@ class _EventRow extends StatelessWidget {
                     Text(
                       '${event.eventDate.day}',
                       style: AppTextStyles.displayMedium.copyWith(
-                        color: isPast ? AppColors.textDark : AppColors.white,
+                        color: isPast ? context.palette.text : AppColors.white,
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
                         height: 1.05,
@@ -482,24 +482,24 @@ class _EventRow extends StatelessWidget {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.access_time,
                           size: 13,
-                          color: Color.fromRGBO(26, 26, 46, 0.55),
+                          color: context.palette.textMuted,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           event.eventTime,
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.65),
+                            color: context.palette.textMuted,
                           ),
                         ),
                         if (event.location != null && event.location!.isNotEmpty) ...[
                           const SizedBox(width: 8),
-                          const Icon(
+                          Icon(
                             Icons.place_outlined,
                             size: 13,
-                            color: Color.fromRGBO(26, 26, 46, 0.55),
+                            color: context.palette.textMuted,
                           ),
                           const SizedBox(width: 4),
                           Flexible(
@@ -508,7 +508,7 @@ class _EventRow extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                                color: context.palette.textMuted,
                               ),
                             ),
                           ),

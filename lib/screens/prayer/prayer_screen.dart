@@ -135,7 +135,7 @@ class _PrayerScreenState extends State<PrayerScreen>
           'Your request and every "I\'m praying" reaction will be removed. '
           'This can\'t be undone.',
           style: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            color: context.palette.textMuted,
             height: 1.5,
           ),
         ),
@@ -145,7 +145,7 @@ class _PrayerScreenState extends State<PrayerScreen>
             child: Text(
               'Cancel',
               style:
-                  AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+                  AppTextStyles.labelMedium.copyWith(color: context.palette.text),
             ),
           ),
           FilledButton(
@@ -293,7 +293,7 @@ class _PrayerScreenState extends State<PrayerScreen>
                   'Share a prayer request and pray together with the SDA community in Zimbabwe.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                     height: 1.5,
                   ),
                 ),
@@ -379,7 +379,7 @@ class _CategoryChip extends StatelessWidget {
           child: Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
-              color: selected ? AppColors.white : AppColors.textDark,
+              color: selected ? AppColors.white : context.palette.text,
               fontWeight: FontWeight.w600,
             ),
           ),

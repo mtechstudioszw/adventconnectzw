@@ -228,7 +228,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
           Text(
             'CATEGORY',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: context.palette.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
@@ -266,7 +266,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
                         style: AppTextStyles.labelMedium.copyWith(
                           color: c == _category
                               ? AppColors.white
-                              : AppColors.textDark,
+                              : context.palette.text,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -288,7 +288,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
           Text(
             'WHO CAN SEE THIS',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: context.palette.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
@@ -356,7 +356,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
                 Text(
                   'Highlights your request at the top of the feed.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ],
@@ -443,7 +443,7 @@ class _VisibilityOption extends StatelessWidget {
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.65),
+                        color: context.palette.textMuted,
                       ),
                     ),
                   ],

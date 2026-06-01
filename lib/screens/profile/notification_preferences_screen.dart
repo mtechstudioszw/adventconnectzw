@@ -275,7 +275,7 @@ class _Pill extends StatelessWidget {
               style: AppTextStyles.labelMedium.copyWith(
                 color: active
                     ? AppColors.white
-                    : const Color.fromRGBO(26, 26, 46, 0.7),
+                    : context.palette.text,
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
               ),

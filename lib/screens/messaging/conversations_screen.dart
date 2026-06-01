@@ -341,7 +341,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.buttonText.copyWith(
-                color: AppColors.textDark,
+                color: context.palette.text,
               ),
             ),
           ),
@@ -673,7 +673,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 onTap: () => Navigator.of(sheetCtx).pop('delete'),
               ),
               ListTile(
-                leading: const Icon(Icons.close, color: AppColors.textDark),
+                leading: Icon(Icons.close, color: context.palette.text),
                 title: const Text('Cancel'),
                 onTap: () => Navigator.of(sheetCtx).pop(null),
               ),
@@ -741,17 +741,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(
               children: [
-                const Icon(
+                Icon(
                   Icons.cloud_off_outlined,
                   size: 56,
-                  color: Color.fromRGBO(26, 26, 46, 0.4),
+                  color: context.palette.textMuted,
                 ),
                 const SizedBox(height: 12),
                 Text(
                   _error!,
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ],
@@ -800,7 +800,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   body,
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                     height: 1.5,
                   ),
                 ),
@@ -858,7 +858,7 @@ class _TabPill extends StatelessWidget {
                   label,
                   style: AppTextStyles.titleMedium.copyWith(
                     color:
-                        selected ? AppColors.white : AppColors.textDark,
+                        selected ? AppColors.white : context.palette.text,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1011,7 +1011,7 @@ class _ConversationTile extends StatelessWidget {
                           style: AppTextStyles.labelSmall.copyWith(
                             color: unread
                                 ? AppColors.primaryBlue
-                                : const Color.fromRGBO(26, 26, 46, 0.55),
+                                : context.palette.textMuted,
                             fontSize: 11,
                             fontWeight: unread
                                 ? FontWeight.w700
@@ -1040,8 +1040,8 @@ class _ConversationTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.bodySmall.copyWith(
                               color: unread
-                                  ? AppColors.textDark
-                                  : const Color.fromRGBO(26, 26, 46, 0.6),
+                                  ? context.palette.text
+                                  : context.palette.textMuted,
                               fontSize: 13,
                               fontWeight:
                                   unread ? FontWeight.w600 : FontWeight.w400,
@@ -1202,7 +1202,7 @@ class _FriendRequestTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.65),
+                            color: context.palette.textMuted,
                           ),
                         ),
                         if (subtitle.trim().isNotEmpty) ...[
@@ -1212,7 +1212,7 @@ class _FriendRequestTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.5),
+                              color: context.palette.textMuted,
                               fontSize: 11,
                             ),
                           ),
@@ -1303,14 +1303,14 @@ class _ActionButton extends StatelessWidget {
             border: filled
                 ? null
                 : Border.all(
-                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    color: context.palette.divider,
                   ),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
             style: AppTextStyles.buttonText.copyWith(
-              color: filled ? AppColors.white : AppColors.textDark,
+              color: filled ? AppColors.white : context.palette.text,
               fontWeight: FontWeight.w700,
               fontSize: 13.5,
             ),
@@ -1414,7 +1414,7 @@ class _RequestTile extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.75),
+                            color: context.palette.textMuted,
                             fontSize: 13,
                             height: 1.4,
                           ),
@@ -1520,7 +1520,7 @@ class _Avatar extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         gradient: hasPhoto && !isSelfChat ? null : AppColors.primaryGradient,
-        color: hasPhoto && !isSelfChat ? AppColors.lightGrey : null,
+        color: hasPhoto && !isSelfChat ? context.palette.cardMuted : null,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(

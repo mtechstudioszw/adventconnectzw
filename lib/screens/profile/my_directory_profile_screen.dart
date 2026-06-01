@@ -250,11 +250,11 @@ class _MyDirectoryProfileScreenState extends State<MyDirectoryProfileScreen> {
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -313,7 +313,7 @@ class _VisibilityToggle extends StatelessWidget {
                     ? 'Other members can find your listing.'
                     : 'Your details are saved but not shown.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: context.palette.textMuted,
                 ),
               ),
             ],
@@ -350,7 +350,7 @@ class _LabeledField extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: context.palette.textMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
@@ -361,7 +361,7 @@ class _LabeledField extends StatelessWidget {
               Text(
                 helper!,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                 ),
               ),
@@ -408,13 +408,11 @@ class _Input extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -445,9 +443,9 @@ class _ProvinceDropdown extends StatelessWidget {
     return DropdownButtonFormField<String?>(
       initialValue: selected,
       isExpanded: true,
-      icon: const Icon(
+      icon: Icon(
         Icons.expand_more,
-        color: Color.fromRGBO(26, 26, 46, 0.5),
+        color: context.palette.textMuted,
       ),
       style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
       decoration: InputDecoration(
@@ -467,13 +465,11 @@ class _ProvinceDropdown extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -484,7 +480,7 @@ class _ProvinceDropdown extends StatelessWidget {
       hint: Text(
         'Choose a province',
         style: AppTextStyles.bodyLarge.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.5),
+          color: context.palette.textMuted,
           fontSize: 15,
         ),
       ),

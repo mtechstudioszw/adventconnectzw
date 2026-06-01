@@ -190,7 +190,7 @@ class _SearchField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: 'Search profession, skill or city',
           hintStyle: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.45),
+            color: context.palette.textMuted,
           ),
           prefixIcon: const Padding(
             padding: EdgeInsets.only(left: 14, right: 10),
@@ -282,13 +282,13 @@ class _Chip extends StatelessWidget {
             border: Border.all(
               color: active
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.08),
+                  : context.palette.divider,
             ),
           ),
           child: Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
-              color: active ? AppColors.white : AppColors.textDark,
+              color: active ? AppColors.white : context.palette.text,
               fontWeight: FontWeight.w700,
               fontSize: 12.5,
             ),
@@ -370,10 +370,10 @@ class _DirectoryRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.place_outlined,
                         size: 12,
-                        color: Color.fromRGBO(26, 26, 46, 0.55),
+                        color: context.palette.textMuted,
                       ),
                       const SizedBox(width: 4),
                       Flexible(
@@ -382,7 +382,7 @@ class _DirectoryRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.6),
+                            color: context.palette.textMuted,
                           ),
                         ),
                       ),
@@ -397,7 +397,7 @@ class _DirectoryRow extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.7),
+                      color: context.palette.text,
                       height: 1.4,
                     ),
                   ),
@@ -517,7 +517,7 @@ class _MessageRequestSheetState extends State<_MessageRequestSheet> {
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  color: context.palette.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -534,7 +534,7 @@ class _MessageRequestSheetState extends State<_MessageRequestSheet> {
             Text(
               'To ${widget.otherUserName}. They\'ll see it in their Requests inbox and can accept or decline.',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: context.palette.textMuted,
                 height: 1.4,
               ),
             ),
@@ -544,7 +544,7 @@ class _MessageRequestSheetState extends State<_MessageRequestSheet> {
                 color: context.palette.cardMuted,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: const Color.fromRGBO(26, 26, 46, 0.06),
+                  color: context.palette.divider,
                 ),
               ),
               child: TextField(
@@ -557,7 +557,7 @@ class _MessageRequestSheetState extends State<_MessageRequestSheet> {
                 decoration: InputDecoration(
                   hintText: 'Hi ${widget.otherUserName.split(' ').first}…',
                   hintStyle: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.45),
+                    color: context.palette.textMuted,
                     fontSize: 14.5,
                   ),
                   border: InputBorder.none,

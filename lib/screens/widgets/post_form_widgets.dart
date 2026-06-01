@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Shared building blocks for "post X" screens (post event, post job,
@@ -146,7 +147,7 @@ class PostFormCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -183,7 +184,7 @@ class PostFormLabeledField extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: context.palette.textMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
@@ -194,7 +195,7 @@ class PostFormLabeledField extends StatelessWidget {
               Text(
                 helper!,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                 ),
               ),

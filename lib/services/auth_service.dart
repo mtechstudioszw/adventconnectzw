@@ -288,31 +288,29 @@ class AuthService {
         return AuthResult.failure('Sign in cancelled.');
       }
 
-      // ── BUG 2 FIX ──────────────────────────────────────────────────
-      // Check what providers are already attached to this email before
-      // we hand the ID token to Supabase. If the email exists as
-      // email-only, Supabase would create a NEW separate auth.users row
-      // (a second account) instead of merging — which is the duplicate-
-      // account bug. Block it here and guide the user to link instead.
+      // Duplicate-account guard. Check what providers are already
+      // attached to this email before handing the ID token to
+      // Supabase — if the email exists as email-only, Supabase would
+      // create a NEW separate auth.users row instead of merging,
+      // which leaves the user with two accounts that look identical.
+      // We refuse the Google flow in that case and tell the user to
+      // sign in with email/password instead. Account linking via
+      // Settings was intentionally not exposed — one auth method per
+      // email is simpler than the merge headache later.
       final googleEmail = account.email.trim().toLowerCase();
       final providers = await emailAuthProviders(googleEmail);
       if (providers != null &&
           providers.isNotEmpty &&
           providers.contains('email') &&
           !providers.contains('google')) {
-        // Account exists as email/password only. We cannot auto-link
-        // without the user being signed in first. Tell them to log in
-        // with their password, then link Google from Settings.
         try {
           await google.signOut();
         } catch (_) {}
         return AuthResult.failure(
           'An account with this email already exists. '
-          'Sign in with your email and password instead. '
-          'You can then link Google in Settings → Account.',
+          'Sign in with your email and password instead.',
         );
       }
-      // ── END BUG 2 FIX ───────────────────────────────────────────────
 
       final auth = await account.authentication;
       final idToken = auth.idToken;
@@ -340,51 +338,6 @@ class AuthService {
       // failures from the Google SDK get the same human-readable
       // copy as the email path instead of the raw exception toString.
       return AuthResult.failure(_friendlyAuthError(e.toString()));
-    }
-  }
-
-  /// Link a Google identity to the currently signed-in account.
-  ///
-  /// BUG 2 FIX — call this from Settings after the user is already
-  /// signed in with email/password. Once linked, both Google and
-  /// email+password work for the same account going forward.
-  static Future<AuthResult> linkGoogleAccount() async {
-    final user = currentUser;
-    if (user == null) {
-      return AuthResult.failure('Sign in to link Google.');
-    }
-    try {
-      final google = GoogleSignIn(serverClientId: _googleWebClientId);
-      await google.signOut();
-      final account = await google.signIn();
-      if (account == null) {
-        return AuthResult.failure('Sign in cancelled.');
-      }
-      // Verify the Google email matches the signed-in account's email
-      // so we don't accidentally link a different Google account.
-      final googleEmail = account.email.trim().toLowerCase();
-      final userEmail = (user.email ?? '').trim().toLowerCase();
-      if (googleEmail.isNotEmpty &&
-          userEmail.isNotEmpty &&
-          googleEmail != userEmail) {
-        try {
-          await google.signOut();
-        } catch (_) {}
-        return AuthResult.failure(
-          'That Google account uses a different email ($googleEmail). '
-          'Sign in with the Google account that matches $userEmail.',
-        );
-      }
-      // supabase_flutter's linkIdentity opens a browser OAuth flow.
-      // The result comes back via the deep-link handler the same way
-      // a normal OAuth sign-in does. The caller should listen to
-      // authStateChanges for the identityLinked event to confirm.
-      await _client.auth.linkIdentity(OAuthProvider.google);
-      return AuthResult.success(_client.auth.currentUser);
-    } on AuthException catch (e) {
-      return AuthResult.failure(e.message);
-    } catch (e) {
-      return AuthResult.failure('Could not link Google: $e');
     }
   }
 

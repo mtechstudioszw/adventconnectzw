@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/job_model.dart';
 import 'analytics_service.dart';
+import 'post_limit_error.dart';
 
 class JobService {
   JobService._();
@@ -59,23 +60,26 @@ class JobService {
     if (user == null) {
       throw const AuthException('Sign in to post a job.');
     }
-    final inserted = await _client.from(_table).insert({
-      'poster_id': user.id,
-      'title': title.trim(),
-      'company': company?.trim(),
-      'description': description.trim(),
-      'requirements': requirements?.trim(),
-      'category': category,
-      'job_type': jobType,
-      'post_type': postType,
-      'salary_range': salaryRange?.trim(),
-      'province': province.trim(),
-      'location': location.trim(),
-      'sabbath_friendly': sabbathFriendly,
-      'is_sda_institution': isSdaInstitution,
-      'contact_phone': contactPhone?.trim(),
-      'contact_email': contactEmail?.trim(),
-    }).select('id').single();
+    final inserted = await PostLimitError.guard(
+      PostSection.job,
+      () => _client.from(_table).insert({
+        'poster_id': user.id,
+        'title': title.trim(),
+        'company': company?.trim(),
+        'description': description.trim(),
+        'requirements': requirements?.trim(),
+        'category': category,
+        'job_type': jobType,
+        'post_type': postType,
+        'salary_range': salaryRange?.trim(),
+        'province': province.trim(),
+        'location': location.trim(),
+        'sabbath_friendly': sabbathFriendly,
+        'is_sda_institution': isSdaInstitution,
+        'contact_phone': contactPhone?.trim(),
+        'contact_email': contactEmail?.trim(),
+      }).select('id').single(),
+    );
     AnalyticsService.jobPosted(category);
     return inserted['id'].toString();
   }

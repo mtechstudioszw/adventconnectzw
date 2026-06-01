@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../services/messaging_service.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
 /// One-tap "say hello" sheet. We no longer ask the user to type a
@@ -123,9 +124,9 @@ class _StartConversationSheetState extends State<_StartConversationSheet> {
   Widget build(BuildContext context) {
     final firstName = widget.otherUserName.split(' ').first;
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: context.palette.sheet,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
       child: Column(

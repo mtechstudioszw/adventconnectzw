@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/prayer_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -164,6 +165,70 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     }
   }
 
+  Future<void> _confirmDelete(Prayer prayer) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        title: Text('Delete this prayer?', style: AppTextStyles.headlineSmall),
+        content: Text(
+          'Your request and every "I\'m praying" reaction will be removed. '
+          'This can\'t be undone.',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style:
+                  AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            child: Text('Delete', style: AppTextStyles.labelLarge),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await PrayerService.deletePrayer(prayer.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Prayer deleted.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      // Pop back to the prayer list so the now-stale details screen
+      // doesn't sit there with a deleted row. The list re-fetches on
+      // resume so the user sees the deletion reflected immediately.
+      if (context.canPop()) context.pop();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not delete. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -289,28 +354,41 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
       ),
       child: Row(
         children: [
-          PrayerAvatar(name: prayer.authorName, size: 52),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  prayer.authorName,
-                  style: AppTextStyles.titleLarge.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${formatTimeAgo(prayer.createdAt)}  •  ${prayer.prayerCount} praying',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
-                  ),
-                ),
-              ],
+          _AuthorHeaderTap(
+            authorId: prayer.authorId,
+            child: PrayerAvatar(
+              name: prayer.authorName,
+              photoUrl: prayer.authorPhotoUrl,
+              size: 52,
             ),
           ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: _AuthorHeaderTap(
+              authorId: prayer.authorId,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    prayer.authorName,
+                    style: AppTextStyles.titleLarge.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${formatTimeAgo(prayer.createdAt)}  •  ${prayer.prayerCount} praying',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (AuthService.currentUser?.id == prayer.authorId &&
+              prayer.authorId.isNotEmpty)
+            _PrayerOwnerMenu(onDelete: () => _confirmDelete(prayer)),
         ],
       ),
     );
@@ -775,6 +853,68 @@ class _SendButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Wraps the prayer author's avatar / name with an InkWell that opens
+/// their profile. Anonymous prayers (empty authorId) render inert.
+class _AuthorHeaderTap extends StatelessWidget {
+  const _AuthorHeaderTap({required this.authorId, required this.child});
+
+  final String authorId;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (authorId.isEmpty) return child;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => context.pushNamed(
+          'user_profile',
+          pathParameters: {'userId': authorId},
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Overflow menu shown in the details header when the signed-in user
+/// is the prayer's author. Currently exposes a single Delete action;
+/// future owner controls (edit, archive, share) live here.
+class _PrayerOwnerMenu extends StatelessWidget {
+  const _PrayerOwnerMenu({required this.onDelete});
+
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(
+        Icons.more_horiz,
+        color: Color.fromRGBO(26, 26, 46, 0.55),
+      ),
+      onSelected: (v) {
+        if (v == 'delete') onDelete();
+      },
+      itemBuilder: (ctx) => [
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              const Icon(Icons.delete_outline, color: AppColors.red, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Delete prayer',
+                style: AppTextStyles.labelMedium.copyWith(color: AppColors.red),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

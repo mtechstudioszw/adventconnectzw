@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Shown immediately after a successful signup. Supabase sends the
@@ -246,7 +247,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
@@ -399,12 +400,14 @@ class _TopBar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.white,
+                color: context.palette.card,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: const Color.fromRGBO(26, 26, 46, 0.08),
                 ),
               ),
+              // TODO(dark-mode): swap to context.palette.text in dark mode
+              // (const here, so left as darkNavy for now).
               child: const Icon(
                 Icons.arrow_back_ios_new,
                 size: 14,
@@ -509,7 +512,7 @@ class _OtpField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: const Color.fromRGBO(26, 26, 46, 0.08),
@@ -552,7 +555,7 @@ class _OtpField extends StatelessWidget {
           ),
           counterText: '',
           filled: true,
-          fillColor: AppColors.lightGrey,
+          fillColor: context.palette.cardMuted,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
           border: OutlineInputBorder(
@@ -649,7 +652,7 @@ class _SecondaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
         onTap: onTap,

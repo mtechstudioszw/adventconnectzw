@@ -7,6 +7,7 @@ import '../models/post_comment_model.dart';
 import '../models/post_model.dart';
 import '../models/story_model.dart';
 import 'messaging_service.dart';
+import 'post_limit_error.dart';
 
 /// All Supabase calls behind the Facebook-style home feed:
 ///   - posts            (CRUD + likes + comments)
@@ -138,23 +139,27 @@ class FeedService {
         (imageUrl == null || imageUrl.isEmpty)) {
       throw ArgumentError('Either body or imageUrl must be non-empty.');
     }
-    final inserted = await _client
-        .from(_postsTable)
-        .insert({
-          'author_id': user.id,
-          if (cleanBody != null && cleanBody.isNotEmpty) 'body': cleanBody,
-          if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
-          'visibility': visibility == PostVisibility.friendsOnly
-              ? 'friends_only'
-              : 'public',
-        })
-        .select(
-          '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
-          'post_likes(user_id), '
-          'post_comments(id)',
-        )
-        .single();
+    final inserted = await PostLimitError.guard(
+      PostSection.feedPost,
+      () => _client
+          .from(_postsTable)
+          .insert({
+            'author_id': user.id,
+            if (cleanBody != null && cleanBody.isNotEmpty) 'body': cleanBody,
+            if (imageUrl != null && imageUrl.isNotEmpty)
+              'image_url': imageUrl,
+            'visibility': visibility == PostVisibility.friendsOnly
+                ? 'friends_only'
+                : 'public',
+          })
+          .select(
+            '*, '
+            'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+            'post_likes(user_id), '
+            'post_comments(id)',
+          )
+          .single(),
+    );
     return Post.fromJson(inserted, viewerId: _viewerId);
   }
 
@@ -363,19 +368,22 @@ class FeedService {
     if (user == null) {
       throw const AuthException('Sign in to post a story.');
     }
-    final inserted = await _client
-        .from(_storiesTable)
-        .insert({
-          'author_id': user.id,
-          'media_url': mediaUrl,
-          if (caption != null && caption.trim().isNotEmpty)
-            'caption': caption.trim(),
-        })
-        .select(
-          '*, '
-          'profiles!stories_author_id_fkey(id, full_name, profile_photo_url)',
-        )
-        .single();
+    final inserted = await PostLimitError.guard(
+      PostSection.story,
+      () => _client
+          .from(_storiesTable)
+          .insert({
+            'author_id': user.id,
+            'media_url': mediaUrl,
+            if (caption != null && caption.trim().isNotEmpty)
+              'caption': caption.trim(),
+          })
+          .select(
+            '*, '
+            'profiles!stories_author_id_fkey(id, full_name, profile_photo_url)',
+          )
+          .single(),
+    );
     return Story.fromJson(inserted);
   }
 

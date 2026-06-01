@@ -6,6 +6,7 @@ import '../../models/seller_model.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -216,7 +217,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -599,7 +600,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
       prefixIconConstraints:
           const BoxConstraints(minWidth: 44, minHeight: 44),
       filled: true,
-      fillColor: AppColors.lightGrey,
+      fillColor: context.palette.inputFill,
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
@@ -682,7 +683,7 @@ class _IntroCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -751,7 +752,7 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -868,7 +869,7 @@ class _Input extends StatelessWidget {
         prefixIconConstraints:
             const BoxConstraints(minWidth: 44, minHeight: 44),
         filled: true,
-        fillColor: AppColors.lightGrey,
+        fillColor: context.palette.inputFill,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
@@ -920,7 +921,7 @@ class _CategoryPicker extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               gradient: active ? AppColors.primaryGradient : null,
-              color: active ? null : AppColors.lightGrey,
+              color: active ? null : context.palette.chipBg,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: active
@@ -978,7 +979,7 @@ class _ProvincePicker extends StatelessWidget {
         prefixIconConstraints:
             const BoxConstraints(minWidth: 44, minHeight: 44),
         filled: true,
-        fillColor: AppColors.lightGrey,
+        fillColor: context.palette.inputFill,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
@@ -1141,7 +1142,7 @@ class _CoverTile extends StatelessWidget {
         child: Container(
           height: 110,
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.08),

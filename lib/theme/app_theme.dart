@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
+import 'app_palette.dart';
 import 'app_text_styles.dart';
 
 class AppTheme {
@@ -17,6 +18,7 @@ class AppTheme {
 
   static ThemeData get light => ThemeData(
         useMaterial3: true,
+        extensions: const <ThemeExtension<dynamic>>[AppPalette.light],
         colorScheme: const ColorScheme.light(
           primary: AppColors.primaryBlue,
           onPrimary: AppColors.white,
@@ -172,6 +174,7 @@ class AppTheme {
   static ThemeData get dark => ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
+        extensions: const <ThemeExtension<dynamic>>[AppPalette.dark],
         colorScheme: const ColorScheme.dark(
           primary: AppColors.primaryBlue,
           onPrimary: AppColors.white,

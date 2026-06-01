@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../models/seller_model.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -54,7 +55,7 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
     final remaining = target.difference(_now);
 
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -487,7 +488,7 @@ class _Chip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             gradient: active ? AppColors.primaryGradient : null,
-            color: active ? null : AppColors.lightGrey,
+            color: active ? null : context.palette.chipBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: active

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../services/presence_service.dart';
 import '../services/user_profile_service.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
 
@@ -93,9 +94,9 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       maxChildSize: 0.85,
       expand: false,
       builder: (ctx, controller) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: context.palette.sheet,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: SingleChildScrollView(
           controller: controller,
@@ -183,7 +184,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppColors.lightGrey,
+                      color: context.palette.cardMuted,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Text(
@@ -247,7 +248,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
         gradient: hasPhoto ? null : AppColors.primaryGradient,
         color: hasPhoto ? AppColors.lightGrey : null,
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.white, width: 4),
+        border: Border.all(color: context.palette.sheet, width: 4),
         boxShadow: [
           BoxShadow(
             color: AppColors.primaryBlue.withValues(alpha: 0.22),

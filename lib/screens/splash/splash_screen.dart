@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
+import '../../services/biometric_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -106,12 +107,21 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (AuthService.isSignedIn) {
-      // Biometric quick-unlock is intentionally disabled in this
-      // build per user direction — we'll revisit after ~2 months of
-      // app use. The BiometricService and Settings toggle have been
-      // hidden but kept in source so re-enabling is a one-line
-      // restore of this check (and unhiding the toggle).
-      //
+      // Quick-unlock gate. If the user opted into biometric in
+      // Settings, the cold-start path requires a successful prompt
+      // before we ever land on home — otherwise a stolen-but-unlocked
+      // phone could read their data. A failed/cancelled prompt
+      // signs them out and bounces to login.
+      if (await BiometricService.isEnabled()) {
+        final ok = await BiometricService.authenticate();
+        if (!mounted) return;
+        if (!ok) {
+          await AuthService.signOut();
+          if (!mounted) return;
+          await _fadeOutThen(() => context.goNamed('login'));
+          return;
+        }
+      }
       // Gate the home tab behind profile completion. A user can sign
       // up, start onboarding, kill the app halfway, then re-open — the
       // session still exists but their profile is empty. Sending them
@@ -143,6 +153,11 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Splash is intentionally white in BOTH light and dark mode — it's
+    // the brand identity panel that owns the cold-start hand-off, and
+    // the logo/wordmark/gold accents were tuned against white. Leaving
+    // it light keeps the brand consistent and matches the native splash
+    // image used by Flutter's launch screen.
     return Scaffold(
       backgroundColor: AppColors.white,
       body: AnimatedBuilder(

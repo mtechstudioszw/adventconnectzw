@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -122,7 +123,7 @@ class _MyEventsScreenState extends State<MyEventsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
@@ -249,7 +250,7 @@ class _TabSwitcher extends StatelessWidget {
     return Container(
       height: 44,
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -435,7 +436,7 @@ class _EventRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: isPast ? null : AppColors.primaryGradient,
                   color: isPast
-                      ? AppColors.lightGrey
+                      ? context.palette.cardMuted
                       : null,
                   borderRadius: BorderRadius.circular(14),
                 ),

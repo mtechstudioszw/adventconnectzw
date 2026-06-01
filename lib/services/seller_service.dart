@@ -361,10 +361,14 @@ class SellerService {
 
   /// Approve a pending seller. Flips status to approved + sends a
   /// notification to the seller. Caller must be a super admin.
+  ///
+  /// sellers.id is BIGINT, so we parse the stringified id back to an
+  /// int before sending — passing the raw string makes PostgREST throw
+  /// a cast error before the function body ever runs.
   static Future<Seller> approveSeller(String sellerId) async {
     final response = await _client.rpc(
       'admin_approve_seller',
-      params: {'p_seller_id': sellerId},
+      params: {'p_seller_id': int.parse(sellerId)},
     );
     final row = response is List
         ? response.first as Map<String, dynamic>
@@ -382,7 +386,7 @@ class SellerService {
     final response = await _client.rpc(
       'admin_reject_seller',
       params: {
-        'p_seller_id': sellerId,
+        'p_seller_id': int.parse(sellerId),
         'p_reason': reason?.trim(),
       },
     );

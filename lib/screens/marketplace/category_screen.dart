@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/screen_shell.dart';
@@ -67,7 +68,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Widget build(BuildContext context) {
     final cat = _category;
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: () async {
@@ -182,7 +183,7 @@ class _CategoryTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Ink(
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(

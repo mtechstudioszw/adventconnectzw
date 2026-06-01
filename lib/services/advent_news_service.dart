@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/advent_news_model.dart';
+import 'post_limit_error.dart';
 
 /// Read-mostly service for the Advent News surface. Writes happen
 /// via the dashboard / Edge Functions / admin pipelines; the app
@@ -110,26 +111,29 @@ class AdventNewsService {
     if (user == null) {
       throw const AuthException('Sign in to publish news.');
     }
-    final row = await _client
-        .from(_table)
-        .insert({
-          'title': title.trim(),
-          'summary': summary.trim(),
-          'body': body?.trim().isNotEmpty == true ? body!.trim() : null,
-          'cover_photo_url': coverPhotoUrl?.trim(),
-          'category': category.code,
-          'source_url': sourceUrl?.trim().isNotEmpty == true
-              ? sourceUrl!.trim()
-              : null,
-          'source_label': sourceLabel?.trim().isNotEmpty == true
-              ? sourceLabel!.trim()
-              : null,
-          'is_pinned': isPinned,
-          'author_id': user.id,
-          'published_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .select('*, $_authorEmbed')
-        .single();
+    final row = await PostLimitError.guard(
+      PostSection.adventNews,
+      () => _client
+          .from(_table)
+          .insert({
+            'title': title.trim(),
+            'summary': summary.trim(),
+            'body': body?.trim().isNotEmpty == true ? body!.trim() : null,
+            'cover_photo_url': coverPhotoUrl?.trim(),
+            'category': category.code,
+            'source_url': sourceUrl?.trim().isNotEmpty == true
+                ? sourceUrl!.trim()
+                : null,
+            'source_label': sourceLabel?.trim().isNotEmpty == true
+                ? sourceLabel!.trim()
+                : null,
+            'is_pinned': isPinned,
+            'author_id': user.id,
+            'published_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .select('*, $_authorEmbed')
+          .single(),
+    );
     return AdventNews.fromJson(row);
   }
 

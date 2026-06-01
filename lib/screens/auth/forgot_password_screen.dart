@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'widgets/auth_hero.dart';
 
@@ -77,7 +78,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -118,7 +119,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.white,
+              color: context.palette.card,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
@@ -161,7 +162,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                     prefixIconConstraints:
                         const BoxConstraints(minWidth: 44, minHeight: 44),
                     filled: true,
-                    fillColor: AppColors.lightGrey,
+                    fillColor: context.palette.inputFill,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 14,
@@ -240,7 +241,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(

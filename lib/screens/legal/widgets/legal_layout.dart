@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 
 class LegalSection {
@@ -72,7 +73,7 @@ class _LegalLayoutState extends State<LegalLayout>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -270,7 +271,7 @@ class _LegalLayoutState extends State<LegalLayout>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -295,7 +296,7 @@ class _LegalLayoutState extends State<LegalLayout>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(

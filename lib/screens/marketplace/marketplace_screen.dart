@@ -10,6 +10,7 @@ import '../../services/connectivity_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
@@ -136,7 +137,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       bottomNavigationBar: const MainBottomNav(currentIndex: 3),
       floatingActionButton: const PostFab(
         routeName: 'add_product',
@@ -264,7 +265,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                   },
                 ),
           filled: true,
-          fillColor: AppColors.white,
+          fillColor: context.palette.inputFill,
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
         ),
       ),
@@ -508,9 +509,9 @@ Future<void> _showSellerChooser(BuildContext context) {
     builder: (sheetContext) => SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: sheetContext.palette.sheet,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
@@ -594,7 +595,7 @@ class _SellerChoiceTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.05),
@@ -806,7 +807,7 @@ class _ShopJobsSegment extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
         ),
@@ -929,7 +930,7 @@ class _CategoryChip extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: selected ? AppColors.primaryGradient : null,
-            color: selected ? null : AppColors.white,
+            color: selected ? null : context.palette.card,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: selected

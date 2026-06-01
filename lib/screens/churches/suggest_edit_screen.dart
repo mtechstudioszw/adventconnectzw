@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -74,7 +75,7 @@ class _SuggestEditScreenState extends State<SuggestEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -138,7 +139,7 @@ class _SuggestEditScreenState extends State<SuggestEditScreen> {
                               width: double.infinity,
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: AppColors.lightGrey,
+                                color: context.palette.cardMuted,
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Text(
@@ -217,7 +218,7 @@ class _SuggestEditScreenState extends State<SuggestEditScreen> {
       prefixIconConstraints:
           const BoxConstraints(minWidth: 44, minHeight: 44),
       filled: true,
-      fillColor: AppColors.lightGrey,
+      fillColor: context.palette.inputFill,
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
@@ -336,7 +337,7 @@ class _FieldRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: active
                 ? AppColors.primaryBlue.withValues(alpha: 0.08)
-                : AppColors.lightGrey,
+                : context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: active ? AppColors.primaryBlue : Colors.transparent,

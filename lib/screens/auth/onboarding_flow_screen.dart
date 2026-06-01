@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -279,7 +280,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         child: Column(
           children: [
@@ -426,7 +427,7 @@ class _NavBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.sheet,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
@@ -487,7 +488,7 @@ class _BackButton extends StatelessWidget {
     return Opacity(
       opacity: disabled ? 0.5 : 1,
       child: Material(
-        color: AppColors.lightGrey,
+        color: context.palette.chipBg,
         borderRadius: BorderRadius.circular(22),
         child: InkWell(
           onTap: onTap,
@@ -805,7 +806,7 @@ class _CoverStrip extends StatelessWidget {
           child: Container(
             height: 132,
             decoration: BoxDecoration(
-              color: AppColors.lightGrey,
+              color: context.palette.cardMuted,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: AppColors.primaryBlue.withValues(alpha: 0.15),
@@ -894,7 +895,7 @@ class _PhotoAvatar extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: hasPhoto ? null : AppColors.primaryGradient,
-            color: hasPhoto ? AppColors.lightGrey : null,
+            color: hasPhoto ? context.palette.cardMuted : null,
             boxShadow: [
               BoxShadow(
                 color: AppColors.primaryBlue.withValues(alpha: 0.28),
@@ -1089,7 +1090,7 @@ class _ChurchPickRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.primaryBlue.withValues(alpha: 0.08)
-                : AppColors.white,
+                : context.palette.card,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: selected
@@ -1106,7 +1107,7 @@ class _ChurchPickRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient:
                       selected ? AppColors.primaryGradient : null,
-                  color: selected ? null : AppColors.lightGrey,
+                  color: selected ? null : context.palette.cardMuted,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -1305,7 +1306,7 @@ class _ChipTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.primaryBlue.withValues(alpha: 0.10)
-                : AppColors.white,
+                : context.palette.card,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
               color: selected
@@ -1368,7 +1369,7 @@ class _NotifSwitch extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: () => onChanged(!value),
@@ -1497,7 +1498,7 @@ class _PermissionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: granted
@@ -1847,7 +1848,7 @@ class _GlowFieldState extends State<_GlowField> {
           prefixIconConstraints:
               const BoxConstraints(minWidth: 48, minHeight: 48),
           filled: true,
-          fillColor: AppColors.white,
+          fillColor: context.palette.inputFill,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
           border: OutlineInputBorder(

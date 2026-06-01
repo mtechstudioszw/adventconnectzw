@@ -11,6 +11,7 @@ import '../../services/seller_rating_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/rate_seller_sheet.dart';
@@ -139,7 +140,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     final result = await showModalBottomSheet<SellerRating?>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.white,
+      backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -244,7 +245,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
   void _showReport() {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.white,
+      backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -307,7 +308,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,
@@ -618,7 +619,7 @@ class _IdentityCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -772,7 +773,7 @@ class _ContactRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -963,7 +964,7 @@ class _AboutCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -1119,7 +1120,7 @@ class _ProductsSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: AppColors.white,
+              color: context.palette.card,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
@@ -1337,7 +1338,7 @@ class _ReportSheetState extends State<_ReportSheet> {
                     decoration: BoxDecoration(
                       color: _selected == r
                           ? AppColors.primaryBlue.withValues(alpha: 0.08)
-                          : AppColors.lightGrey,
+                          : context.palette.chipBg,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: _selected == r
@@ -1473,7 +1474,7 @@ class _ReviewsSection extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -1736,7 +1737,7 @@ class _ErrorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -1792,14 +1793,14 @@ class _OwnerBadge extends StatelessWidget {
     final photo = owner.profilePhotoUrl;
     final hasPhoto = photo != null && photo.isNotEmpty;
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: AppColors.primaryBlue.withValues(alpha: 0.18),

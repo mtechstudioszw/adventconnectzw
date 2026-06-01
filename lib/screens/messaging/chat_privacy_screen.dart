@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// WhatsApp-style privacy controls dedicated to the chat surface.
@@ -100,7 +101,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
         title: const Text('Chat privacy'),
         backgroundColor: AppColors.darkNavy,
@@ -193,7 +194,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(

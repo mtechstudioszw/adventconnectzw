@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
 /// Compact "you're offline" strip used inside list-based tabs (events,
@@ -31,7 +32,7 @@ class OfflineInlineNotice extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: const Color.fromRGBO(26, 26, 46, 0.10),

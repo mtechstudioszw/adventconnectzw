@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/church_model.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -54,7 +55,7 @@ class _ChurchAnnouncementsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,

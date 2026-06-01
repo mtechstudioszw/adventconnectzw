@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'widgets/auth_hero.dart';
 
@@ -103,7 +104,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -140,7 +141,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
       key: _formKey,
       child: Card(
         elevation: 0,
-        color: AppColors.white,
+        color: context.palette.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
@@ -216,7 +217,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
   Widget _buildSuccess() {
     return Card(
       elevation: 0,
-      color: AppColors.white,
+      color: context.palette.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
@@ -287,7 +288,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
         onPressed: onToggle,
       ),
       filled: true,
-      fillColor: AppColors.lightGrey,
+      fillColor: context.palette.inputFill,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),

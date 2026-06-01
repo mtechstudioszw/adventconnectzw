@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/block_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -81,7 +82,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,

@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// External landing URLs for the legal pages (live Netlify site).
@@ -437,7 +438,7 @@ class _AuthScreenState extends State<AuthScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
@@ -795,7 +796,7 @@ class _BirthDateField extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.10),
@@ -913,7 +914,7 @@ class _GoogleButton extends StatelessWidget {
     return Opacity(
       opacity: onTap == null && !busy ? 0.6 : 1,
       child: Material(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(22),
         elevation: 0,
         child: InkWell(
@@ -1084,7 +1085,7 @@ class _GlowFieldState extends State<_GlowField> {
               const BoxConstraints(minWidth: 48, minHeight: 48),
           suffixIcon: widget.suffix,
           filled: true,
-          fillColor: AppColors.white,
+          fillColor: context.palette.inputFill,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
           border: OutlineInputBorder(
@@ -1225,8 +1226,9 @@ class _TermsCheckboxState extends State<_TermsCheckbox> {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color:
-                    widget.value ? AppColors.primaryBlue : AppColors.white,
+                color: widget.value
+                    ? AppColors.primaryBlue
+                    : context.palette.card,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: widget.value
@@ -1236,6 +1238,7 @@ class _TermsCheckboxState extends State<_TermsCheckbox> {
                 ),
               ),
               alignment: Alignment.center,
+              // Check glyph sits on primaryBlue when value=true — keep white.
               child: widget.value
                   ? const Icon(
                       Icons.check,

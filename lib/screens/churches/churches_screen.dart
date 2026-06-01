@@ -13,6 +13,7 @@ import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/location_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/church_card.dart';
 import '../../widgets/last_updated_strip.dart';
@@ -272,7 +273,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     HapticFeedback.selectionClick();
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.white,
+      backgroundColor: context.palette.sheet,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -413,7 +414,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
                   },
                 ),
           filled: true,
-          fillColor: AppColors.white,
+          fillColor: context.palette.inputFill,
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
         ),
       ),
@@ -717,7 +718,7 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = selected ? AppColors.white : AppColors.textDark;
     return Material(
-      color: selected ? AppColors.primaryBlue : AppColors.white,
+      color: selected ? AppColors.primaryBlue : context.palette.card,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -834,7 +835,7 @@ class _NearbyComingSoonSheet extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.lightGrey,
+                color: context.palette.cardMuted,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: AppColors.goldAccent.withValues(alpha: 0.4),

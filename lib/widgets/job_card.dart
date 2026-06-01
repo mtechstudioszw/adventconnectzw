@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/job_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
 
@@ -24,7 +25,7 @@ class JobCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -227,7 +228,7 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.lightGrey,
+        color: context.palette.chipBg,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(

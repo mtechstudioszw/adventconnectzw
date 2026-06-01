@@ -6,6 +6,7 @@ import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -206,7 +207,7 @@ class _AddProductScreenState extends State<AddProductScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -728,7 +729,7 @@ class _SellerGate extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: const Color.fromRGBO(26, 26, 46, 0.06),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/product_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
 
@@ -23,7 +24,7 @@ class ProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// "Invite friends" prompt that sits on the home feed and helps the app
@@ -29,7 +30,7 @@ class InviteFriendsCard extends StatelessWidget {
       margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
         boxShadow: [
@@ -139,9 +140,9 @@ class _ShareSheet extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: context.palette.sheet,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
@@ -262,7 +263,7 @@ class _ChannelTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.05),

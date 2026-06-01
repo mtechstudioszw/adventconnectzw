@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/feedback_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 class FeedbackScreen extends StatefulWidget {
@@ -76,7 +77,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -196,7 +197,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
     return InputDecoration(
       hintText: hint,
       filled: true,
-      fillColor: AppColors.white,
+      fillColor: context.palette.inputFill,
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
@@ -268,12 +269,12 @@ class _CategoryChips extends StatelessWidget {
               decoration: BoxDecoration(
                 color: c.id == selected
                     ? AppColors.primaryBlue
-                    : AppColors.white,
+                    : context.palette.card,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: c.id == selected
                       ? AppColors.primaryBlue
-                      : const Color.fromRGBO(26, 26, 46, 0.10),
+                      : context.palette.divider,
                 ),
               ),
               child: Row(

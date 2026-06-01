@@ -10,6 +10,8 @@ import 'config/supabase_config.dart';
 import 'config/router_config.dart';
 import 'services/account_mode_service.dart';
 import 'services/analytics_service.dart';
+import 'services/auth_service.dart';
+import 'services/biometric_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/messaging_service.dart';
@@ -171,14 +173,71 @@ Future<void> _initBackgroundServices() async {
   }
 }
 
-class AdventConnectApp extends StatelessWidget {
+class AdventConnectApp extends StatefulWidget {
   const AdventConnectApp({super.key});
 
-  // Biometric resume re-prompt was wired here but is intentionally
-  // disabled in this build per user direction (revisit ~2 months
-  // post-launch). When re-enabling, restore the WidgetsBindingObserver
-  // pattern from git history (commit 606a714) — it stamped a paused
-  // timestamp and re-prompted on resume past a 2-minute threshold.
+  @override
+  State<AdventConnectApp> createState() => _AdventConnectAppState();
+}
+
+class _AdventConnectAppState extends State<AdventConnectApp>
+    with WidgetsBindingObserver {
+  // Anything shorter than this is treated as the user glancing at
+  // another app (e.g. tapping a notification or copying a 2FA code)
+  // and doesn't re-prompt biometric. Without a threshold every brief
+  // backgrounding would lock the user out, which they reported as
+  // unusable in a previous build.
+  static const _biometricThreshold = Duration(minutes: 2);
+
+  DateTime? _backgroundedAt;
+  bool _biometricPromptInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _backgroundedAt = DateTime.now();
+      return;
+    }
+    if (state == AppLifecycleState.resumed) {
+      _maybeRequireBiometric();
+    }
+  }
+
+  Future<void> _maybeRequireBiometric() async {
+    if (_biometricPromptInFlight) return;
+    final at = _backgroundedAt;
+    _backgroundedAt = null;
+    if (at == null) return;
+    if (DateTime.now().difference(at) < _biometricThreshold) return;
+    if (!AuthService.isSignedIn) return;
+    if (!await BiometricService.isEnabled()) return;
+    _biometricPromptInFlight = true;
+    try {
+      final ok = await BiometricService.authenticate();
+      if (!ok) {
+        // Cancelled or failed → sign out + back to login, same
+        // posture as the cold-start gate in the splash.
+        await AuthService.signOut();
+        appRouter.goNamed('login');
+      }
+    } finally {
+      _biometricPromptInFlight = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

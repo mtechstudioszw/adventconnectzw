@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Marketplace Code of Conduct gate. Replaces the old admin-approval
@@ -77,7 +78,7 @@ class _MarketplaceGuidelinesScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         child: Column(
           children: [
@@ -245,7 +246,7 @@ class _MarketplaceGuidelinesScreenState
 
   Widget _buildFooter(BuildContext context) {
     return Container(
-      color: AppColors.white,
+      color: context.palette.card,
       padding: EdgeInsets.fromLTRB(
         20,
         14,
@@ -356,7 +357,7 @@ class _RuleCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -419,7 +420,7 @@ class _AcceptanceTile extends StatelessWidget {
     return Material(
       color: accepted
           ? AppColors.primaryBlue.withValues(alpha: 0.08)
-          : AppColors.white,
+          : context.palette.card,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: () => onChanged(!accepted),

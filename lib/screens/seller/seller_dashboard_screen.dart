@@ -5,6 +5,7 @@ import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -80,7 +81,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,
@@ -311,8 +312,74 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
           _SabbathBadge(
             notice: seller.sabbathNoticeText ?? 'Observes the Sabbath.',
           ),
+        if (seller.observesSabbath) const SizedBox(height: 16),
+        _DangerZoneCard(onDelete: () => _confirmDeleteStore(seller)),
       ],
     );
+  }
+
+  Future<void> _confirmDeleteStore(Seller seller) async {
+    // Two-step confirm so an accidental tap can't wipe the storefront
+    // — destructive + irreversible (every product is dropped too).
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Delete your store?', style: AppTextStyles.headlineSmall),
+        content: Text(
+          '"${seller.businessName}" and every product you\'ve listed will be '
+          'removed from the marketplace. This cannot be undone.',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style:
+                  AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            child: Text('Delete store', style: AppTextStyles.labelLarge),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await SellerService.deleteMySellerProfile();
+      if (!mounted) return;
+      setState(() {
+        _seller = null;
+        _products = const [];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Store deleted.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not delete the store. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildHero() {
@@ -1273,6 +1340,73 @@ class _CircleIconButton extends StatelessWidget {
           ),
           child: Icon(icon, color: AppColors.white, size: 18),
         ),
+      ),
+    );
+  }
+}
+
+/// Destructive "danger zone" footer for the approved dashboard. Lives
+/// below the recent-products card so a seller has to scroll past
+/// everything else before they reach Delete — and the row uses the
+/// outlined red treatment so it visually reads as "stop, are you sure"
+/// before the confirm dialog also asks.
+class _DangerZoneCard extends StatelessWidget {
+  const _DangerZoneCard({required this.onDelete});
+
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.red.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'DANGER ZONE',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.red,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Delete this store and every product you\'ve listed. This '
+            'cannot be undone.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: Text('Delete store', style: AppTextStyles.labelLarge),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.red,
+              side: const BorderSide(color: AppColors.red),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

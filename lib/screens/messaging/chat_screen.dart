@@ -13,6 +13,7 @@ import '../../services/auth_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/chat_contact_sheet.dart';
@@ -120,7 +121,7 @@ class _ChatScreenState extends State<ChatScreen>
     final hasText = (m.content.trim().isNotEmpty) && m.messageType != 'voice';
     final action = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppColors.white,
+      backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -748,7 +749,7 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: Column(
         children: [
           _buildHeader(),
@@ -850,7 +851,7 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildOverflowMenu(bool canOpenProfile, String? otherUserId) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: AppColors.white),
-      color: AppColors.white,
+      color: context.palette.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -1247,7 +1248,7 @@ class _ChatScreenState extends State<ChatScreen>
     // tappable strip that opens the Unblock confirmation.
     if (_isBlocked) {
       return Container(
-        color: AppColors.white,
+        color: context.palette.card,
         child: SafeArea(
           top: false,
           child: InkWell(
@@ -1279,7 +1280,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
@@ -1305,7 +1306,7 @@ class _ChatScreenState extends State<ChatScreen>
         Expanded(
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.lightGrey,
+              color: context.palette.inputFill,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: const Color.fromRGBO(26, 26, 46, 0.06),
@@ -1477,7 +1478,7 @@ class _MessageBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           gradient: isMine ? AppColors.primaryGradient : null,
-          color: isMine ? null : AppColors.white,
+          color: isMine ? null : context.palette.card,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -1615,7 +1616,7 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           gradient: isMine ? AppColors.primaryGradient : null,
-          color: isMine ? null : AppColors.white,
+          color: isMine ? null : context.palette.card,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -1717,7 +1718,7 @@ class _MicButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.lightGrey,
+        color: context.palette.cardMuted,
         shape: BoxShape.circle,
         border: Border.all(
           color: const Color.fromRGBO(26, 26, 46, 0.08),

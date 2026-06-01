@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/church_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Replaces the live church-admin claim flow with a "Coming Soon"
@@ -26,7 +27,7 @@ class ClaimChurchComingSoonScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -36,9 +37,9 @@ class ClaimChurchComingSoonScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildPitchCard(),
+                  _buildPitchCard(context),
                   const SizedBox(height: 18),
-                  _buildFeaturePreview(),
+                  _buildFeaturePreview(context),
                   const SizedBox(height: 18),
                   _buildSponsorCta(context),
                   const SizedBox(height: 14),
@@ -161,11 +162,11 @@ class ClaimChurchComingSoonScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPitchCard() {
+  Widget _buildPitchCard(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -222,7 +223,7 @@ class ClaimChurchComingSoonScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFeaturePreview() {
+  Widget _buildFeaturePreview(BuildContext context) {
     final features = const [
       _Feature(
         icon: Icons.people_alt_outlined,
@@ -275,7 +276,7 @@ class ClaimChurchComingSoonScreen extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.white,
+              color: context.palette.card,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
@@ -491,7 +492,7 @@ class ClaimChurchComingSoonScreen extends StatelessWidget {
 
   Widget _buildContactCta(BuildContext context) {
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),

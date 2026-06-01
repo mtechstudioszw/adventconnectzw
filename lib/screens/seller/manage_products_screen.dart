@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 
@@ -115,7 +116,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
+        backgroundColor: ctx.palette.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
         ),
@@ -183,7 +184,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await context.pushNamed('add_product');
@@ -298,7 +299,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -353,7 +354,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -506,7 +507,7 @@ class _Chip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             gradient: active ? AppColors.primaryGradient : null,
-            color: active ? null : AppColors.white,
+            color: active ? null : context.palette.card,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: active
@@ -576,7 +577,7 @@ class _ProductRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
@@ -596,26 +597,34 @@ class _ProductRow extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: AspectRatio(
-                      aspectRatio: 1.0,
-                      child: Container(
-                        width: 76,
-                        color: AppColors.lightGrey,
-                        child: firstImage.isNotEmpty
-                            ? CachedImage(
-                                firstImage,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => const Icon(
-                                  Icons.image_not_supported_outlined,
+                  // SizedBox gives AspectRatio a bounded width — without
+                  // it, the Row's unbounded width constraint cascades into
+                  // AspectRatio (which needs at least one bounded axis) and
+                  // the whole product row collapses to zero height, so the
+                  // counts above tick up but no rows render below. The
+                  // square thumb is still enforced by AspectRatio(1.0).
+                  SizedBox(
+                    width: 76,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: AspectRatio(
+                        aspectRatio: 1.0,
+                        child: Container(
+                          color: AppColors.lightGrey,
+                          child: firstImage.isNotEmpty
+                              ? CachedImage(
+                                  firstImage,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Icon(
+                                    Icons.image_not_supported_outlined,
+                                    color: Color.fromRGBO(26, 26, 46, 0.4),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.image_outlined,
                                   color: Color.fromRGBO(26, 26, 46, 0.4),
                                 ),
-                              )
-                            : const Icon(
-                                Icons.image_outlined,
-                                color: Color.fromRGBO(26, 26, 46, 0.4),
-                              ),
+                        ),
                       ),
                     ),
                   ),
@@ -810,7 +819,7 @@ class _ErrorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(

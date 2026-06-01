@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/notification_preferences_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -89,7 +90,7 @@ class _NotificationPreferencesScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
@@ -224,7 +225,7 @@ class _Segmented extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.lightGrey,
+        color: context.palette.cardMuted,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(

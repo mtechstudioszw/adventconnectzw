@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/prayer_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
 class PrayerCard extends StatelessWidget {
@@ -11,6 +13,8 @@ class PrayerCard extends StatelessWidget {
     required this.busy,
     required this.onTogglePray,
     required this.onTap,
+    this.onAuthorTap,
+    this.onDelete,
   });
 
   final Prayer prayer;
@@ -18,6 +22,14 @@ class PrayerCard extends StatelessWidget {
   final bool busy;
   final VoidCallback onTogglePray;
   final VoidCallback onTap;
+
+  /// Tap on the author's avatar or name. Null for anonymous prayers
+  /// (the prayer screen passes null when `prayer.authorId` is empty).
+  final VoidCallback? onAuthorTap;
+
+  /// Owner-only delete action. Null for non-owners — the overflow
+  /// menu only renders when this is non-null.
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +41,7 @@ class PrayerCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -44,32 +56,44 @@ class PrayerCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  PrayerAvatar(name: prayer.authorName, size: 42),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          prayer.authorName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          formatTimeAgo(prayer.createdAt),
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.55),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                  _AuthorTapTarget(
+                    onTap: onAuthorTap,
+                    child: PrayerAvatar(
+                      name: prayer.authorName,
+                      photoUrl: prayer.authorPhotoUrl,
+                      size: 42,
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _AuthorTapTarget(
+                      onTap: onAuthorTap,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            prayer.authorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            formatTimeAgo(prayer.createdAt),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: const Color.fromRGBO(26, 26, 46, 0.55),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (onDelete != null)
+                    _OwnerMenu(onDelete: onDelete!),
                 ],
               ),
               const SizedBox(height: 12),
@@ -99,7 +123,7 @@ class PrayerCard extends StatelessWidget {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.lightGrey,
+                      color: context.palette.chipBg,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -143,9 +167,18 @@ String formatTimeAgo(DateTime then) {
 }
 
 class PrayerAvatar extends StatelessWidget {
-  const PrayerAvatar({super.key, required this.name, this.size = 40});
+  const PrayerAvatar({
+    super.key,
+    required this.name,
+    this.photoUrl,
+    this.size = 40,
+  });
 
   final String name;
+
+  /// Profile photo to render. When null/empty (or anonymous prayer)
+  /// the avatar falls back to a gradient circle with initials.
+  final String? photoUrl;
   final double size;
 
   String _initials() {
@@ -158,6 +191,25 @@ class PrayerAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final url = photoUrl?.trim();
+    if (url != null && url.isNotEmpty) {
+      return ClipOval(
+        child: CachedNetworkImage(
+          imageUrl: url,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          // Show the initials placeholder while the photo loads or
+          // if it fails — never flash an empty white circle.
+          placeholder: (context, _) => _initialsCircle(),
+          errorWidget: (context, _, e) => _initialsCircle(),
+        ),
+      );
+    }
+    return _initialsCircle();
+  }
+
+  Widget _initialsCircle() {
     return Container(
       width: size,
       height: size,
@@ -174,6 +226,63 @@ class PrayerAvatar extends StatelessWidget {
           fontSize: size * 0.34,
         ),
       ),
+    );
+  }
+}
+
+/// Wraps the avatar / name with an InkWell when `onTap` is non-null.
+/// Anonymous prayers pass `onTap: null`, so the tap target is inert
+/// — the surrounding card's tap still opens the prayer details.
+class _AuthorTapTarget extends StatelessWidget {
+  const _AuthorTapTarget({required this.onTap, required this.child});
+
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onTap == null) return child;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _OwnerMenu extends StatelessWidget {
+  const _OwnerMenu({required this.onDelete});
+
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(
+        Icons.more_horiz,
+        color: Color.fromRGBO(26, 26, 46, 0.55),
+      ),
+      onSelected: (value) {
+        if (value == 'delete') onDelete();
+      },
+      itemBuilder: (ctx) => [
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              const Icon(Icons.delete_outline, color: AppColors.red, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Delete',
+                style: AppTextStyles.labelMedium.copyWith(color: AppColors.red),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

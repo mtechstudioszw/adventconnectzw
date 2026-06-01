@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/event_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
 
@@ -35,7 +36,7 @@ class EventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(

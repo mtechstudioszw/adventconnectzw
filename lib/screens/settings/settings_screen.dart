@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
+import '../../services/biometric_service.dart';
 import '../../services/notification_preferences_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/seller_service.dart';
@@ -31,6 +32,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
   ThemeMode _themeMode = ThemeService.current;
   bool _isSuperAdmin = false;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
+  bool _biometricBusy = false;
 
   @override
   void initState() {
@@ -45,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
     _loadCategoryPrefs();
     _loadSuperAdmin();
+    _loadBiometric();
   }
 
   Future<void> _loadCategoryPrefs() async {
@@ -58,6 +63,44 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (!mounted) return;
     setState(() => _isSuperAdmin = isAdmin);
   }
+
+  Future<void> _loadBiometric() async {
+    final results = await Future.wait([
+      BiometricService.isAvailable(),
+      BiometricService.isEnabled(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _biometricAvailable = results[0];
+      _biometricEnabled = results[1];
+    });
+  }
+
+  Future<void> _toggleBiometric(bool next) async {
+    if (_biometricBusy) return;
+    setState(() => _biometricBusy = true);
+    final ok = await BiometricService.setEnabled(next);
+    if (!mounted) return;
+    setState(() {
+      _biometricBusy = false;
+      // setEnabled(false) is unconditional, setEnabled(true) only
+      // returns true once the OS prompt is satisfied — so this
+      // single expression covers cancel-flip-back too.
+      _biometricEnabled = ok && next;
+    });
+    if (next && !ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not verify biometrics. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
 
   /// Optimistic write — flip the local toggle immediately so the
   /// Switch animates, then fire-and-forget the persist call. The
@@ -414,12 +457,23 @@ class _SettingsScreenState extends State<SettingsScreen>
                           label: 'Change password',
                           onTap: _changePassword,
                         ),
-                        // Biometric unlock toggle is intentionally
-                        // hidden in this build per user direction —
-                        // revisit ~2 months post-launch. The
-                        // BiometricService still exists; unhide this
-                        // block + restore the resume/splash checks
-                        // to enable.
+                        if (_biometricAvailable) ...[
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.fingerprint,
+                            label: 'Biometric unlock',
+                            value: _biometricEnabled,
+                            onChanged: _biometricBusy
+                                ? null
+                                : (v) => _toggleBiometric(v),
+                          ),
+                        ],
+                        const _Divider(),
+                        _NavRow(
+                          icon: Icons.block,
+                          label: 'Blocked contacts',
+                          onTap: () => context.pushNamed('blocked_users'),
+                        ),
                         const _Divider(),
                         _NavRow(
                           icon: Icons.delete_outline,
@@ -1140,7 +1194,10 @@ class _NavRow extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  // Nullable so callers can render a passive (non-tappable) row when
+  // there is nothing left to do — e.g. "Google linked" once linking
+  // has succeeded. A null onTap also disables InkWell's ripple.
+  final VoidCallback? onTap;
   final String? trailing;
   final bool destructive;
 
@@ -1201,7 +1258,9 @@ class _ToggleRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  // Nullable so callers can disable the Switch during an in-flight
+  // OS prompt (e.g. waiting for the biometric dialog to return).
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {

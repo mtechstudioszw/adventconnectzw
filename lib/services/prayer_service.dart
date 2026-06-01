@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/prayer_model.dart';
 import 'analytics_service.dart';
+import 'post_limit_error.dart';
 
 class PrayerService {
   PrayerService._();
@@ -22,7 +23,8 @@ class PrayerService {
   static const _readTable = 'prayers';
   static const _responsesTable = 'prayer_responses';
 
-  static const _authorEmbed = 'author:author_id(full_name)';
+  static const _authorEmbed =
+      'author:author_id(full_name, profile_photo_url)';
 
   /// Optionally filter by [category] code ('healing', 'family',
   /// 'spiritual', 'provision', 'thanksgiving', 'ministry', 'other').
@@ -164,19 +166,23 @@ class PrayerService {
     // Insert and immediately read back the joined author name in a single
     // round-trip. Reading from the base `prayers` table here (not the view)
     // is fine — the author can always read their own row.
-    final inserted = await _client
-        .from(_writeTable)
-        .insert({
-          'author_id': user.id,
-          'content': content.trim(),
-          'visibility': visibility,
-          'is_urgent': isUrgent,
-          'category': category,
-          if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
-          if (churchId != null) 'church_id': int.tryParse(churchId),
-        })
-        .select('*, author:author_id(full_name)')
-        .single();
+    final inserted = await PostLimitError.guard(
+      PostSection.prayer,
+      () => _client
+          .from(_writeTable)
+          .insert({
+            'author_id': user.id,
+            'content': content.trim(),
+            'visibility': visibility,
+            'is_urgent': isUrgent,
+            'category': category,
+            if (title != null && title.trim().isNotEmpty)
+              'title': title.trim(),
+            if (churchId != null) 'church_id': int.tryParse(churchId),
+          })
+          .select('*, author:author_id(full_name, profile_photo_url)')
+          .single(),
+    );
     AnalyticsService.prayerPosted(visibility: visibility);
     return _hydratePrayer(inserted);
   }
@@ -273,13 +279,35 @@ class PrayerService {
     final isAnonymous = (row['visibility'] as String?) == 'anonymous';
     final author = row['author'] as Map<String, dynamic>?;
     final name = (author?['full_name'] as String?)?.trim();
+    final photo = (author?['profile_photo_url'] as String?)?.trim();
     final masked = <String, dynamic>{
       ...row,
       if (isAnonymous) 'author_id': null,
       'author_name':
           isAnonymous ? 'Anonymous' : (name?.isNotEmpty == true ? name : 'A friend'),
+      // Strip the photo for anonymous posts — the whole point is the
+      // poster isn't identifiable. Otherwise pass it through so the
+      // prayer card can render a real avatar instead of initials.
+      'author_photo_url':
+          isAnonymous ? null : (photo?.isNotEmpty == true ? photo : null),
     };
     return Prayer.fromJson(masked);
+  }
+
+  /// Delete a prayer the current user posted. RLS on `prayers` already
+  /// restricts DELETE to the author (`author_id = auth.uid()`), but
+  /// we also pass the predicate explicitly so a transient role issue
+  /// never silently affects another user's row.
+  static Future<void> deletePrayer(String prayerId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to delete your prayer.');
+    }
+    await _client
+        .from(_writeTable)
+        .delete()
+        .eq('id', prayerId)
+        .eq('author_id', user.id);
   }
 }
 

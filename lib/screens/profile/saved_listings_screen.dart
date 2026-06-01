@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -60,7 +61,7 @@ class _SavedListingsScreenState extends State<SavedListingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/prayer_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -119,6 +120,69 @@ class _PrayerScreenState extends State<PrayerScreen>
   Future<void> _openPostScreen() async {
     await context.pushNamed('post_prayer');
     if (mounted) await _bootstrap();
+  }
+
+  Future<void> _confirmDelete(Prayer prayer) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        title: Text('Delete this prayer?', style: AppTextStyles.headlineSmall),
+        content: Text(
+          'Your request and every "I\'m praying" reaction will be removed. '
+          'This can\'t be undone.',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style:
+                  AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            child: Text('Delete', style: AppTextStyles.labelLarge),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await PrayerService.deletePrayer(prayer.id);
+      if (!mounted) return;
+      // Drop the row locally so the list updates without a full
+      // reload roundtrip; _bootstrap on next refresh corrects drift.
+      setState(() => _prayers = _prayers.where((p) => p.id != prayer.id).toList());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Prayer deleted.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not delete. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -250,6 +314,11 @@ class _PrayerScreenState extends State<PrayerScreen>
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
         final p = _prayers[i];
+        // Anonymous prayers come back with an empty authorId — there's
+        // nothing to navigate to and the row should stay inert.
+        final canViewAuthor = p.authorId.isNotEmpty;
+        final isMine = canViewAuthor &&
+            AuthService.currentUser?.id == p.authorId;
         return PrayerCard(
           prayer: p,
           isPraying: _prayedIds.contains(p.id),
@@ -263,6 +332,13 @@ class _PrayerScreenState extends State<PrayerScreen>
             );
             if (mounted) _bootstrap();
           },
+          onAuthorTap: canViewAuthor
+              ? () => context.pushNamed(
+                    'user_profile',
+                    pathParameters: {'userId': p.authorId},
+                  )
+              : null,
+          onDelete: isMine ? () => _confirmDelete(p) : null,
         );
       },
     );

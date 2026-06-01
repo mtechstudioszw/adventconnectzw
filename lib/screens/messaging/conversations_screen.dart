@@ -9,6 +9,7 @@ import '../../services/feed_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/composer_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
@@ -382,12 +383,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: Column(
         children: [
           _buildHero(),
           Container(
-            color: AppColors.white,
+            color: context.palette.card,
             child: StoriesRail(
               stories: _stories,
               viewerId: _currentUserId,
@@ -507,7 +508,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       child: Container(
         height: 44,
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -645,7 +646,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   Future<void> _openConversationActions(Conversation c) async {
     final action = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppColors.white,
+      backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -919,7 +920,7 @@ class _ConversationTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -954,7 +955,7 @@ class _ConversationTile extends StatelessWidget {
                           color: AppColors.successGreen,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: AppColors.white,
+                            color: context.palette.card,
                             width: 2,
                           ),
                         ),
@@ -1160,7 +1161,7 @@ class _FriendRequestTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: AppColors.primaryBlue.withValues(alpha: 0.20),
@@ -1290,7 +1291,7 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: filled ? AppColors.primaryBlue : AppColors.white,
+      color: filled ? AppColors.primaryBlue : context.palette.card,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -1343,7 +1344,7 @@ class _RequestTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: AppColors.primaryBlue.withValues(alpha: 0.12),

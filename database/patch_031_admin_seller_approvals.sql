@@ -38,10 +38,19 @@ ALTER TABLE public.sellers
 -- app still writes it on insert because the Code of Conduct gate is
 -- still part of the setup flow.
 
+-- Drop any earlier UUID-typed versions of these RPCs from a prior
+-- deployment of this patch. sellers.id is BIGSERIAL (BIGINT), so the
+-- original UUID parameter type caused PostgREST to reject Approve /
+-- Reject calls with a cast error. CREATE OR REPLACE can't change a
+-- parameter type, so we DROP first to let the BIGINT versions below
+-- replace them cleanly.
+DROP FUNCTION IF EXISTS public.admin_approve_seller(UUID);
+DROP FUNCTION IF EXISTS public.admin_reject_seller(UUID, TEXT);
+
 
 -- ----- 2. admin_approve_seller --------------------------------------
 CREATE OR REPLACE FUNCTION public.admin_approve_seller(
-  p_seller_id UUID
+  p_seller_id BIGINT
 )
 RETURNS public.sellers AS $$
 DECLARE
@@ -92,13 +101,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
-REVOKE ALL ON FUNCTION public.admin_approve_seller(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.admin_approve_seller(UUID) TO authenticated;
+REVOKE ALL ON FUNCTION public.admin_approve_seller(BIGINT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.admin_approve_seller(BIGINT) TO authenticated;
 
 
 -- ----- 3. admin_reject_seller ---------------------------------------
 CREATE OR REPLACE FUNCTION public.admin_reject_seller(
-  p_seller_id UUID,
+  p_seller_id BIGINT,
   p_reason    TEXT
 )
 RETURNS public.sellers AS $$
@@ -150,8 +159,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
 
-REVOKE ALL ON FUNCTION public.admin_reject_seller(UUID, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.admin_reject_seller(UUID, TEXT) TO authenticated;
+REVOKE ALL ON FUNCTION public.admin_reject_seller(BIGINT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.admin_reject_seller(BIGINT, TEXT) TO authenticated;
 
 
 -- ----- 4. admin_pending_sellers -------------------------------------

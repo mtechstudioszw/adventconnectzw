@@ -18,6 +18,7 @@ import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -315,7 +316,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -343,7 +344,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildSearchBar() {
     return Container(
-      color: AppColors.white,
+      color: context.palette.card,
       padding: const EdgeInsets.fromLTRB(8, 8, 12, 10),
       child: Row(
         children: [
@@ -364,7 +365,7 @@ class _SearchScreenState extends State<SearchScreen> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.lightGrey,
+                color: context.palette.inputFill,
                 borderRadius: BorderRadius.circular(22),
               ),
               child: TextField(
@@ -426,7 +427,7 @@ class _SearchScreenState extends State<SearchScreen> {
       const _FilterDef(_Filter.jobs, 'Jobs'),
     ];
     return Container(
-      color: AppColors.white,
+      color: context.palette.card,
       padding: const EdgeInsets.only(bottom: 8),
       child: SizedBox(
         height: 38,
@@ -893,7 +894,7 @@ class _SuggestionTap extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.chipBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.08),

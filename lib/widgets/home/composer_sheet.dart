@@ -4,6 +4,7 @@ import '../../models/story_model.dart';
 import '../../services/feed_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
 
@@ -118,9 +119,9 @@ class _PostComposerState extends State<_PostComposer> {
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: context.palette.sheet,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: SingleChildScrollView(
@@ -181,7 +182,7 @@ class _PostComposerState extends State<_PostComposer> {
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
-                  color: AppColors.lightGrey,
+                  color: context.palette.inputFill,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: const Color.fromRGBO(26, 26, 46, 0.06),
@@ -432,9 +433,9 @@ class _StoryComposerState extends State<_StoryComposer> {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxSheetHeight),
         child: Container(
-          decoration: const BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: context.palette.sheet,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SafeArea(
             top: false,
@@ -522,7 +523,7 @@ class _StoryComposerState extends State<_StoryComposer> {
                         const SizedBox(height: 12),
                         Container(
                           decoration: BoxDecoration(
-                            color: AppColors.lightGrey,
+                            color: context.palette.inputFill,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color:

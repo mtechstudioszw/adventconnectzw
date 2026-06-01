@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -163,7 +164,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   Widget build(BuildContext context) {
     final hasUnread = _items.any((n) => !n.isRead);
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
@@ -305,7 +306,7 @@ class _NotificationRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: unread
                 ? AppColors.primaryBlue.withValues(alpha: 0.06)
-                : AppColors.white,
+                : context.palette.card,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: unread

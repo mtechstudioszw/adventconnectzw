@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// Premium shimmer placeholders so list screens never show a bare
 /// spinner (Part 3 of the master reference). Three shapes cover every
@@ -48,7 +48,7 @@ class _CardSkeleton extends StatelessWidget {
       child: Container(
         height: 96,
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(18),
         ),
       ),
@@ -64,7 +64,7 @@ class _ProductSkeleton extends StatelessWidget {
       highlightColor: ShimmerLoaders._highlight,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
-        child: Container(color: AppColors.white),
+        child: Container(color: context.palette.card),
       ),
     );
   }

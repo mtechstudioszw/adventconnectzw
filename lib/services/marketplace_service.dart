@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/product_model.dart';
+import 'post_limit_error.dart';
 
 class MarketplaceService {
   MarketplaceService._();
@@ -197,19 +198,22 @@ class MarketplaceService {
     if (user == null) {
       throw const AuthException('Sign in to post a product.');
     }
-    final inserted = await _client.from(_table).insert({
-      'seller_id': user.id,
-      'title': title.trim(),
-      'description': description?.trim(),
-      'price': price,
-      'price_currency': priceCurrency,
-      'category': category,
-      'subcategory': subcategory?.trim(),
-      'image_urls': imageUrls ?? const [],
-      'condition': condition,
-      'province': province?.trim(),
-      'location': location?.trim(),
-    }).select('id').single();
+    final inserted = await PostLimitError.guard(
+      PostSection.product,
+      () => _client.from(_table).insert({
+        'seller_id': user.id,
+        'title': title.trim(),
+        'description': description?.trim(),
+        'price': price,
+        'price_currency': priceCurrency,
+        'category': category,
+        'subcategory': subcategory?.trim(),
+        'image_urls': imageUrls ?? const [],
+        'condition': condition,
+        'province': province?.trim(),
+        'location': location?.trim(),
+      }).select('id').single(),
+    );
     return inserted['id'].toString();
   }
 }

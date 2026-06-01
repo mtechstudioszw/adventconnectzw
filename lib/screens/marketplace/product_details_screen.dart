@@ -8,6 +8,7 @@ import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/start_conversation_sheet.dart';
 import '../../widgets/cached_image.dart';
@@ -168,7 +169,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: _buildBody(),
     );
   }
@@ -313,7 +314,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -394,7 +395,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
 
   Widget _buildSellerCard(Product product) {
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: product.sellerId.isEmpty
@@ -406,7 +407,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
         borderRadius: BorderRadius.circular(20),
         child: Ink(
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -548,7 +549,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
         borderRadius: BorderRadius.circular(14),
         child: Ink(
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: AppColors.primaryBlue.withValues(alpha: 0.30),
@@ -586,7 +587,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(

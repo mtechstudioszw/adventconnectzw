@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/seller_rating_service.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
 /// Bottom-sheet composer for rating a seller (1-5 stars + optional
@@ -138,7 +139,7 @@ class _RateSellerSheetState extends State<RateSellerSheet> {
                     color: const Color.fromRGBO(26, 26, 46, 0.5),
                   ),
                   filled: true,
-                  fillColor: AppColors.lightGrey,
+                  fillColor: context.palette.inputFill,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,

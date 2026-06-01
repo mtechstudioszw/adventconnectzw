@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/event_model.dart';
+import 'post_limit_error.dart';
 import 'analytics_service.dart';
 
 class EventService {
@@ -153,15 +154,22 @@ class EventService {
     };
     Map<String, dynamic> inserted;
     try {
-      inserted =
-          await _client.from(_table).insert(row).select('id').single();
-    } catch (_) {
+      inserted = await PostLimitError.guard(
+        PostSection.event,
+        () => _client.from(_table).insert(row).select('id').single(),
+      );
+    } catch (e) {
+      // Re-surface daily-limit errors instead of falling through to the
+      // legacy-schema retry, which would silently consume a second slot.
+      if (PostLimitError.matches(e)) rethrow;
       // Retry without the end_* columns when the migration hasn't been
       // applied yet, so existing deployments don't 400 on every post.
       row.remove('end_date');
       row.remove('end_time');
-      inserted =
-          await _client.from(_table).insert(row).select('id').single();
+      inserted = await PostLimitError.guard(
+        PostSection.event,
+        () => _client.from(_table).insert(row).select('id').single(),
+      );
     }
     return inserted['id'].toString();
   }

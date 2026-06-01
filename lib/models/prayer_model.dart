@@ -31,6 +31,7 @@ class Prayer {
     required this.content,
     required this.prayerCount,
     required this.createdAt,
+    this.authorPhotoUrl,
     this.commentCount = 0,
     this.category = PrayerCategory.other,
   });
@@ -38,6 +39,7 @@ class Prayer {
   final String id;
   final String authorId;
   final String authorName;
+  final String? authorPhotoUrl;
   final String content;
   final int prayerCount;
   final int commentCount;
@@ -49,6 +51,7 @@ class Prayer {
       id: json['id'].toString(),
       authorId: (json['author_id'] ?? '').toString(),
       authorName: (json['author_name'] ?? 'A friend') as String,
+      authorPhotoUrl: json['author_photo_url'] as String?,
       content: (json['content'] ?? '') as String,
       prayerCount: _readInt(json['prayer_count']),
       commentCount: _readInt(json['comment_count']),
@@ -63,6 +66,7 @@ class Prayer {
       id: id,
       authorId: authorId,
       authorName: authorName,
+      authorPhotoUrl: authorPhotoUrl,
       content: content,
       prayerCount: prayerCount ?? this.prayerCount,
       commentCount: commentCount ?? this.commentCount,

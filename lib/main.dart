@@ -225,15 +225,16 @@ class _AdventConnectAppState extends State<AdventConnectApp>
     if (DateTime.now().difference(at) < _biometricThreshold) return;
     if (!AuthService.isSignedIn) return;
     if (!await BiometricService.isEnabled()) return;
+    // Don't double-prompt if the lock screen is already on top — that
+    // would chain two OS dialogs and confuse the user.
+    final loc = appRouter.routerDelegate.currentConfiguration.uri.path;
+    if (loc.startsWith('/biometric-lock') || loc == '/splash') return;
     _biometricPromptInFlight = true;
     try {
-      final ok = await BiometricService.authenticate();
-      if (!ok) {
-        // Cancelled or failed → sign out + back to login, same
-        // posture as the cold-start gate in the splash.
-        await AuthService.signOut();
-        appRouter.goNamed('login');
-      }
+      // WhatsApp-style: navigate to the dedicated lock screen and let
+      // IT drive the prompt + Try-again loop. The session stays alive
+      // on cancel — no more accidental sign-outs.
+      appRouter.goNamed('biometric_lock');
     } finally {
       _biometricPromptInFlight = false;
     }

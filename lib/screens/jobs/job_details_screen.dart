@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/job_model.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../services/messaging_service.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
@@ -88,7 +89,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
+        backgroundColor: ctx.palette.sheet,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Mark as filled?',
@@ -181,7 +182,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
+        backgroundColor: ctx.palette.sheet,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Reopen this listing?',
@@ -364,7 +365,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: _buildBody(),
     );
   }
@@ -567,7 +568,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -704,7 +705,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -740,7 +741,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -893,7 +894,7 @@ class _MarkFilledButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.primaryBlue, width: 1.5),
       ),
@@ -1008,7 +1009,7 @@ class _SecondaryActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.primaryBlue, width: 1.5),
       ),
@@ -1051,7 +1052,7 @@ class _ReopenButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.primaryBlue, width: 1.5),
       ),

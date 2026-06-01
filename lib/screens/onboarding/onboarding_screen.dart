@@ -559,6 +559,7 @@ class _PrimaryButton extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
+                // TODO(dark-mode): const Icon — sits on primaryGradient button.
                 const Icon(
                   Icons.arrow_forward_rounded,
                   color: AppColors.white,

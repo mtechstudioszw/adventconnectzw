@@ -188,7 +188,7 @@ class _CompanyLogo extends StatelessWidget {
       height: 52,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.lightGrey,
+        color: context.palette.cardMuted,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
       ),

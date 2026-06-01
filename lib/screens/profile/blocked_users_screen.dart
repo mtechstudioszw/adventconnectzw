@@ -177,7 +177,7 @@ class _UserRow extends StatelessWidget {
             height: 48,
             decoration: BoxDecoration(
               gradient: hasPhoto ? null : AppColors.primaryGradient,
-              color: hasPhoto ? AppColors.lightGrey : null,
+              color: hasPhoto ? context.palette.cardMuted : null,
               shape: BoxShape.circle,
               image: hasPhoto
                   ? DecorationImage(

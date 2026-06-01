@@ -27,6 +27,7 @@ import '../../services/prayer_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
 import '../../widgets/home/comments_sheet.dart';
@@ -454,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: Stack(
         children: [
           _buildScrollableContent(),
@@ -471,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen>
                 FloatingActionButton(
                   heroTag: 'home_prayer_fab',
                   mini: true,
-                  backgroundColor: AppColors.white,
+                  backgroundColor: context.palette.card,
                   foregroundColor: AppColors.primaryBlue,
                   elevation: 4,
                   tooltip: 'Prayer requests',
@@ -941,7 +942,7 @@ class _HomeScreenState extends State<HomeScreen>
                 height: 240,
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.white,
+                  color: context.palette.card,
                   borderRadius: BorderRadius.circular(18),
                 ),
               ),
@@ -1580,7 +1581,7 @@ class _SuggestedMemberTile extends StatelessWidget {
             ? entry.city!.trim()
             : 'Adventist member');
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(18),
       elevation: 0,
       child: InkWell(
@@ -1588,7 +1589,7 @@ class _SuggestedMemberTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
             boxShadow: [
@@ -2010,7 +2011,7 @@ class _WelcomeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(20),
       elevation: 0,
       shadowColor: Colors.black.withValues(alpha: 0.08),
@@ -2023,7 +2024,7 @@ class _WelcomeCard extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -2042,9 +2043,9 @@ class _WelcomeCard extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               gradient: photoUrl == null ? AppColors.primaryGradient : null,
-              color: photoUrl == null ? null : AppColors.lightGrey,
+              color: photoUrl == null ? null : context.palette.cardMuted,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.white, width: 3),
+              border: Border.all(color: context.palette.card, width: 3),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.primaryBlue.withValues(alpha: 0.25),
@@ -2157,7 +2158,7 @@ class _HomeEventCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.white,
+              color: context.palette.card,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
@@ -2523,7 +2524,7 @@ class _CoverImage extends StatelessWidget {
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
         return Container(
-          color: AppColors.lightGrey,
+          color: context.palette.cardMuted,
           alignment: Alignment.center,
           child: const SizedBox(
             width: 18,
@@ -2549,7 +2550,7 @@ class _PrayerHomeCard extends StatelessWidget {
     return SizedBox(
       width: 260,
       child: Material(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(18),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -2638,7 +2639,7 @@ class _PrayersEmpty extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -2760,7 +2761,7 @@ class _CompactStatTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.06),
@@ -2825,7 +2826,7 @@ class _ComposerEntry extends StatelessWidget {
         ? '?'
         : name.trim().substring(0, 1).toUpperCase();
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(28),
       child: InkWell(
         onTap: onTap,
@@ -2833,7 +2834,7 @@ class _ComposerEntry extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.08),

@@ -1239,6 +1239,7 @@ class _TermsCheckboxState extends State<_TermsCheckbox> {
               ),
               alignment: Alignment.center,
               // Check glyph sits on primaryBlue when value=true — keep white.
+              // TODO(dark-mode): const Icon — stays white on primaryBlue fill.
               child: widget.value
                   ? const Icon(
                       Icons.check,
@@ -1324,6 +1325,7 @@ class _PrimaryButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 18),
               alignment: Alignment.center,
               child: busy
+                  // TODO(dark-mode): const CircularProgressIndicator — sits on primaryGradient.
                   ? const SizedBox(
                       width: 22,
                       height: 22,

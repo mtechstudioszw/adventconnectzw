@@ -362,6 +362,7 @@ class _GradientButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 18),
               child: Center(
                 child: busy
+                    // TODO(dark-mode): const CircularProgressIndicator — sits on primaryGradient.
                     ? const SizedBox(
                         width: 22,
                         height: 22,

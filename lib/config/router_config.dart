@@ -73,6 +73,7 @@ import '../screens/seller/setup_store_screen.dart';
 import '../screens/settings/about_screen.dart';
 import '../screens/settings/permissions_screen.dart';
 import '../screens/settings/settings_screen.dart';
+import '../screens/splash/biometric_lock_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -83,6 +84,16 @@ final GoRouter appRouter = GoRouter(
       path: '/splash',
       name: 'splash',
       builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      // WhatsApp-style biometric lock. Splash routes here on cold
+      // start when biometric is enabled; main.dart's resume handler
+      // pushes here when the app returns from > 2 min in background.
+      // Cancel keeps the user signed-in on this screen with Try Again,
+      // never bounces to login.
+      path: '/biometric-lock',
+      name: 'biometric_lock',
+      builder: (context, state) => const BiometricLockScreen(),
     ),
     GoRoute(
       path: '/onboarding',

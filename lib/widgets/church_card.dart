@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/church_model.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
 
@@ -184,7 +185,7 @@ class _CoverImage extends StatelessWidget {
       url!,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) => Container(
-        color: AppColors.lightGrey,
+        color: context.palette.cardMuted,
         child: const Icon(
           Icons.broken_image_outlined,
           color: Color.fromRGBO(26, 26, 46, 0.3),
@@ -193,7 +194,7 @@ class _CoverImage extends StatelessWidget {
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
         return Container(
-          color: AppColors.lightGrey,
+          color: context.palette.cardMuted,
           alignment: Alignment.center,
           child: const SizedBox(
             width: 18,

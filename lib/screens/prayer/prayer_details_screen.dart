@@ -5,6 +5,7 @@ import '../../models/prayer_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/prayer_card.dart';
@@ -232,7 +233,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -342,7 +343,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -398,7 +399,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -437,7 +438,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -467,7 +468,8 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                     child: Container(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.white, width: 2.5),
+                        border: Border.all(
+                            color: context.palette.card, width: 2.5),
                       ),
                       child: PrayerAvatar(
                         name: visible[i].userName,
@@ -483,9 +485,10 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                       height: 40,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppColors.lightGrey,
+                        color: context.palette.cardMuted,
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.white, width: 2.5),
+                        border: Border.all(
+                            color: context.palette.card, width: 2.5),
                       ),
                       child: Text(
                         '+${_prayingUsers.length - visible.length}',
@@ -511,7 +514,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -577,7 +580,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -643,7 +646,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                       ? 'Write encouragement...'
                       : 'Reply to ${_replyTo!.authorName}...',
                   filled: true,
-                  fillColor: AppColors.lightGrey,
+                  fillColor: context.palette.inputFill,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(

@@ -3,6 +3,7 @@ import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
 
@@ -527,9 +528,9 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
       maxChildSize: 0.92,
       expand: false,
       builder: (ctx, controller) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        decoration: BoxDecoration(
+          color: context.palette.sheet,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         ),
         child: Column(
           children: [
@@ -591,7 +592,7 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
                             return ListTile(
                               leading: CircleAvatar(
                                 radius: 22,
-                                backgroundColor: AppColors.lightGrey,
+                                backgroundColor: context.palette.cardMuted,
                                 child: photo.isNotEmpty
                                     ? ClipOval(
                                         child: CachedImage(

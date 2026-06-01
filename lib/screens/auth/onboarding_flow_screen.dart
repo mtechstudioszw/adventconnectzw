@@ -545,6 +545,7 @@ class _PrimaryButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 18),
               alignment: Alignment.center,
               child: busy
+                  // TODO(dark-mode): const CircularProgressIndicator — sits on primaryGradient.
                   ? const SizedBox(
                       width: 22,
                       height: 22,
@@ -856,6 +857,7 @@ class _CoverStrip extends StatelessWidget {
               child: InkWell(
                 customBorder: const CircleBorder(),
                 onTap: onRemove,
+                // TODO(dark-mode): const Icon — sits on translucent-black scrim.
                 child: const Padding(
                   padding: EdgeInsets.all(6),
                   child: Icon(
@@ -911,6 +913,7 @@ class _PhotoAvatar extends StatelessWidget {
                 : null,
           ),
           alignment: Alignment.center,
+          // TODO(dark-mode): const Icon — sits on primaryGradient avatar.
           child: hasPhoto
               ? null
               : const Icon(
@@ -935,6 +938,7 @@ class _PhotoAvatar extends StatelessWidget {
                 border: Border.all(color: AppColors.white, width: 2.5),
               ),
               child: uploading
+                  // TODO(dark-mode): const widgets — sit on primaryBlue camera badge.
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -1161,6 +1165,7 @@ class _ChurchPickRow extends StatelessWidget {
                   ),
                 ),
                 alignment: Alignment.center,
+                // TODO(dark-mode): const Icon — sits on primaryBlue check fill.
                 child: selected
                     ? const Icon(
                         Icons.check,
@@ -1656,6 +1661,7 @@ class _SuccessPageState extends State<_SuccessPage>
                         ),
                       ],
                     ),
+                    // TODO(dark-mode): const Icon — sits on primaryGradient success disc.
                     child: const Icon(
                       Icons.check_rounded,
                       color: AppColors.white,

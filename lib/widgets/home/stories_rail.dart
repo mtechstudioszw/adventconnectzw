@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/story_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
 
@@ -103,7 +104,7 @@ class _YourStoryCard extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Material(
-            color: AppColors.white,
+            color: context.palette.card,
             child: InkWell(
               // Single tap region for the whole card. When the viewer
               // hasn't posted yet the whole thing is "Create story";
@@ -133,7 +134,7 @@ class _YourStoryCard extends StatelessWidget {
                       Expanded(
                         flex: 3,
                         child: Container(
-                          color: AppColors.white,
+                          color: context.palette.card,
                           alignment: Alignment.center,
                           padding: const EdgeInsets.symmetric(horizontal: 6),
                           child: Text(
@@ -142,7 +143,7 @@ class _YourStoryCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.labelMedium.copyWith(
-                              color: AppColors.textDark,
+                              color: context.palette.text,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),

@@ -141,7 +141,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -168,7 +168,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -602,7 +602,7 @@ class _StoreSummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -732,7 +732,7 @@ class _StatsRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -830,7 +830,7 @@ class _QuickActionsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -967,7 +967,7 @@ class _RecentProductsSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -1065,7 +1065,7 @@ class _ProductPreviewRow extends StatelessWidget {
             child: Container(
               width: 52,
               height: 52,
-              color: AppColors.lightGrey,
+              color: context.palette.cardMuted,
               child: firstImage.isNotEmpty
                   ? CachedImage(
                       firstImage,
@@ -1185,7 +1185,7 @@ class _ChecklistCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -1360,7 +1360,7 @@ class _DangerZoneCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.red.withValues(alpha: 0.25)),
         boxShadow: [

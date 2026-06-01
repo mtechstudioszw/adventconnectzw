@@ -162,7 +162,7 @@ class _ProductImage extends StatelessWidget {
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
         return Container(
-          color: AppColors.lightGrey,
+          color: context.palette.cardMuted,
           alignment: Alignment.center,
           child: const SizedBox(
             width: 18,

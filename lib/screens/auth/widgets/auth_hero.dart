@@ -119,6 +119,7 @@ class _BackChip extends StatelessWidget {
                 color: AppColors.white.withValues(alpha: 0.10),
               ),
             ),
+            // TODO(dark-mode): const Icon — sits on appBarGradient header.
             child: const Icon(
               Icons.arrow_back_ios_new,
               size: 14,

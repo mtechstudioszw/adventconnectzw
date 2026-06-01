@@ -8,6 +8,7 @@ import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/event_card.dart';
 import '../../widgets/last_updated_strip.dart';
@@ -259,7 +260,7 @@ class _EventsScreenState extends State<EventsScreen>
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: const Color.fromRGBO(26, 26, 46, 0.06),
@@ -326,7 +327,7 @@ class _EventsScreenState extends State<EventsScreen>
                   },
                 ),
           filled: true,
-          fillColor: AppColors.white,
+          fillColor: context.palette.inputFill,
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
         ),
       ),
@@ -348,7 +349,7 @@ class _EventsScreenState extends State<EventsScreen>
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.white,
+                  color: context.palette.card,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: _dateRange != null

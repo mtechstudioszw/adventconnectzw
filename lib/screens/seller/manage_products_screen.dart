@@ -610,7 +610,7 @@ class _ProductRow extends StatelessWidget {
                       child: AspectRatio(
                         aspectRatio: 1.0,
                         child: Container(
-                          color: AppColors.lightGrey,
+                          color: context.palette.cardMuted,
                           child: firstImage.isNotEmpty
                               ? CachedImage(
                                   firstImage,

@@ -246,7 +246,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         gradient: hasPhoto ? null : AppColors.primaryGradient,
-        color: hasPhoto ? AppColors.lightGrey : null,
+        color: hasPhoto ? context.palette.cardMuted : null,
         shape: BoxShape.circle,
         border: Border.all(color: context.palette.sheet, width: 4),
         boxShadow: [

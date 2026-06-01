@@ -203,7 +203,7 @@ class _CoverHero extends StatelessWidget {
               url!,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Container(
-                color: AppColors.lightGrey,
+                color: context.palette.cardMuted,
                 child: const Center(
                   child: Icon(
                     Icons.broken_image_outlined,
@@ -257,7 +257,7 @@ class _DateBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -285,7 +285,7 @@ class _DateBadge extends StatelessWidget {
           Text(
             '${date.day}',
             style: AppTextStyles.titleLarge.copyWith(
-              color: AppColors.darkNavy,
+              color: context.palette.text,
               fontWeight: FontWeight.w800,
               fontSize: 20,
               height: 1,

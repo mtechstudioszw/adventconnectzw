@@ -461,6 +461,7 @@ class _SuccessRing extends StatelessWidget {
                         ),
                       ],
                     ),
+                    // TODO(dark-mode): const Icon — sits on primaryGradient circle.
                     child: const Icon(
                       Icons.mark_email_read_outlined,
                       color: AppColors.white,
@@ -615,6 +616,7 @@ class _PrimaryButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 18),
               alignment: Alignment.center,
               child: busy
+                  // TODO(dark-mode): const CircularProgressIndicator — sits on primaryGradient.
                   ? const SizedBox(
                       width: 22,
                       height: 22,

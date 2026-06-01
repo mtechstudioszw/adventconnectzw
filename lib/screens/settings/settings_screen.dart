@@ -9,6 +9,7 @@ import '../../services/sabbath_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/theme_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/invite_friends_card.dart';
 
@@ -136,7 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
-        backgroundColor: AppColors.white,
+        backgroundColor: ctx.palette.sheet,
         title: Text(title, style: AppTextStyles.headlineSmall),
         content: Text(body, style: AppTextStyles.bodyMedium),
         actions: [
@@ -239,7 +240,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _openSupportSheet() async {
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.white,
+      backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -423,7 +424,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -781,7 +782,7 @@ class _SupportChannel extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: const Color.fromRGBO(26, 26, 46, 0.05),
@@ -867,9 +868,9 @@ class _EcoCashDonationSheet extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: context.palette.sheet,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
@@ -932,7 +933,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                 vertical: 14,
               ),
               decoration: BoxDecoration(
-                color: AppColors.lightGrey,
+                color: context.palette.cardMuted,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: const Color.fromRGBO(26, 26, 46, 0.06),
@@ -977,6 +978,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // TODO(dark-mode): const Icon — sits on primaryBlue copy button.
                                 const Icon(
                                   Icons.content_copy,
                                   color: AppColors.white,
@@ -1021,6 +1023,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      // TODO(dark-mode): const Icon — sits on primaryBlue dialer button.
                       const Icon(Icons.dialpad,
                           color: AppColors.white, size: 18),
                       const SizedBox(width: 10),

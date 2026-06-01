@@ -60,6 +60,9 @@ class CachedImage extends StatelessWidget {
   }
 
   static Widget _placeholderTile({double? width, double? height}) {
+    // TODO(dark-mode): static method has no BuildContext, so we can't
+    // read `context.palette.cardMuted`. Loading shimmer stays neutral
+    // light grey in both light + dark themes for now.
     return Container(
       width: width,
       height: height,
@@ -68,6 +71,7 @@ class CachedImage extends StatelessWidget {
   }
 
   static Widget _defaultErrorTile({double? width, double? height}) {
+    // TODO(dark-mode): static method — see _placeholderTile note.
     return Container(
       width: width,
       height: height,

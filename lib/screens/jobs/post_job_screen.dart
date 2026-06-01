@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
 
@@ -149,7 +150,7 @@ class _PostJobScreenState extends State<PostJobScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -490,7 +491,7 @@ class _PostTypeButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: selected ? AppColors.primaryGradient : null,
-            color: selected ? null : AppColors.lightGrey,
+            color: selected ? null : context.palette.cardMuted,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected

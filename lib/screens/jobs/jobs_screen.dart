@@ -8,6 +8,7 @@ import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/job_card.dart';
 import '../../widgets/last_updated_strip.dart';
@@ -127,7 +128,7 @@ class _JobsScreenState extends State<JobsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       bottomNavigationBar: const MainBottomNav(currentIndex: 3),
       floatingActionButton: const PostFab(
         routeName: 'post_job',
@@ -247,7 +248,7 @@ class _JobsScreenState extends State<JobsScreen>
                   },
                 ),
           filled: true,
-          fillColor: AppColors.white,
+          fillColor: context.palette.inputFill,
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
         ),
       ),
@@ -471,7 +472,7 @@ class _ShopJobsSegment extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
         ),
@@ -592,7 +593,7 @@ class _CategoryChip extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: selected ? AppColors.primaryGradient : null,
-            color: selected ? null : AppColors.white,
+            color: selected ? null : context.palette.card,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: selected

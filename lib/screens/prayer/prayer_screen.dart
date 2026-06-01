@@ -4,6 +4,7 @@ import '../../models/prayer_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/prayer_card.dart';
 import '../widgets/main_scaffold.dart';
@@ -225,7 +226,7 @@ class _PrayerScreenState extends State<PrayerScreen>
 
   Widget _buildCategoryChips() {
     return Container(
-      color: AppColors.lightGrey,
+      color: context.palette.scaffoldBg,
       child: SizedBox(
         height: 50,
         child: ListView(
@@ -359,7 +360,7 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primaryBlue : AppColors.white,
+      color: selected ? AppColors.primaryBlue : context.palette.card,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),

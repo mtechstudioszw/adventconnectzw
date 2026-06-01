@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/prayer_model.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
 
@@ -114,7 +115,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
   Widget build(BuildContext context) {
     final length = _contentController.text.length;
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -242,7 +243,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
                 Material(
                   color: c == _category
                       ? AppColors.primaryBlue
-                      : AppColors.lightGrey,
+                      : context.palette.chipBg,
                   borderRadius: BorderRadius.circular(20),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(20),
@@ -401,7 +402,7 @@ class _VisibilityOption extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.primaryBlue.withValues(alpha: 0.06)
-                : AppColors.lightGrey,
+                : context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: selected
@@ -417,7 +418,7 @@ class _VisibilityOption extends StatelessWidget {
                 height: 38,
                 decoration: BoxDecoration(
                   gradient: selected ? AppColors.primaryGradient : null,
-                  color: selected ? null : AppColors.white,
+                  color: selected ? null : context.palette.card,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(

@@ -107,20 +107,17 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (AuthService.isSignedIn) {
-      // Quick-unlock gate. If the user opted into biometric in
-      // Settings, the cold-start path requires a successful prompt
-      // before we ever land on home — otherwise a stolen-but-unlocked
-      // phone could read their data. A failed/cancelled prompt
-      // signs them out and bounces to login.
+      // WhatsApp-style biometric gate. If the user opted in, we hand
+      // off to the dedicated lock screen instead of prompting + bailing
+      // here — that way cancelling the OS prompt KEEPS the session
+      // alive and just leaves the user staring at a Try-again screen
+      // (the old behaviour signed them out, which everyone hated).
+      // The lock screen itself routes onward to home / profile_setup
+      // after a successful unlock.
       if (await BiometricService.isEnabled()) {
-        final ok = await BiometricService.authenticate();
         if (!mounted) return;
-        if (!ok) {
-          await AuthService.signOut();
-          if (!mounted) return;
-          await _fadeOutThen(() => context.goNamed('login'));
-          return;
-        }
+        await _fadeOutThen(() => context.goNamed('biometric_lock'));
+        return;
       }
       // Gate the home tab behind profile completion. A user can sign
       // up, start onboarding, kill the app halfway, then re-open — the

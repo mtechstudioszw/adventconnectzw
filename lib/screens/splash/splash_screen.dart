@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/app_bootstrap.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/secure_storage_service.dart';
@@ -31,12 +32,24 @@ class _SplashScreenState extends State<SplashScreen>
   // screen instead of a hard cut. User reported the previous
   // transition felt abrupt.
   late final AnimationController _exit;
+  // First-launch only: a richer "blossom" hand-off into onboarding
+  // — logo scales up and brightens, wordmark + tagline lift away,
+  // gradient flares before the route hand-off. Runs forward from 0
+  // → 1 immediately before goNamed('onboarding'). For every other
+  // destination (home / login / profile_setup) we use the plain
+  // _exit fade instead so warm-start hand-offs stay snappy.
+  late final AnimationController _blossom;
 
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
   late final Animation<double> _wordmarkOpacity;
   late final Animation<double> _wordmarkSlide;
   late final Animation<double> _taglineOpacity;
+  late final Animation<double> _blossomLogoScale;
+  late final Animation<double> _blossomLogoFade;
+  late final Animation<double> _blossomWordmarkLift;
+  late final Animation<double> _blossomTaglineFade;
+  late final Animation<double> _blossomBackgroundFade;
 
   @override
   void initState() {
@@ -83,6 +96,30 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 320),
     );
 
+    _blossom = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 720),
+    );
+    _blossomLogoScale = Tween<double>(begin: 1.0, end: 1.45).animate(
+      CurvedAnimation(parent: _blossom, curve: Curves.easeInOutCubic),
+    );
+    _blossomLogoFade = CurvedAnimation(
+      parent: _blossom,
+      curve: const Interval(0.45, 1.0, curve: Curves.easeOut),
+      reverseCurve: Curves.easeIn,
+    );
+    _blossomWordmarkLift = Tween<double>(begin: 0, end: -28).animate(
+      CurvedAnimation(parent: _blossom, curve: Curves.easeOut),
+    );
+    _blossomTaglineFade = CurvedAnimation(
+      parent: _blossom,
+      curve: const Interval(0.0, 0.55, curve: Curves.easeOut),
+    );
+    _blossomBackgroundFade = CurvedAnimation(
+      parent: _blossom,
+      curve: const Interval(0.55, 1.0, curve: Curves.easeIn),
+    );
+
     _navigate();
   }
 
@@ -91,6 +128,7 @@ class _SplashScreenState extends State<SplashScreen>
     _entrance.dispose();
     _progress.dispose();
     _exit.dispose();
+    _blossom.dispose();
     super.dispose();
   }
 
@@ -102,8 +140,26 @@ class _SplashScreenState extends State<SplashScreen>
     go();
   }
 
+  /// First-launch hand-off into onboarding. Logo scales up and
+  /// brightens, wordmark + tagline lift away, then the white
+  /// background fades — the onboarding screen blooms into view
+  /// instead of cutting in. Longer + showier than [_fadeOutThen] on
+  /// purpose: this is the first impression the user gets.
+  Future<void> _blossomOutThen(VoidCallback go) async {
+    await _blossom.forward();
+    if (!mounted) return;
+    go();
+  }
+
   Future<void> _navigate() async {
-    await Future.delayed(_minLoaderDuration);
+    // Run the brand animation and the deferred Supabase init in
+    // parallel — main.dart no longer awaits Supabase before runApp,
+    // so we MUST wait for it here before the AuthService reads
+    // below (they'd throw "Supabase has not been initialized").
+    await Future.wait([
+      Future.delayed(_minLoaderDuration),
+      AppBootstrap.awaitSupabaseReady(),
+    ]);
     if (!mounted) return;
 
     if (AuthService.isSignedIn) {
@@ -140,7 +196,9 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (!hasSeenOnboarding) {
-      await _fadeOutThen(() => context.goNamed('onboarding'));
+      // First launch ever — celebrate it with the blossom hand-off
+      // instead of the plain fade used for warm starts.
+      await _blossomOutThen(() => context.goNamed('onboarding'));
       return;
     }
 
@@ -158,11 +216,19 @@ class _SplashScreenState extends State<SplashScreen>
     return Scaffold(
       backgroundColor: AppColors.white,
       body: AnimatedBuilder(
-        animation: _exit,
-        builder: (context, child) => Opacity(
-          opacity: Curves.easeOut.transform(_exit.value),
-          child: child,
-        ),
+        animation: Listenable.merge([_exit, _blossom]),
+        builder: (context, child) {
+          // _exit covers the warm-start hand-off (320ms fade). _blossom
+          // is only driven for the first-launch onboarding path; on
+          // every other path it stays at 0 so its effects are no-ops.
+          final exitOpacity = Curves.easeOut.transform(_exit.value);
+          final backgroundOpacity =
+              exitOpacity * (1 - _blossomBackgroundFade.value);
+          return Opacity(
+            opacity: backgroundOpacity,
+            child: child,
+          );
+        },
         child: DecoratedBox(
         decoration: const BoxDecoration(color: AppColors.white),
         child: Stack(
@@ -187,23 +253,30 @@ class _SplashScreenState extends State<SplashScreen>
                     left: 0,
                     right: 0,
                     bottom: 30,
-                    child: Column(
-                      children: [
-                        // Single refined loader — the bouncing dots were
-                        // dropped (redundant alongside the progress bar
-                        // and part of the "busy / AI-generated" feel).
-                        _buildProgressBar(),
-                        const SizedBox(height: 18),
-                        Text(
-                          'MYTECH STUDIOS ZW',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.textDark.withValues(alpha: 0.35),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 2.0,
+                    child: AnimatedBuilder(
+                      animation: _blossom,
+                      builder: (context, child) => Opacity(
+                        opacity: 1 - _blossomTaglineFade.value,
+                        child: child,
+                      ),
+                      child: Column(
+                        children: [
+                          // Single refined loader — the bouncing dots were
+                          // dropped (redundant alongside the progress bar
+                          // and part of the "busy / AI-generated" feel).
+                          _buildProgressBar(),
+                          const SizedBox(height: 18),
+                          Text(
+                            'MYTECH STUDIOS ZW',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.textDark.withValues(alpha: 0.35),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 2.0,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -239,12 +312,16 @@ class _SplashScreenState extends State<SplashScreen>
 
   Widget _buildLogoTile() {
     return AnimatedBuilder(
-      animation: _entrance,
+      animation: Listenable.merge([_entrance, _blossom]),
       builder: (context, _) {
+        // Entrance does its scale/fade in; blossom overlays an extra
+        // scale-up + fade-out during the first-launch hand-off.
+        final opacity = _logoOpacity.value * (1 - _blossomLogoFade.value);
+        final scale = _logoScale.value * _blossomLogoScale.value;
         return Opacity(
-          opacity: _logoOpacity.value,
+          opacity: opacity,
           child: Transform.scale(
-            scale: _logoScale.value,
+            scale: scale,
             // The actual brand logo (assets/icon/logo.png) — same
             // image as the launcher icon so the splash → app handoff
             // feels continuous. The disc / ring / glow framing keeps
@@ -289,12 +366,16 @@ class _SplashScreenState extends State<SplashScreen>
 
   Widget _buildWordmark() {
     return AnimatedBuilder(
-      animation: _entrance,
+      animation: Listenable.merge([_entrance, _blossom]),
       builder: (context, _) {
+        final blossomT = _blossom.value;
         return Opacity(
-          opacity: _wordmarkOpacity.value,
+          opacity: _wordmarkOpacity.value * (1 - blossomT),
           child: Transform.translate(
-            offset: Offset(0, _wordmarkSlide.value),
+            offset: Offset(
+              0,
+              _wordmarkSlide.value + _blossomWordmarkLift.value,
+            ),
             child: Text(
               'Advent Connect ZW',
               style: AppTextStyles.displayMedium.copyWith(
@@ -313,10 +394,10 @@ class _SplashScreenState extends State<SplashScreen>
 
   Widget _buildTagline() {
     return AnimatedBuilder(
-      animation: _entrance,
+      animation: Listenable.merge([_entrance, _blossom]),
       builder: (context, _) {
         return Opacity(
-          opacity: _taglineOpacity.value,
+          opacity: _taglineOpacity.value * (1 - _blossomTaglineFade.value),
           child: Text(
             'COMMUNITY  •  FAITH  •  ZIMBABWE',
             style: AppTextStyles.labelSmall.copyWith(

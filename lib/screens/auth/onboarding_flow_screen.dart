@@ -622,9 +622,14 @@ class _WelcomePage extends StatelessWidget {
             child: Container(
               width: 140,
               height: 140,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(36),
+                border: Border.all(
+                  color: AppColors.goldAccent,
+                  width: 2,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.primaryBlue.withValues(alpha: 0.40),
@@ -633,10 +638,12 @@ class _WelcomePage extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.church,
-                color: AppColors.goldAccent,
-                size: 64,
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Image.asset(
+                  'assets/icon/logo.png',
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
           ),

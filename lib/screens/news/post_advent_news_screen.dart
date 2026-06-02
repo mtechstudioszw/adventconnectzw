@@ -261,6 +261,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
     return ClipPath(
       clipper: _HeroClipper(),
       child: Container(
+        width: double.infinity,
         decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
         child: SafeArea(
           bottom: false,

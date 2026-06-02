@@ -151,6 +151,7 @@ class AboutScreen extends StatelessWidget {
     return ClipPath(
       clipper: _HeroClipper(),
       child: Container(
+        width: double.infinity,
         decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
         child: SafeArea(
           bottom: false,

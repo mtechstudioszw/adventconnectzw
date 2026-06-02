@@ -6,7 +6,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'config/supabase_config.dart';
+import 'config/app_bootstrap.dart';
 import 'config/router_config.dart';
 import 'services/account_mode_service.dart';
 import 'services/analytics_service.dart';
@@ -17,7 +17,6 @@ import 'services/connectivity_service.dart';
 import 'services/messaging_service.dart';
 import 'services/presence_service.dart';
 import 'services/push_service.dart';
-import 'services/secure_supabase_storage.dart';
 import 'services/theme_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
@@ -25,36 +24,23 @@ import 'widgets/offline_banner.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Cold-start path is split into "must finish before first paint"
-  // vs "do in background after runApp". Sequential awaits add up —
-  // splash used to drag because we serialised every disk read + the
-  // Firebase native init even though most of them don't depend on
-  // each other.
+  // Tap-to-splash latency is dominated by what runs BEFORE runApp.
+  // Supabase.initialize() reads + decrypts the persisted session via
+  // flutter_secure_storage; on Android cold start that keychain hop
+  // is 300–700ms. We kick it off here without awaiting so the
+  // Flutter splash paints immediately. The splash awaits this same
+  // future inside _navigate() before any auth.currentUser read.
+  unawaited(AppBootstrap.startSupabaseInit());
 
-  // Phase 1: cheap disk reads that several services read SYNCHRONOUSLY
-  // on first build. Parallelised so the slowest one bounds total
-  // latency instead of summing them.
+  // Cheap disk reads several services consume synchronously on first
+  // build. Parallelised so the slowest one bounds total latency
+  // instead of summing them. None of these depend on Supabase.
   await Future.wait([
     CacheService.initialize(),
     ConnectivityService.initialize(),
     AccountModeService.init(),
     ThemeService.init(),
   ]);
-
-  // Phase 2: Supabase MUST be ready before the splash routes anywhere
-  // (it reads currentUser to decide home vs login). Kept on the
-  // critical path; everything else moves to the background.
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-    // Persist sessions in flutter_secure_storage (per CLAUDE.md) so a
-    // cold-start restores the user's session instead of bouncing them
-    // back to the login screen every time they reopen the app.
-    authOptions: FlutterAuthClientOptions(
-      localStorage: SecureLocalStorage(),
-      autoRefreshToken: true,
-    ),
-  );
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -83,6 +69,10 @@ void main() async {
 }
 
 Future<void> _initBackgroundServices() async {
+  // Auth-listener setup + outbox flusher both touch Supabase, so wait
+  // until init finishes before wiring them up.
+  await AppBootstrap.awaitSupabaseReady();
+
   // Outbox flusher needs Hive from Phase 1 above. Fire and forget.
   unawaited(MessagingService.startOutboxFlusher());
 

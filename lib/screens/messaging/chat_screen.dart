@@ -136,7 +136,7 @@ class _ChatScreenState extends State<ChatScreen>
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.12),
+                  color: ctx.palette.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -160,7 +160,7 @@ class _ChatScreenState extends State<ChatScreen>
                   subtitle: Text(
                     'Removes the message from this chat for both of you.',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: ctx.palette.textMuted,
                     ),
                   ),
                   onTap: () => Navigator.pop(ctx, 'delete'),
@@ -886,7 +886,7 @@ class _ChatScreenState extends State<ChatScreen>
             child: ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.person_outline, color: AppColors.textDark),
+              leading: Icon(Icons.person_outline),
               title: Text('View contact'),
             ),
           ),
@@ -921,8 +921,7 @@ class _ChatScreenState extends State<ChatScreen>
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.cleaning_services_outlined,
-                color: AppColors.textDark),
+            leading: Icon(Icons.cleaning_services_outlined),
             title: Text('Clear chat'),
           ),
         ),
@@ -1114,7 +1113,7 @@ class _ChatScreenState extends State<ChatScreen>
             _error!,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
             ),
           ),
         ),
@@ -1152,7 +1151,7 @@ class _ChatScreenState extends State<ChatScreen>
                 'Start the conversation with a friendly greeting.',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: context.palette.textMuted,
                   height: 1.5,
                 ),
               ),
@@ -1208,7 +1207,7 @@ class _ChatScreenState extends State<ChatScreen>
                         Text(
                           _stamp(m.createdAt),
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.45),
+                            color: context.palette.textMuted,
                             fontSize: 10.5,
                           ),
                         ),
@@ -1228,7 +1227,7 @@ class _ChatScreenState extends State<ChatScreen>
                             size: 13,
                             color: m.read
                                 ? AppColors.primaryBlue
-                                : const Color.fromRGBO(26, 26, 46, 0.45),
+                                : context.palette.textMuted,
                           ),
                         ],
                       ],
@@ -1261,13 +1260,12 @@ class _ChatScreenState extends State<ChatScreen>
                     ? MainAxisAlignment.center
                     : MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.block,
-                      size: 16, color: AppColors.textDark),
+                  Icon(Icons.block, size: 16, color: context.palette.text),
                   const SizedBox(width: 8),
                   Text(
                     'You blocked this contact. Tap to unblock.',
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textDark.withValues(alpha: 0.7),
+                      color: context.palette.textMuted,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -1308,20 +1306,21 @@ class _ChatScreenState extends State<ChatScreen>
             decoration: BoxDecoration(
               color: context.palette.inputFill,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: const Color.fromRGBO(26, 26, 46, 0.06),
-              ),
+              border: Border.all(color: context.palette.divider),
             ),
             child: TextField(
               controller: _inputController,
               minLines: 1,
               maxLines: 5,
               textCapitalization: TextCapitalization.sentences,
-              style: AppTextStyles.bodyMedium.copyWith(fontSize: 14.5),
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontSize: 14.5,
+                color: context.palette.text,
+              ),
               decoration: InputDecoration(
                 hintText: 'Write a message',
                 hintStyle: AppTextStyles.bodyMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.5),
+                  color: context.palette.textMuted,
                   fontSize: 14.5,
                 ),
                 border: InputBorder.none,
@@ -1376,7 +1375,7 @@ class _ChatScreenState extends State<ChatScreen>
                 Text(
                   '$mm:$ss',
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textDark,
+                    color: context.palette.text,
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
@@ -1498,7 +1497,7 @@ class _MessageBubble extends StatelessWidget {
         child: Text(
           message.content,
           style: AppTextStyles.bodyMedium.copyWith(
-            color: isMine ? AppColors.white : AppColors.textDark,
+            color: isMine ? AppColors.white : context.palette.text,
             fontSize: 14.5,
             height: 1.35,
           ),
@@ -1597,13 +1596,13 @@ class _VoiceBubbleState extends State<_VoiceBubble> {
   Widget build(BuildContext context) {
     final isMine = widget.isMine;
     final maxWidth = MediaQuery.of(context).size.width * 0.74;
-    final fg = isMine ? AppColors.white : AppColors.textDark;
+    final fg = isMine ? AppColors.white : context.palette.text;
     final muted = isMine
         ? AppColors.white.withValues(alpha: 0.7)
-        : const Color.fromRGBO(26, 26, 46, 0.55);
+        : context.palette.textMuted;
     final trackBg = isMine
         ? AppColors.white.withValues(alpha: 0.25)
-        : const Color.fromRGBO(26, 26, 46, 0.10);
+        : context.palette.divider;
     final total = _total ?? const Duration(seconds: 1);
     final progress = total.inMilliseconds == 0
         ? 0.0
@@ -1720,9 +1719,7 @@ class _MicButton extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.palette.cardMuted,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: const Color.fromRGBO(26, 26, 46, 0.08),
-        ),
+        border: Border.all(color: context.palette.divider),
       ),
       child: Material(
         color: Colors.transparent,
@@ -1734,9 +1731,7 @@ class _MicButton extends StatelessWidget {
             height: 46,
             child: Icon(
               Icons.mic_rounded,
-              color: busy
-                  ? const Color.fromRGBO(26, 26, 46, 0.4)
-                  : AppColors.primaryBlue,
+              color: busy ? context.palette.textMuted : AppColors.primaryBlue,
               size: 22,
             ),
           ),

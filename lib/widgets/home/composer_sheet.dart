@@ -134,7 +134,7 @@ class _PostComposerState extends State<_PostComposer> {
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    color: context.palette.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -171,7 +171,7 @@ class _PostComposerState extends State<_PostComposer> {
                             style: AppTextStyles.buttonText.copyWith(
                               color: hasContent
                                   ? AppColors.primaryBlue
-                                  : const Color.fromRGBO(26, 26, 46, 0.35),
+                                  : context.palette.textMuted,
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
                             ),
@@ -184,9 +184,7 @@ class _PostComposerState extends State<_PostComposer> {
                 decoration: BoxDecoration(
                   color: context.palette.inputFill,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: const Color.fromRGBO(26, 26, 46, 0.06),
-                  ),
+                  border: Border.all(color: context.palette.divider),
                 ),
                 child: TextField(
                   controller: _controller,
@@ -194,11 +192,14 @@ class _PostComposerState extends State<_PostComposer> {
                   maxLines: 8,
                   textCapitalization: TextCapitalization.sentences,
                   autofocus: true,
-                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 15),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: 15,
+                    color: context.palette.text,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'What\'s on your mind today?',
                     hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.45),
+                      color: context.palette.textMuted,
                       fontSize: 15,
                     ),
                     border: InputBorder.none,
@@ -447,7 +448,7 @@ class _StoryComposerState extends State<_StoryComposer> {
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    color: context.palette.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -479,7 +480,7 @@ class _StoryComposerState extends State<_StoryComposer> {
                                 'Share',
                                 style: AppTextStyles.buttonText.copyWith(
                                   color: _mediaUrl == null
-                                      ? const Color.fromRGBO(26, 26, 46, 0.35)
+                                      ? context.palette.textMuted
                                       : AppColors.primaryBlue,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
@@ -525,22 +526,21 @@ class _StoryComposerState extends State<_StoryComposer> {
                           decoration: BoxDecoration(
                             color: context.palette.inputFill,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color:
-                                  const Color.fromRGBO(26, 26, 46, 0.06),
-                            ),
+                            border: Border.all(color: context.palette.divider),
                           ),
                           child: TextField(
                             controller: _caption,
                             minLines: 1,
                             maxLines: 3,
                             textCapitalization: TextCapitalization.sentences,
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(fontSize: 14.5),
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontSize: 14.5,
+                              color: context.palette.text,
+                            ),
                             decoration: InputDecoration(
                               hintText: 'Add a caption (optional)',
                               hintStyle: AppTextStyles.bodyMedium.copyWith(
-                                color: const Color.fromRGBO(26, 26, 46, 0.45),
+                                color: context.palette.textMuted,
                                 fontSize: 14.5,
                               ),
                               border: InputBorder.none,

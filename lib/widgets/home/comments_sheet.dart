@@ -196,7 +196,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    color: context.palette.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -242,7 +242,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
           child: Text(
             'Be the first to comment.',
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
             ),
           ),
         ),
@@ -345,9 +345,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                 decoration: BoxDecoration(
                   color: context.palette.inputFill,
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: const Color.fromRGBO(26, 26, 46, 0.06),
-                  ),
+                  border: Border.all(color: context.palette.divider),
                 ),
                 child: TextField(
                   controller: _controller,
@@ -355,13 +353,16 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                   minLines: 1,
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
-                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 14.5),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: 14.5,
+                    color: context.palette.text,
+                  ),
                   decoration: InputDecoration(
                     hintText: _replyTo == null
                         ? 'Write a comment…'
                         : 'Write a reply…',
                     hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.45),
+                      color: context.palette.textMuted,
                       fontSize: 14.5,
                     ),
                     border: InputBorder.none,
@@ -566,7 +567,7 @@ class _CommentRow extends StatelessWidget {
                       child: Text(
                         'Reply',
                         style: AppTextStyles.labelMedium.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.65),
+                          color: context.palette.textMuted,
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -598,9 +599,8 @@ class _VoteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = highlighted
-        ? AppColors.primaryBlue
-        : const Color.fromRGBO(26, 26, 46, 0.55);
+    final color =
+        highlighted ? AppColors.primaryBlue : context.palette.textMuted;
     return GestureDetector(
       onTap: onTap,
       child: Row(

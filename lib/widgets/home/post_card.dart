@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/post_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
 
@@ -44,7 +45,7 @@ class PostCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -57,18 +58,18 @@ class PostCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildHeader(),
-          if ((post.body ?? '').isNotEmpty) _buildBody(),
-          if ((post.imageUrl ?? '').isNotEmpty) _buildImage(),
-          if (post.likeCount > 0 || post.commentCount > 0) _buildCounts(),
-          const Divider(height: 1, color: Color.fromRGBO(26, 26, 46, 0.06)),
+          _buildHeader(context),
+          if ((post.body ?? '').isNotEmpty) _buildBody(context),
+          if ((post.imageUrl ?? '').isNotEmpty) _buildImage(context),
+          if (post.likeCount > 0 || post.commentCount > 0) _buildCounts(context),
+          Divider(height: 1, color: context.palette.divider),
           _buildActions(),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
       child: Row(
@@ -107,7 +108,7 @@ class PostCard extends StatelessWidget {
                             ? Icons.people_alt_outlined
                             : Icons.public,
                         size: 12,
-                        color: const Color.fromRGBO(26, 26, 46, 0.45),
+                        color: context.palette.textMuted,
                       ),
                     ],
                   ),
@@ -115,7 +116,7 @@ class PostCard extends StatelessWidget {
                   Text(
                     _formatTimeAgo(post.createdAt),
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.55),
+                      color: context.palette.textMuted,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -142,13 +143,13 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Text(
         post.body!,
         style: AppTextStyles.bodyMedium.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.88),
+          color: context.palette.text,
           height: 1.45,
           fontSize: 14.5,
         ),
@@ -156,7 +157,7 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  Widget _buildImage() {
+  Widget _buildImage(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: GestureDetector(
@@ -170,8 +171,8 @@ class PostCard extends StatelessWidget {
               child: CachedImage(
                 post.imageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: AppColors.lightGrey,
+                errorBuilder: (ctx, error, stackTrace) => Container(
+                  color: ctx.palette.cardMuted,
                   alignment: Alignment.center,
                   child: const Icon(
                     Icons.broken_image_outlined,
@@ -181,7 +182,7 @@ class PostCard extends StatelessWidget {
                 loadingBuilder: (ctx, child, progress) {
                   if (progress == null) return child;
                   return Container(
-                    color: AppColors.lightGrey,
+                    color: ctx.palette.cardMuted,
                     alignment: Alignment.center,
                     child: const CircularProgressIndicator(
                       color: AppColors.primaryBlue,
@@ -197,7 +198,7 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCounts() {
+  Widget _buildCounts(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
@@ -221,7 +222,7 @@ class PostCard extends StatelessWidget {
             Text(
               '${post.likeCount}',
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.7),
+                color: context.palette.text,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -234,7 +235,7 @@ class PostCard extends StatelessWidget {
                   ? '1 comment'
                   : '${post.commentCount} comments',
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.55),
+                color: context.palette.textMuted,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -346,9 +347,8 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = highlighted
-        ? AppColors.primaryBlue
-        : const Color.fromRGBO(26, 26, 46, 0.7);
+    final color =
+        highlighted ? AppColors.primaryBlue : context.palette.text;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -394,9 +394,9 @@ class _OwnerMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: const Icon(
+      icon: Icon(
         Icons.more_horiz,
-        color: Color.fromRGBO(26, 26, 46, 0.55),
+        color: context.palette.textMuted,
         size: 20,
       ),
       tooltip: 'Manage post',
@@ -484,9 +484,9 @@ class _ViewerMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: const Icon(
+      icon: Icon(
         Icons.more_horiz,
-        color: Color.fromRGBO(26, 26, 46, 0.55),
+        color: context.palette.textMuted,
         size: 20,
       ),
       tooltip: 'More',

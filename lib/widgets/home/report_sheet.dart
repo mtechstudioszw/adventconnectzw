@@ -116,7 +116,7 @@ class _ReportSheetState extends State<_ReportSheet> {
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    color: context.palette.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -134,7 +134,7 @@ class _ReportSheetState extends State<_ReportSheet> {
                 'Tell us what\'s wrong. The admin team reviews every '
                 'report and may take action.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  color: context.palette.textMuted,
                   height: 1.4,
                 ),
               ),
@@ -156,20 +156,21 @@ class _ReportSheetState extends State<_ReportSheet> {
                 decoration: BoxDecoration(
                   color: context.palette.inputFill,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: const Color.fromRGBO(26, 26, 46, 0.06),
-                  ),
+                  border: Border.all(color: context.palette.divider),
                 ),
                 child: TextField(
                   controller: _detailsController,
                   minLines: 3,
                   maxLines: 6,
                   textCapitalization: TextCapitalization.sentences,
-                  style: AppTextStyles.bodyMedium.copyWith(fontSize: 14.5),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: 14.5,
+                    color: context.palette.text,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Anything else we should know? (optional)',
                     hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.45),
+                      color: context.palette.textMuted,
                       fontSize: 14.5,
                     ),
                     border: InputBorder.none,
@@ -257,14 +258,14 @@ class _ReasonChip extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue.withValues(alpha: 0.40)
-                  : const Color.fromRGBO(26, 26, 46, 0.08),
+                  : context.palette.divider,
             ),
           ),
           child: Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
               color:
-                  selected ? AppColors.primaryBlue : AppColors.textDark,
+                  selected ? AppColors.primaryBlue : context.palette.text,
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
             ),

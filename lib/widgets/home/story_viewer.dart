@@ -539,7 +539,7 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textDark.withValues(alpha: 0.18),
+                color: ctx.palette.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -555,7 +555,7 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
                         ? 'Viewed by…'
                         : 'Viewed by ${_viewers.length}',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.textDark,
+                      color: ctx.palette.text,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -571,12 +571,12 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
                       ),
                     )
                   : _viewers.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Padding(
-                            padding: EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(24),
                             child: Text(
                               'No views yet.',
-                              style: TextStyle(color: AppColors.textDark),
+                              style: TextStyle(color: ctx.palette.text),
                             ),
                           ),
                         )
@@ -610,7 +610,7 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
                               title: Text(
                                 name,
                                 style: AppTextStyles.bodyMedium.copyWith(
-                                  color: AppColors.textDark,
+                                  color: ctx.palette.text,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

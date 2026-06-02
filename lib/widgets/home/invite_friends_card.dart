@@ -32,7 +32,7 @@ class InviteFriendsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.palette.card,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+        border: Border.all(color: context.palette.divider),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -73,7 +73,7 @@ class InviteFriendsCard extends StatelessWidget {
                   'Bring others into the community so you can chat, '
                   'trade, and share together.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                     fontSize: 11.5,
                     height: 1.3,
                   ),
@@ -154,7 +154,7 @@ class _ShareSheet extends StatelessWidget {
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  color: context.palette.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -171,7 +171,7 @@ class _ShareSheet extends StatelessWidget {
             Text(
               'Pick how you want to send the invite.',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: context.palette.textMuted,
               ),
             ),
             const SizedBox(height: 16),
@@ -265,9 +265,7 @@ class _ChannelTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.05),
-            ),
+            border: Border.all(color: context.palette.divider),
           ),
           child: Row(
             children: [

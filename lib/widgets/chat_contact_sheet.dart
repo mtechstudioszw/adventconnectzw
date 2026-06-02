@@ -111,7 +111,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.textDark.withValues(alpha: 0.18),
+                    color: context.palette.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -145,7 +145,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                       name,
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleLarge.copyWith(
-                        color: AppColors.textDark,
+                        color: context.palette.text,
                         fontWeight: FontWeight.w800,
                         fontSize: 20,
                       ),
@@ -168,7 +168,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                         Text(
                           presence,
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textDark.withValues(alpha: 0.65),
+                            color: context.palette.textMuted,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -190,7 +190,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                     child: Text(
                       bio,
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textDark,
+                        color: context.palette.text,
                         height: 1.4,
                       ),
                     ),

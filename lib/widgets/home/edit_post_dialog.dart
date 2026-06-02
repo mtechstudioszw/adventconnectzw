@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Show the "Edit post" dialog. Returns the new body text, or null if
@@ -67,7 +68,7 @@ class _EditPostDialogState extends State<_EditPostDialog> {
           child: Text(
             'Cancel',
             style: AppTextStyles.buttonText.copyWith(
-              color: AppColors.textDark,
+              color: context.palette.text,
             ),
           ),
         ),

@@ -178,7 +178,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
           'Your request and every "I\'m praying" reaction will be removed. '
           'This can\'t be undone.',
           style: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            color: ctx.palette.text,
             height: 1.5,
           ),
         ),
@@ -187,8 +187,9 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style:
-                  AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: ctx.palette.text,
+              ),
             ),
           ),
           FilledButton(
@@ -896,9 +897,9 @@ class _PrayerOwnerMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: const Icon(
+      icon: Icon(
         Icons.more_horiz,
-        color: Color.fromRGBO(26, 26, 46, 0.55),
+        color: context.palette.textMuted,
       ),
       onSelected: (v) {
         if (v == 'delete') onDelete();

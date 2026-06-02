@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/church_map.dart';
 import '../../widgets/cached_image.dart';
@@ -192,11 +193,11 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                   church.coverPhotoUrl!,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
-                    color: AppColors.lightGrey,
-                    child: const Icon(
+                    color: context.palette.cardMuted,
+                    child: Icon(
                       Icons.broken_image_outlined,
                       size: 56,
-                      color: Color.fromRGBO(26, 26, 46, 0.3),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ),
@@ -250,16 +251,16 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.location_on_outlined,
                 size: 18,
-                color: Color.fromRGBO(26, 26, 46, 0.6),
+                color: context.palette.textMuted,
               ),
               const SizedBox(width: 6),
               Text(
                 church.city.isEmpty ? 'Unknown city' : church.city,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.7),
+                  color: context.palette.text,
                 ),
               ),
               const SizedBox(width: 16),
@@ -415,14 +416,14 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                     'This church isn\'t claimed yet',
                     style: AppTextStyles.titleSmall.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
+                      color: context.palette.text,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     'You can follow, but don\'t expect announcements until a pastor or elder claims it.',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.72),
+                      color: context.palette.textMuted,
                       height: 1.4,
                     ),
                   ),
@@ -513,7 +514,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                     Text(
                       addressLine,
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.75),
+                        color: context.palette.text,
                         height: 1.5,
                       ),
                     ),
@@ -595,7 +596,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
               Text(
                 church.description!,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.8),
+                  color: context.palette.text,
                   height: 1.5,
                 ),
               ),
@@ -646,11 +647,11 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
               for (var i = 0; i < rows.length; i++) ...[
                 rows[i],
                 if (i < rows.length - 1)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Divider(
                       height: 1,
-                      color: Color.fromRGBO(26, 26, 46, 0.08),
+                      color: context.palette.divider,
                     ),
                   ),
               ],
@@ -674,7 +675,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
               Text(
                 label,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.5),
+                  color: context.palette.textMuted,
                 ),
               ),
               const SizedBox(height: 2),

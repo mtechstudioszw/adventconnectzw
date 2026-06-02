@@ -105,7 +105,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.buttonText.copyWith(
-                color: AppColors.textDark,
+                color: ctx.palette.text,
               ),
             ),
           ),
@@ -198,7 +198,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.buttonText.copyWith(
-                color: AppColors.textDark,
+                color: ctx.palette.text,
               ),
             ),
           ),
@@ -607,7 +607,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     return Container(
       width: 1,
       height: 40,
-      color: const Color.fromRGBO(26, 26, 46, 0.08),
+      color: context.palette.divider,
     );
   }
 
@@ -728,7 +728,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           Text(
             job.description!,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.85),
+              color: context.palette.text,
               height: 1.55,
             ),
           ),
@@ -778,7 +778,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                   child: Text(
                     req,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.85),
+                      color: context.palette.text,
                       height: 1.5,
                     ),
                   ),
@@ -1119,7 +1119,7 @@ class _SummaryTile extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.5),
+              color: context.palette.textMuted,
               fontSize: 9.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,

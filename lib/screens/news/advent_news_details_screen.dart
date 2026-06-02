@@ -301,29 +301,26 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
                       height: 1.2,
-                      color: AppColors.darkNavy,
+                      color: context.palette.text,
                     ),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     item.summary,
                     style: AppTextStyles.bodyLarge.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.75),
+                      color: context.palette.text,
                       height: 1.55,
                       fontSize: 15,
                     ),
                   ),
                   if ((item.body ?? '').isNotEmpty) ...[
                     const SizedBox(height: 18),
-                    Container(
-                      height: 1,
-                      color: const Color.fromRGBO(26, 26, 46, 0.08),
-                    ),
+                    Container(height: 1, color: context.palette.divider),
                     const SizedBox(height: 18),
                     Text(
                       item.body!,
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textDark,
+                        color: context.palette.text,
                         height: 1.65,
                         fontSize: 15,
                       ),
@@ -334,7 +331,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                     Text(
                       'By ${item.authorName}',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.65),
+                        color: context.palette.textMuted,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -502,7 +499,7 @@ class _SourceLinkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.white,
+      color: context.palette.card,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -550,7 +547,7 @@ class _SourceLinkCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        color: context.palette.textMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -591,11 +588,9 @@ class _ActionButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 10),
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.06),
-            ),
+            border: Border.all(color: context.palette.divider),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -605,7 +600,7 @@ class _ActionButton extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.textDark,
+                  color: context.palette.text,
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),

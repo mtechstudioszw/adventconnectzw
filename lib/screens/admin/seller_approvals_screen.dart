@@ -94,46 +94,21 @@ class _SellerApprovalsScreenState extends State<SellerApprovalsScreen> {
   }
 
   Future<String?> _askReason(Seller seller) async {
-    final controller = TextEditingController();
-    final result = await showDialog<String?>(
+    // Previously this method owned the TextEditingController and
+    // disposed it after showDialog returned. That triggered the
+    // `_dependents.isEmpty` framework assertion intermittently: the
+    // TextField widget hadn't finished detaching from the controller
+    // by the time `.dispose()` ran in the parent's async frame.
+    // Moving controller ownership into the dialog's own StatefulWidget
+    // (whose dispose runs AFTER its TextField is removed from the
+    // tree) is the standard fix and removes the race entirely.
+    return showDialog<String?>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
-        title: Text('Reject ${seller.businessName}?',
-            style: AppTextStyles.headlineSmall),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          maxLength: 240,
-          decoration: InputDecoration(
-            hintText: 'Reason (optional, shown to the applicant)',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child: Text(
-              'Cancel',
-              style:
-                  AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
-            ),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
-            child: Text('Reject', style: AppTextStyles.labelLarge),
-          ),
-        ],
+      builder: (ctx) => _RejectReasonDialog(
+        seller: seller,
+        isFinal: seller.isFinalReviewPending,
       ),
     );
-    controller.dispose();
-    return result;
   }
 
   void _showSnack(String message, Color color) {
@@ -296,10 +271,17 @@ class _PendingCard extends StatelessWidget {
     final cityLine = [seller.city, seller.province]
         .where((s) => s != null && s.isNotEmpty)
         .join(', ');
+    final addressLine = [seller.address, seller.suburb]
+        .where((s) => s != null && s.trim().isNotEmpty)
+        .join(' · ');
     final photo = seller.profilePhotoUrl;
     final hasPhoto = photo != null && photo.isNotEmpty;
+    final cover = seller.coverPhotoUrl;
+    final hasCover = cover != null && cover.isNotEmpty;
+    final isFinalReview = seller.isFinalReviewPending;
+    final attempt = seller.applicationAttempts;
     return Container(
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(18),
@@ -314,127 +296,396 @@ class _PendingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: hasPhoto ? null : AppColors.primaryGradient,
-                  color: hasPhoto ? AppColors.lightGrey : null,
-                  shape: BoxShape.circle,
-                  image: hasPhoto
-                      ? DecorationImage(
-                          image: CachedNetworkImageProvider(photo),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: hasPhoto
-                    ? null
-                    : const Icon(
-                        Icons.storefront,
-                        color: AppColors.white,
-                        size: 26,
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Cover photo strip — gives the admin a visual feel for the
+          // store before they read the form details.
+          AspectRatio(
+            aspectRatio: 16 / 7,
+            child: hasCover
+                ? CachedNetworkImage(
+                    imageUrl: cover,
+                    fit: BoxFit.cover,
+                    errorWidget: (ctx, url, error) =>
+                        const _CoverPlaceholder(),
+                    placeholder: (ctx, url) => const _CoverPlaceholder(),
+                  )
+                : const _CoverPlaceholder(),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      seller.businessName,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontWeight: FontWeight.w700,
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        gradient:
+                            hasPhoto ? null : AppColors.primaryGradient,
+                        color: hasPhoto ? AppColors.lightGrey : null,
+                        shape: BoxShape.circle,
+                        image: hasPhoto
+                            ? DecorationImage(
+                                image: CachedNetworkImageProvider(photo),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: hasPhoto
+                          ? null
+                          : const Icon(
+                              Icons.storefront,
+                              color: AppColors.white,
+                              size: 26,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            seller.businessName,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            SellerCategory.labelFor(seller.category),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      SellerCategory.labelFor(seller.category),
+                    _AttemptBadge(
+                      attempt: attempt,
+                      isFinal: isFinalReview,
+                    ),
+                  ],
+                ),
+                if (isFinalReview) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.red.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.red.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.gavel_outlined,
+                          color: AppColors.red,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Final review — a rejection here permanently blocks future applications.',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.red,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (cityLine.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _MetaRow(
+                    icon: Icons.location_on_outlined,
+                    text: cityLine,
+                  ),
+                ],
+                if (addressLine.isNotEmpty)
+                  _MetaRow(
+                    icon: Icons.home_outlined,
+                    text: addressLine,
+                  ),
+                if ((seller.contactName ?? '').isNotEmpty)
+                  _MetaRow(
+                    icon: Icons.person_outline,
+                    text: 'Contact: ${seller.contactName}',
+                  ),
+                if ((seller.whatsapp ?? '').isNotEmpty)
+                  _MetaRow(
+                    icon: Icons.chat_outlined,
+                    text: 'WhatsApp ${seller.whatsapp}',
+                  ),
+                if ((seller.phone).isNotEmpty)
+                  _MetaRow(
+                    icon: Icons.phone_outlined,
+                    text: seller.phone,
+                  ),
+                if ((seller.paymentMethods ?? '').isNotEmpty)
+                  _MetaRow(
+                    icon: Icons.payments_outlined,
+                    text: 'Payment: ${seller.paymentMethods}',
+                  ),
+                if (seller.offersDelivery)
+                  _MetaRow(
+                    icon: Icons.local_shipping_outlined,
+                    text: [
+                      'Delivers',
+                      if ((seller.deliveryArea ?? '').isNotEmpty)
+                        'to ${seller.deliveryArea}',
+                      if ((seller.deliveryFee ?? '').isNotEmpty)
+                        '(${seller.deliveryFee})',
+                    ].join(' '),
+                  ),
+                if (seller.observesSabbath)
+                  _MetaRow(
+                    icon: Icons.bedtime_outlined,
+                    text: (seller.sabbathNoticeText ?? '').isNotEmpty
+                        ? 'Sabbath: ${seller.sabbathNoticeText}'
+                        : 'Observes the Sabbath',
+                  ),
+                if ((seller.description ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.lightGrey,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      seller.description!,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w600,
+                        color: const Color.fromRGBO(26, 26, 46, 0.85),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: busy ? null : onReject,
+                        icon: const Icon(Icons.close, size: 18),
+                        label:
+                            Text('Reject', style: AppTextStyles.labelLarge),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.red,
+                          side: const BorderSide(color: AppColors.red),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: busy ? null : onApprove,
+                        icon: busy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: AppColors.white,
+                                  strokeWidth: 2.2,
+                                ),
+                              )
+                            : const Icon(Icons.check, size: 18),
+                        label: Text(
+                          busy ? 'Working' : 'Approve',
+                          style: AppTextStyles.labelLarge,
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.successGreen,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          if (cityLine.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _MetaRow(icon: Icons.location_on_outlined, text: cityLine),
-          ],
-          if ((seller.whatsapp ?? '').isNotEmpty)
-            _MetaRow(
-              icon: Icons.chat_outlined,
-              text: 'WhatsApp ${seller.whatsapp}',
+              ],
             ),
-          if ((seller.phone).isNotEmpty)
-            _MetaRow(
-              icon: Icons.phone_outlined,
-              text: seller.phone,
-            ),
-          if ((seller.description ?? '').isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              seller.description!,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.75),
-                height: 1.5,
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: busy ? null : onReject,
-                  icon: const Icon(Icons.close, size: 18),
-                  label: Text('Reject', style: AppTextStyles.labelLarge),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.red,
-                    side: const BorderSide(color: AppColors.red),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: busy ? null : onApprove,
-                  icon: busy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            color: AppColors.white,
-                            strokeWidth: 2.2,
-                          ),
-                        )
-                      : const Icon(Icons.check, size: 18),
-                  label: Text(
-                    busy ? 'Working' : 'Approve',
-                    style: AppTextStyles.labelLarge,
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.successGreen,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CoverPlaceholder extends StatelessWidget {
+  const _CoverPlaceholder();
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+      child: Center(
+        child: Icon(
+          Icons.image_outlined,
+          color: AppColors.white,
+          size: 32,
+        ),
+      ),
+    );
+  }
+}
+
+class _AttemptBadge extends StatelessWidget {
+  const _AttemptBadge({required this.attempt, required this.isFinal});
+  final int attempt;
+  final bool isFinal;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isFinal ? AppColors.red : AppColors.primaryBlue;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.30)),
+      ),
+      child: Text(
+        isFinal ? 'FINAL · #$attempt/3' : '#$attempt/3',
+        style: AppTextStyles.labelSmall.copyWith(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+/// Stateful dialog that owns its own TextEditingController so the
+/// controller is disposed AFTER its TextField is detached from the
+/// tree — the parent _askReason used to dispose immediately after
+/// `await showDialog(...)`, which triggered `_dependents.isEmpty`
+/// when the dialog's children hadn't finished unmounting.
+class _RejectReasonDialog extends StatefulWidget {
+  const _RejectReasonDialog({
+    required this.seller,
+    required this.isFinal,
+  });
+
+  final Seller seller;
+  final bool isFinal;
+
+  @override
+  State<_RejectReasonDialog> createState() => _RejectReasonDialogState();
+}
+
+class _RejectReasonDialogState extends State<_RejectReasonDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      title: Text(
+        widget.isFinal
+            ? 'Final-review reject ${widget.seller.businessName}?'
+            : 'Reject ${widget.seller.businessName}?',
+        style: AppTextStyles.headlineSmall,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.isFinal) ...[
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.red.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.red.withValues(alpha: 0.30),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppColors.red,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This is the seller\'s third attempt. A rejection here permanently blocks them from re-applying.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.red,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          TextField(
+            controller: _controller,
+            maxLines: 4,
+            maxLength: 240,
+            decoration: InputDecoration(
+              hintText: 'Reason (optional, shown to the applicant)',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: Text(
+            'Cancel',
+            style:
+                AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+          ),
+        ),
+        FilledButton(
+          onPressed: () =>
+              Navigator.pop(context, _controller.text.trim()),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+          child: Text(
+            widget.isFinal ? 'Reject permanently' : 'Reject',
+            style: AppTextStyles.labelLarge,
+          ),
+        ),
+      ],
     );
   }
 }

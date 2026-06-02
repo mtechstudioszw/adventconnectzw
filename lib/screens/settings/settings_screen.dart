@@ -364,6 +364,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  // Theme picker — kept available for the v1.1 dark-mode update.
+  // The Settings row that triggers it is hidden in build() until
+  // the remaining ~45 screens are migrated to context.palette.
+  // ignore: unused_element
   Future<void> _pickTheme() async {
     final picked = await showModalBottomSheet<ThemeMode>(
       context: context,
@@ -376,6 +380,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  // ignore: unused_element
   String _themeLabel(ThemeMode m) {
     switch (m) {
       case ThemeMode.dark:
@@ -541,13 +546,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                           label: 'Permissions',
                           onTap: () => context.pushNamed('permissions'),
                         ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.dark_mode_outlined,
-                          label: 'Appearance',
-                          trailing: _themeLabel(_themeMode),
-                          onTap: _pickTheme,
-                        ),
+                        // Appearance / dark-mode toggle hidden for v1
+                        // launch — dark-mode migration is only ~50%
+                        // through the screen catalogue, so exposing the
+                        // toggle right now would let users land on
+                        // half-migrated screens (raw whites against the
+                        // dark canvas). Will re-enable in v1.1 once
+                        // every screen reads from context.palette.
                         const _Divider(),
                         _NavRow(
                           icon: Icons.language,

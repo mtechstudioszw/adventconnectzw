@@ -385,6 +385,11 @@ class SellerService {
   /// Reject a pending seller with an optional human-readable reason.
   /// The reason is surfaced back to the seller in the dashboard so
   /// they know what to fix before re-submitting.
+  ///
+  /// On a third-attempt rejection (current status `final_review_pending`)
+  /// the RPC transitions to `rejected_final` — see patch_037. The
+  /// returned Seller will reflect that state so the admin UI can move
+  /// the row out of the queue immediately.
   static Future<Seller> rejectSeller(
     String sellerId, {
     String? reason,
@@ -395,6 +400,23 @@ class SellerService {
         'p_seller_id': int.parse(sellerId),
         'p_reason': reason?.trim(),
       },
+    );
+    final row = response is List
+        ? response.first as Map<String, dynamic>
+        : response as Map<String, dynamic>;
+    return Seller.fromJson(row);
+  }
+
+  /// Seller-side reapply (patch_037). Called after the rejected seller
+  /// edits their store details — flips status back to `pending` (or
+  /// `final_review_pending` on the third attempt), bumps the attempt
+  /// counter, clears rejection_reason. The RPC validates that the row
+  /// is owned by the caller and that status is `rejected`, so the Dart
+  /// side just needs to surface the friendly error.
+  static Future<Seller> reapplyAsSeller(String sellerId) async {
+    final response = await _client.rpc(
+      'seller_reapply',
+      params: {'p_seller_id': int.parse(sellerId)},
     );
     final row = response is List
         ? response.first as Map<String, dynamic>

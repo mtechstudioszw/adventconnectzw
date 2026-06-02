@@ -232,18 +232,21 @@ class _AdventConnectAppState extends State<AdventConnectApp>
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeService.notifier,
-      builder: (context, mode, _) => MaterialApp.router(
-        title: 'Advent Connect ZW',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: mode,
-        routerConfig: appRouter,
-        builder: (context, child) =>
-            OfflineBanner(child: child ?? const SizedBox.shrink()),
-      ),
+    // v1 launch: force light mode at the MaterialApp level. The
+    // ThemeService toggle is still in place under the hood so the
+    // v1.1 dark-mode update is a one-line revert here + un-hiding
+    // the Settings row, but for now we hard-pin light so users can't
+    // land on the ~45 unmigrated screens that still hard-code white
+    // surfaces.
+    return MaterialApp.router(
+      title: 'Advent Connect ZW',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.light,
+      routerConfig: appRouter,
+      builder: (context, child) =>
+          OfflineBanner(child: child ?? const SizedBox.shrink()),
     );
   }
 }

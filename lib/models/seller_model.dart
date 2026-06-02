@@ -35,6 +35,7 @@ class Seller {
     this.approvedAt,
     this.observesSabbath = false,
     this.sabbathNoticeText,
+    this.applicationAttempts = 1,
     this.createdAt,
   });
 
@@ -67,11 +68,33 @@ class Seller {
   final DateTime? approvedAt;
   final bool observesSabbath;
   final String? sabbathNoticeText;
+  /// 1 on the first submission, +1 each time the seller reapplies.
+  /// Capped at 3 — patch_037 blocks a fourth attempt.
+  final int applicationAttempts;
   final DateTime? createdAt;
 
   bool get isPending => status == 'pending';
   bool get isApproved => status == 'approved';
   bool get isRejected => status == 'rejected';
+  bool get isFinalReviewPending => status == 'final_review_pending';
+  bool get isRejectedFinal => status == 'rejected_final';
+
+  /// True when the seller can still submit another application —
+  /// false for `rejected_final` (third strike) and statuses that
+  /// don't need re-review (`pending`, `approved`, `final_review_pending`).
+  bool get canReapply => status == 'rejected' && applicationAttempts < 3;
+
+  /// True for the terminal "no more attempts" state. UI uses this to
+  /// disable the Reapply button and surface the support-contact copy.
+  bool get isPermanentlyBlocked => status == 'rejected_final';
+
+  /// Remaining attempts after this one. Used in dashboard copy
+  /// ("1 attempt remaining"). 0 once the seller is on their 3rd /
+  /// final review.
+  int get attemptsRemaining {
+    final used = applicationAttempts.clamp(1, 3);
+    return (3 - used).clamp(0, 3);
+  }
 
   factory Seller.fromJson(Map<String, dynamic> json) {
     return Seller(
@@ -104,6 +127,9 @@ class Seller {
       approvedAt: _parseDate(json['approved_at']),
       observesSabbath: json['observes_sabbath'] == true,
       sabbathNoticeText: json['sabbath_notice_text'] as String?,
+      applicationAttempts: _readInt(json['application_attempts']) == 0
+          ? 1
+          : _readInt(json['application_attempts']),
       createdAt: _parseDate(json['created_at']),
     );
   }

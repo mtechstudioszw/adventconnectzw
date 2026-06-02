@@ -131,6 +131,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
     if (_seller!.isPending) {
       return _buildPendingState(_seller!);
     }
+    if (_seller!.isFinalReviewPending) {
+      return _buildFinalReviewState(_seller!);
+    }
+    if (_seller!.isRejectedFinal) {
+      return _buildRejectedFinalState(_seller!);
+    }
     if (_seller!.isRejected) {
       return _buildRejectedState(_seller!);
     }
@@ -256,27 +262,69 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   }
 
   Widget _buildRejectedState(Seller seller) {
+    final attemptsLeft = seller.attemptsRemaining;
+    final isLastChance = attemptsLeft <= 1;
     return Column(
       children: [
         _StatusBanner(
           tone: _BannerTone.danger,
           icon: Icons.report_problem_outlined,
-          title: 'Application not approved',
+          title: isLastChance
+              ? 'Application not approved — final attempt remaining'
+              : 'Application not approved',
           message: seller.rejectionReason?.trim().isNotEmpty == true
               ? seller.rejectionReason!
-              : 'Reach out via support if you\'d like more detail. You can update your details and resubmit.',
+              : 'Reach out via support if you\'d like more detail. Update your store details below and resubmit — '
+                  '${attemptsLeft == 1 ? 'this is your last chance' : '$attemptsLeft attempts remaining'} '
+                  'before marketplace access is closed.',
         ),
         const SizedBox(height: 16),
         _StoreSummaryCard(seller: seller),
         const SizedBox(height: 16),
         _GradientButton(
-          label: 'Edit store details',
+          label: 'Edit & resubmit',
           icon: Icons.edit_outlined,
           onTap: () async {
             await context.pushNamed('edit_store', extra: seller);
             if (mounted) _bootstrap();
           },
         ),
+      ],
+    );
+  }
+
+  Widget _buildFinalReviewState(Seller seller) {
+    return Column(
+      children: [
+        _StatusBanner(
+          tone: _BannerTone.info,
+          icon: Icons.gavel_outlined,
+          title: 'Final review in progress',
+          message:
+              'This is your third and final application. An admin is reviewing '
+              'your updated details — you\'ll get a notification when there\'s '
+              'a decision.',
+        ),
+        const SizedBox(height: 16),
+        _StoreSummaryCard(seller: seller),
+      ],
+    );
+  }
+
+  Widget _buildRejectedFinalState(Seller seller) {
+    return Column(
+      children: [
+        _StatusBanner(
+          tone: _BannerTone.danger,
+          icon: Icons.block_outlined,
+          title: 'Marketplace access closed',
+          message:
+              'Your seller application has been rejected 3 times. You are no '
+              'longer eligible to apply to become a marketplace seller. '
+              'Please contact support if you need more information.',
+        ),
+        const SizedBox(height: 16),
+        _StoreSummaryCard(seller: seller),
       ],
     );
   }
@@ -508,6 +556,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       return 'Open a storefront on the marketplace.';
     }
     if (_seller!.isPending) return 'Application under review.';
+    if (_seller!.isFinalReviewPending) return 'Final review in progress.';
+    if (_seller!.isRejectedFinal) return 'Marketplace access closed.';
     if (_seller!.isRejected) return 'Application needs your attention.';
     return 'Listings, stats, and store settings in one place.';
   }

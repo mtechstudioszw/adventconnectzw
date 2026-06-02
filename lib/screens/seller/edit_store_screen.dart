@@ -244,6 +244,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
 
     setState(() => _saving = true);
     try {
+      final wasRejected = _seller!.isRejected;
       await SellerService.updateMySellerProfile(
         sellerId: _seller!.id,
         businessName: _businessNameController.text,
@@ -266,12 +267,37 @@ class _EditStoreScreenState extends State<EditStoreScreen>
             _observesSabbath ? _sabbathNoticeController.text : '',
         isActive: _isActive,
       );
+
+      // patch_037: when a rejected seller saves new details, also fire
+      // seller_reapply so the row flips back into the admin queue
+      // (pending or final_review_pending) and the attempt counter
+      // bumps. Without this the updated row stayed at status='rejected'
+      // and the admin never saw the resubmission.
+      Seller? reapplied;
+      if (wasRejected) {
+        try {
+          reapplied = await SellerService.reapplyAsSeller(_seller!.id);
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            _saving = false;
+            _error = e.toString().replaceFirst('Exception: ', '');
+          });
+          return;
+        }
+      }
+
       if (!mounted) return;
+      final isFinalReview = reapplied?.isFinalReviewPending ?? false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.successGreen,
           content: Text(
-            'Store updated.',
+            wasRejected
+                ? (isFinalReview
+                    ? 'Resubmitted — this is your final review.'
+                    : 'Resubmitted. An admin will review your details again.')
+                : 'Store updated.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

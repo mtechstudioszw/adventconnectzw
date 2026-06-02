@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -58,7 +60,6 @@ class _AuthScreenState extends State<AuthScreen>
   bool _obscureConfirm = true;
   bool _acceptedTerms = false;
   String? _error;
-  String? _googleLinkedEmail;
 
   DateTime? _birthDate;
 
@@ -138,10 +139,15 @@ class _AuthScreenState extends State<AuthScreen>
     final email = _emailController.text.trim();
     setState(() => _checking = true);
 
-    // Pull both presence + provider mix in parallel. The provider
-    // info is what makes the OAuth-only "password paradox" case
-    // detectable — without it, a user who signed up only with
-    // Google gets dead-ended at a password prompt they can't fill.
+    // Pull both presence + provider mix in parallel. providers is the
+    // authoritative existence signal — the RPC joins auth.identities
+    // → auth.users, so a non-empty result inherently means the
+    // account exists. We fall back to email_exists only when
+    // providers is null (RPC failed / rate-limited). Previously we
+    // gated isOAuthOnly on `exists == true`, which meant ONE failing
+    // RPC made us silently drop a Google user into the sign-up form
+    // (the bug "asked me for name + create password despite having
+    // a Google account").
     final results = await Future.wait([
       AuthService.emailExists(email),
       AuthService.emailAuthProviders(email),
@@ -150,27 +156,36 @@ class _AuthScreenState extends State<AuthScreen>
     final exists = results[0] as bool?;
     final providers = results[1] as List<String>?;
 
+    final hasProviders = providers != null && providers.isNotEmpty;
+    final accountExists = hasProviders || exists == true;
+
     // OAuth-only case: account exists but no email/password identity.
-    final isOAuthOnly = exists == true &&
-        providers != null &&
-        providers.isNotEmpty &&
-        !providers.contains('email');
+    // Offer two routes — keep tapping the Google button (existing
+    // behaviour) OR verify with an emailed 6-digit code that links
+    // an email/password identity to the same auth.users row. Claude
+    // does the same thing.
+    final isOAuthOnly = hasProviders && !providers.contains('email');
     if (isOAuthOnly) {
+      setState(() => _checking = false);
+      HapticFeedback.heavyImpact();
+      await _showLinkOptionsSheet(email);
+      return;
+    }
+
+    // Both RPCs failed (rate limit / network). Don't silently default
+    // to signup — that's how a returning user ends up creating a
+    // duplicate account. Stay on the email stage and tell them.
+    if (exists == null && providers == null) {
       setState(() {
         _checking = false;
-        _stage = _Stage.email;
-        _error = 'This email is linked to Google. '
-            'Tap "Continue with Google" above to sign in.';
+        _error = 'Couldn\'t verify this email right now. '
+            'Try Continue with Google above, or try again in a minute.';
       });
       HapticFeedback.heavyImpact();
       return;
     }
 
-    final next = switch (exists) {
-      true => _Stage.login,
-      false => _Stage.signup,
-      null => _Stage.signup,
-    };
+    final next = accountExists ? _Stage.login : _Stage.signup;
     setState(() {
       _checking = false;
       _stage = next;
@@ -210,12 +225,83 @@ class _AuthScreenState extends State<AuthScreen>
       return;
     }
     if (message.contains('incorrect') || message.contains('invalid')) {
-      setState(() => _error =
-          'That password didn\'t match. If you signed up with Google, '
-          'tap "Continue with Google" above instead.');
+      // Concrete "is this email actually Google-only?" check rather
+      // than a hand-wavy "if you signed up with Google" hint. The
+      // generic copy used to confuse users with mistyped passwords
+      // because it always suggested Google. Now we only push them
+      // toward Google when we can confirm the email's only identity
+      // is Google.
+      final providers = await AuthService.emailAuthProviders(
+        _emailController.text.trim(),
+      );
+      if (!mounted) return;
+      final isGoogleOnly = providers != null &&
+          providers.contains('google') &&
+          !providers.contains('email');
+      if (isGoogleOnly) {
+        HapticFeedback.heavyImpact();
+        await _showLinkOptionsSheet(_emailController.text.trim());
+        return;
+      }
+      setState(() => _error = 'That password didn\'t match. Try again.');
       return;
     }
     setState(() => _error = result.errorMessage);
+  }
+
+  /// Shown when the user types an email tied only to Google. Lets
+  /// them either tap through to Google sign-in OR receive a 6-digit
+  /// code by email — the OTP path proves inbox control and lets the
+  /// user (optionally) attach a password for next time.
+  Future<void> _showLinkOptionsSheet(String email) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _GoogleLinkSheet(
+        email: email,
+        onUseGoogle: () {
+          Navigator.of(ctx).pop();
+          _onGoogle();
+        },
+        onUseOtp: () async {
+          Navigator.of(ctx).pop();
+          await _startOtpLinkFlow(email);
+        },
+      ),
+    );
+  }
+
+  /// Send a 6-digit code and route to the OTP entry sheet. The
+  /// service-side method handles rate-limit + SMTP failures with
+  /// friendly copy.
+  Future<void> _startOtpLinkFlow(String email) async {
+    setState(() {
+      _checking = true;
+      _error = null;
+    });
+    final sent = await AuthService.sendEmailLoginOtp(email);
+    if (!mounted) return;
+    setState(() => _checking = false);
+    if (!sent.isSuccess) {
+      setState(() => _error = sent.errorMessage);
+      HapticFeedback.heavyImpact();
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    final verified = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      builder: (ctx) => _OtpLinkSheet(email: email),
+    );
+    if (!mounted) return;
+    if (verified == true) {
+      final hasProfile = await AuthService.hasCompletedProfileSetup();
+      if (!mounted) return;
+      context.goNamed(hasProfile ? 'home' : 'profile_setup');
+    }
   }
 
   Future<void> _onSignup() async {
@@ -275,9 +361,10 @@ class _AuthScreenState extends State<AuthScreen>
           _stage = _Stage.email;
           _passwordController.clear();
           _confirmController.clear();
-          _googleLinkedEmail = _emailController.text.trim();
           _error = null;
         });
+        HapticFeedback.heavyImpact();
+        await _showLinkOptionsSheet(_emailController.text.trim());
         return;
       }
       setState(() {
@@ -399,7 +486,6 @@ class _AuthScreenState extends State<AuthScreen>
       _nameController.clear();
       _acceptedTerms = false;
       _error = null;
-      _googleLinkedEmail = null;
     });
     Future.delayed(const Duration(milliseconds: 280), () {
       if (mounted) _emailFocus.requestFocus();
@@ -621,14 +707,6 @@ class _AuthScreenState extends State<AuthScreen>
           validator: _validateEmail,
           onSubmitted: (_) => _onContinue(),
         ),
-        if (_googleLinkedEmail != null) ...[
-          const SizedBox(height: 16),
-          _GoogleLinkedBanner(
-            email: _googleLinkedEmail!,
-            onGoogleTap: _onGoogle,
-            googleBusy: _googleBusy,
-          ),
-        ],
       ],
     );
   }
@@ -1454,65 +1532,426 @@ class _LegalLineState extends State<_LegalLine> {
 }
 
 
-/// Shown when user tries to sign up with an email already tied to Google.
-/// Replaces the generic error with a clear, actionable prompt.
-class _GoogleLinkedBanner extends StatelessWidget {
-  const _GoogleLinkedBanner({
+/// Bottom sheet shown when the user types an email tied only to a
+/// Google account. Gives them two ways forward: tap Google (the
+/// historical happy path) or verify with an emailed 6-digit code
+/// (Claude-style — proves inbox control without needing Google).
+class _GoogleLinkSheet extends StatelessWidget {
+  const _GoogleLinkSheet({
     required this.email,
-    required this.onGoogleTap,
-    required this.googleBusy,
+    required this.onUseGoogle,
+    required this.onUseOtp,
   });
 
   final String email;
-  final VoidCallback onGoogleTap;
-  final bool googleBusy;
+  final VoidCallback onUseGoogle;
+  final VoidCallback onUseOtp;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.primaryBlue.withValues(alpha: 0.25),
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.palette.sheet,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(
-                Icons.link_rounded,
-                color: AppColors.primaryBlue,
-                size: 20,
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: context.palette.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'This email is linked to Google',
-                  style: AppTextStyles.titleSmall.copyWith(
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.info_outline,
+                      color: AppColors.primaryBlue,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'This email is signed in with Google',
+                      style: AppTextStyles.titleLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '$email already has an account through Google. Pick how '
+                'you\'d like to sign in — either continue with Google or '
+                'we can email you a 6-digit code to verify it\'s you.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.palette.textMuted,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 18),
+              _PrimaryButton(
+                label: 'Continue with Google',
+                busy: false,
+                onTap: onUseGoogle,
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: onUseOtp,
+                icon: const Icon(
+                  Icons.mark_email_read_outlined,
+                  color: AppColors.primaryBlue,
+                ),
+                label: Text(
+                  'Email me a code instead',
+                  style: AppTextStyles.buttonText.copyWith(
                     color: AppColors.primaryBlue,
                     fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  side: BorderSide(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.40),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '$email is already signed in with Google. '
-            'Tap below to continue with your Google account.',
-            style: AppTextStyles.bodySmall.copyWith(
-              color: context.palette.textMuted,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 14),
-          _GoogleButton(busy: googleBusy, onTap: googleBusy ? null : onGoogleTap),
-        ],
+        ),
       ),
     );
+  }
+}
+
+/// Stateful bottom sheet that collects the 6-digit code emailed by
+/// `AuthService.sendEmailLoginOtp`, then verifies it. On success the
+/// user is signed in to the same auth.users row the Google identity
+/// is attached to; the sheet then offers to set a password so the
+/// next login can skip the email round-trip.
+class _OtpLinkSheet extends StatefulWidget {
+  const _OtpLinkSheet({required this.email});
+
+  final String email;
+
+  @override
+  State<_OtpLinkSheet> createState() => _OtpLinkSheetState();
+}
+
+class _OtpLinkSheetState extends State<_OtpLinkSheet> {
+  final _codeController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _verifying = false;
+  bool _settingPassword = false;
+  bool _verified = false;
+  bool _resending = false;
+  bool _obscurePassword = true;
+  int _resendCooldown = 0;
+  Timer? _cooldownTimer;
+  String? _error;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    _passwordController.dispose();
+    _cooldownTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    final code = _codeController.text.trim();
+    if (code.length < 6) {
+      setState(() => _error = 'Enter the 6-digit code.');
+      return;
+    }
+    setState(() {
+      _verifying = true;
+      _error = null;
+    });
+    final result = await AuthService.verifyEmailLoginOtp(
+      email: widget.email,
+      token: code,
+    );
+    if (!mounted) return;
+    if (!result.isSuccess) {
+      setState(() {
+        _verifying = false;
+        _error = result.errorMessage;
+      });
+      HapticFeedback.heavyImpact();
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _verifying = false;
+      _verified = true;
+    });
+  }
+
+  Future<void> _resend() async {
+    if (_resendCooldown > 0 || _resending) return;
+    setState(() {
+      _resending = true;
+      _error = null;
+    });
+    final result = await AuthService.sendEmailLoginOtp(widget.email);
+    if (!mounted) return;
+    setState(() => _resending = false);
+    if (!result.isSuccess) {
+      setState(() => _error = result.errorMessage);
+      return;
+    }
+    // 60s cool-down to keep users from spamming the SMTP quota.
+    setState(() => _resendCooldown = 60);
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _resendCooldown -= 1);
+      if (_resendCooldown <= 0) t.cancel();
+    });
+  }
+
+  Future<void> _setPassword() async {
+    final pw = _passwordController.text;
+    if (pw.length < 8) {
+      setState(() => _error = 'At least 8 characters.');
+      return;
+    }
+    setState(() {
+      _settingPassword = true;
+      _error = null;
+    });
+    final result = await AuthService.setPasswordForOtpUser(pw);
+    if (!mounted) return;
+    setState(() => _settingPassword = false);
+    if (!result.isSuccess) {
+      // Don't block the user — they're already signed in. Show the
+      // error inline but let them continue with Skip.
+      setState(() => _error = result.errorMessage);
+      return;
+    }
+    Navigator.of(context).pop(true);
+  }
+
+  void _skip() {
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.palette.sheet,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: context.palette.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              if (!_verified) ..._buildCodeStep(context),
+              if (_verified) ..._buildPasswordStep(context),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.red,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildCodeStep(BuildContext context) {
+    return [
+      Text(
+        'Enter the 6-digit code',
+        style: AppTextStyles.titleLarge.copyWith(
+          fontWeight: FontWeight.w800,
+          fontSize: 17,
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        'We sent it to ${widget.email}. The code expires in a few '
+        'minutes.',
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: context.palette.textMuted,
+          height: 1.45,
+        ),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _codeController,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: 6,
+        autofocus: true,
+        style: AppTextStyles.displayMedium.copyWith(
+          fontSize: 22,
+          letterSpacing: 8,
+          fontWeight: FontWeight.w700,
+        ),
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          hintText: '000000',
+          counterText: '',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+      const SizedBox(height: 14),
+      _PrimaryButton(
+        label: 'Verify and sign in',
+        busy: _verifying,
+        onTap: _verifying ? null : _verify,
+      ),
+      const SizedBox(height: 10),
+      TextButton(
+        onPressed: _resendCooldown > 0 || _resending ? null : _resend,
+        child: Text(
+          _resending
+              ? 'Sending…'
+              : _resendCooldown > 0
+                  ? 'Resend in ${_resendCooldown}s'
+                  : 'Didn\'t get it? Resend code',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.primaryBlue,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _buildPasswordStep(BuildContext context) {
+    return [
+      Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.successGreen.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              color: AppColors.successGreen,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'You\'re signed in',
+              style: AppTextStyles.titleLarge.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 17,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'Set a password so you can sign in directly next time without '
+        'waiting for an email — totally optional.',
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: context.palette.textMuted,
+          height: 1.45,
+        ),
+      ),
+      const SizedBox(height: 14),
+      TextField(
+        controller: _passwordController,
+        obscureText: _obscurePassword,
+        decoration: InputDecoration(
+          labelText: 'New password (at least 8 characters)',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscurePassword ? Icons.visibility : Icons.visibility_off,
+            ),
+            onPressed: () => setState(
+              () => _obscurePassword = !_obscurePassword,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 14),
+      _PrimaryButton(
+        label: 'Save password',
+        busy: _settingPassword,
+        onTap: _settingPassword ? null : _setPassword,
+      ),
+      const SizedBox(height: 10),
+      TextButton(
+        onPressed: _skip,
+        child: Text(
+          'Skip for now',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: context.palette.textMuted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ];
   }
 }

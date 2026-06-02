@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'connectivity_service.dart';
@@ -229,6 +231,105 @@ class AuthService {
       return AuthResult.failure(e.message);
     } catch (_) {
       return AuthResult.failure('Could not verify the code.');
+    }
+  }
+
+  /// Send a 6-digit code to [email] so the user can prove inbox
+  /// control without typing a password. Used by the "verify with
+  /// email code" path on the auth screen — Claude-style escape hatch
+  /// for users whose email is bound to Google but who don't want to
+  /// (or can't) sign in with Google right now.
+  ///
+  /// `shouldCreateUser: false` because this is only used on emails we
+  /// already know exist (the collision-detection branch in
+  /// _onContinue). Lets Supabase return a clean "user not found"
+  /// instead of silently creating a fresh row.
+  static Future<AuthResult> sendEmailLoginOtp(String email) async {
+    final trimmed = email.trim().toLowerCase();
+    if (trimmed.isEmpty) {
+      return AuthResult.failure('Enter your email first.');
+    }
+    if (!ConnectivityService.isOnline) {
+      return AuthResult.failure(
+        'You appear to be offline. Check your connection and try again.',
+      );
+    }
+    try {
+      await _client.auth.signInWithOtp(
+        email: trimmed,
+        shouldCreateUser: false,
+      );
+      return AuthResult.success(null);
+    } on AuthException catch (e) {
+      final lower = e.message.toLowerCase();
+      if (lower.contains('rate limit') || lower.contains('too many')) {
+        return AuthResult.failure(
+          'Couldn\'t send the code right now — try Continue with Google '
+          'instead, or try again in a few minutes.',
+        );
+      }
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } catch (e) {
+      return AuthResult.failure(
+        'Couldn\'t send the code right now — try Continue with Google '
+        'instead, or check your connection and try again.',
+      );
+    }
+  }
+
+  /// Verify the 6-digit OTP sent by [sendEmailLoginOtp] and sign the
+  /// user in. After success the caller may invite the user to set a
+  /// password (`setPasswordForOtpUser`) so they can sign in directly
+  /// next time without another email round-trip.
+  static Future<AuthResult> verifyEmailLoginOtp({
+    required String email,
+    required String token,
+  }) async {
+    try {
+      final response = await _client.auth.verifyOTP(
+        type: OtpType.email,
+        email: email.trim().toLowerCase(),
+        token: token.trim(),
+      );
+      final user = response.user;
+      if (user == null) {
+        return AuthResult.failure(
+          'Verification failed. Check the code and try again.',
+        );
+      }
+      await _persistSession(response.session);
+      return AuthResult.success(user);
+    } on AuthException catch (e) {
+      final lower = e.message.toLowerCase();
+      if (lower.contains('expired') || lower.contains('invalid')) {
+        return AuthResult.failure(
+          'That code didn\'t match. Request a new one and try again.',
+        );
+      }
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } catch (_) {
+      return AuthResult.failure('Could not verify the code.');
+    }
+  }
+
+  /// Attach an email/password identity to the currently-signed-in
+  /// user. Used after a successful OTP verification so the user can
+  /// sign in with password next time instead of waiting for another
+  /// email. Failure is swallowed — they're already signed in via
+  /// OTP, so they can keep going without setting a password.
+  static Future<AuthResult> setPasswordForOtpUser(String password) async {
+    if (password.length < 8) {
+      return AuthResult.failure(
+        'Choose a stronger password — at least 8 characters.',
+      );
+    }
+    try {
+      await _client.auth.updateUser(UserAttributes(password: password));
+      return AuthResult.success(currentUser);
+    } on AuthException catch (e) {
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } catch (_) {
+      return AuthResult.failure('Could not save the password.');
     }
   }
 
@@ -687,11 +788,43 @@ class AuthService {
     return value == 'true';
   }
 
+  /// True when the user has either finished the in-app onboarding flow
+  /// OR already has a populated `profiles` row from an earlier session.
+  ///
+  /// History: this used to read only `userMetadata['onboarding_completed']`,
+  /// which is set in exactly one place (onboarding_flow_screen, on the
+  /// final "Done" tap). Users who signed up before that flag was added
+  /// — or bailed out of onboarding halfway — got re-asked for date of
+  /// birth on every Google sign-in because the metadata gate kept
+  /// answering false. We now also check `profiles.full_name`: if it
+  /// exists and isn't empty, the user clearly completed onboarding at
+  /// some point, and we backfill the metadata flag so subsequent calls
+  /// don't have to round-trip to the DB.
   static Future<bool> hasCompletedProfileSetup() async {
     final user = currentUser;
     if (user == null) return false;
     final meta = user.userMetadata ?? const {};
-    return meta['onboarding_completed'] == true;
+    if (meta['onboarding_completed'] == true) return true;
+
+    // Fallback: a populated profiles.full_name means onboarding was
+    // already completed in a previous session — heal the metadata
+    // flag so we don't pay this round-trip on every login.
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+      final name = (row?['full_name'] as String?)?.trim() ?? '';
+      if (name.isNotEmpty) {
+        unawaited(updateMetadataDirect({'onboarding_completed': true}));
+        return true;
+      }
+    } catch (_) {
+      // Network blip / RLS oddity — fall through to false. The user
+      // sees the welcome step again, which is the safer side to err.
+    }
+    return false;
   }
 
   static Future<DateTime?> getStoredBirthDate() async {

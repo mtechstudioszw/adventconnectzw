@@ -6,6 +6,7 @@ import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/post_card.dart';
@@ -136,8 +137,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Keep',
-              style: AppTextStyles.buttonText
-                  .copyWith(color: AppColors.textDark),
+              style: AppTextStyles.buttonText.copyWith(
+                color: ctx.palette.text,
+              ),
             ),
           ),
           FilledButton(
@@ -455,7 +457,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             Text(
               '$age years old',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                color: context.palette.textMuted,
               ),
             ),
           ],
@@ -555,7 +557,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             Text(
               '${_posts.length}',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.5),
+                color: context.palette.textMuted,
               ),
             ),
           ],
@@ -568,7 +570,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           child: Text(
             'Nothing posted yet.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -646,9 +648,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.white,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+          border: Border.all(color: context.palette.divider),
         ),
         child: Column(
           children: [
@@ -667,7 +669,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               'to see their bio, posts and more.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                color: context.palette.textMuted,
                 height: 1.4,
               ),
             ),
@@ -713,10 +715,10 @@ class _PrimaryButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: highlighted ? null : AppColors.primaryGradient,
-            color: highlighted ? AppColors.lightGrey : null,
+            color: highlighted ? context.palette.cardMuted : null,
             borderRadius: BorderRadius.circular(12),
             border: highlighted
-                ? Border.all(color: const Color.fromRGBO(26, 26, 46, 0.10))
+                ? Border.all(color: context.palette.divider)
                 : null,
           ),
           child: Row(
@@ -724,14 +726,14 @@ class _PrimaryButton extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                color: highlighted ? AppColors.textDark : AppColors.white,
+                color: highlighted ? context.palette.text : AppColors.white,
                 size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: AppTextStyles.buttonText.copyWith(
-                  color: highlighted ? AppColors.textDark : AppColors.white,
+                  color: highlighted ? context.palette.text : AppColors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -761,9 +763,9 @@ class _SquareButton extends StatelessWidget {
           height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AppColors.lightGrey,
+            color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.10)),
+            border: Border.all(color: context.palette.divider),
           ),
           child: Icon(icon, color: AppColors.primaryBlue, size: 20),
         ),
@@ -783,9 +785,9 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.08)),
+        border: Border.all(color: context.palette.divider),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -795,7 +797,7 @@ class _InfoChip extends StatelessWidget {
           Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.textDark,
+              color: context.palette.text,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),

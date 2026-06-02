@@ -108,7 +108,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   Text(
                     'Tell us what\'s working, what\'s broken, or what you wish was there. The team reads every message.',
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.7),
+                      color: context.palette.textMuted,
                       height: 1.5,
                     ),
                   ),
@@ -202,13 +202,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide:
-            const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.08)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide:
-            const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.08)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -234,7 +232,7 @@ class _Section extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: context.palette.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
@@ -293,7 +291,7 @@ class _CategoryChips extends StatelessWidget {
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: c.id == selected
                           ? AppColors.white
-                          : AppColors.textDark,
+                          : context.palette.text,
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),

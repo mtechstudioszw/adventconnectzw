@@ -146,17 +146,17 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       ),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.cloud_off_outlined,
             size: 48,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
+            color: context.palette.textMuted,
           ),
           const SizedBox(height: 12),
           Text(
             _error!,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
             ),
           ),
         ],
@@ -206,7 +206,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
             'List products to the SDA community across Zimbabwe. We review applications within 1–3 days.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
               height: 1.5,
             ),
           ),
@@ -330,7 +330,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
           '"${seller.businessName}" and every product you\'ve listed will be '
           'removed from the marketplace. This cannot be undone.',
           style: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            color: ctx.palette.text,
             height: 1.5,
           ),
         ),
@@ -340,7 +340,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
             child: Text(
               'Cancel',
               style:
-                  AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+                  AppTextStyles.labelMedium.copyWith(color: ctx.palette.text),
             ),
           ),
           FilledButton(
@@ -570,7 +570,7 @@ class _StatusBanner extends StatelessWidget {
                 Text(
                   message,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.75),
+                    color: context.palette.text,
                     height: 1.5,
                   ),
                 ),
@@ -676,7 +676,7 @@ class _StoreSummaryCard extends StatelessWidget {
                   Text(
                     cityLine,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ],
@@ -758,10 +758,12 @@ class _StatsRow extends StatelessWidget {
     );
   }
 
-  Widget _v() => Container(
-        width: 1,
-        height: 36,
-        color: const Color.fromRGBO(26, 26, 46, 0.08),
+  Widget _v() => Builder(
+        builder: (context) => Container(
+          width: 1,
+          height: 36,
+          color: context.palette.divider,
+        ),
       );
 }
 
@@ -790,7 +792,7 @@ class _Stat extends StatelessWidget {
           Text(
             label,
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -801,7 +803,7 @@ class _Stat extends StatelessWidget {
             Text(
               sub!,
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.5),
+                color: context.palette.textMuted,
                 fontSize: 10.5,
               ),
             ),
@@ -846,7 +848,7 @@ class _QuickActionsCard extends StatelessWidget {
           Text(
             'QUICK ACTIONS',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -927,15 +929,15 @@ class _ActionRow extends StatelessWidget {
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                        color: context.palette.textMuted,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right,
-                color: Color.fromRGBO(26, 26, 46, 0.4),
+                color: context.palette.textMuted,
               ),
             ],
           ),
@@ -950,9 +952,9 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Divider(
+    return Divider(
       height: 1,
-      color: Color.fromRGBO(26, 26, 46, 0.06),
+      color: context.palette.divider,
     );
   }
 }
@@ -985,7 +987,7 @@ class _RecentProductsSection extends StatelessWidget {
               Text(
                 'RECENT PRODUCTS',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  color: context.palette.textMuted,
                   fontSize: 10.5,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.4,
@@ -1032,7 +1034,7 @@ class _RecentProductsSection extends StatelessWidget {
                   Text(
                     'Tap the + button to list your first product.',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ],
@@ -1070,14 +1072,14 @@ class _ProductPreviewRow extends StatelessWidget {
                   ? CachedImage(
                       firstImage,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Icon(
+                      errorBuilder: (context, error, stackTrace) => Icon(
                         Icons.image_not_supported_outlined,
-                        color: Color.fromRGBO(26, 26, 46, 0.4),
+                        color: context.palette.textMuted,
                       ),
                     )
-                  : const Icon(
+                  : Icon(
                       Icons.image_outlined,
-                      color: Color.fromRGBO(26, 26, 46, 0.4),
+                      color: context.palette.textMuted,
                     ),
             ),
           ),
@@ -1118,7 +1120,7 @@ class _AvailabilityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = available ? AppColors.successGreen : AppColors.textDark;
+    final color = available ? AppColors.successGreen : context.palette.text;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -1165,7 +1167,7 @@ class _SabbathBadge extends StatelessWidget {
             child: Text(
               notice,
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.75),
+                color: context.palette.text,
                 height: 1.5,
               ),
             ),
@@ -1201,7 +1203,7 @@ class _ChecklistCard extends StatelessWidget {
           Text(
             'WHILE YOU WAIT',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -1230,7 +1232,7 @@ class _ChecklistCard extends StatelessWidget {
                     child: Text(
                       item,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.75),
+                        color: context.palette.text,
                       ),
                     ),
                   ),
@@ -1388,7 +1390,7 @@ class _DangerZoneCard extends StatelessWidget {
             'Delete this store and every product you\'ve listed. This '
             'cannot be undone.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: context.palette.textMuted,
               height: 1.5,
             ),
           ),

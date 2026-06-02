@@ -231,7 +231,7 @@ class _MarketplaceGuidelinesScreenState
                   'products removed, and your account permanently banned '
                   'from selling. No second chances on serious breaches.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.78),
+                    color: context.palette.text,
                     height: 1.5,
                     fontSize: 12.5,
                   ),
@@ -266,14 +266,14 @@ class _MarketplaceGuidelinesScreenState
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
-                side: const BorderSide(
-                  color: Color.fromRGBO(26, 26, 46, 0.18),
+                side: BorderSide(
+                  color: context.palette.divider,
                 ),
               ),
               child: Text(
                 'Not now',
                 style: AppTextStyles.buttonText.copyWith(
-                  color: AppColors.textDark,
+                  color: context.palette.text,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -395,7 +395,7 @@ class _RuleCard extends StatelessWidget {
                 Text(
                   rule.body,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.72),
+                    color: context.palette.text,
                     height: 1.55,
                     fontSize: 12.8,
                   ),
@@ -432,7 +432,7 @@ class _AcceptanceTile extends StatelessWidget {
             border: Border.all(
               color: accepted
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.10),
+                  : context.palette.divider,
               width: accepted ? 1.5 : 1,
             ),
           ),
@@ -449,7 +449,7 @@ class _AcceptanceTile extends StatelessWidget {
                   border: Border.all(
                     color: accepted
                         ? AppColors.primaryBlue
-                        : const Color.fromRGBO(26, 26, 46, 0.30),
+                        : context.palette.divider,
                     width: 1.5,
                   ),
                 ),
@@ -468,7 +468,7 @@ class _AcceptanceTile extends StatelessWidget {
                   'Conduct. I understand that violations result in '
                   'permanent removal from the marketplace.',
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textDark,
+                    color: context.palette.text,
                     height: 1.5,
                     fontSize: 13.5,
                     fontWeight:

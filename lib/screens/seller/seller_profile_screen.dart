@@ -644,7 +644,7 @@ class _IdentityCard extends StatelessWidget {
                   child: Text(
                     cityLine,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.85),
+                      color: context.palette.text,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -677,11 +677,13 @@ class _IdentityCard extends StatelessWidget {
     );
   }
 
-  Widget _v() => Container(
-        width: 1,
-        height: 38,
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        color: const Color.fromRGBO(26, 26, 46, 0.08),
+  Widget _v() => Builder(
+        builder: (context) => Container(
+          width: 1,
+          height: 38,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          color: context.palette.divider,
+        ),
       );
 
   String _memberSince(DateTime? createdAt) {
@@ -729,7 +731,7 @@ class _Stat extends StatelessWidget {
           Text(
             label,
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -741,7 +743,7 @@ class _Stat extends StatelessWidget {
               sub!,
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.5),
+                color: context.palette.textMuted,
                 fontSize: 10.5,
               ),
             ),
@@ -941,7 +943,7 @@ class _SabbathBadge extends StatelessWidget {
                 Text(
                   notice,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.75),
+                    color: context.palette.text,
                     height: 1.5,
                   ),
                 ),
@@ -980,7 +982,7 @@ class _AboutCard extends StatelessWidget {
           Text(
             'ABOUT',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: context.palette.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -990,7 +992,7 @@ class _AboutCard extends StatelessWidget {
           Text(
             text,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.85),
+              color: context.palette.text,
               height: 1.55,
             ),
           ),
@@ -1050,7 +1052,7 @@ class _DeliveryCard extends StatelessWidget {
                   Text(
                     'Area: $area',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.8),
+                      color: context.palette.text,
                       height: 1.5,
                     ),
                   ),
@@ -1058,7 +1060,7 @@ class _DeliveryCard extends StatelessWidget {
                   Text(
                     'Fee: $fee',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.8),
+                      color: context.palette.text,
                       height: 1.5,
                     ),
                   ),
@@ -1067,7 +1069,7 @@ class _DeliveryCard extends StatelessWidget {
                   Text(
                     'Contact the seller for delivery details.',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.7),
+                      color: context.palette.text,
                     ),
                   ),
               ],
@@ -1097,7 +1099,7 @@ class _ProductsSection extends StatelessWidget {
               Text(
                 'PRODUCTS',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.4,
@@ -1142,7 +1144,7 @@ class _ProductsSection extends StatelessWidget {
                   'Check back soon — this seller hasn\'t listed anything yet.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ],
@@ -1255,7 +1257,7 @@ class _SafetyCard extends StatelessWidget {
                 Text(
                   'Meet in a public place. Inspect items before paying. Never send money in advance to people you don\'t trust. Advent Connect ZW is not a party to any transaction.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.7),
+                    color: context.palette.text,
                     height: 1.5,
                   ),
                 ),
@@ -1304,7 +1306,7 @@ class _ReportSheetState extends State<_ReportSheet> {
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.12),
+                  color: context.palette.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1320,7 +1322,7 @@ class _ReportSheetState extends State<_ReportSheet> {
             Text(
               'Reports are reviewed by the Advent Connect ZW team.',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                color: context.palette.textMuted,
               ),
             ),
             const SizedBox(height: 18),
@@ -1355,7 +1357,7 @@ class _ReportSheetState extends State<_ReportSheet> {
                               : Icons.radio_button_off,
                           color: _selected == r
                               ? AppColors.primaryBlue
-                              : const Color.fromRGBO(26, 26, 46, 0.4),
+                              : context.palette.textMuted,
                           size: 20,
                         ),
                         const SizedBox(width: 12),
@@ -1365,7 +1367,7 @@ class _ReportSheetState extends State<_ReportSheet> {
                             style: AppTextStyles.bodyMedium.copyWith(
                               color: _selected == r
                                   ? AppColors.primaryBlue
-                                  : AppColors.textDark,
+                                  : context.palette.text,
                               fontWeight: _selected == r
                                   ? FontWeight.w700
                                   : FontWeight.w500,
@@ -1451,7 +1453,7 @@ class _ReviewsSection extends StatelessWidget {
               Text(
                 'REVIEWS',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.4,
@@ -1553,7 +1555,7 @@ class _RatingSummary extends StatelessWidget {
                     ? '$totalCount ${totalCount == 1 ? 'review' : 'reviews'}'
                     : 'No reviews yet — be the first.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: context.palette.textMuted,
                 ),
               ),
             ],
@@ -1587,7 +1589,7 @@ class _StarStrip extends StatelessWidget {
             size: size,
             color: filled || half
                 ? AppColors.goldAccent
-                : const Color.fromRGBO(26, 26, 46, 0.3),
+                : context.palette.divider,
           ),
         );
       }),
@@ -1650,7 +1652,7 @@ class _RateCta extends StatelessWidget {
                           Text(
                             'You gave them',
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.6),
+                              color: context.palette.textMuted,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -1694,7 +1696,7 @@ class _ReviewRow extends StatelessWidget {
             Text(
               _relative(review.createdAt),
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.55),
+                color: context.palette.textMuted,
                 fontSize: 11,
               ),
             ),
@@ -1705,7 +1707,7 @@ class _ReviewRow extends StatelessWidget {
           Text(
             review.review!,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.8),
+              color: context.palette.text,
               height: 1.45,
             ),
           ),
@@ -1742,10 +1744,10 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.storefront_outlined,
             size: 48,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
+            color: context.palette.textMuted,
           ),
           const SizedBox(height: 12),
           Text(
@@ -1759,7 +1761,7 @@ class _ErrorCard extends StatelessWidget {
             message,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
               height: 1.5,
             ),
           ),
@@ -1840,7 +1842,7 @@ class _OwnerBadge extends StatelessWidget {
                     Text(
                       'OWNED BY',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        color: context.palette.textMuted,
                         fontSize: 9.5,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.4,
@@ -1873,10 +1875,10 @@ class _OwnerBadge extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right,
                 size: 18,
-                color: Color.fromRGBO(26, 26, 46, 0.4),
+                color: context.palette.textMuted,
               ),
             ],
           ),

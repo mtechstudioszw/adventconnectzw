@@ -509,7 +509,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
                         'We review applications within 1–3 business days.',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.55),
+                          color: context.palette.textMuted,
                         ),
                       ),
                     ],
@@ -605,11 +605,11 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -723,7 +723,7 @@ class _IntroCard extends StatelessWidget {
                 Text(
                   'Fill the form. We review within 1–3 days. Once approved your dashboard unlocks and you can list products.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.65),
+                    color: context.palette.textMuted,
                     height: 1.5,
                   ),
                 ),
@@ -776,7 +776,7 @@ class _SectionCard extends StatelessWidget {
           Text(
             subtitle,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
             ),
           ),
           const SizedBox(height: 16),
@@ -808,7 +808,7 @@ class _LabeledField extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: context.palette.textMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
@@ -819,7 +819,7 @@ class _LabeledField extends StatelessWidget {
               Text(
                 helper!,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                 ),
               ),
@@ -874,13 +874,11 @@ class _Input extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -926,7 +924,7 @@ class _CategoryPicker extends StatelessWidget {
               border: Border.all(
                 color: active
                     ? AppColors.primaryBlue
-                    : const Color.fromRGBO(26, 26, 46, 0.08),
+                    : context.palette.divider,
               ),
             ),
             child: Row(
@@ -937,7 +935,7 @@ class _CategoryPicker extends StatelessWidget {
                 Text(
                   c.label,
                   style: AppTextStyles.labelMedium.copyWith(
-                    color: active ? AppColors.white : AppColors.textDark,
+                    color: active ? AppColors.white : context.palette.text,
                     fontWeight: FontWeight.w700,
                     fontSize: 12.5,
                   ),
@@ -962,9 +960,9 @@ class _ProvincePicker extends StatelessWidget {
     return DropdownButtonFormField<String?>(
       initialValue: selected,
       isExpanded: true,
-      icon: const Icon(
+      icon: Icon(
         Icons.expand_more,
-        color: Color.fromRGBO(26, 26, 46, 0.5),
+        color: context.palette.textMuted,
       ),
       style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
       decoration: InputDecoration(
@@ -984,13 +982,11 @@ class _ProvincePicker extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -1001,7 +997,7 @@ class _ProvincePicker extends StatelessWidget {
       hint: Text(
         'Choose a province',
         style: AppTextStyles.bodyLarge.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.5),
+          color: context.palette.textMuted,
           fontSize: 15,
         ),
       ),
@@ -1077,7 +1073,7 @@ class _PhotoTile extends StatelessWidget {
                     ? 'Looks great. Tap change to swap it.'
                     : 'Optional — a logo or shopfront photo.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: context.palette.textMuted,
                 ),
               ),
             ],
@@ -1145,7 +1141,7 @@ class _CoverTile extends StatelessWidget {
             color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.08),
+              color: context.palette.divider,
             ),
             image: hasPhoto
                 ? DecorationImage(
@@ -1248,7 +1244,7 @@ class _ToggleRow extends StatelessWidget {
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ],

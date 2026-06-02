@@ -188,7 +188,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
         content: Text(
           'Your store and every product you listed will be removed from the marketplace. This cannot be undone.',
           style: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.75),
+            color: ctx.palette.text,
             height: 1.5,
           ),
         ),
@@ -197,7 +197,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
             onPressed: () => Navigator.pop(ctx, false),
             child: Text('Cancel',
                 style: AppTextStyles.labelMedium
-                    .copyWith(color: AppColors.textDark)),
+                    .copyWith(color: ctx.palette.text)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.red),
@@ -703,11 +703,11 @@ class _EditStoreScreenState extends State<EditStoreScreen>
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide: BorderSide(color: context.palette.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -748,7 +748,7 @@ class _CategoryReadonly extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+        border: Border.all(color: context.palette.divider),
       ),
       child: Row(
         children: [
@@ -770,7 +770,7 @@ class _CategoryReadonly extends StatelessWidget {
                 Text(
                   'STORE CATEGORY',
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: context.palette.textMuted,
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.4,
@@ -787,15 +787,15 @@ class _CategoryReadonly extends StatelessWidget {
                 Text(
                   'Contact support to change category.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: context.palette.textMuted,
                   ),
                 ),
               ],
             ),
           ),
-          const Icon(
+          Icon(
             Icons.lock_outline,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
+            color: context.palette.textMuted,
             size: 18,
           ),
         ],
@@ -890,7 +890,7 @@ class _SectionCard extends StatelessWidget {
           Text(
             subtitle,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
             ),
           ),
           const SizedBox(height: 16),
@@ -922,7 +922,7 @@ class _LabeledField extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: context.palette.textMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
@@ -933,7 +933,7 @@ class _LabeledField extends StatelessWidget {
               Text(
                 helper!,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.45),
+                  color: context.palette.textMuted,
                   fontSize: 11,
                 ),
               ),
@@ -988,13 +988,11 @@ class _Input extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -1025,9 +1023,9 @@ class _ProvincePicker extends StatelessWidget {
     return DropdownButtonFormField<String?>(
       initialValue: selected,
       isExpanded: true,
-      icon: const Icon(
+      icon: Icon(
         Icons.expand_more,
-        color: Color.fromRGBO(26, 26, 46, 0.5),
+        color: context.palette.textMuted,
       ),
       style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
       decoration: InputDecoration(
@@ -1047,13 +1045,11 @@ class _ProvincePicker extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+          borderSide: BorderSide(color: context.palette.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -1064,7 +1060,7 @@ class _ProvincePicker extends StatelessWidget {
       hint: Text(
         'Choose a province',
         style: AppTextStyles.bodyLarge.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.5),
+          color: context.palette.textMuted,
           fontSize: 15,
         ),
       ),
@@ -1140,7 +1136,7 @@ class _PhotoTile extends StatelessWidget {
                     ? 'Looks great. Tap change to swap it.'
                     : 'Optional — a logo or shopfront photo.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: context.palette.textMuted,
                 ),
               ),
             ],
@@ -1386,7 +1382,7 @@ class _ToggleRow extends StatelessWidget {
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: context.palette.textMuted,
                     ),
                   ),
                 ],
@@ -1478,17 +1474,17 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.cloud_off_outlined,
             size: 48,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
+            color: context.palette.textMuted,
           ),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: context.palette.textMuted,
             ),
           ),
         ],

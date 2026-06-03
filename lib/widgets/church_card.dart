@@ -87,36 +87,43 @@ class ChurchCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
+                    // Wrap so the members + distance chips re-flow to a
+                    // second line on narrow phones / large font scaling
+                    // instead of clipping. Previously a long city +
+                    // verified badge + members + distance overflowed
+                    // when system font size was bumped to large.
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        const Icon(
-                          Icons.people_outline,
-                          size: 14,
-                          color: AppColors.primaryBlue,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.people_outline,
+                              size: 14,
+                              color: AppColors.primaryBlue,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${_formatCount(church.membersCount)} members',
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: AppColors.primaryBlue,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatCount(church.membersCount),
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          ' members',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.6),
-                          ),
-                        ),
-                        if (distanceLabel != null) ...[
-                          const SizedBox(width: 8),
+                        if (distanceLabel != null)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                              color: AppColors.primaryBlue
+                                  .withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Row(
@@ -139,7 +146,6 @@ class ChurchCard extends StatelessWidget {
                               ],
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ],

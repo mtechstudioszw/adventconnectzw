@@ -21,7 +21,7 @@ class AboutScreen extends StatelessWidget {
   static const _contactEmail = 'tanatswamichaelmikuwa@gmail.com';
   static const _contactWhatsApp = '+263778092494';
   static const _sponsorEcoCash = '0778 092 494';
-  static const _sponsorEcoCashName = 'Advent Connect ZW';
+  static const _sponsorEcoCashName = 'Tanatswa Michael Mikuwa';
 
   @override
   Widget build(BuildContext context) {
@@ -427,12 +427,12 @@ class _SponsorCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.construction,
+              const Icon(Icons.favorite_outline,
                   color: AppColors.goldAccent, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Still building — here\'s how to help',
+                  'Support the ministry',
                   style: AppTextStyles.titleMedium.copyWith(
                     color: AppColors.white,
                     fontWeight: FontWeight.w800,
@@ -444,11 +444,11 @@ class _SponsorCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'If you notice a feature that isn\'t quite working yet, '
-            'it\'s usually because the resources to build and host it '
-            'aren\'t there yet — not a bug we forgot. You can sponsor '
-            'this ministry directly so the next feature ships sooner '
-            'and the app keeps running smoothly for the community.',
+            'Advent Connect ZW is built and run by a small team to serve '
+            'the Adventist community across Zimbabwe. If the app has '
+            'blessed you and you\'d like to help keep it running, you can '
+            'send a voluntary gift via EcoCash. Completely optional — '
+            'every feature stays free for everyone.',
             style: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.white.withValues(alpha: 0.88),
               height: 1.55,
@@ -527,7 +527,7 @@ class _SponsorCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Account name: Tanatswa Michael Mikuwa',
+                  'Account name: $accountName',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.white.withValues(alpha: 0.78),
                     fontWeight: FontWeight.w600,

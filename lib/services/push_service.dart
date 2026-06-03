@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'messaging_service.dart';
 import 'notification_service.dart';
 
 /// Top-level handler for FCM messages received while the app is in the
@@ -148,6 +149,21 @@ class PushService {
   }
 
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    // Even before we render the banner, optimistically mark the
+    // conversation as delivered. notify-fcm (patch_032's webhook
+    // pipeline) puts the conversation id in reference_id when the
+    // notification originates from a chat message — flip every
+    // undelivered incoming message in one server round-trip so the
+    // sender's tick goes double the moment the push lands, not when
+    // the recipient eventually opens the chat. Best-effort: failure
+    // here just leaves the tick single until the chat screen runs
+    // its own mark-delivered pass.
+    final referenceType = '${message.data['reference_type'] ?? ''}';
+    final referenceId = '${message.data['reference_id'] ?? ''}';
+    if (referenceType == 'conversation' && referenceId.isNotEmpty) {
+      unawaited(MessagingService.markConversationDelivered(referenceId));
+    }
+
     final notif = message.notification;
     if (notif == null) return; // data-only payload — no UI to show
     final title = notif.title ?? 'Advent Connect ZW';

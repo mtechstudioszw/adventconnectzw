@@ -8,8 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/friendship_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/feed_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
@@ -251,6 +253,15 @@ class _ChatScreenState extends State<ChatScreen>
   // Block state — surfaced in the overflow menu (Block / Unblock).
   bool _isBlocked = false;
 
+  // Friendship state — drives the "not friends yet" banner above the
+  // message list. Null until the first fetch resolves; null after
+  // resolution means no friendship row exists between the two users
+  // (i.e. they're strangers). _friendshipBusy guards the in-banner
+  // Accept / Add-friend / Cancel buttons from double-fires.
+  Friendship? _friendship;
+  bool _friendshipResolved = false;
+  bool _friendshipBusy = false;
+
   // Voice-note recording state. We use a single AudioRecorder per
   // chat screen and tear it down in dispose().
   final AudioRecorder _recorder = AudioRecorder();
@@ -305,6 +316,7 @@ class _ChatScreenState extends State<ChatScreen>
     // fires on join/leave; long-running idle doesn't bump it).
     unawaited(_refreshLastSeen(otherId));
     unawaited(_refreshBlockedState(otherId));
+    unawaited(_refreshFriendship(otherId));
     _lastSeenRefreshTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => unawaited(_refreshLastSeen(otherId)),
@@ -319,6 +331,90 @@ class _ChatScreenState extends State<ChatScreen>
     final blocked = await MessagingService.isBlockedByMe(otherId);
     if (!mounted) return;
     setState(() => _isBlocked = blocked);
+  }
+
+  /// Pulls the friendship row (if any) between the viewer and the
+  /// other participant. Filters client-side from fetchMyFriendships
+  /// because the typical user has a small friend list and adding a
+  /// dedicated single-pair lookup endpoint is overkill for the
+  /// throughput we need here.
+  Future<void> _refreshFriendship(String otherId) async {
+    try {
+      final all = await FeedService.fetchMyFriendships();
+      if (!mounted) return;
+      Friendship? match;
+      for (final f in all) {
+        if (f.involves(otherId)) {
+          match = f;
+          break;
+        }
+      }
+      setState(() {
+        _friendship = match;
+        _friendshipResolved = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _friendshipResolved = true);
+    }
+  }
+
+  Future<void> _addFriend() async {
+    final otherId = _conversation?.otherUserId;
+    if (otherId == null || otherId.isEmpty || _friendshipBusy) return;
+    setState(() => _friendshipBusy = true);
+    try {
+      final created = await FeedService.sendRequest(otherId);
+      if (!mounted) return;
+      setState(() => _friendship = created);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not send friend request. Try again.',
+            style:
+                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _friendshipBusy = false);
+    }
+  }
+
+  Future<void> _acceptIncoming() async {
+    final f = _friendship;
+    if (f == null || _friendshipBusy) return;
+    setState(() => _friendshipBusy = true);
+    try {
+      await FeedService.acceptRequest(f.id);
+      if (!mounted) return;
+      setState(() {
+        _friendship = Friendship(
+          id: f.id,
+          requesterId: f.requesterId,
+          addresseeId: f.addresseeId,
+          status: FriendshipStatus.accepted,
+          createdAt: f.createdAt,
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not accept. Try again.',
+            style:
+                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _friendshipBusy = false);
+    }
   }
 
   Future<void> _refreshLastSeen(String otherId) async {
@@ -753,8 +849,152 @@ class _ChatScreenState extends State<ChatScreen>
       body: Column(
         children: [
           _buildHeader(),
+          _buildFriendshipBanner(),
           Expanded(child: _buildBody()),
           _buildInputBar(),
+        ],
+      ),
+    );
+  }
+
+  /// "You're not friends yet" banner — pops above the message list
+  /// when the viewer and the other participant aren't connected on
+  /// the friend graph. Three states map to three CTAs (Add friend,
+  /// Accept, or just a sent-pending status). Hidden once they're
+  /// friends. Mirrors how Facebook/Instagram surface stranger DMs.
+  Widget _buildFriendshipBanner() {
+    final convo = _conversation;
+    if (convo == null) return const SizedBox.shrink();
+    if (convo.isSelfChat) return const SizedBox.shrink();
+    if (!_friendshipResolved) return const SizedBox.shrink();
+    final f = _friendship;
+    if (f != null && f.isAccepted) return const SizedBox.shrink();
+
+    final viewerId = AuthService.currentUser?.id ?? '';
+    final otherName = convo.otherUserName;
+    final isIncoming = f != null && f.isIncomingPendingFor(viewerId);
+    final isOutgoingPending =
+        f != null && f.isPending && !f.isIncomingPendingFor(viewerId);
+
+    String title;
+    String body;
+    Widget? action;
+
+    if (isIncoming) {
+      title = '$otherName wants to be friends';
+      body =
+          'Accept to follow each other\'s friends-only posts. You can still chat regardless.';
+      action = Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _friendshipBusy ? null : _acceptIncoming,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                side: const BorderSide(color: AppColors.primaryBlue),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                _friendshipBusy ? 'Accepting…' : 'Accept',
+                style: AppTextStyles.buttonText.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    } else if (isOutgoingPending) {
+      title = 'Friend request sent';
+      body =
+          'Waiting for $otherName to accept. You can keep chatting in the meantime.';
+      action = null;
+    } else {
+      title = 'You\'re not friends with $otherName yet';
+      body =
+          'You can still send messages. Add as a friend to follow each other\'s posts.';
+      action = Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _friendshipBusy ? null : _addFriend,
+              icon: const Icon(
+                Icons.person_add_alt_1,
+                size: 16,
+                color: AppColors.primaryBlue,
+              ),
+              label: Text(
+                _friendshipBusy ? 'Sending…' : 'Add friend',
+                style: AppTextStyles.buttonText.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                side: const BorderSide(color: AppColors.primaryBlue),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.goldAccent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.goldAccent.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.info_outline,
+                size: 16,
+                color: AppColors.goldAccent,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+              height: 1.4,
+              fontSize: 12,
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(height: 10),
+            action,
+          ],
         ],
       ),
     );

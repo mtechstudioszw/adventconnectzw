@@ -30,6 +30,12 @@ class PresenceService {
   static final Set<String> _onlineUserIds = <String>{};
   static final ValueNotifier<Set<String>> _notifier =
       ValueNotifier<Set<String>>(const <String>{});
+  // Tracks whether we currently announce ourselves on the presence
+  // channel. False when the user has flipped "Hide online" in the
+  // chat privacy screen — we still subscribe so we can see others'
+  // dots, we just don't broadcast our own. refreshVisibility() flips
+  // this in either direction without tearing the channel down.
+  static bool _isTracked = false;
 
   /// True when the given user id is currently subscribed to the
   /// presence channel — i.e. has the app open in the foreground.
@@ -78,9 +84,18 @@ class PresenceService {
       _notifier.value = Set.unmodifiable(_onlineUserIds);
     });
 
+    // Read the user's own show_online_status before announcing — if
+    // they've hidden their online dot via Settings → Chat privacy, we
+    // subscribe to the channel (so we can still SEE others' dots) but
+    // we don't broadcast ourselves. Previously start() always called
+    // track(), so flipping "Hide online" had no effect on what other
+    // clients saw — the user stayed visibly green.
+    final wantsToBroadcast = await _wantsToBroadcastPresence();
+
     channel.subscribe((status, _) async {
-      if (status == RealtimeSubscribeStatus.subscribed) {
+      if (status == RealtimeSubscribeStatus.subscribed && wantsToBroadcast) {
         await channel.track({'user_id': me.id});
+        _isTracked = true;
       }
     });
     _channel = channel;
@@ -98,6 +113,7 @@ class PresenceService {
   static Future<void> stop({bool clearRoster = true}) async {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    _isTracked = false;
     final ch = _channel;
     _channel = null;
     if (ch != null) {
@@ -114,6 +130,51 @@ class PresenceService {
     if (clearRoster) {
       _onlineUserIds.clear();
       _notifier.value = const <String>{};
+    }
+  }
+
+  /// Called by ChatPrivacyScreen after the user flips the "Show me
+  /// as online" toggle. Reads the freshly-saved profiles row and
+  /// either tracks (becomes visible) or untracks (becomes hidden)
+  /// the live presence channel without tearing the subscription
+  /// down. No-op if presence isn't running yet.
+  static Future<void> refreshVisibility() async {
+    final ch = _channel;
+    if (ch == null) return;
+    final wantsToBroadcast = await _wantsToBroadcastPresence();
+    try {
+      if (wantsToBroadcast && !_isTracked) {
+        final me = _client.auth.currentUser;
+        if (me == null) return;
+        await ch.track({'user_id': me.id});
+        _isTracked = true;
+      } else if (!wantsToBroadcast && _isTracked) {
+        await ch.untrack();
+        _isTracked = false;
+      }
+    } catch (_) {
+      // If the channel isn't ready yet the flip will be picked up by
+      // the next start() — better to fail silently than crash the
+      // privacy screen on a transient network blip.
+    }
+  }
+
+  /// Reads `profiles.show_online_status` for the signed-in user.
+  /// Defaults to `true` (visible) on any error / missing row — the
+  /// historical behaviour before this column existed.
+  static Future<bool> _wantsToBroadcastPresence() async {
+    final me = _client.auth.currentUser;
+    if (me == null) return false;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('show_online_status')
+          .eq('id', me.id)
+          .maybeSingle();
+      if (row == null) return true;
+      return row['show_online_status'] != false;
+    } catch (_) {
+      return true;
     }
   }
 

@@ -735,6 +735,28 @@ class MessagingService {
     }
   }
 
+  /// Bulk variant of [markMessagesDelivered]. The push handler only
+  /// gets the conversation id off the FCM payload (no individual
+  /// message ids), so we flip every undelivered incoming message in
+  /// the conversation in one round-trip. Backed by
+  /// `mark_conversation_delivered` (patch_038). Fires from
+  /// PushService when an FCM "conversation" notification lands, so
+  /// the sender's tick goes double as soon as the recipient's device
+  /// receives the push — not when they later open the chat screen.
+  static Future<void> markConversationDelivered(String conversationId) async {
+    final id = int.tryParse(conversationId);
+    if (id == null) return;
+    try {
+      await _client.rpc(
+        'mark_conversation_delivered',
+        params: {'p_conversation_id': id},
+      );
+    } catch (_) {
+      // Best-effort — the next time the user opens the chat, the
+      // per-message RPC catches anything we missed.
+    }
+  }
+
   /// Mark every unread message in this conversation that was sent by
   /// someone other than the current user as read. Called when the user
   /// opens the chat — the other party will then see the double-tick

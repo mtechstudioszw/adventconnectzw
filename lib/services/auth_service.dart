@@ -789,40 +789,37 @@ class AuthService {
   }
 
   /// True when the user has either finished the in-app onboarding flow
-  /// OR already has a populated `profiles` row from an earlier session.
+  /// OR already has onboarding-derived metadata from an earlier session.
   ///
-  /// History: this used to read only `userMetadata['onboarding_completed']`,
-  /// which is set in exactly one place (onboarding_flow_screen, on the
-  /// final "Done" tap). Users who signed up before that flag was added
-  /// — or bailed out of onboarding halfway — got re-asked for date of
-  /// birth on every Google sign-in because the metadata gate kept
-  /// answering false. We now also check `profiles.full_name`: if it
-  /// exists and isn't empty, the user clearly completed onboarding at
-  /// some point, and we backfill the metadata flag so subsequent calls
-  /// don't have to round-trip to the DB.
+  /// History:
+  ///  - v1 read only `userMetadata['onboarding_completed']`. Users who
+  ///    signed up before that flag was added got re-asked for date of
+  ///    birth on every Google sign-in.
+  ///  - v2 fell back to `profiles.full_name`. WRONG — the
+  ///    `handle_new_user` trigger (patch_001) auto-fills full_name from
+  ///    Google's raw_user_meta_data for brand-new Google users, so the
+  ///    fallback fired immediately and bypassed both age verification
+  ///    AND profile setup.
+  ///  - v3 (current): the fallback is `userMetadata['interests']` — set
+  ///    only on step 3 (Personalization) of onboarding_flow_screen, and
+  ///    not auto-populated by Google OR by the signup trigger. Safe
+  ///    signal that the user actually reached the onboarding flow.
   static Future<bool> hasCompletedProfileSetup() async {
     final user = currentUser;
     if (user == null) return false;
     final meta = user.userMetadata ?? const {};
     if (meta['onboarding_completed'] == true) return true;
 
-    // Fallback: a populated profiles.full_name means onboarding was
-    // already completed in a previous session — heal the metadata
-    // flag so we don't pay this round-trip on every login.
-    try {
-      final row = await _client
-          .from('profiles')
-          .select('full_name')
-          .eq('id', user.id)
-          .maybeSingle();
-      final name = (row?['full_name'] as String?)?.trim() ?? '';
-      if (name.isNotEmpty) {
-        unawaited(updateMetadataDirect({'onboarding_completed': true}));
-        return true;
-      }
-    } catch (_) {
-      // Network blip / RLS oddity — fall through to false. The user
-      // sees the welcome step again, which is the safer side to err.
+    // Fallback for users who pre-date the onboarding_completed flag.
+    // `interests` is written only by onboarding_flow_screen step 3,
+    // and Google's raw metadata never includes it — so a non-empty
+    // interests list is a reliable signal that this account
+    // completed onboarding before. Heal the metadata flag.
+    final interests = meta['interests'];
+    final hasInterests = interests is List && interests.isNotEmpty;
+    if (hasInterests) {
+      unawaited(updateMetadataDirect({'onboarding_completed': true}));
+      return true;
     }
     return false;
   }

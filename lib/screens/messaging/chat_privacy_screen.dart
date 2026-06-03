@@ -72,6 +72,12 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         'show_online_status': _showOnlineStatus,
         'show_read_receipts': _showReadReceipts,
       }).eq('id', user.id);
+      // PresenceService caches its broadcast state in _isTracked —
+      // flipping the DB column doesn't retroactively untrack the
+      // existing presence channel. Tell PresenceService to reconcile
+      // so OTHER clients see the user vanish (or reappear) within a
+      // tick of saving here.
+      unawaited(PresenceService.refreshVisibility());
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

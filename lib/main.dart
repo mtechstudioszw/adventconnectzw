@@ -136,6 +136,15 @@ Future<void> _initBackgroundServices() async {
             break;
           case 'conversation':
             if (id.isNotEmpty) {
+              // Tap-to-open flow: mark every undelivered incoming
+              // message in this conversation as delivered before
+              // navigating, so the sender's tick goes double at the
+              // moment of tap (not after the chat screen mounts +
+              // runs its own per-message mark-delivered pass). The
+              // foreground handler already runs this for pushes that
+              // land while the app is open; this branch covers
+              // taps from system tray / killed state.
+              unawaited(MessagingService.markConversationDelivered(id));
               appRouter.pushNamed('chat', pathParameters: {'id': id});
             }
             break;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/job_model.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -7,7 +8,12 @@ import '../../theme/app_text_styles.dart';
 import '../widgets/post_form_widgets.dart';
 
 class PostJobScreen extends StatefulWidget {
-  const PostJobScreen({super.key});
+  const PostJobScreen({super.key, this.existing});
+
+  /// When non-null, the screen renders in edit mode: form is
+  /// pre-filled with [existing] values, Save calls JobService
+  /// .updateJob instead of postJob, and the snackbar copy adapts.
+  final Job? existing;
 
   @override
   State<PostJobScreen> createState() => _PostJobScreenState();
@@ -32,6 +38,10 @@ class _PostJobScreenState extends State<PostJobScreen>
   String _category = 'other';
   String _jobType = 'full_time';
   String _postType = 'hiring';
+  // patch_039 — experience tier. Drives JobsScreen filter chip
+  // matching and helps applicants self-select. Defaults to 'mid' so
+  // the post matches the most common case.
+  String _level = 'mid';
   String? _province;
   bool _sabbathFriendly = false;
   bool _isSdaInstitution = false;
@@ -72,6 +82,8 @@ class _PostJobScreenState extends State<PostJobScreen>
     'Midlands',
   ];
 
+  bool get _isEdit => widget.existing != null;
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +95,23 @@ class _PostJobScreenState extends State<PostJobScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+
+    // Edit-mode hydration. Skip when [existing] is null (post path).
+    final ex = widget.existing;
+    if (ex != null) {
+      _titleController.text = ex.title;
+      _companyController.text = ex.company;
+      _descriptionController.text = ex.description ?? '';
+      _requirementsController.text = ex.requirements.join('\n');
+      _salaryController.text =
+          ex.salaryMin != null || ex.salaryMax != null ? ex.formatSalary() : '';
+      _locationController.text = ex.location ?? '';
+      _phoneController.text = ex.contactPhone ?? '';
+      _category = ex.category ?? 'other';
+      _jobType = ex.type ?? 'full_time';
+      _postType = ex.postType;
+      _level = ex.level;
+    }
   }
 
   @override
@@ -108,30 +137,57 @@ class _PostJobScreenState extends State<PostJobScreen>
     }
     setState(() => _saving = true);
     try {
-      await JobService.postJob(
-        title: _titleController.text,
-        description: _descriptionController.text,
-        category: _category,
-        province: _province!,
-        location: _locationController.text,
-        company: _companyController.text.isEmpty ? null : _companyController.text,
-        requirements: _requirementsController.text.isEmpty
-            ? null
-            : _requirementsController.text,
-        jobType: _jobType,
-        postType: _postType,
-        salaryRange:
-            _salaryController.text.isEmpty ? null : _salaryController.text,
-        sabbathFriendly: _sabbathFriendly,
-        isSdaInstitution: _isSdaInstitution,
-        contactPhone: _phoneController.text.isEmpty ? null : _phoneController.text,
-        contactEmail: _emailController.text.isEmpty ? null : _emailController.text,
-      );
+      final ex = widget.existing;
+      if (ex == null) {
+        await JobService.postJob(
+          title: _titleController.text,
+          description: _descriptionController.text,
+          category: _category,
+          province: _province!,
+          location: _locationController.text,
+          company:
+              _companyController.text.isEmpty ? null : _companyController.text,
+          requirements: _requirementsController.text.isEmpty
+              ? null
+              : _requirementsController.text,
+          jobType: _jobType,
+          postType: _postType,
+          level: _level,
+          salaryRange:
+              _salaryController.text.isEmpty ? null : _salaryController.text,
+          sabbathFriendly: _sabbathFriendly,
+          isSdaInstitution: _isSdaInstitution,
+          contactPhone:
+              _phoneController.text.isEmpty ? null : _phoneController.text,
+          contactEmail:
+              _emailController.text.isEmpty ? null : _emailController.text,
+        );
+      } else {
+        await JobService.updateJob(
+          jobId: ex.id,
+          title: _titleController.text,
+          company: _companyController.text,
+          description: _descriptionController.text,
+          requirements: _requirementsController.text,
+          category: _category,
+          jobType: _jobType,
+          level: _level,
+          salaryRange: _salaryController.text,
+          province: _province!,
+          location: _locationController.text,
+          sabbathFriendly: _sabbathFriendly,
+          isSdaInstitution: _isSdaInstitution,
+          contactPhone: _phoneController.text,
+          contactEmail: _emailController.text,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _postType == 'hiring' ? 'Job posted.' : 'Looking-for posted.',
+            _isEdit
+                ? 'Job updated.'
+                : (_postType == 'hiring' ? 'Job posted.' : 'Looking-for posted.'),
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -141,7 +197,9 @@ class _PostJobScreenState extends State<PostJobScreen>
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Could not post the job. Please try again.';
+          _error = _isEdit
+              ? 'Could not save changes. Please try again.'
+              : 'Could not post the job. Please try again.';
         });
       }
     }
@@ -295,6 +353,52 @@ class _PostJobScreenState extends State<PostJobScreen>
                       DropdownMenuItem(value: e.key, child: Text(e.value)))
                   .toList(),
               onChanged: (v) => setState(() => _jobType = v ?? 'full_time'),
+            ),
+          ),
+          const SizedBox(height: 18),
+          PostFormLabeledField(
+            label: 'Experience level',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final l in JobLevel.all)
+                      ChoiceChip(
+                        label: Text(l.label),
+                        selected: _level == l.id,
+                        onSelected: (_) => setState(() => _level = l.id),
+                        selectedColor:
+                            AppColors.primaryBlue.withValues(alpha: 0.18),
+                        labelStyle: AppTextStyles.labelMedium.copyWith(
+                          color: _level == l.id
+                              ? AppColors.primaryBlue
+                              : context.palette.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: _level == l.id
+                                ? AppColors.primaryBlue
+                                : context.palette.divider,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  JobLevel.byId(_level).helper,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.textMuted,
+                    height: 1.4,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

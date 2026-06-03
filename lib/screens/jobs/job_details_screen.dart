@@ -33,6 +33,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   String? _error;
   bool _markingFilled = false;
   bool _reopening = false;
+  bool _renewing = false;
+  bool _deleting = false;
 
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -263,6 +265,220 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
           backgroundColor: AppColors.red,
+        ),
+      );
+    }
+  }
+
+  /// Owner-only Renew tile + 5-days-left warning. Hidden when the
+  /// post is healthy (more than 5 days remaining) so we don't nag
+  /// the poster about a job that's nowhere near expiry.
+  Widget _buildExpiryBanner(Job job) {
+    final days = job.daysUntilExpiry;
+    final expired = job.isExpired;
+    final urgent = expired || (days != null && days <= 5);
+    if (!urgent) return const SizedBox.shrink();
+    final title = expired
+        ? 'This post has expired'
+        : days == 0
+            ? 'Expires today'
+            : days == 1
+                ? 'Expires tomorrow'
+                : 'Expires in $days days';
+    final body = expired
+        ? 'It\'s hidden from applicants until you renew. One tap gives you another 30 days.'
+        : 'Renew to give it another 30 days and re-arm the 5-days-out reminder.';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.goldAccent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.goldAccent.withValues(alpha: 0.40),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.schedule,
+                size: 16,
+                color: AppColors.goldAccent,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+              height: 1.4,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _renewing ? null : _renew,
+            icon: const Icon(
+              Icons.refresh,
+              size: 16,
+              color: AppColors.primaryBlue,
+            ),
+            label: Text(
+              _renewing ? 'Renewing…' : 'Renew for 30 days',
+              style: AppTextStyles.buttonText.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              side: BorderSide(
+                color: AppColors.primaryBlue.withValues(alpha: 0.40),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _renew() async {
+    final job = _job;
+    if (job == null || _renewing) return;
+    setState(() => _renewing = true);
+    try {
+      final updated = await JobService.renewJob(job.id);
+      if (!mounted) return;
+      setState(() {
+        _job = updated;
+        _renewing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Renewed — listed for another 30 days.',
+            style:
+                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _renewing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not renew. Try again.',
+            style:
+                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _editJob() async {
+    final job = _job;
+    if (job == null) return;
+    final changed = await context.pushNamed<bool>(
+      'edit_job',
+      extra: job,
+    );
+    if (changed == true && mounted) {
+      _bootstrap();
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final job = _job;
+    if (job == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.palette.sheet,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Delete this job?',
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          '"${job.title}" will be removed permanently. Applicants who '
+          'already messaged you keep their chats.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.buttonText.copyWith(
+                color: ctx.palette.text,
+              ),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _deleting = true);
+    try {
+      await JobService.deleteJob(job.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            'Job deleted.',
+            style:
+                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.goNamed('jobs');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not delete. Try again.',
+            style:
+                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
         ),
       );
     }
@@ -616,6 +832,24 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final hasPhone = (job.contactPhone ?? '').trim().isNotEmpty;
 
     if (_isPoster) {
+      final ownerExtras = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildExpiryBanner(job),
+          const SizedBox(height: 10),
+          _SecondaryActionButton(
+            icon: Icons.edit_outlined,
+            label: 'Edit job',
+            onTap: _editJob,
+          ),
+          const SizedBox(height: 10),
+          _SecondaryActionButton(
+            icon: Icons.delete_outline,
+            label: _deleting ? 'Deleting…' : 'Delete job',
+            onTap: _deleting ? () {} : _confirmDelete,
+          ),
+        ],
+      );
       if (job.isFilled) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -631,12 +865,19 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
               loading: _reopening,
               onTap: _confirmReopen,
             ),
+            ownerExtras,
           ],
         );
       }
-      return _MarkFilledButton(
-        loading: _markingFilled,
-        onTap: _confirmMarkFilled,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MarkFilledButton(
+            loading: _markingFilled,
+            onTap: _confirmMarkFilled,
+          ),
+          ownerExtras,
+        ],
       );
     }
 

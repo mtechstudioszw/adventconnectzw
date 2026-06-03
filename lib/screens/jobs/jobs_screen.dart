@@ -34,6 +34,9 @@ class _JobsScreenState extends State<JobsScreen>
 
   List<Job> _jobs = [];
   String _selectedCategory = 'all';
+  /// patch_039: 'all' | 'entry' | 'mid' | 'senior'. Second-row filter
+  /// strip under categories so applicants can self-select tier.
+  String _selectedLevel = 'all';
   bool _loading = true;
   String? _error;
 
@@ -95,6 +98,7 @@ class _JobsScreenState extends State<JobsScreen>
       final list = await JobService.fetchJobs(
         search: _searchController.text,
         category: _selectedCategory,
+        level: _selectedLevel == 'all' ? null : _selectedLevel,
       );
       if (!mounted) return;
       setState(() {
@@ -103,7 +107,9 @@ class _JobsScreenState extends State<JobsScreen>
       });
       // Cache the unfiltered list (no search, no category filter) so
       // the cache represents the full feed users land on first.
-      if (_searchController.text.isEmpty && _selectedCategory == 'all') {
+      if (_searchController.text.isEmpty &&
+          _selectedCategory == 'all' &&
+          _selectedLevel == 'all') {
         unawaited(_writeCache(list));
       }
     } catch (_) {
@@ -125,6 +131,11 @@ class _JobsScreenState extends State<JobsScreen>
     _loadJobs();
   }
 
+  void _selectLevel(String id) {
+    setState(() => _selectedLevel = id);
+    _loadJobs();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -142,6 +153,8 @@ class _JobsScreenState extends State<JobsScreen>
             _buildSearchBar(),
             const _ShopJobsSegment(active: _Section.jobs),
             _buildCategoryStrip(),
+            const SizedBox(height: 6),
+            _buildLevelStrip(),
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.primaryBlue,
@@ -270,6 +283,36 @@ class _JobsScreenState extends State<JobsScreen>
             label: cat.label,
             selected: selected,
             onTap: () => _selectCategory(cat.id),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Tier filter strip — entry / mid / senior, with "All levels" as
+  /// the opt-out. Sits under the category row so the two filter
+  /// dimensions stack cleanly. patch_039.
+  Widget _buildLevelStrip() {
+    const items = <(String, String)>[
+      ('all', 'All levels'),
+      ('entry', 'Entry'),
+      ('mid', 'Mid'),
+      ('senior', 'Senior'),
+    ];
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: items.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final (id, label) = items[i];
+          final selected = _selectedLevel == id;
+          return _CategoryChip(
+            label: label,
+            selected: selected,
+            onTap: () => _selectLevel(id),
           );
         },
       ),

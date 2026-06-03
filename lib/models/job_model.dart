@@ -19,6 +19,8 @@ class Job {
     this.isActive = true,
     this.status = 'open',
     this.postType = 'hiring',
+    this.level = 'mid',
+    this.expiresAt,
   });
 
   final String id;
@@ -42,12 +44,49 @@ class Job {
   /// for work). Drives whether the card labels the poster as a
   /// recruiter or as the candidate.
   final String postType;
+  /// 'entry' | 'mid' | 'senior'. Patch_039 default is 'mid' so legacy
+  /// rows still surface in the default filter.
+  final String level;
+  /// patch_039: 30 days from posting by default, bumped via renew_job.
+  /// Server-side cron strips expired rows from the public feed.
+  final DateTime? expiresAt;
   final DateTime createdAt;
 
   bool get isFilled => status == 'filled';
   bool get isOpen => status == 'open';
   bool get isHiring => postType == 'hiring';
   bool get isSeeking => postType == 'seeking';
+
+  /// True when the post is past its 30-day shelf life. Even if the
+  /// row is still active, JobsScreen should mark it Expired and
+  /// the owner gets a Renew CTA.
+  bool get isExpired {
+    final t = expiresAt;
+    if (t == null) return false;
+    return t.isBefore(DateTime.now());
+  }
+
+  /// Whole days remaining until expiry, clamped to 0. Null when the
+  /// row pre-dates patch_039 (shouldn't happen post-backfill).
+  int? get daysUntilExpiry {
+    final t = expiresAt;
+    if (t == null) return null;
+    final diff = t.difference(DateTime.now()).inHours;
+    if (diff <= 0) return 0;
+    return (diff / 24).ceil();
+  }
+
+  String levelLabel() {
+    switch (level) {
+      case 'entry':
+        return 'Entry level';
+      case 'senior':
+        return 'Senior level';
+      case 'mid':
+      default:
+        return 'Mid level';
+    }
+  }
 
   factory Job.fromJson(Map<String, dynamic> json) {
     final raw = json['requirements'];
@@ -76,6 +115,9 @@ class Job {
       isActive: json['is_active'] != false,
       status: (json['status'] ?? 'open') as String,
       postType: postType,
+      level: (json['level'] ?? 'mid') as String,
+      expiresAt:
+          DateTime.tryParse(json['expires_at']?.toString() ?? ''),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );
@@ -102,6 +144,8 @@ class Job {
         'is_active': isActive,
         'status': status,
         'post_type': postType,
+        'level': level,
+        'expires_at': expiresAt?.toIso8601String(),
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -149,4 +193,38 @@ class JobCategory {
     JobCategory(id: 'hospitality', label: 'Hospitality'),
     JobCategory(id: 'other', label: 'Other'),
   ];
+}
+
+/// Experience tier for a job posting. Drives the level filter on
+/// JobsScreen + the tier selector on PostJobScreen.
+class JobLevel {
+  const JobLevel({
+    required this.id,
+    required this.label,
+    required this.helper,
+  });
+  final String id;
+  final String label;
+  final String helper;
+
+  static const entry = JobLevel(
+    id: 'entry',
+    label: 'Entry',
+    helper: 'No formal experience required. Great for first jobs.',
+  );
+  static const mid = JobLevel(
+    id: 'mid',
+    label: 'Mid',
+    helper: '1–4 years of experience expected.',
+  );
+  static const senior = JobLevel(
+    id: 'senior',
+    label: 'Senior',
+    helper: '5+ years of experience or team-lead expectations.',
+  );
+
+  static const all = [entry, mid, senior];
+
+  static JobLevel byId(String id) =>
+      all.firstWhere((l) => l.id == id, orElse: () => mid);
 }

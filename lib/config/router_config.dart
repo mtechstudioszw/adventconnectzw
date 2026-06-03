@@ -363,6 +363,14 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const PostJobScreen(),
         ),
         GoRoute(
+          path: 'edit',
+          name: 'edit_job',
+          builder: (context, state) {
+            final existing = state.extra is Job ? state.extra as Job : null;
+            return PostJobScreen(existing: existing);
+          },
+        ),
+        GoRoute(
           path: ':id',
           name: 'job_details',
           builder: (context, state) {

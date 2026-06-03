@@ -13,11 +13,22 @@ class JobService {
   static Future<List<Job>> fetchJobs({
     String? search,
     String? category,
+    String? level,
   }) async {
-    var query = _client.from(_table).select().eq('status', 'open');
+    // Hide expired rows from the public feed. patch_039's pg_cron
+    // also flips status='expired' once a day, but filtering by
+    // expires_at gives us up-to-the-minute correctness.
+    var query = _client
+        .from(_table)
+        .select()
+        .eq('status', 'open')
+        .gt('expires_at', DateTime.now().toUtc().toIso8601String());
 
     if (category != null && category.isNotEmpty && category != 'all') {
       query = query.eq('category', category);
+    }
+    if (level != null && level.isNotEmpty && level != 'all') {
+      query = query.eq('level', level);
     }
     if (search != null && search.trim().isNotEmpty) {
       final term = '%${search.trim()}%';
@@ -50,6 +61,7 @@ class JobService {
     String? requirements,
     String jobType = 'full_time',
     String postType = 'hiring',
+    String level = 'mid',
     String? salaryRange,
     bool sabbathFriendly = false,
     bool isSdaInstitution = false,
@@ -71,6 +83,7 @@ class JobService {
         'category': category,
         'job_type': jobType,
         'post_type': postType,
+        'level': level,
         'salary_range': salaryRange?.trim(),
         'province': province.trim(),
         'location': location.trim(),
@@ -82,6 +95,81 @@ class JobService {
     );
     AnalyticsService.jobPosted(category);
     return inserted['id'].toString();
+  }
+
+  /// Owner-only edit. Touches the same writable fields as the post
+  /// form. RLS limits the row to the poster; the `.eq('poster_id')`
+  /// is belt-and-braces.
+  static Future<void> updateJob({
+    required String jobId,
+    String? title,
+    String? company,
+    String? description,
+    String? requirements,
+    String? category,
+    String? jobType,
+    String? level,
+    String? salaryRange,
+    String? province,
+    String? location,
+    bool? sabbathFriendly,
+    bool? isSdaInstitution,
+    String? contactPhone,
+    String? contactEmail,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to update a job.');
+    }
+    final updates = <String, dynamic>{
+      'title': ?title?.trim(),
+      'company': ?company?.trim(),
+      'description': ?description?.trim(),
+      'requirements': ?requirements?.trim(),
+      'category': ?category,
+      'job_type': ?jobType,
+      'level': ?level,
+      'salary_range': ?salaryRange?.trim(),
+      'province': ?province?.trim(),
+      'location': ?location?.trim(),
+      'sabbath_friendly': ?sabbathFriendly,
+      'is_sda_institution': ?isSdaInstitution,
+      'contact_phone': ?contactPhone?.trim(),
+      'contact_email': ?contactEmail?.trim(),
+    };
+    await _client
+        .from(_table)
+        .update(updates)
+        .eq('id', jobId)
+        .eq('poster_id', user.id);
+  }
+
+  /// Owner-only delete. Permanently removes the row + its
+  /// applications cascade.
+  static Future<void> deleteJob(String jobId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to delete a job.');
+    }
+    await _client
+        .from(_table)
+        .delete()
+        .eq('id', jobId)
+        .eq('poster_id', user.id);
+  }
+
+  /// patch_039: bumps expires_at to NOW() + 30 days and flips
+  /// status='expired' back to 'open' if needed. Backed by the
+  /// renew_job SECURITY DEFINER RPC which validates ownership.
+  static Future<Job> renewJob(String jobId) async {
+    final response = await _client.rpc(
+      'renew_job',
+      params: {'p_job_id': int.parse(jobId)},
+    );
+    final row = response is List
+        ? response.first as Map<String, dynamic>
+        : response as Map<String, dynamic>;
+    return Job.fromJson(row);
   }
 
   /// Flip an open job to 'filled'. RLS already restricts this to the

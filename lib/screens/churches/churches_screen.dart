@@ -1,12 +1,10 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../models/church_model.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
@@ -28,13 +26,13 @@ class ChurchesScreen extends StatefulWidget {
 }
 
 /// Filter chip identifiers per master reference Part 15.
-/// All — show every church (sorted alphabetically, or by distance
+/// All â€” show every church (sorted alphabetically, or by distance
 ///       if location is granted).
-/// Nearby — top 5 churches by GPS distance. Tapping requests
+/// Nearby â€” top 5 churches by GPS distance. Tapping requests
 ///          location permission if not already granted.
-/// Verified — churches that have at least one approved admin
+/// Verified â€” churches that have at least one approved admin
 ///            (church.is_verified = true).
-/// My Province — churches whose province matches the viewer's
+/// My Province â€” churches whose province matches the viewer's
 ///               profiles.province. Hidden if the viewer hasn't
 ///               set a province yet.
 enum _ChurchFilter { all, nearby, verified, myProvince }
@@ -98,7 +96,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   bool get _nearMode => _activeFilter == _ChurchFilter.nearby;
 
   Future<void> _bootstrap() async {
-    // Kick off location lookup + viewer's province in parallel — both
+    // Kick off location lookup + viewer's province in parallel â€” both
     // can take a few seconds and we don't want to block list paint.
     _resolveLocation();
     _loadMyProvince();
@@ -118,7 +116,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       if (!mounted || province == null || province.isEmpty) return;
       setState(() => _myProvince = province);
     } catch (_) {
-      // Best-effort — chip just stays hidden if we can't read it.
+      // Best-effort â€” chip just stays hidden if we can't read it.
     }
   }
 
@@ -167,7 +165,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     return LocationService.formatDistance(m);
   }
 
-  /// Visible list — composes the active chip filter with the loaded
+  /// Visible list â€” composes the active chip filter with the loaded
   /// _churches. Falls back to the full list if a chip's data isn't
   /// available yet (e.g. location not granted while Nearby is
   /// selected, or no churches have province set).
@@ -188,7 +186,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         //   3. If still empty, top up with whatever else is loaded
         //      so the chip never returns an empty list.
         //
-        // Avoids any external geocoding (no Google Maps API) — pure
+        // Avoids any external geocoding (no Google Maps API) â€” pure
         // client-side filter over data we already have on screen.
         final geo = _churches.where((c) => c.hasLocation).toList()
           ..sort((a, b) {
@@ -239,16 +237,24 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     }
   }
 
-  /// Switch the active filter chip. Nearby is special-cased — if the
+  /// Switch the active filter chip. Nearby is special-cased â€” if the
   /// user hasn't granted location yet, tapping the chip kicks off the
   /// permission request, then enables the filter only if granted.
   Future<void> _setFilter(_ChurchFilter filter) async {
-    // Nearby Churches is a paid-feature pitch while we finish the
-    // location-radius queries — tap shows a coming-soon sheet with
-    // an EcoCash sponsorship CTA. Doesn't change _activeFilter so
-    // the user stays on whatever they had selected.
+    // Nearby: activate the real distance filter. _visibleChurches()
+    // already degrades gracefully (GPS distance â†’ viewer's province â†’
+    // any) so the list is never empty even before a GPS fix lands. If
+    // we don't have a position yet, kick off the permission request +
+    // fetch; the list re-sorts when it resolves.
     if (filter == _ChurchFilter.nearby) {
-      _showNearbyComingSoon();
+      setState(() {
+        _activeFilter = _ChurchFilter.nearby;
+        _locationError = null;
+        _locationFailure = null;
+      });
+      if (_position == null) {
+        unawaited(_resolveLocation());
+      }
       return;
     }
     if (filter == _activeFilter) {
@@ -267,19 +273,6 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       _locationError = null;
       _locationFailure = null;
     });
-  }
-
-  void _showNearbyComingSoon() {
-    HapticFeedback.selectionClick();
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: context.palette.sheet,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => _NearbyComingSoonSheet(),
-    );
   }
 
   Future<void> _loadChurches() async {
@@ -333,7 +326,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
 
   Widget _buildNearModeBanner() {
     // Pick a label that matches whatever fallback level the
-    // _visibleChurches getter is actually using right now — so the
+    // _visibleChurches getter is actually using right now â€” so the
     // user knows whether they're seeing real GPS distances or a
     // province-based estimate.
     final hasGeo = _churches.any((c) => c.hasLocation);
@@ -344,7 +337,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     if (hasGeo) {
       label = 'Showing the 5 churches closest to you';
     } else if (hasProvincePool) {
-      label = 'No mapped churches in your area yet — '
+      label = 'No mapped churches in your area yet â€” '
           'showing nearby ones in $_myProvince';
     } else {
       label = 'We\'re showing churches near your region based on '
@@ -422,8 +415,8 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
 
   Widget _buildLocationErrorBanner() {
     // Pick the right action button for the failure type. permission-
-    // deniedForever → Settings (the OS won't show the prompt again).
-    // servicesDisabled → Location toggle. Everything else → just a
+    // deniedForever â†’ Settings (the OS won't show the prompt again).
+    // servicesDisabled â†’ Location toggle. Everything else â†’ just a
     // dismiss button since "try again" reopens the picker via the FAB.
     final (String? actionLabel, VoidCallback? action) = switch (
         _locationFailure) {
@@ -513,7 +506,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     );
   }
 
-  /// Master reference Part 15 — fixed filter chip row.
+  /// Master reference Part 15 â€” fixed filter chip row.
   /// All / Nearby / Verified / My Province (My Province only renders
   /// when the viewer's profile has a province set).
   Widget _buildFilterChips() {
@@ -755,194 +748,6 @@ class _FilterChip extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Bottom sheet shown when the Nearby filter chip is tapped. The
-/// feature is paused until we ship the location-radius backend, so
-/// we surface a coming-soon card with an EcoCash sponsorship CTA so
-/// readers who want it sooner can fund the build.
-class _NearbyComingSoonSheet extends StatelessWidget {
-  static const _ecoCashNumber = '0778 092 494';
-  static const _supportWhatsApp = '+263778092494';
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.12),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Center(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.goldAccent.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(20),
-                  border:
-                      Border.all(color: AppColors.goldAccent, width: 1),
-                ),
-                child: Text(
-                  'COMING SOON',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.goldAccent,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 10.5,
-                    letterSpacing: 1.6,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Nearby Churches',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.headlineSmall.copyWith(
-                fontWeight: FontWeight.w800,
-                fontSize: 20,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'We\'re building location-aware church discovery so you can find the closest SDA church wherever you are. Want it sooner? Sponsor the build.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.7),
-                height: 1.45,
-                fontSize: 13.5,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: context.palette.cardMuted,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.goldAccent.withValues(alpha: 0.4),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.goldAccent.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.volunteer_activism,
-                        color: AppColors.goldAccent, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Sponsor via EcoCash',
-                          style: AppTextStyles.titleMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Dial *151# → Send Money → $_ecoCashNumber',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.7),
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.copy_outlined,
-                        color: AppColors.primaryBlue, size: 18),
-                    onPressed: () async {
-                      await Clipboard.setData(const ClipboardData(
-                          text: _ecoCashNumber));
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: AppColors.darkNavy,
-                          content: Text(
-                            'EcoCash number copied: $_ecoCashNumber',
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: AppColors.white),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () async {
-                    final uri = Uri.parse(
-                      'https://wa.me/${_supportWhatsApp.replaceAll("+", "")}'
-                      '?text=${Uri.encodeComponent("Hi, I'd like to help fund Nearby Churches in Advent Connect ZW.")}',
-                    );
-                    try {
-                      await launchUrl(uri,
-                          mode: LaunchMode.externalApplication);
-                    } catch (_) {}
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    child: Center(
-                      child: Text(
-                        'Talk to us on WhatsApp',
-                        style: AppTextStyles.buttonText.copyWith(
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Maybe later',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

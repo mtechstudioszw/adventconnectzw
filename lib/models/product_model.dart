@@ -111,6 +111,7 @@ class ProductCategory {
     ProductCategory(id: 'clothing', label: 'Clothing', icon: '👗'),
     ProductCategory(id: 'electronics', label: 'Electronics', icon: '📱'),
     ProductCategory(id: 'food', label: 'Food', icon: '🍞'),
+    ProductCategory(id: 'catering', label: 'Catering & Events', icon: '🍽️'),
     ProductCategory(id: 'furniture', label: 'Furniture', icon: '🪑'),
     ProductCategory(id: 'services', label: 'Services', icon: '🛠️'),
     ProductCategory(id: 'other', label: 'Other', icon: '✨'),

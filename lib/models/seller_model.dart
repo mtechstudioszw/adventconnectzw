@@ -166,6 +166,7 @@ class SellerCategory {
     SellerCategory(id: 'clothing', label: 'Clothing & Fashion', icon: '👗'),
     SellerCategory(id: 'electronics', label: 'Electronics', icon: '📱'),
     SellerCategory(id: 'food', label: 'Food & Groceries', icon: '🍞'),
+    SellerCategory(id: 'catering', label: 'Catering & Events', icon: '🍽️'),
     SellerCategory(id: 'furniture', label: 'Furniture & Home', icon: '🪑'),
     SellerCategory(id: 'services', label: 'Services', icon: '🛠️'),
     SellerCategory(id: 'crafts', label: 'Crafts & Art', icon: '🎨'),

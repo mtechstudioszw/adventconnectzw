@@ -12,7 +12,20 @@
           "package_name": "io.supabase.adventconnectzw.advent_connect_zw"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "13892017929-ktbu1ahbambn0csq9j1lj6ubo9ru6791.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "io.supabase.adventconnectzw.advent_connect_zw",
+            "certificate_hash": "3e5289980b2917ff2da850c1a9d7a895d218bde2"
+          }
+        },
+        {
+          "client_id": "13892017929-sn69ofm9c8bvb46qtj9m3qac4aajuk57.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDgKlv0SAPzf9G3YvZyEkKokinbaEdDMxQ"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "13892017929-sn69ofm9c8bvb46qtj9m3qac4aajuk57.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "13892017929-dg9g51c203gldfk9qb05mv80ps7t997m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "io.supabase.adventconnectzw.adventConnectZw"
+              }
+            }
+          ]
         }
       }
     }

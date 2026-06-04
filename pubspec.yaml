@@ -47,6 +47,15 @@ dependencies:
 
   # Auth + biometric + location
   google_sign_in: ^6.2.2
+  # Sign in with Apple — REQUIRED on iOS by App Store Guideline 4.8
+  # whenever a third-party social login (Google) is offered. The
+  # button is shown on iOS only; Android keeps Google-only. Does
+  # nothing until the Apple provider is configured in Supabase +
+  # the Apple Developer account exists — see
+  # docs/APPLE_SIGN_IN_SETUP.md.
+  sign_in_with_apple: ^6.1.4
+  # SHA-256 of the Apple sign-in nonce (replay protection).
+  crypto: ^3.0.3
   local_auth: ^2.3.0
   geolocator: ^13.0.2
 

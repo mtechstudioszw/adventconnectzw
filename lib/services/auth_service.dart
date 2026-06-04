@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'connectivity_service.dart';
 import 'secure_storage_service.dart';
@@ -438,6 +442,94 @@ class AuthService {
       // Run through the friendly mapper so offline / DNS / handshake
       // failures from the Google SDK get the same human-readable
       // copy as the email path instead of the raw exception toString.
+      return AuthResult.failure(_friendlyAuthError(e.toString()));
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // Sign in with Apple (iOS only — App Store Guideline 4.8)
+  //
+  // Mirrors signInWithGoogle: get a native Apple credential, hand the
+  // identity token to Supabase via signInWithIdToken(provider: apple).
+  // A nonce (raw → Supabase, SHA-256 → Apple) gives replay protection.
+  //
+  // NOT functional until the Apple provider is configured in Supabase
+  // Auth (Service ID + key from the Apple Developer account) — see
+  // docs/APPLE_SIGN_IN_SETUP.md. Until then this returns a friendly
+  // failure rather than crashing. The button is shown on iOS only.
+  // ────────────────────────────────────────────────────────────────
+  static String _generateNonce([int length = 32]) {
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(
+      length,
+      (_) => charset[random.nextInt(charset.length)],
+    ).join();
+  }
+
+  static String _sha256(String input) =>
+      sha256.convert(utf8.encode(input)).toString();
+
+  static Future<AuthResult> signInWithApple() async {
+    try {
+      if (!ConnectivityService.isOnline) {
+        return AuthResult.failure(
+          'You appear to be offline. Check your connection and try '
+          'again.',
+        );
+      }
+
+      final rawNonce = _generateNonce();
+      final hashedNonce = _sha256(rawNonce);
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        return AuthResult.failure(
+          'Apple didn\'t return an identity token. Try again.',
+        );
+      }
+
+      final response = await _client.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+      if (response.user == null) {
+        return AuthResult.failure('Could not sign in with Apple.');
+      }
+
+      // Apple only returns the user's name on the VERY FIRST
+      // authorization — capture it into metadata while we have it so
+      // the profile isn't left nameless.
+      final given = credential.givenName ?? '';
+      final family = credential.familyName ?? '';
+      final full = [given, family].where((s) => s.isNotEmpty).join(' ').trim();
+      if (full.isNotEmpty &&
+          (response.user!.userMetadata?['full_name'] == null)) {
+        try {
+          await updateMetadataDirect({'full_name': full});
+        } catch (_) {}
+      }
+
+      await _persistSession(response.session);
+      return AuthResult.success(response.user);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return AuthResult.failure('Sign in cancelled.');
+      }
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } on AuthException catch (e) {
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } catch (e) {
       return AuthResult.failure(_friendlyAuthError(e.toString()));
     }
   }

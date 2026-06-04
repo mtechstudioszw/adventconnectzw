@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -56,6 +57,7 @@ class _AuthScreenState extends State<AuthScreen>
   bool _checking = false;
   bool _submitting = false;
   bool _googleBusy = false;
+  bool _appleBusy = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _acceptedTerms = false;
@@ -443,6 +445,61 @@ class _AuthScreenState extends State<AuthScreen>
     context.goNamed('profile_setup');
   }
 
+  /// Sign in with Apple — iOS only (see _AppleButton gating). Mirrors
+  /// _onGoogle: returning users go home, new users pass age check then
+  /// profile setup. Will only succeed once the Apple provider is
+  /// configured in Supabase (docs/APPLE_SIGN_IN_SETUP.md); until then
+  /// the user just sees a friendly error.
+  Future<void> _onApple() async {
+    setState(() {
+      _error = null;
+      _appleBusy = true;
+    });
+    final result = await AuthService.signInWithApple();
+    if (!mounted) return;
+    if (!result.isSuccess) {
+      setState(() => _appleBusy = false);
+      if (result.errorMessage == 'Sign in cancelled.') return;
+      setState(() => _error = result.errorMessage);
+      return;
+    }
+
+    final hasProfile = await AuthService.hasCompletedProfileSetup();
+    if (!mounted) return;
+    if (hasProfile) {
+      HapticFeedback.mediumImpact();
+      setState(() => _appleBusy = false);
+      context.goNamed('home');
+      return;
+    }
+
+    final dob = await _pickBirthDateForGoogleSignup();
+    if (!mounted) return;
+    if (dob == null) {
+      await AuthService.signOut();
+      if (!mounted) return;
+      setState(() {
+        _appleBusy = false;
+        _error = 'Date of birth is required to create an account.';
+      });
+      return;
+    }
+    if (_ageInYears(dob) < 13) {
+      await AuthService.signOut();
+      if (!mounted) return;
+      setState(() {
+        _appleBusy = false;
+        _error = 'You must be at least 13 to use Advent Connect.';
+      });
+      return;
+    }
+    await AuthService.markAgeVerified(dob);
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _appleBusy = false);
+    context.goNamed('profile_setup');
+  }
+
   Future<DateTime?> _pickBirthDateForGoogleSignup() async {
     final now = DateTime.now();
     return showDatePicker(
@@ -567,6 +624,18 @@ class _AuthScreenState extends State<AuthScreen>
                   ),
                   const SizedBox(height: 28),
                   if (_stage == _Stage.email) ...[
+                    // App Store Guideline 4.8: when a social login is
+                    // offered on iOS, Sign in with Apple must be offered
+                    // too — and presented at least as prominently, so it
+                    // goes ABOVE Google. iOS only; Android stays Google-
+                    // only (Apple sign-in isn't expected there).
+                    if (Platform.isIOS) ...[
+                      _AppleButton(
+                        busy: _appleBusy,
+                        onTap: (_appleBusy || _submitting) ? null : _onApple,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     _GoogleButton(
                       busy: _googleBusy,
                       onTap: (_googleBusy || _submitting) ? null : _onGoogle,
@@ -1033,6 +1102,71 @@ class _GoogleButton extends StatelessWidget {
                         'Continue with Google',
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: context.palette.text,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Sign in with Apple button. Apple's HIG requires the black-fill +
+/// white Apple logo + "Continue with Apple" wording at equal-or-
+/// greater prominence than other social buttons. Shown on iOS only.
+class _AppleButton extends StatelessWidget {
+  const _AppleButton({required this.busy, required this.onTap});
+
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onTap == null && !busy ? 0.6 : 1,
+      child: Material(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(22),
+        elevation: 0,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: busy
+                ? const Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    ),
+                  )
+                : const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.apple, color: Colors.white, size: 22),
+                      SizedBox(width: 10),
+                      Text(
+                        'Continue with Apple',
+                        style: TextStyle(
+                          color: Colors.white,
                           fontWeight: FontWeight.w700,
                           fontSize: 14.5,
                         ),

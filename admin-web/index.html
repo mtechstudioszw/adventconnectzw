@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Advent Connect ZW — Admin</title>
+<style>
+  :root {
+    --navy: #0D1B3E;
+    --navy-2: #131f44;
+    --blue: #1565C0;
+    --gold: #C8A951;
+    --red: #D32F2F;
+    --green: #2E7D32;
+    --bg: #F5F7FA;
+    --card: #FFFFFF;
+    --text: #1A1A2E;
+    --muted: #6ب7280;
+    --muted: #6b7280;
+    --border: #e4e7ec;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: var(--font); color: var(--text); background: var(--bg); }
+  button { font-family: inherit; cursor: pointer; }
+  input, textarea, select { font-family: inherit; }
+
+  /* ---------- Login ---------- */
+  #login {
+    height: 100%; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--navy), #0a142e);
+  }
+  .login-card {
+    background: var(--card); width: 360px; max-width: 90vw; padding: 32px;
+    border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  }
+  .login-card h1 { font-size: 18px; margin: 0 0 4px; }
+  .login-card p { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  .login-card label { display:block; font-size:12px; font-weight:600; margin:12px 0 6px; }
+  .login-card input {
+    width: 100%; padding: 11px 12px; border: 1px solid var(--border);
+    border-radius: 10px; font-size: 14px;
+  }
+  .login-card button {
+    width: 100%; margin-top: 18px; padding: 12px; border: none; border-radius: 10px;
+    background: var(--blue); color: #fff; font-weight: 700; font-size: 14px;
+  }
+  .err { color: var(--red); font-size: 13px; margin-top: 12px; min-height: 16px; }
+
+  /* ---------- App shell ---------- */
+  #app { display: none; height: 100%; }
+  .shell { display: flex; height: 100%; }
+  .sidebar {
+    width: 220px; background: var(--navy); color: #cdd5e6; flex-shrink: 0;
+    display: flex; flex-direction: column; padding: 18px 12px;
+  }
+  .brand { color:#fff; font-weight:800; font-size:15px; padding: 6px 10px 18px; letter-spacing:.3px; }
+  .brand small { display:block; color: var(--gold); font-size:10px; letter-spacing:1.4px; font-weight:700; margin-top:3px; }
+  .nav a {
+    display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:10px;
+    color:#cdd5e6; text-decoration:none; font-size:14px; font-weight:600; margin-bottom:2px;
+  }
+  .nav a:hover { background: rgba(255,255,255,.06); }
+  .nav a.active { background: var(--blue); color:#fff; }
+  .nav .badge { margin-left:auto; background: var(--red); color:#fff; font-size:11px; font-weight:700; border-radius:10px; padding:1px 7px; }
+  .sidebar .who { margin-top:auto; font-size:12px; color:#8b95ad; padding:10px; border-top:1px solid rgba(255,255,255,.08); }
+  .sidebar .who button { margin-top:8px; background:transparent; color:#cdd5e6; border:1px solid rgba(255,255,255,.18); border-radius:8px; padding:7px 10px; font-size:12px; width:100%; }
+
+  .main { flex:1; overflow:auto; padding: 26px 30px; }
+  .main h2 { margin: 0 0 4px; font-size: 20px; }
+  .main .sub { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
+
+  .cards { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:8px; }
+  .stat { background: var(--card); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .stat .n { font-size:26px; font-weight:800; }
+  .stat .l { font-size:12px; color:var(--muted); margin-top:2px; }
+  .stat.alert .n { color: var(--red); }
+
+  .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  .toolbar select, .toolbar input {
+    padding:9px 11px; border:1px solid var(--border); border-radius:9px; font-size:13px;
+  }
+  .toolbar input { flex:1; min-width:180px; }
+
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  th, td { text-align:left; padding:12px 14px; font-size:13px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { background:#fafbfc; color:var(--muted); font-weight:700; font-size:11px; letter-spacing:.4px; text-transform:uppercase; }
+  tr:last-child td { border-bottom:none; }
+  td .meta { color:var(--muted); font-size:12px; }
+  .chip { display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; }
+  .chip.gold { background:rgba(200,169,81,.18); color:#967714; }
+  .chip.red { background:rgba(211,47,47,.12); color:var(--red); }
+  .chip.green { background:rgba(46,125,50,.12); color:var(--green); }
+  .chip.grey { background:#eef0f4; color:#5b6473; }
+
+  .btn { border:none; border-radius:9px; padding:7px 13px; font-size:12.5px; font-weight:700; }
+  .btn.primary { background:var(--blue); color:#fff; }
+  .btn.green { background:var(--green); color:#fff; }
+  .btn.red { background:var(--red); color:#fff; }
+  .btn.ghost { background:#eef0f4; color:var(--text); }
+  .btn + .btn { margin-left:6px; }
+
+  .empty { text-align:center; color:var(--muted); padding:50px 0; font-size:14px; }
+  .loading { color:var(--muted); font-size:13px; padding:20px 2px; }
+
+  /* broadcast form */
+  .form { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:22px; max-width:560px; }
+  .form label { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; }
+  .form input, .form textarea, .form select {
+    width:100%; padding:11px 12px; border:1px solid var(--border); border-radius:10px; font-size:14px;
+  }
+  .form textarea { min-height:120px; resize:vertical; }
+  .form .send { margin-top:18px; background:var(--blue); color:#fff; border:none; padding:12px 20px; border-radius:10px; font-weight:700; }
+  .ok { color:var(--green); font-size:13px; margin-top:12px; }
+
+  /* modal */
+  .modal-bg { position:fixed; inset:0; background:rgba(13,27,62,.55); display:none; align-items:center; justify-content:center; z-index:50; }
+  .modal { background:#fff; border-radius:16px; padding:24px; width:440px; max-width:92vw; }
+  .modal h3 { margin:0 0 6px; font-size:16px; }
+  .modal p { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  .modal textarea { width:100%; min-height:90px; padding:11px; border:1px solid var(--border); border-radius:10px; font-size:14px; }
+  .modal .row { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login">
+  <form class="login-card" id="loginForm">
+    <h1>Advent Connect ZW</h1>
+    <p>Admin dashboard — super admins only.</p>
+    <label>Email</label>
+    <input type="email" id="email" autocomplete="username" required />
+    <label>Password</label>
+    <input type="password" id="password" autocomplete="current-password" required />
+    <button type="submit" id="loginBtn">Sign in</button>
+    <div class="err" id="loginErr"></div>
+  </form>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">Advent Connect ZW<small>ADMIN CONSOLE</small></div>
+      <nav class="nav" id="nav">
+        <a data-tab="overview" class="active">📊 Overview</a>
+        <a data-tab="sellers">🛍️ Sellers <span class="badge" id="b-sellers" style="display:none"></span></a>
+        <a data-tab="reports">🚩 Reports <span class="badge" id="b-reports" style="display:none"></span></a>
+        <a data-tab="feedback">💬 Feedback <span class="badge" id="b-feedback" style="display:none"></span></a>
+        <a data-tab="users">👤 Users</a>
+        <a data-tab="broadcast">📣 Broadcast</a>
+      </nav>
+      <div class="who">
+        <div id="whoEmail"></div>
+        <button id="logoutBtn">Sign out</button>
+      </div>
+    </aside>
+    <main class="main" id="view"></main>
+  </div>
+</div>
+
+<!-- ============ MODAL (reason / reply) ============ -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="modalTitle"></h3>
+    <p id="modalSub"></p>
+    <textarea id="modalInput" placeholder=""></textarea>
+    <div class="row">
+      <button class="btn ghost" id="modalCancel">Cancel</button>
+      <button class="btn primary" id="modalOk">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+// Public anon key — same one shipped in the app. RLS + the
+// assert_super_admin() guard on every admin RPC are the real
+// protection; the anon key grants nothing without a super-admin
+// session.
+const SUPABASE_URL = "https://eqbyvasteolqyktbqbem.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxYnl2YXN0ZW9scXlrdGJxYmVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5NzU3NjAsImV4cCI6MjA5MzU1MTc2MH0.mur8gWyJI6EhxIbK2FHeeLUOBNgypZiELZxq2-L8d3o";
+
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => (s == null ? "" : String(s).replace(/[&<>"']/g, c => (
+  { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])));
+const fmtDate = (s) => s ? new Date(s).toLocaleString() : "—";
+
+async function rpc(fn, args = {}) {
+  const { data, error } = await sb.rpc(fn, args);
+  if (error) throw error;
+  return data;
+}
+
+// ---------- Auth gate ----------
+async function isSuperAdmin() {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return false;
+  const { data, error } = await sb
+    .from("profiles").select("is_super_admin").eq("id", user.id).maybeSingle();
+  if (error) return false;
+  return data?.is_super_admin === true;
+}
+
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session && await isSuperAdmin()) {
+    showApp(session.user.email);
+  } else {
+    if (session) await sb.auth.signOut(); // signed in but not admin
+    showLogin();
+  }
+}
+
+function showLogin() {
+  $("login").style.display = "flex";
+  $("app").style.display = "none";
+}
+
+function showApp(email) {
+  $("login").style.display = "none";
+  $("app").style.display = "block";
+  $("whoEmail").textContent = email || "";
+  switchTab("overview");
+  refreshBadges();
+}
+
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("loginErr").textContent = "";
+  $("loginBtn").disabled = true;
+  $("loginBtn").textContent = "Signing in…";
+  try {
+    const { error } = await sb.auth.signInWithPassword({
+      email: $("email").value.trim(),
+      password: $("password").value,
+    });
+    if (error) throw error;
+    if (!(await isSuperAdmin())) {
+      await sb.auth.signOut();
+      throw new Error("This account is not a super admin.");
+    }
+    const { data: { user } } = await sb.auth.getUser();
+    showApp(user.email);
+  } catch (err) {
+    $("loginErr").textContent = err.message || "Sign in failed.";
+  } finally {
+    $("loginBtn").disabled = false;
+    $("loginBtn").textContent = "Sign in";
+  }
+});
+
+$("logoutBtn").addEventListener("click", async () => {
+  await sb.auth.signOut();
+  showLogin();
+});
+
+// ---------- Nav ----------
+$("nav").addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-tab]");
+  if (!a) return;
+  switchTab(a.dataset.tab);
+});
+
+function switchTab(tab) {
+  document.querySelectorAll("#nav a").forEach(a =>
+    a.classList.toggle("active", a.dataset.tab === tab));
+  ({ overview, sellers, reports, feedback, users, broadcast }[tab] || overview)();
+}
+
+async function refreshBadges() {
+  try {
+    const s = await rpc("admin_overview_stats");
+    setBadge("b-sellers", s.pending_sellers);
+    setBadge("b-reports", s.open_reports);
+    setBadge("b-feedback", s.untriaged_feedback);
+  } catch (_) {}
+}
+function setBadge(id, n) {
+  const el = $(id);
+  if (n > 0) { el.style.display = "inline-block"; el.textContent = n; }
+  else el.style.display = "none";
+}
+
+// ---------- Modal helper ----------
+function ask({ title, sub, placeholder, okLabel = "Confirm", okClass = "primary", needText = true }) {
+  return new Promise((resolve) => {
+    $("modalTitle").textContent = title;
+    $("modalSub").textContent = sub || "";
+    $("modalInput").value = "";
+    $("modalInput").placeholder = placeholder || "";
+    $("modalInput").style.display = needText ? "block" : "none";
+    const ok = $("modalOk"); ok.textContent = okLabel;
+    ok.className = "btn " + okClass;
+    $("modalBg").style.display = "flex";
+    const close = (val) => { $("modalBg").style.display = "none"; cleanup(); resolve(val); };
+    const onOk = () => close(needText ? $("modalInput").value.trim() : true);
+    const onCancel = () => close(null);
+    function cleanup() { ok.onclick = null; $("modalCancel").onclick = null; }
+    ok.onclick = onOk; $("modalCancel").onclick = onCancel;
+  });
+}
+
+// ---------- Sections ----------
+const view = () => $("view");
+const head = (h2, sub) => `<h2>${esc(h2)}</h2><p class="sub">${esc(sub)}</p>`;
+const loading = () => `<div class="loading">Loading…</div>`;
+
+async function overview() {
+  view().innerHTML = head("Overview", "What needs your attention today.") + loading();
+  try {
+    const s = await rpc("admin_overview_stats");
+    view().innerHTML = head("Overview", "What needs your attention today.") + `
+      <div class="cards">
+        <div class="stat ${s.pending_sellers ? "alert" : ""}"><div class="n">${s.pending_sellers}</div><div class="l">Pending sellers</div></div>
+        <div class="stat ${s.open_reports ? "alert" : ""}"><div class="n">${s.open_reports}</div><div class="l">Open reports</div></div>
+        <div class="stat ${s.untriaged_feedback ? "alert" : ""}"><div class="n">${s.untriaged_feedback}</div><div class="l">New feedback</div></div>
+        <div class="stat"><div class="n">${s.total_users}</div><div class="l">Total users</div></div>
+        <div class="stat"><div class="n">${s.new_users_7d}</div><div class="l">New (7 days)</div></div>
+        <div class="stat"><div class="n">${s.banned_users}</div><div class="l">Banned</div></div>
+      </div>`;
+    refreshBadges();
+  } catch (err) { view().innerHTML = head("Overview","") + errBox(err); }
+}
+
+async function sellers() {
+  view().innerHTML = head("Sellers", "Approve or reject storefronts before they appear on the marketplace.") + loading();
+  try {
+    const rows = await rpc("admin_pending_sellers");
+    if (!rows.length) { view().innerHTML = head("Sellers","Approve or reject storefronts.") + empty("No pending sellers."); return; }
+    const body = rows.map(s => `
+      <tr>
+        <td><b>${esc(s.business_name)}</b><div class="meta">${esc(s.category || "")} · ${esc(s.city || "")} ${esc(s.province || "")}</div>
+            ${s.description ? `<div class="meta">${esc(s.description)}</div>` : ""}</td>
+        <td>${esc(s.phone || "")}${s.whatsapp ? `<div class="meta">WA ${esc(s.whatsapp)}</div>` : ""}</td>
+        <td>${s.status === "final_review_pending" ? `<span class="chip red">FINAL #${esc(s.application_attempts)}/3</span>` : `<span class="chip gold">PENDING</span>`}</td>
+        <td style="white-space:nowrap">
+          <button class="btn green" data-approve="${esc(s.id)}">Approve</button>
+          <button class="btn red" data-reject="${esc(s.id)}">Reject</button>
+        </td>
+      </tr>`).join("");
+    view().innerHTML = head("Sellers","Approve or reject storefronts.") +
+      `<table><thead><tr><th>Business</th><th>Contact</th><th>Status</th><th></th></tr></thead><tbody>${body}</tbody></table>`;
+    view().querySelectorAll("[data-approve]").forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await rpc("admin_approve_seller", { p_seller_id: Number(b.dataset.approve) }); sellers(); refreshBadges(); }
+      catch (e) { alert(e.message); b.disabled = false; }
+    });
+    view().querySelectorAll("[data-reject]").forEach(b => b.onclick = async () => {
+      const reason = await ask({ title: "Reject seller", sub: "Optional reason shown to the applicant.", placeholder: "Reason (optional)", okLabel: "Reject", okClass: "red" });
+      if (reason === null) return;
+      try { await rpc("admin_reject_seller", { p_seller_id: Number(b.dataset.reject), p_reason: reason }); sellers(); refreshBadges(); }
+      catch (e) { alert(e.message); }
+    });
+  } catch (err) { view().innerHTML = head("Sellers","") + errBox(err); }
+}
+
+let reportFilter = "open";
+async function reports() {
+  view().innerHTML = head("Reports", "Review reported content and take action.") +
+    `<div class="toolbar">${statusSelect("rf", ["open","resolved","dismissed","all"], reportFilter)}</div>` + loading();
+  $("rf").onchange = (e) => { reportFilter = e.target.value; reports(); };
+  try {
+    const rows = await rpc("admin_list_reports", { p_status: reportFilter });
+    const table = !rows.length ? empty("No reports.") : `<table><thead><tr>
+        <th>Content</th><th>Reason</th><th>Reporter</th><th>Status</th><th></th></tr></thead><tbody>` +
+      rows.map(r => `<tr>
+        <td><b>${esc(r.content_type)}</b><div class="meta">id: ${esc(r.content_id)}</div></td>
+        <td>${esc(r.reason)}${r.details ? `<div class="meta">${esc(r.details)}</div>` : ""}</td>
+        <td>${esc(r.reporter_name)}<div class="meta">${fmtDate(r.created_at)}</div></td>
+        <td>${statusChip(r.status)}${r.action_taken ? `<div class="meta">${esc(r.action_taken)}</div>` : ""}</td>
+        <td style="white-space:nowrap">${r.status === "open" ? `
+          <button class="btn green" data-resolve="${r.id}">Resolve</button>
+          <button class="btn ghost" data-dismiss="${r.id}">Dismiss</button>` : "—"}</td>
+      </tr>`).join("") + `</tbody></table>`;
+    view().querySelector(".loading")?.remove();
+    view().insertAdjacentHTML("beforeend", table);
+    view().querySelectorAll("[data-resolve]").forEach(b => b.onclick = async () => {
+      const note = await ask({ title: "Resolve report", sub: "What action did you take?", placeholder: "e.g. Removed the post", okLabel: "Resolve", okClass: "green" });
+      if (note === null) return;
+      try { await rpc("admin_resolve_report", { p_report_id: Number(b.dataset.resolve), p_status: "resolved", p_action: note }); reports(); refreshBadges(); }
+      catch (e) { alert(e.message); }
+    });
+    view().querySelectorAll("[data-dismiss]").forEach(b => b.onclick = async () => {
+      try { await rpc("admin_resolve_report", { p_report_id: Number(b.dataset.dismiss), p_status: "dismissed", p_action: "Dismissed — no action" }); reports(); refreshBadges(); }
+      catch (e) { alert(e.message); }
+    });
+  } catch (err) { view().querySelector(".loading")?.remove(); view().insertAdjacentHTML("beforeend", errBox(err)); }
+}
+
+let fbFilter = "new";
+async function feedback() {
+  view().innerHTML = head("Feedback", "Read and reply — your reply lands in the user's notifications.") +
+    `<div class="toolbar">${statusSelect("ff", ["new","resolved","all"], fbFilter)}</div>` + loading();
+  $("ff").onchange = (e) => { fbFilter = e.target.value; feedback(); };
+  try {
+    const rows = await rpc("admin_list_feedback", { p_status: fbFilter });
+    const table = !rows.length ? empty("No feedback.") : `<table><thead><tr>
+        <th>From</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody>` +
+      rows.map(f => `<tr>
+        <td><b>${esc(f.user_name)}</b><div class="meta">${esc(f.category || "")} · ${esc(f.platform || "")} ${esc(f.app_version || "")}</div><div class="meta">${fmtDate(f.created_at)}</div></td>
+        <td><b>${esc(f.subject || "(no subject)")}</b><div>${esc(f.body)}</div>${f.resolution_note ? `<div class="meta">↳ replied: ${esc(f.resolution_note)}</div>` : ""}</td>
+        <td>${statusChip(f.status)}</td>
+        <td style="white-space:nowrap">${f.status !== "resolved" ? `<button class="btn primary" data-reply="${f.id}">Reply</button>` : "—"}</td>
+      </tr>`).join("") + `</tbody></table>`;
+    view().querySelector(".loading")?.remove();
+    view().insertAdjacentHTML("beforeend", table);
+    view().querySelectorAll("[data-reply]").forEach(b => b.onclick = async () => {
+      const reply = await ask({ title: "Reply to feedback", sub: "Sent to the user as an in-app notification.", placeholder: "Type your reply…", okLabel: "Send reply" });
+      if (!reply) return;
+      try { await rpc("admin_reply_feedback", { p_feedback_id: Number(b.dataset.reply), p_reply: reply }); feedback(); refreshBadges(); }
+      catch (e) { alert(e.message); }
+    });
+  } catch (err) { view().querySelector(".loading")?.remove(); view().insertAdjacentHTML("beforeend", errBox(err)); }
+}
+
+async function users() {
+  view().innerHTML = head("Users", "Search, then ban or unban.") +
+    `<div class="toolbar"><input id="uq" placeholder="Search name or email…" /><button class="btn primary" id="usearch">Search</button></div><div id="ulist"></div>`;
+  const run = async () => {
+    $("ulist").innerHTML = loading();
+    try {
+      const rows = await rpc("admin_search_users", { p_query: $("uq").value.trim() });
+      $("ulist").innerHTML = !rows.length ? empty("No users.") : `<table><thead><tr>
+          <th>Name</th><th>Email</th><th>Joined</th><th>Status</th><th></th></tr></thead><tbody>` +
+        rows.map(u => `<tr>
+          <td><b>${esc(u.full_name)}</b>${u.is_super_admin ? ` <span class="chip gold">ADMIN</span>` : ""}</td>
+          <td>${esc(u.email || "—")}</td>
+          <td class="meta">${fmtDate(u.created_at)}</td>
+          <td>${u.is_banned ? `<span class="chip red">BANNED</span>` : `<span class="chip green">Active</span>`}</td>
+          <td style="white-space:nowrap">${u.is_super_admin ? "—" :
+            (u.is_banned
+              ? `<button class="btn ghost" data-unban="${u.id}">Unban</button>`
+              : `<button class="btn red" data-ban="${u.id}">Ban</button>`)}</td>
+        </tr>`).join("") + `</tbody></table>`;
+      $("ulist").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
+        const ok = await ask({ title: "Ban user", sub: "They'll be notified and blocked from posting.", okLabel: "Ban", okClass: "red", needText: false });
+        if (!ok) return;
+        try { await rpc("admin_set_banned", { p_user_id: b.dataset.ban, p_banned: true }); run(); refreshBadges(); }
+        catch (e) { alert(e.message); }
+      });
+      $("ulist").querySelectorAll("[data-unban]").forEach(b => b.onclick = async () => {
+        try { await rpc("admin_set_banned", { p_user_id: b.dataset.unban, p_banned: false }); run(); }
+        catch (e) { alert(e.message); }
+      });
+    } catch (err) { $("ulist").innerHTML = errBox(err); }
+  };
+  $("usearch").onclick = run;
+  $("uq").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
+  run();
+}
+
+async function broadcast() {
+  view().innerHTML = head("Broadcast", "Send a notice to users. Each delivery also pushes a notification.") + `
+    <div class="form">
+      <label>Segment</label>
+      <select id="bseg">
+        <option value="all">All users</option>
+        <option>Harare</option><option>Bulawayo</option><option>Manicaland</option>
+        <option>Mashonaland Central</option><option>Mashonaland East</option><option>Mashonaland West</option>
+        <option>Masvingo</option><option>Matabeleland North</option><option>Matabeleland South</option><option>Midlands</option>
+      </select>
+      <label>Title</label>
+      <input id="btitle" maxlength="80" placeholder="e.g. Scheduled maintenance tonight" />
+      <label>Message</label>
+      <textarea id="bbody" maxlength="500" placeholder="Write the notice…"></textarea>
+      <button class="send" id="bsend">Send broadcast</button>
+      <div class="ok" id="bok"></div>
+    </div>`;
+  $("bsend").onclick = async () => {
+    const title = $("btitle").value.trim(), body = $("bbody").value.trim(), seg = $("bseg").value;
+    if (!title || !body) { $("bok").style.color = "var(--red)"; $("bok").textContent = "Title and message are required."; return; }
+    const ok = await ask({ title: "Send to " + (seg === "all" ? "ALL users" : seg) + "?", sub: "This pushes a notification to everyone in the segment.", okLabel: "Send", needText: false });
+    if (!ok) return;
+    $("bsend").disabled = true; $("bsend").textContent = "Sending…";
+    try {
+      const n = await rpc("admin_broadcast", { p_title: title, p_body: body, p_segment: seg });
+      $("bok").style.color = "var(--green)"; $("bok").textContent = `Sent to ${n} user(s).`;
+      $("btitle").value = ""; $("bbody").value = "";
+    } catch (e) { $("bok").style.color = "var(--red)"; $("bok").textContent = e.message; }
+    finally { $("bsend").disabled = false; $("bsend").textContent = "Send broadcast"; }
+  };
+}
+
+// ---------- small render helpers ----------
+function statusSelect(id, opts, current) {
+  return `<select id="${id}">` + opts.map(o => `<option ${o===current?"selected":""}>${o}</option>`).join("") + `</select>`;
+}
+function statusChip(s) {
+  const map = { open:"gold", new:"gold", resolved:"green", dismissed:"grey" };
+  return `<span class="chip ${map[s] || "grey"}">${esc((s||"").toUpperCase())}</span>`;
+}
+function empty(msg) { return `<div class="empty">${esc(msg)}</div>`; }
+function errBox(err) {
+  const m = (err && err.message) || "Something went wrong.";
+  return `<div class="empty" style="color:var(--red)">${esc(m)}</div>`;
+}
+
+boot();
+</script>
+</body>
+</html>

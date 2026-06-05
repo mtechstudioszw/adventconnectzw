@@ -13,8 +13,10 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// External landing URLs for the legal pages (live Netlify site).
-const _termsUrl = 'https://adventconnectzw.netlify.app/terms';
-const _privacyUrl = 'https://adventconnectzw.netlify.app/privacy';
+const _termsUrl =
+    'https://mtechstudioszw.github.io/adventconnect-legal/terms.html';
+const _privacyUrl =
+    'https://mtechstudioszw.github.io/adventconnect-legal/privacy.html';
 
 Future<void> _openLegalUrl(String url) async {
   await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);

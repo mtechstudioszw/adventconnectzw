@@ -104,7 +104,7 @@ class AboutScreen extends StatelessWidget {
                         label: 'Terms of service',
                         onTap: () => _openLegal(
                           context,
-                          'https://adventconnectzw.netlify.app/terms',
+                          'https://mtechstudioszw.github.io/adventconnect-legal/terms.html',
                         ),
                       ),
                       const _Divider(),
@@ -113,7 +113,7 @@ class AboutScreen extends StatelessWidget {
                         label: 'Privacy policy',
                         onTap: () => _openLegal(
                           context,
-                          'https://adventconnectzw.netlify.app/privacy',
+                          'https://mtechstudioszw.github.io/adventconnect-legal/privacy.html',
                         ),
                       ),
                       const _Divider(),
@@ -122,7 +122,7 @@ class AboutScreen extends StatelessWidget {
                         label: 'Community guidelines',
                         onTap: () => _openLegal(
                           context,
-                          'https://adventconnectzw.netlify.app/guidelines',
+                          'https://mtechstudioszw.github.io/adventconnect-legal/guidelines.html',
                         ),
                       ),
                     ],

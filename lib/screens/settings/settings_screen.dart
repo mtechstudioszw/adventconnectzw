@@ -591,7 +591,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           icon: Icons.description_outlined,
                           label: 'Terms of service',
                           onTap: () => _openLegal(
-                            'https://adventconnectzw.netlify.app/terms',
+                            'https://mtechstudioszw.github.io/adventconnect-legal/terms.html',
                           ),
                         ),
                         const _Divider(),
@@ -599,14 +599,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                           icon: Icons.privacy_tip_outlined,
                           label: 'Privacy policy',
                           onTap: () => _openLegal(
-                            'https://adventconnectzw.netlify.app/privacy',
+                            'https://mtechstudioszw.github.io/adventconnect-legal/privacy.html',
                           ),
                         ),
                         const _Divider(),
                         _NavRow(
                           icon: Icons.shield_outlined,
                           label: 'Community guidelines',
-                          onTap: () => _openLegal('https://adventconnectzw.netlify.app/guidelines'),
+                          onTap: () => _openLegal('https://mtechstudioszw.github.io/adventconnect-legal/guidelines.html'),
                         ),
                       ],
                     ),

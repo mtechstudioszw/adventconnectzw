@@ -1446,12 +1446,18 @@ class _ChatScreenState extends State<ChatScreen>
           // matches how WhatsApp actually renders — each bubble has
           // its own time underneath, not a single trailing stamp.
           final showStamp = true;
+          // WhatsApp-style day separator: shown above the first message
+          // of each calendar day (Today / Yesterday / "Mon 8 Jun").
+          final prev = i > 0 ? _messages[i - 1] : null;
+          final showDateSeparator = prev == null ||
+              !_sameLocalDay(prev.createdAt, m.createdAt);
           return Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Column(
               crossAxisAlignment:
                   isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
+                if (showDateSeparator) _DateSeparator(label: _dayLabel(m.createdAt)),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onLongPress: () => _showMessageActions(m, isMine),
@@ -1503,6 +1509,33 @@ class _ChatScreenState extends State<ChatScreen>
         },
       ),
     );
+  }
+
+  bool _sameLocalDay(DateTime a, DateTime b) {
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+  }
+
+  /// "Today" / "Yesterday" / "Mon 8 Jun" / "8 Jun 2025" — WhatsApp's
+  /// day-separator label.
+  String _dayLabel(DateTime when) {
+    final local = when.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(local.year, local.month, local.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dow = days[local.weekday - 1];
+    final mon = months[local.month - 1];
+    if (local.year == now.year) return '$dow ${local.day} $mon';
+    return '${local.day} $mon ${local.year}';
   }
 
   Widget _buildInputBar() {
@@ -1810,6 +1843,37 @@ class _ChatScreenState extends State<ChatScreen>
     final hh = local.hour.toString().padLeft(2, '0');
     final mm = local.minute.toString().padLeft(2, '0');
     return '$hh:$mm';
+  }
+}
+
+/// Centered day-divider chip between messages from different days.
+class _DateSeparator extends StatelessWidget {
+  const _DateSeparator({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.center,
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: context.palette.cardMuted,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.palette.divider),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: context.palette.textMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ),
+    );
   }
 }
 

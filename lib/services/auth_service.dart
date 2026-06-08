@@ -788,6 +788,7 @@ class AuthService {
     String? username,
     String? profilePhotoUrl,
     String? coverPhotoUrl,
+    bool? showAge,
   }) async {
     try {
       final user = currentUser;
@@ -811,6 +812,7 @@ class AuthService {
       if (coverPhotoUrl != null) {
         next['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
+      if (showAge != null) next['show_age'] = showAge;
       final response = await _client.auth.updateUser(
         UserAttributes(data: next),
       );
@@ -831,6 +833,7 @@ class AuthService {
       if (coverPhotoUrl != null) {
         dbUpdates['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
+      if (showAge != null) dbUpdates['show_age'] = showAge;
       if (dbUpdates.isNotEmpty) {
         try {
           await _client

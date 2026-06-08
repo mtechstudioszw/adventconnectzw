@@ -465,7 +465,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ],
             ],
           ),
-          if (age != null) ...[
+          if (age != null && (_isSelf || _profile!.showAge)) ...[
             const SizedBox(height: 4),
             Text(
               '$age years old',

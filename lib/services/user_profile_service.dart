@@ -18,6 +18,7 @@ class PublicUserProfile {
     this.dateOfBirth,
     this.joinedAt,
     this.churchName,
+    this.showAge = true,
   });
 
   final String id;
@@ -33,6 +34,7 @@ class PublicUserProfile {
   final bool isDiscoverable;
   final bool isVerified;
   final bool isBusiness;
+  final bool showAge;
 
   int? get age {
     if (dateOfBirth == null) return null;
@@ -67,6 +69,7 @@ class PublicUserProfile {
       isDiscoverable: json['is_discoverable'] != false,
       isVerified: json['is_verified'] == true,
       isBusiness: json['is_business'] == true,
+      showAge: json['show_age'] != false,
     );
   }
 }
@@ -84,7 +87,7 @@ class UserProfileService {
         .select(
           'id, full_name, profile_photo_url, cover_photo_url, bio, '
           'province, city, date_of_birth, created_at, '
-          'is_discoverable, is_verified, is_business, '
+          'is_discoverable, is_verified, is_business, show_age, '
           'churches(name)',
         )
         .eq('id', userId)

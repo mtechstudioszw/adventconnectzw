@@ -35,6 +35,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   bool _uploadingPhoto = false;
   bool _uploadingCover = false;
   bool _loadingChurches = true;
+  bool _showAge = true;
   String? _error;
 
   @override
@@ -55,6 +56,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     _selectedChurchId = (meta['church_id'] as String?);
     _profilePhotoUrl = (meta['profile_photo_url'] as String?);
     _coverPhotoUrl = (meta['cover_photo_url'] as String?);
+    _showAge = (meta['show_age'] as bool?) ?? true;
     _loadChurches();
   }
 
@@ -102,6 +104,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       churchId: _selectedChurchId,
       profilePhotoUrl: _profilePhotoUrl,
       coverPhotoUrl: _coverPhotoUrl,
+      showAge: _showAge,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -166,6 +169,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                       _buildCoverUploader(),
                       const SizedBox(height: 16),
                       _buildFieldsCard(),
+                      const SizedBox(height: 16),
+                      _buildPrivacyCard(),
                       if (_error != null) ...[
                         const SizedBox(height: 16),
                         _ErrorBanner(message: _error!),
@@ -561,6 +566,44 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPrivacyCard() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 6, 12, 6),
+      decoration: BoxDecoration(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        activeThumbColor: AppColors.primaryBlue,
+        value: _showAge,
+        onChanged: (v) => setState(() => _showAge = v),
+        title: Text(
+          'Show my age',
+          style: AppTextStyles.titleSmall.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          _showAge
+              ? 'Your age is visible on your profile.'
+              : 'Your age is hidden from others.',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: context.palette.textMuted,
+          ),
+        ),
+        secondary: const Icon(Icons.cake_outlined, color: AppColors.primaryBlue),
       ),
     );
   }

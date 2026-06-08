@@ -70,8 +70,13 @@ class Post {
         });
       }
     } else if (likesRaw is Map<String, dynamic>) {
-      // Aggregated count form: { count: N }.
+      // Aggregated count form from the offline cache: { count, viewer_liked }.
+      // viewer_liked MUST be restored here — without it, a cache-first
+      // paint showed every post as unliked until the network embed
+      // landed, so a like the user just made "forgot" itself for a few
+      // seconds on the next load.
       likeCount = (likesRaw['count'] as int?) ?? 0;
+      viewerLiked = likesRaw['viewer_liked'] == true;
     }
 
     final commentsRaw = json['post_comments'];
@@ -119,8 +124,10 @@ class Post {
             : 'public',
         'created_at': createdAt.toIso8601String(),
         // Aggregate form so fromJson reads counts from the
-        // { count: N } branch.
-        'post_likes': {'count': likeCount},
+        // { count, viewer_liked } branch. viewer_liked is persisted so
+        // the cache-first paint keeps the heart filled for posts the
+        // viewer already liked.
+        'post_likes': {'count': likeCount, 'viewer_liked': viewerLiked},
         'post_comments': {'count': commentCount},
       };
 }

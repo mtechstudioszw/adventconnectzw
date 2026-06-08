@@ -12,6 +12,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/start_conversation_sheet.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/full_image_viewer.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({
@@ -715,16 +716,19 @@ class _CarouselImage extends StatelessWidget {
         ),
       );
     }
-    return CachedImage(
-      url,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: AppColors.white.withValues(alpha: 0.55),
-            size: 56,
+    return GestureDetector(
+      onTap: () => FullImageViewer.show(context, url),
+      child: CachedImage(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+          child: Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: AppColors.white.withValues(alpha: 0.55),
+              size: 56,
+            ),
           ),
         ),
       ),

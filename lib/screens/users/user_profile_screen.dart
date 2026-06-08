@@ -11,6 +11,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
+import '../../widgets/full_image_viewer.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../services/messaging_service.dart';
 import '../../widgets/cached_image.dart';
@@ -308,17 +309,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Cover image / gradient placeholder.
-          Container(
-            height: 180,
-            decoration: BoxDecoration(
-              gradient: AppColors.appBarGradient,
-              image: cover != null && cover.isNotEmpty
-                  ? DecorationImage(
-                      image: CachedNetworkImageProvider(cover),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
+          // Cover image / gradient placeholder. Tap to expand.
+          GestureDetector(
+            onTap: (cover != null && cover.isNotEmpty)
+                ? () => FullImageViewer.show(context, cover)
+                : null,
+            child: Container(
+              height: 180,
+              decoration: BoxDecoration(
+                gradient: AppColors.appBarGradient,
+                image: cover != null && cover.isNotEmpty
+                    ? DecorationImage(
+                        image: CachedNetworkImageProvider(cover),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
             ),
           ),
           // Back button.
@@ -369,15 +375,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   color: AppColors.white,
                   shape: BoxShape.circle,
                 ),
-                child: ClipOval(
-                  child: _profile!.profilePhotoUrl != null &&
-                          _profile!.profilePhotoUrl!.isNotEmpty
-                      ? CachedImage(
-                          _profile!.profilePhotoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => _initialAvatar(),
-                        )
-                      : _initialAvatar(),
+                child: GestureDetector(
+                  onTap: (_profile!.profilePhotoUrl != null &&
+                          _profile!.profilePhotoUrl!.isNotEmpty)
+                      ? () => FullImageViewer.show(
+                          context, _profile!.profilePhotoUrl)
+                      : null,
+                  child: ClipOval(
+                    child: _profile!.profilePhotoUrl != null &&
+                            _profile!.profilePhotoUrl!.isNotEmpty
+                        ? CachedImage(
+                            _profile!.profilePhotoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => _initialAvatar(),
+                          )
+                        : _initialAvatar(),
+                  ),
                 ),
               ),
             ),

@@ -301,6 +301,18 @@ class FeedService {
     return PostComment.fromJson(inserted, viewerId: _viewerId);
   }
 
+  /// Delete a comment. RLS (patch_044) permits this when the caller
+  /// authored the comment OR owns the post it's on, so the same call
+  /// serves both "delete my comment" and "remove a comment from my
+  /// post". A no-op server-side if neither applies.
+  static Future<void> deleteComment(String commentId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to delete comments.');
+    }
+    await _client.from(_commentsTable).delete().eq('id', commentId);
+  }
+
   /// Cast / change / clear the viewer's vote on a comment.
   ///   value =  1 → like
   ///   value = -1 → dislike
@@ -489,48 +501,23 @@ class FeedService {
       fetchPendingFriendRequests() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
-    final rows = await _client
-        .from(_friendshipsTable)
-        .select('id, requester_id, created_at')
-        .eq('addressee_id', user.id)
-        .eq('status', 'pending')
-        .order('created_at', ascending: false);
+    // patch_043: go through the SECURITY DEFINER RPC so the requester's
+    // name + photo come back even when their profile isn't
+    // discoverable. Reading profiles directly was blocked by
+    // profiles_select_discoverable_or_self for non-discoverable
+    // requesters, which surfaced everyone as "Member".
+    final rows = await _client.rpc('pending_friend_requests');
     final list = (rows as List).cast<Map<String, dynamic>>();
     if (list.isEmpty) return const [];
 
-    final requesterIds = list
-        .map((r) => (r['requester_id'] ?? '').toString())
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList();
-    Map<String, Map<String, dynamic>> profilesById = const {};
-    if (requesterIds.isNotEmpty) {
-      try {
-        final profileRows = await _client
-            .from('profiles')
-            .select('id, full_name, profile_photo_url, church_name')
-            .inFilter('id', requesterIds);
-        profilesById = {
-          for (final row in (profileRows as List).cast<Map<String, dynamic>>())
-            row['id'].toString(): row,
-        };
-      } catch (_) {
-        // If the profiles table isn't readable for some reason (RLS),
-        // we still want the requests to surface — just without the
-        // pretty name + photo.
-      }
-    }
-
     return list.map((r) {
-      final requesterId = (r['requester_id'] ?? '').toString();
-      final profile = profilesById[requesterId];
-      final name = (profile?['full_name'] as String?)?.trim();
+      final name = (r['requester_name'] as String?)?.trim();
       return PendingFriendRequest(
-        friendshipId: r['id'].toString(),
-        requesterId: requesterId,
+        friendshipId: (r['friendship_id'] ?? '').toString(),
+        requesterId: (r['requester_id'] ?? '').toString(),
         requesterName: (name == null || name.isEmpty) ? 'Member' : name,
-        requesterPhotoUrl: profile?['profile_photo_url'] as String?,
-        requesterChurchName: profile?['church_name'] as String?,
+        requesterPhotoUrl: r['requester_photo_url'] as String?,
+        requesterChurchName: r['requester_church_name'] as String?,
         createdAt: r['created_at'] != null
             ? (DateTime.tryParse(r['created_at'].toString()) ??
                 DateTime.now())

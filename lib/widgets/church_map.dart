@@ -210,7 +210,22 @@ class MapsLauncher {
   }
 
   static Future<bool> _launch(Uri url) async {
-    if (!await canLaunchUrl(url)) return false;
-    return launchUrl(url, mode: LaunchMode.externalApplication);
+    // Don't gate on canLaunchUrl(): on Android 11+ it returns false
+    // for https unless the app declares matching <queries> in the
+    // manifest, which made "Get directions" always fail with "could
+    // not find directions" even though Maps / a browser was present.
+    // Just attempt the launch and fall back to the platform default.
+    try {
+      if (await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        return true;
+      }
+    } catch (_) {
+      // external-app mode unavailable — fall through to default mode
+    }
+    try {
+      return await launchUrl(url);
+    } catch (_) {
+      return false;
+    }
   }
 }

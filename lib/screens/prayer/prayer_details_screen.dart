@@ -166,6 +166,76 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     }
   }
 
+  /// Viewer can delete a comment if they wrote it OR they own the
+  /// prayer (patch_044 enforces the same rule server-side).
+  bool _canDeleteComment(PrayerComment comment, String ownerId) {
+    final viewerId = AuthService.currentUser?.id;
+    if (viewerId == null) return false;
+    return comment.authorId == viewerId || ownerId == viewerId;
+  }
+
+  Future<void> _deleteComment(PrayerComment comment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.palette.sheet,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        title: const Text('Delete comment?'),
+        content: const Text(
+          'This removes the comment for everyone. It can\'t be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final removedIds = <String>{
+      comment.id,
+      ..._comments
+          .where((c) => c.parentCommentId == comment.id)
+          .map((c) => c.id),
+    };
+    final prev = _comments;
+    final next =
+        _comments.where((c) => !removedIds.contains(c.id)).toList();
+    setState(() {
+      _comments = next;
+      if (_prayer != null) {
+        _prayer = _prayer!.copyWith(
+          commentCount:
+              (_prayer!.commentCount - removedIds.length).clamp(0, 1 << 30),
+        );
+      }
+    });
+
+    try {
+      await PrayerService.deletePrayerComment(comment.id);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _comments = prev);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not delete the comment. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _confirmDelete(Prayer prayer) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -548,6 +618,8 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                 comment: tree[i],
                 isOwner: tree[i].authorId.isNotEmpty &&
                     tree[i].authorId == ownerId,
+                canDelete: _canDeleteComment(tree[i], ownerId),
+                onDelete: () => _deleteComment(tree[i]),
                 onReply: () =>
                     setState(() => _replyTo = tree[i]),
               ),
@@ -558,6 +630,8 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                     comment: reply,
                     isOwner: reply.authorId.isNotEmpty &&
                         reply.authorId == ownerId,
+                    canDelete: _canDeleteComment(reply, ownerId),
+                    onDelete: () => _deleteComment(reply),
                     onReply: () => setState(() => _replyTo = tree[i]),
                     isReply: true,
                   ),
@@ -688,10 +762,14 @@ class _CommentTile extends StatelessWidget {
     required this.isOwner,
     required this.onReply,
     this.isReply = false,
+    this.canDelete = false,
+    this.onDelete,
   });
   final PrayerComment comment;
   final bool isOwner;
   final bool isReply;
+  final bool canDelete;
+  final VoidCallback? onDelete;
   final VoidCallback onReply;
 
   void _openProfile(BuildContext context) {
@@ -788,19 +866,40 @@ class _CommentTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              InkWell(
-                onTap: onReply,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    'Reply',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
+              Row(
+                children: [
+                  InkWell(
+                    onTap: onReply,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(
+                        'Reply',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  if (canDelete) ...[
+                    const SizedBox(width: 16),
+                    InkWell(
+                      onTap: onDelete,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          'Delete',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.red,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

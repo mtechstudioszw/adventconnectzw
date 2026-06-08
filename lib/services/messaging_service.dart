@@ -9,6 +9,42 @@ import 'analytics_service.dart';
 import 'cache_service.dart';
 import 'connectivity_service.dart';
 
+/// One-shot handoff for opening a chat with a pre-filled draft and an
+/// optional product preview (tester bug #17: "message a seller from a
+/// product — show the product picture with a message ready to send").
+/// Set it right before navigating to the chat; ChatScreen reads + clears
+/// it in initState. Avoids threading extra args through go_router.
+class ChatLaunchIntent {
+  ChatLaunchIntent._();
+
+  static String? draft;
+  static String? productImageUrl;
+  static String? productTitle;
+  static String? productPrice;
+
+  static bool get hasProduct =>
+      (productTitle ?? '').isNotEmpty || (productImageUrl ?? '').isNotEmpty;
+
+  static void set({
+    String? draft,
+    String? productImageUrl,
+    String? productTitle,
+    String? productPrice,
+  }) {
+    ChatLaunchIntent.draft = draft;
+    ChatLaunchIntent.productImageUrl = productImageUrl;
+    ChatLaunchIntent.productTitle = productTitle;
+    ChatLaunchIntent.productPrice = productPrice;
+  }
+
+  static void clear() {
+    draft = null;
+    productImageUrl = null;
+    productTitle = null;
+    productPrice = null;
+  }
+}
+
 class MessagingService {
   MessagingService._();
 
@@ -402,21 +438,42 @@ class MessagingService {
       // server-side too — this is a client-side belt-and-braces so
       // the right behaviour kicks in even before the migration runs.
       final areFriends = await _areAcceptedFriends(user.id, otherUserId);
-      final inserted = await _client
-          .from(_conversationsTable)
-          .insert({
-            'participant_a_id': user.id,
-            'participant_b_id': otherUserId,
-            'participant_a_name': myName,
-            'participant_b_name': resolvedOtherName,
-            'initiator_id': user.id,
-            'conversation_source': source,
-            'is_business': isBusiness,
-            if (areFriends) 'request_status': 'accepted',
-          })
-          .select(_conversationSelect)
-          .single();
-      convoRow = (inserted as Map).cast<String, dynamic>();
+      try {
+        final inserted = await _client
+            .from(_conversationsTable)
+            .insert({
+              'participant_a_id': user.id,
+              'participant_b_id': otherUserId,
+              'participant_a_name': myName,
+              'participant_b_name': resolvedOtherName,
+              'initiator_id': user.id,
+              'conversation_source': source,
+              'is_business': isBusiness,
+              if (areFriends) 'request_status': 'accepted',
+            })
+            .select(_conversationSelect)
+            .single();
+        convoRow = (inserted as Map).cast<String, dynamic>();
+      } on PostgrestException catch (e) {
+        // patch_046 unique pair index: a concurrent tap (or entering
+        // the chat from two surfaces at once) raced us to the insert.
+        // Re-fetch the row the other call created instead of throwing
+        // — guarantees one thread per pair, never a duplicate.
+        if (e.code == '23505') {
+          final raced = await _client
+              .from(_conversationsTable)
+              .select(_conversationSelect)
+              .or(
+                'and(participant_a_id.eq.${user.id},participant_b_id.eq.$otherUserId),'
+                'and(participant_a_id.eq.$otherUserId,participant_b_id.eq.${user.id})',
+              )
+              .limit(1);
+          if ((raced as List).isEmpty) rethrow;
+          convoRow = (raced.first as Map).cast<String, dynamic>();
+        } else {
+          rethrow;
+        }
+      }
     }
 
     final conversationId = convoRow['id'].toString();

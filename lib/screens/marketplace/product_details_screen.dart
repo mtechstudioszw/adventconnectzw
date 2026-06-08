@@ -7,10 +7,10 @@ import '../../models/product_model.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/start_conversation_sheet.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 
@@ -157,14 +157,44 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
       );
       return;
     }
-    await showStartConversationSheet(
-      context,
-      otherUserId: product.sellerId,
-      otherUserName: product.sellerName,
-      source: 'marketplace',
-      isBusiness: true,
-      openerOverride: 'Hi, is "${product.title}" still available?',
-    );
+    // #17: open the chat with the product shown + an editable draft
+    // ("ready to send"), instead of auto-firing a bare text opener.
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: product.sellerId,
+        otherUserName: product.sellerName,
+        source: 'marketplace',
+        isBusiness: true,
+        // No firstMessage → get-or-create only, nothing auto-sends.
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      ChatLaunchIntent.set(
+        draft: 'Hi, is "${product.title}" still available?',
+        productImageUrl: product.imageUrls.isNotEmpty
+            ? product.imageUrls.first
+            : null,
+        productTitle: product.title,
+        productPrice: product.formatPrice(),
+      );
+      if (!mounted) return;
+      context.pushNamed(
+        'chat',
+        pathParameters: {'id': convo.id},
+        extra: convo,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not open the chat. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   @override

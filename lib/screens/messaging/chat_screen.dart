@@ -272,6 +272,13 @@ class _ChatScreenState extends State<ChatScreen>
   Duration _recordingElapsed = Duration.zero;
   bool _hasText = false;
 
+  // #17: product preview shown above the composer when the chat was
+  // opened from a marketplace product. Dismissible; cleared once the
+  // first message is sent.
+  String? _productPreviewImage;
+  String? _productPreviewTitle;
+  String? _productPreviewPrice;
+
   late final AnimationController _entrance;
   late final Animation<double> _fade;
   late final Animation<double> _slide;
@@ -288,6 +295,19 @@ class _ChatScreenState extends State<ChatScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _conversation = widget.initialConversation;
+    // #17: consume the product-launch handoff — prefill the composer
+    // with an editable draft and show the product preview chip.
+    if (ChatLaunchIntent.draft != null || ChatLaunchIntent.hasProduct) {
+      final draft = ChatLaunchIntent.draft ?? '';
+      if (draft.isNotEmpty) {
+        _inputController.text = draft;
+        _hasText = true;
+      }
+      _productPreviewImage = ChatLaunchIntent.productImageUrl;
+      _productPreviewTitle = ChatLaunchIntent.productTitle;
+      _productPreviewPrice = ChatLaunchIntent.productPrice;
+      ChatLaunchIntent.clear();
+    }
     _bootstrap();
     _resolveConversation();
   }
@@ -772,6 +792,10 @@ class _ChatScreenState extends State<ChatScreen>
       // the user reopened the chat. WhatsApp/Telegram parity:
       // after send, the toolbar reverts to mic immediately.
       _hasText = false;
+      // First message sent — drop the product preview chip.
+      _productPreviewImage = null;
+      _productPreviewTitle = null;
+      _productPreviewPrice = null;
     });
     _inputController.clear();
     _scrollToBottom();
@@ -1538,9 +1562,14 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildComposeBar() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
+        if (_productPreviewTitle != null || _productPreviewImage != null)
+          _buildProductPreview(),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -1579,7 +1608,92 @@ class _ChatScreenState extends State<ChatScreen>
           _SendButton(busy: _sending, onTap: _send)
         else
           _MicButton(busy: _sending, onTap: _startRecording),
+          ],
+        ),
       ],
+    );
+  }
+
+  /// #17: product chip shown above the composer when the chat was
+  /// opened from a marketplace product. Dismissible.
+  Widget _buildProductPreview() {
+    final img = _productPreviewImage;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: context.palette.cardMuted,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.palette.divider),
+      ),
+      child: Row(
+        children: [
+          if (img != null && img.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: CachedImage(img, fit: BoxFit.cover),
+              ),
+            )
+          else
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.shopping_bag_outlined,
+                  color: AppColors.primaryBlue, size: 20),
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Asking about',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.palette.textMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                Text(
+                  _productPreviewTitle ?? 'this product',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if ((_productPreviewPrice ?? '').isNotEmpty)
+                  Text(
+                    _productPreviewPrice!,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close, size: 18, color: context.palette.textMuted),
+            onPressed: () => setState(() {
+              _productPreviewImage = null;
+              _productPreviewTitle = null;
+              _productPreviewPrice = null;
+            }),
+          ),
+        ],
+      ),
     );
   }
 

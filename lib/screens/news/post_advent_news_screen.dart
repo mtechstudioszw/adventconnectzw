@@ -117,7 +117,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
           content: Text(
             _isEdit
                 ? 'Story updated.'
-                : 'Published. The community will see it on home.',
+                : 'Submitted for review — it\'ll appear on Advent News once an admin approves it.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

@@ -186,4 +186,33 @@ class AdventNewsService {
   static Future<void> deleteNews(String id) async {
     await _client.from(_table).delete().eq('id', id);
   }
+
+  // ────────────────────────────────────────────────────────────────
+  // Super-admin approval queue (patch_047). Backed by SECURITY DEFINER
+  // RPCs gated on is_super_admin — same surface the web dashboard uses.
+  // ────────────────────────────────────────────────────────────────
+
+  /// Member-submitted news awaiting review.
+  static Future<List<Map<String, dynamic>>> fetchPendingNews() async {
+    final response = await _client.rpc('admin_list_pending_news');
+    if (response is List) {
+      return response
+          .map((e) => (e as Map).cast<String, dynamic>())
+          .toList();
+    }
+    return const [];
+  }
+
+  /// Approve a pending news post — it goes live + the author is notified.
+  static Future<void> approveNews(String id) async {
+    await _client.rpc('admin_approve_news', params: {'p_id': int.parse(id)});
+  }
+
+  /// Reject a pending news post with an optional reason (shown to author).
+  static Future<void> rejectNews(String id, {String? reason}) async {
+    await _client.rpc(
+      'admin_reject_news',
+      params: {'p_id': int.parse(id), 'p_reason': reason?.trim()},
+    );
+  }
 }

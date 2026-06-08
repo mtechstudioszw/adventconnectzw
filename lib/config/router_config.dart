@@ -4,6 +4,7 @@ import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
 import '../screens/admin/seller_approvals_screen.dart';
+import '../screens/admin/news_approvals_screen.dart';
 import '../screens/auth/auth_screen.dart';
 import '../screens/auth/email_verification_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -505,6 +506,12 @@ final GoRouter appRouter = GoRouter(
           path: 'sellers',
           name: 'admin_seller_approvals',
           builder: (context, state) => const SellerApprovalsScreen(),
+        ),
+        GoRoute(
+          // Super-admin Advent News approvals queue (patch_047).
+          path: 'news-approvals',
+          name: 'admin_news_approvals',
+          builder: (context, state) => const NewsApprovalsScreen(),
         ),
       ],
     ),

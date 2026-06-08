@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/post_comment_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -158,6 +159,68 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     _composerFocus.requestFocus();
   }
 
+  /// The viewer may delete a comment if they wrote it OR they own the
+  /// post it's on (patch_044 enforces the same rule server-side).
+  bool _canDelete(PostComment comment) {
+    final viewerId = AuthService.currentUser?.id;
+    if (viewerId == null) return false;
+    return comment.authorId == viewerId ||
+        (widget.postAuthorId != null && widget.postAuthorId == viewerId);
+  }
+
+  Future<void> _deleteComment(PostComment comment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.palette.sheet,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        title: const Text('Delete comment?'),
+        content: const Text(
+          'This removes the comment for everyone. It can\'t be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    // Optimistic removal of the comment + any direct replies to it.
+    final removedIds = <String>{
+      comment.id,
+      ..._flat.where((c) => c.parentCommentId == comment.id).map((c) => c.id),
+    };
+    final prev = _flat;
+    final next = _flat.where((c) => !removedIds.contains(c.id)).toList();
+    setState(() {
+      _flat = next;
+      _tree = PostComment.buildTree(next);
+    });
+    widget.onCommentCountChanged(next.length);
+
+    try {
+      await FeedService.deleteComment(comment.id);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _flat = prev;
+        _tree = PostComment.buildTree(prev);
+      });
+      widget.onCommentCountChanged(prev.length);
+      _toast('Could not delete the comment. Try again.');
+    }
+  }
+
   void _cancelReply() {
     setState(() => _replyTo = null);
   }
@@ -262,6 +325,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               comment: root,
               isOwner: widget.postAuthorId != null &&
                   root.authorId == widget.postAuthorId,
+              canDelete: _canDelete(root),
+              onDelete: () => _deleteComment(root),
               onReply: () => _startReply(root),
               onLike: () => _react(root, 1),
               onDislike: () => _react(root, -1),
@@ -276,6 +341,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                         comment: reply,
                         isOwner: widget.postAuthorId != null &&
                             reply.authorId == widget.postAuthorId,
+                        canDelete: _canDelete(reply),
+                        onDelete: () => _deleteComment(reply),
                         onReply: () => _startReply(root),
                         onLike: () => _react(reply, 1),
                         onDislike: () => _react(reply, -1),
@@ -414,10 +481,14 @@ class _CommentRow extends StatelessWidget {
     required this.onLike,
     required this.onDislike,
     this.isOwner = false,
+    this.canDelete = false,
+    this.onDelete,
   });
 
   final PostComment comment;
   final bool isOwner;
+  final bool canDelete;
+  final VoidCallback? onDelete;
   final VoidCallback onReply;
   final VoidCallback onLike;
   final VoidCallback onDislike;
@@ -573,6 +644,20 @@ class _CommentRow extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (canDelete) ...[
+                      const SizedBox(width: 14),
+                      GestureDetector(
+                        onTap: onDelete,
+                        child: Text(
+                          'Delete',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.red,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

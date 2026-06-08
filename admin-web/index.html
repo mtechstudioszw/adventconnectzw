@@ -148,6 +148,7 @@
         <a data-tab="overview" class="active">📊 Overview</a>
         <a data-tab="sellers">🛍️ Sellers <span class="badge" id="b-sellers" style="display:none"></span></a>
         <a data-tab="reports">🚩 Reports <span class="badge" id="b-reports" style="display:none"></span></a>
+        <a data-tab="news">📰 News <span class="badge" id="b-news" style="display:none"></span></a>
         <a data-tab="feedback">💬 Feedback <span class="badge" id="b-feedback" style="display:none"></span></a>
         <a data-tab="users">👤 Users</a>
         <a data-tab="broadcast">📣 Broadcast</a>
@@ -270,7 +271,7 @@ $("nav").addEventListener("click", (e) => {
 function switchTab(tab) {
   document.querySelectorAll("#nav a").forEach(a =>
     a.classList.toggle("active", a.dataset.tab === tab));
-  ({ overview, sellers, reports, feedback, users, broadcast }[tab] || overview)();
+  ({ overview, sellers, reports, news, feedback, users, broadcast }[tab] || overview)();
 }
 
 async function refreshBadges() {
@@ -279,6 +280,7 @@ async function refreshBadges() {
     setBadge("b-sellers", s.pending_sellers);
     setBadge("b-reports", s.open_reports);
     setBadge("b-feedback", s.untriaged_feedback);
+    if (s.pending_news != null) setBadge("b-news", s.pending_news);
   } catch (_) {}
 }
 function setBadge(id, n) {
@@ -417,6 +419,38 @@ async function feedback() {
       catch (e) { alert(e.message); }
     });
   } catch (err) { view().querySelector(".loading")?.remove(); view().insertAdjacentHTML("beforeend", errBox(err)); }
+}
+
+async function news() {
+  view().innerHTML = head("Advent News", "Approve or reject member-submitted news before it goes live.") + loading();
+  try {
+    const rows = await rpc("admin_list_pending_news");
+    if (!rows.length) { view().innerHTML = head("Advent News","Approve or reject member-submitted news.") + empty("No news awaiting review."); return; }
+    const body = rows.map(n => `
+      <tr>
+        <td style="max-width:120px">${n.cover_photo_url ? `<img src="${esc(n.cover_photo_url)}" style="width:100px;height:60px;object-fit:cover;border-radius:8px"/>` : "—"}</td>
+        <td><b>${esc(n.title)}</b><div class="meta">${esc(n.category || "")} · by ${esc(n.author_name)} · ${fmtDate(n.created_at)}</div>
+            <div class="meta">${esc(n.summary || "")}</div>
+            ${n.body ? `<div class="meta" style="margin-top:4px">${esc(String(n.body).slice(0,400))}${String(n.body).length>400?"…":""}</div>` : ""}</td>
+        <td style="white-space:nowrap">
+          <button class="btn green" data-approve-news="${n.id}">Approve</button>
+          <button class="btn red" data-reject-news="${n.id}">Reject</button>
+        </td>
+      </tr>`).join("");
+    view().innerHTML = head("Advent News","Approve or reject member-submitted news.") +
+      `<table><thead><tr><th>Cover</th><th>Story</th><th></th></tr></thead><tbody>${body}</tbody></table>`;
+    view().querySelectorAll("[data-approve-news]").forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await rpc("admin_approve_news", { p_id: Number(b.dataset.approveNews) }); news(); refreshBadges(); }
+      catch (e) { alert(e.message); b.disabled = false; }
+    });
+    view().querySelectorAll("[data-reject-news]").forEach(b => b.onclick = async () => {
+      const reason = await ask({ title: "Reject news", sub: "Optional reason sent to the author.", placeholder: "Reason (optional)", okLabel: "Reject", okClass: "red" });
+      if (reason === null) return;
+      try { await rpc("admin_reject_news", { p_id: Number(b.dataset.rejectNews), p_reason: reason }); news(); refreshBadges(); }
+      catch (e) { alert(e.message); }
+    });
+  } catch (err) { view().innerHTML = head("Advent News","") + errBox(err); }
 }
 
 async function users() {

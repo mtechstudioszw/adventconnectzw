@@ -272,6 +272,21 @@ class PrayerService {
     return comments.last;
   }
 
+  /// Delete a prayer comment (a `message` response). RLS (patch_044)
+  /// allows this when the caller wrote it OR owns the prayer, so the
+  /// one call covers "delete my comment" and "remove a comment from
+  /// my prayer". No-op server-side if neither applies.
+  static Future<void> deletePrayerComment(String responseId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to delete comments.');
+    }
+    await _client
+        .from(_responsesTable)
+        .delete()
+        .eq('id', int.tryParse(responseId) ?? responseId);
+  }
+
   static Prayer _hydratePrayer(Map<String, dynamic> row) {
     // Mask the author for anonymous prayers in code, since we read from the
     // base table now. The author can still see their own row's author_id —

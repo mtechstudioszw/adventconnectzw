@@ -69,13 +69,31 @@ class _SearchScreenState extends State<SearchScreen> {
   List<String> _recent = const [];
   bool _seeAllRecent = false;
 
+  // "People you may know" — shown on the no-query landing state so the
+  // search screen always surfaces someone to connect with (tester #11),
+  // not just an empty recents list.
+  List<MemberDirectoryEntry> _suggestions = const [];
+  bool _seeAllSuggestions = false;
+
   @override
   void initState() {
     super.initState();
     _loadRecent();
+    _loadSuggestions();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _focusNode.requestFocus(),
     );
+  }
+
+  Future<void> _loadSuggestions() async {
+    try {
+      final list = await DirectoryService.fetchSuggestedMembers(limit: 20);
+      if (!mounted) return;
+      setState(() => _suggestions = list);
+    } catch (_) {
+      // Suggestions are best-effort — a failure just leaves the landing
+      // state showing recents only.
+    }
   }
 
   @override
@@ -451,76 +469,78 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildRecent() {
-    if (_recent.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
-        children: [
-          Text(
-            'TRY SEARCHING FOR',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final s in const [
-                'Tendai',
-                'Harare central',
-                'Camp meeting',
-                'Plumber',
-                'Bibles',
-                'Solusi',
-                'Teaching',
-              ])
-                _SuggestionTap(
-                  label: s,
-                  onTap: () => _useRecent(s),
-                ),
-            ],
-          ),
-        ],
-      );
-    }
     final shown =
         _seeAllRecent ? _recent : _recent.take(5).toList(growable: false);
     return ListView(
       padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-          child: Row(
-            children: [
-              Text(
-                'Recent',
-                style: AppTextStyles.titleMedium.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              if (_recent.length > 5)
-                TextButton(
-                  onPressed: () =>
-                      setState(() => _seeAllRecent = !_seeAllRecent),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.primaryBlue,
-                    minimumSize: const Size(0, 36),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+        if (_recent.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'TRY SEARCHING FOR',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.palette.textMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.4,
                   ),
-                  child: Text(
-                    _seeAllRecent ? 'Show less' : 'See all',
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w700,
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in const [
+                      'Tendai',
+                      'Harare central',
+                      'Camp meeting',
+                      'Plumber',
+                      'Bibles',
+                      'Solusi',
+                      'Teaching',
+                    ])
+                      _SuggestionTap(
+                        label: s,
+                        onTap: () => _useRecent(s),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          )
+        else ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+            child: Row(
+              children: [
+                Text(
+                  'Recent',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                if (_recent.length > 5)
+                  TextButton(
+                    onPressed: () =>
+                        setState(() => _seeAllRecent = !_seeAllRecent),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primaryBlue,
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    child: Text(
+                      _seeAllRecent ? 'Show less' : 'See all',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-              if (_recent.isNotEmpty)
                 TextButton(
                   onPressed: _clearRecent,
                   style: TextButton.styleFrom(
@@ -536,15 +556,71 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
-        ),
-        for (final q in shown)
-          _RecentRow(
-            query: q,
-            onTap: () => _useRecent(q),
-            onRemove: () => _removeRecent(q),
+          for (final q in shown)
+            _RecentRow(
+              query: q,
+              onTap: () => _useRecent(q),
+              onRemove: () => _removeRecent(q),
+            ),
+        ],
+        if (_suggestions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+            child: Row(
+              children: [
+                Text(
+                  'People you may know',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                if (_suggestions.length > 6)
+                  TextButton(
+                    onPressed: () => setState(
+                      () => _seeAllSuggestions = !_seeAllSuggestions,
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primaryBlue,
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    child: Text(
+                      _seeAllSuggestions ? 'Show less' : 'See all',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                for (final p in (_seeAllSuggestions
+                    ? _suggestions
+                    : _suggestions.take(6)))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _PersonRow(
+                      person: p,
+                      onTap: () => context.pushNamed(
+                        'user_profile',
+                        pathParameters: {'userId': p.userId},
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

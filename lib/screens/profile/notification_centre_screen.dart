@@ -23,6 +23,9 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   String? _error;
   List<AppNotification> _items = const [];
 
+  /// Categories the user has tapped "See more" on. Collapsed by default.
+  final Set<_NotifCategory> _expanded = <_NotifCategory>{};
+
   @override
   void initState() {
     super.initState();
@@ -98,7 +101,43 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       // failed mark-read isn't worth a snackbar.
       NotificationService.markRead(n.id).ignore();
     }
-    _routeFor(n);
+    // Announcements / suspensions carry their whole message in the body
+    // and have no screen to open — show it in a reader sheet instead of
+    // a dead tap. Everything else routes to the relevant screen.
+    if (_hasRoute(n)) {
+      _routeFor(n);
+    } else {
+      _openReader(n);
+    }
+  }
+
+  /// True when [_routeFor] can actually take the user somewhere. Used to
+  /// decide between routing and opening the in-place reader sheet.
+  bool _hasRoute(AppNotification n) {
+    final hasId = (n.referenceId ?? '').isNotEmpty;
+    switch (n.referenceType) {
+      case 'event':
+      case 'prayer':
+      case 'conversation':
+        return hasId;
+      case 'friend_request':
+      case 'seller':
+      case 'church_admin':
+        return true;
+    }
+    return false;
+  }
+
+  void _openReader(AppNotification n) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.palette.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _NotificationReaderSheet(item: n),
+    );
   }
 
   void _routeFor(AppNotification n) {
@@ -215,35 +254,178 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
             'When someone RSVPs your event, prays for your request or messages you, you\'ll see it here.',
       );
     }
+    // Group by source so the inbox reads as sections rather than one
+    // long undifferentiated stream (tester feedback #4).
+    final grouped = <_NotifCategory, List<AppNotification>>{};
+    for (final n in _items) {
+      grouped.putIfAbsent(_categoryFor(n), () => []).add(n);
+    }
+    const order = [
+      _NotifCategory.messages,
+      _NotifCategory.social,
+      _NotifCategory.announcements,
+      _NotifCategory.activity,
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final n in _items)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Dismissible(
-              key: ValueKey('notif-${n.id}'),
-              direction: DismissDirection.endToStart,
-              background: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                decoration: BoxDecoration(
-                  color: AppColors.red,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(
-                  Icons.delete_outline,
-                  color: AppColors.white,
-                ),
-              ),
-              onDismissed: (_) => _dismiss(n),
-              child: _NotificationRow(item: n, onTap: () => _open(n)),
-            ),
-          ),
+        for (final cat in order)
+          if (grouped[cat]?.isNotEmpty ?? false)
+            ..._buildSection(cat, grouped[cat]!),
       ],
     );
   }
+
+  /// One category block: a header with an unread badge, up to four rows
+  /// collapsed, and a See-more / Show-less toggle when there are more.
+  List<Widget> _buildSection(
+    _NotifCategory cat,
+    List<AppNotification> items,
+  ) {
+    const collapsedCount = 4;
+    final expanded = _expanded.contains(cat);
+    final unreadInCat = items.where((n) => !n.isRead).length;
+    final visible =
+        expanded ? items : items.take(collapsedCount).toList();
+    final hiddenCount = items.length - visible.length;
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
+        child: Row(
+          children: [
+            Icon(_categoryIcon(cat), size: 17, color: AppColors.primaryBlue),
+            const SizedBox(width: 8),
+            Text(
+              _categoryLabel(cat),
+              style: AppTextStyles.titleSmall.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (unreadInCat > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$unreadInCat',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      for (final n in visible)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Dismissible(
+            key: ValueKey('notif-${n.id}'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 20),
+              decoration: BoxDecoration(
+                color: AppColors.red,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
+                Icons.delete_outline,
+                color: AppColors.white,
+              ),
+            ),
+            onDismissed: (_) => _dismiss(n),
+            child: _NotificationRow(item: n, onTap: () => _open(n)),
+          ),
+        ),
+      if (hiddenCount > 0 || expanded)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () => setState(() {
+              if (expanded) {
+                _expanded.remove(cat);
+              } else {
+                _expanded.add(cat);
+              }
+            }),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primaryBlue,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              minimumSize: const Size(0, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              expanded ? 'Show less' : 'See $hiddenCount more',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      const SizedBox(height: 10),
+    ];
+  }
+
+  _NotifCategory _categoryFor(AppNotification n) {
+    final ref = n.referenceType ?? '';
+    final type = n.type;
+    if (ref == 'conversation' || type.contains('message')) {
+      return _NotifCategory.messages;
+    }
+    if (ref == 'friend_request' ||
+        ref == 'friendship' ||
+        type.contains('friend')) {
+      return _NotifCategory.social;
+    }
+    if (ref == 'announcement' ||
+        ref == 'account' ||
+        type == 'admin_broadcast' ||
+        type == 'urgent_banner' ||
+        type.contains('announcement') ||
+        type.contains('broadcast') ||
+        type.contains('sabbath')) {
+      return _NotifCategory.announcements;
+    }
+    return _NotifCategory.activity;
+  }
+
+  String _categoryLabel(_NotifCategory cat) {
+    switch (cat) {
+      case _NotifCategory.messages:
+        return 'Messages';
+      case _NotifCategory.social:
+        return 'Friends & requests';
+      case _NotifCategory.announcements:
+        return 'Announcements';
+      case _NotifCategory.activity:
+        return 'Activity';
+    }
+  }
+
+  IconData _categoryIcon(_NotifCategory cat) {
+    switch (cat) {
+      case _NotifCategory.messages:
+        return Icons.forum_outlined;
+      case _NotifCategory.social:
+        return Icons.people_outline;
+      case _NotifCategory.announcements:
+        return Icons.campaign_outlined;
+      case _NotifCategory.activity:
+        return Icons.notifications_active_outlined;
+    }
+  }
 }
+
+enum _NotifCategory { messages, social, announcements, activity }
 
 class _NotificationRow extends StatelessWidget {
   const _NotificationRow({required this.item, required this.onTap});
@@ -394,6 +576,101 @@ class _NotificationRow extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Full-text reader for notifications that have no screen to open —
+/// admin broadcasts, urgent banners, suspensions. The list truncates the
+/// body to three lines; this shows the whole thing (tester feedback #4).
+class _NotificationReaderSheet extends StatelessWidget {
+  const _NotificationReaderSheet({required this.item});
+
+  final AppNotification item;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.palette.textMuted.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.campaign_outlined,
+                    color: AppColors.primaryBlue,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.title,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Text(
+                  item.body,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.palette.text,
+                    height: 1.6,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(
+                  'Close',
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

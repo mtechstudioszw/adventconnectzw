@@ -455,6 +455,87 @@ class FeedService {
     }
   }
 
+  /// Whether the current viewer has liked [storyId]. Reads back the
+  /// caller's own like row (RLS permits self-reads). Swallows errors so
+  /// a missing table / network blip just renders an empty heart.
+  static Future<bool> isStoryLiked(String storyId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return false;
+    try {
+      final rows = await _client
+          .from('story_likes')
+          .select('story_id')
+          .eq('story_id', storyId)
+          .eq('user_id', user.id)
+          .limit(1);
+      return (rows as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Toggle the current viewer's like on [storyId]. [currentlyLiked] is
+  /// the caller's optimistic state; we persist the opposite. Returns the
+  /// new state actually applied (falls back to [currentlyLiked] on
+  /// failure so the UI can roll back).
+  static Future<bool> toggleStoryLike(
+    String storyId, {
+    required bool currentlyLiked,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return currentlyLiked;
+    try {
+      if (currentlyLiked) {
+        await _client
+            .from('story_likes')
+            .delete()
+            .eq('story_id', storyId)
+            .eq('user_id', user.id);
+        return false;
+      } else {
+        await _client.from('story_likes').insert({
+          'story_id': storyId,
+          'user_id': user.id,
+        });
+        return true;
+      }
+    } catch (_) {
+      // Re-inserting an existing like collides on the PK — treat that as
+      // "already liked" rather than an error.
+      return currentlyLiked ? false : true;
+    }
+  }
+
+  /// Who liked a story the current user owns. Returns
+  /// {user_id, full_name, profile_photo_url, liked_at} tuples, newest
+  /// first. RLS only returns rows when the caller authored the story.
+  static Future<List<Map<String, dynamic>>> fetchStoryLikers(
+    String storyId,
+  ) async {
+    try {
+      final response = await _client
+          .from('story_likes')
+          .select(
+            'created_at, profiles!story_likes_user_id_fkey('
+            'id, full_name, profile_photo_url)',
+          )
+          .eq('story_id', storyId)
+          .order('created_at', ascending: false);
+      return (response as List).map((row) {
+        final map = row as Map<String, dynamic>;
+        final profile = map['profiles'] as Map<String, dynamic>?;
+        return <String, dynamic>{
+          'user_id': profile?['id']?.toString() ?? '',
+          'full_name': profile?['full_name']?.toString() ?? 'Member',
+          'profile_photo_url': profile?['profile_photo_url']?.toString(),
+          'liked_at': map['created_at']?.toString() ?? '',
+        };
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   // ===================================================================
   // FRIENDSHIPS
   // ===================================================================

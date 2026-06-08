@@ -49,6 +49,11 @@ class _StoryViewerState extends State<StoryViewer>
   // id. Populated on first display + after the "Viewed by" sheet opens.
   final Map<String, int> _viewerCounts = <String, int>{};
 
+  // Whether the current viewer has liked each story (non-owner view),
+  // and the like tally for the author's own stories.
+  final Map<String, bool> _liked = <String, bool>{};
+  final Map<String, int> _likeCounts = <String, int>{};
+
   @override
   void initState() {
     super.initState();
@@ -72,9 +77,11 @@ class _StoryViewerState extends State<StoryViewer>
     final story = widget.stories[_index];
     if (_isMyStory(story)) {
       _loadViewerCount(story.id);
+      _loadLikeCount(story.id);
     } else {
       // Fire-and-forget — viewer rows are idempotent on (story, viewer).
       FeedService.markStoryViewed(story.id);
+      _loadLikedState(story.id);
     }
   }
 
@@ -82,6 +89,45 @@ class _StoryViewerState extends State<StoryViewer>
     final list = await FeedService.fetchStoryViewers(storyId);
     if (!mounted) return;
     setState(() => _viewerCounts[storyId] = list.length);
+  }
+
+  Future<void> _loadLikeCount(String storyId) async {
+    final list = await FeedService.fetchStoryLikers(storyId);
+    if (!mounted) return;
+    setState(() => _likeCounts[storyId] = list.length);
+  }
+
+  Future<void> _loadLikedState(String storyId) async {
+    final liked = await FeedService.isStoryLiked(storyId);
+    if (!mounted) return;
+    setState(() => _liked[storyId] = liked);
+  }
+
+  /// Toggle the viewer's like with an optimistic flip, reconciling with
+  /// the state the service actually persisted.
+  Future<void> _toggleLike(Story story) async {
+    final current = _liked[story.id] ?? false;
+    setState(() => _liked[story.id] = !current);
+    final applied = await FeedService.toggleStoryLike(
+      story.id,
+      currentlyLiked: current,
+    );
+    if (!mounted) return;
+    setState(() => _liked[story.id] = applied);
+  }
+
+  Future<void> _openLikersSheet(Story story) async {
+    _onHoldStart();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _StoryPeopleSheet(storyId: story.id, kind: _PeopleKind.likers),
+    );
+    if (!mounted) return;
+    _onHoldEnd();
+    _loadLikeCount(story.id);
   }
 
   @override
@@ -168,7 +214,8 @@ class _StoryViewerState extends State<StoryViewer>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _StoryViewersSheet(storyId: story.id),
+      builder: (_) =>
+          _StoryPeopleSheet(storyId: story.id, kind: _PeopleKind.viewers),
     );
     if (!mounted) return;
     _onHoldEnd();
@@ -286,7 +333,7 @@ class _StoryViewerState extends State<StoryViewer>
             if ((story.caption ?? '').isNotEmpty)
               Positioned(
                 left: 16,
-                right: 16,
+                right: _isMyStory(story) ? 16 : 72,
                 bottom: _isMyStory(story) ? 78 : 32,
                 child: Container(
                   padding:
@@ -304,10 +351,43 @@ class _StoryViewerState extends State<StoryViewer>
                   ),
                 ),
               ),
-            // Own-story footer — tappable "Viewed by N" pill that
-            // opens the viewers sheet. Hidden for stories the viewer
-            // doesn't own (they shouldn't see other people's viewer
-            // lists; RLS would block the fetch anyway).
+            // Viewer reaction — a heart that toggles a like on someone
+            // else's story. Hidden on your own stories (you can't like
+            // yourself; the owner footer shows the tally instead).
+            if (!_isMyStory(story))
+              Positioned(
+                right: 16,
+                bottom: 24,
+                child: IgnorePointer(
+                  ignoring: _paused,
+                  child: AnimatedOpacity(
+                    opacity: _paused ? 0 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    child: GestureDetector(
+                      onTap: () => _toggleLike(story),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          (_liked[story.id] ?? false)
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          color: (_liked[story.id] ?? false)
+                              ? AppColors.red
+                              : AppColors.white,
+                          size: 26,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // Own-story footer — tappable "likes" and "viewed by" pills
+            // that open their respective people sheets. Hidden for
+            // stories the viewer doesn't own (RLS blocks the fetch too).
             if (_isMyStory(story))
               Positioned(
                 left: 16,
@@ -318,54 +398,66 @@ class _StoryViewerState extends State<StoryViewer>
                   child: AnimatedOpacity(
                     opacity: _paused ? 0 : 1,
                     duration: const Duration(milliseconds: 180),
-                    child: GestureDetector(
-                      onTap: () => _openViewersSheet(story),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _statPill(
+                          icon: Icons.favorite,
+                          label: () {
+                            final n = _likeCounts[story.id];
+                            if (n == null) return 'Likes…';
+                            return n == 1 ? '1 like' : '$n likes';
+                          }(),
+                          onTap: () => _openLikersSheet(story),
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(18),
+                        const SizedBox(width: 10),
+                        _statPill(
+                          icon: Icons.visibility_outlined,
+                          label: () {
+                            final n = _viewerCounts[story.id];
+                            if (n == null) return 'Viewed by…';
+                            return n == 1 ? 'Viewed by 1' : 'Viewed by $n';
+                          }(),
+                          onTap: () => _openViewersSheet(story),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.visibility_outlined,
-                              color: AppColors.white,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              () {
-                                final n = _viewerCounts[story.id];
-                                if (n == null) return 'Viewed by…';
-                                return n == 1
-                                    ? 'Viewed by 1'
-                                    : 'Viewed by $n';
-                              }(),
-                              style: AppTextStyles.labelLarge.copyWith(
-                                color: AppColors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: AppColors.white,
-                              size: 16,
-                            ),
-                          ],
-                        ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A translucent, tappable count pill used in the owner footer.
+  Widget _statPill({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppColors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppTextStyles.labelLarge.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
           ],
         ),
       ),
@@ -494,16 +586,32 @@ class _StoryViewerState extends State<StoryViewer>
   }
 }
 
-class _StoryViewersSheet extends StatefulWidget {
-  const _StoryViewersSheet({required this.storyId});
+enum _PeopleKind { viewers, likers }
+
+class _StoryPeopleSheet extends StatefulWidget {
+  const _StoryPeopleSheet({required this.storyId, required this.kind});
   final String storyId;
+  final _PeopleKind kind;
   @override
-  State<_StoryViewersSheet> createState() => _StoryViewersSheetState();
+  State<_StoryPeopleSheet> createState() => _StoryPeopleSheetState();
 }
 
-class _StoryViewersSheetState extends State<_StoryViewersSheet> {
+class _StoryPeopleSheetState extends State<_StoryPeopleSheet> {
   bool _loading = true;
   List<Map<String, dynamic>> _viewers = const [];
+
+  bool get _isLikers => widget.kind == _PeopleKind.likers;
+  IconData get _icon =>
+      _isLikers ? Icons.favorite : Icons.visibility_outlined;
+
+  String _heading() {
+    final n = _viewers.length;
+    if (_isLikers) {
+      if (_loading) return 'Likes…';
+      return n == 1 ? '1 like' : '$n likes';
+    }
+    return _loading ? 'Viewed by…' : 'Viewed by $n';
+  }
 
   @override
   void initState() {
@@ -512,7 +620,9 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
   }
 
   Future<void> _load() async {
-    final list = await FeedService.fetchStoryViewers(widget.storyId);
+    final list = _isLikers
+        ? await FeedService.fetchStoryLikers(widget.storyId)
+        : await FeedService.fetchStoryViewers(widget.storyId);
     if (!mounted) return;
     setState(() {
       _viewers = list;
@@ -547,13 +657,10 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
               child: Row(
                 children: [
-                  const Icon(Icons.visibility_outlined,
-                      color: AppColors.primaryBlue, size: 20),
+                  Icon(_icon, color: AppColors.primaryBlue, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    _loading
-                        ? 'Viewed by…'
-                        : 'Viewed by ${_viewers.length}',
+                    _heading(),
                     style: AppTextStyles.titleMedium.copyWith(
                       color: ctx.palette.text,
                       fontWeight: FontWeight.w800,
@@ -575,7 +682,7 @@ class _StoryViewersSheetState extends State<_StoryViewersSheet> {
                           child: Padding(
                             padding: const EdgeInsets.all(24),
                             child: Text(
-                              'No views yet.',
+                              _isLikers ? 'No likes yet.' : 'No views yet.',
                               style: TextStyle(color: ctx.palette.text),
                             ),
                           ),

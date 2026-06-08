@@ -80,12 +80,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
     }
   }
 
-  /// Share the product. Points everyone at the canonical Netlify
-  /// landing page — no per-record deep-link page yet.
+  /// Share the product via the product-share Edge Function so the
+  /// preview card shows the product photo (og:image).
   Future<void> _shareProduct() async {
     final product = _product;
     if (product == null) return;
-    const shareUrl = 'https://adventconnectzw.netlify.app/';
+    final shareUrl =
+        'https://eqbyvasteolqyktbqbem.functions.supabase.co/product-share?id=${product.id}';
     final text = '${product.title}\n\n'
         'For sale on Advent Connect ZW marketplace:\n$shareUrl';
     try {

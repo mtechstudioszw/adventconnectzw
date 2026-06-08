@@ -658,9 +658,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   }
 
   Future<void> _shareEvent(Event event) async {
-    // Single canonical landing page — recipients always land on the
-    // branded Netlify site to download the app.
-    const shareUrl = 'https://adventconnectzw.netlify.app/';
+    // Share the event-share Edge Function URL (not the generic landing
+    // page) so WhatsApp/Facebook render a rich preview with the event
+    // flyer as og:image. The function deep-links back into the app and
+    // falls back to a download CTA.
+    final shareUrl =
+        'https://eqbyvasteolqyktbqbem.functions.supabase.co/event-share?id=${event.id}';
     final text = '${event.title}\n\n'
         'Join me at this event on Advent Connect ZW:\n$shareUrl';
     await Share.share(text, subject: event.title);

@@ -521,7 +521,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   Future<void> _shareJob() async {
     final job = _job;
     if (job == null) return;
-    const shareUrl = 'https://adventconnectzw.netlify.app/';
+    final shareUrl =
+        'https://eqbyvasteolqyktbqbem.functions.supabase.co/job-share?id=${job.id}';
     final text = '${job.title}\n\n'
         'Job opportunity on Advent Connect ZW:\n$shareUrl';
     try {

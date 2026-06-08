@@ -29,6 +29,22 @@ class Story {
 
   bool get isExpired => !timeRemaining.isNegative ? false : true;
 
+  /// Round-trip JSON for the offline cache. Uses the same nested
+  /// `profiles` shape the API returns so [fromJson] hydrates it without
+  /// special-casing cached payloads.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'author_id': authorId,
+        'profiles': {
+          'full_name': authorName,
+          'profile_photo_url': authorPhotoUrl,
+        },
+        'media_url': mediaUrl,
+        'caption': caption,
+        'created_at': createdAt.toIso8601String(),
+        'expires_at': expiresAt.toIso8601String(),
+      };
+
   factory Story.fromJson(Map<String, dynamic> json) {
     final author = json['profiles'];
     final authorMap = author is Map<String, dynamic> ? author : null;

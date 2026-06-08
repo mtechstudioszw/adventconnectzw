@@ -259,6 +259,10 @@ class _HomeScreenState extends State<HomeScreen>
         'events': events.map((e) => e.toJson()).toList(),
         'churches': churches.map((c) => c.toJson()).toList(),
         'posts': posts.take(30).map((p) => p.toJson()).toList(),
+        // Cache stories too — testers reported the rail occasionally
+        // rendering empty on a flaky fetch until a manual refresh.
+        // Painting the last-known set first hides that gap.
+        'stories': _stories.map((s) => s.toJson()).toList(),
       });
       await CacheService.writeString('home_feed', payload);
     } catch (_) {
@@ -284,13 +288,22 @@ class _HomeScreenState extends State<HomeScreen>
                 viewerId: viewerId,
               ))
           .toList();
+      // Drop any cached stories that have since expired (24h window).
+      final stories = ((decoded['stories'] as List?) ?? const [])
+          .map((s) => Story.fromJson(s as Map<String, dynamic>))
+          .where((s) => !s.isExpired)
+          .toList();
       if (!mounted) return;
       setState(() {
         if (_events.isEmpty) _events = events;
         if (_churches.isEmpty) _churches = churches;
         if (_posts.isEmpty) _posts = posts;
+        if (_stories.isEmpty) _stories = stories;
         // Paint instantly when cache hits — no spinner.
-        if (events.isNotEmpty || churches.isNotEmpty || posts.isNotEmpty) {
+        if (events.isNotEmpty ||
+            churches.isNotEmpty ||
+            posts.isNotEmpty ||
+            stories.isNotEmpty) {
           _loading = false;
         }
       });

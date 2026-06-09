@@ -6,6 +6,7 @@ import '../../models/message_model.dart';
 import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
@@ -459,6 +460,18 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ),
               onTap: () => Navigator.pop(ctx, 'chat'),
             ),
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.darkNavy,
+                child: const Icon(Icons.link, color: AppColors.white),
+              ),
+              title: Text(
+                'Join group with link',
+                style:
+                    AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+              ),
+              onTap: () => Navigator.pop(ctx, 'join'),
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -467,9 +480,80 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (!mounted || choice == null) return;
     if (choice == 'group') {
       context.pushNamed('create_group');
+    } else if (choice == 'join') {
+      await _joinWithLink();
     } else {
       context.pushNamed('member_directory');
     }
+  }
+
+  /// Paste an invite link (or raw code) to join a group. Full tap-to-open
+  /// deep linking needs platform config; this works today.
+  Future<void> _joinWithLink() async {
+    final controller = TextEditingController();
+    final input = await showDialog<String>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        backgroundColor: context.palette.card,
+        title: const Text('Join group'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Paste invite link or code',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+            onPressed: () => Navigator.pop(dctx, controller.text.trim()),
+            child: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || input == null || input.isEmpty) return;
+    final token = _extractInviteToken(input);
+    if (token == null) {
+      _toastMsg('That doesn\'t look like a valid invite link.');
+      return;
+    }
+    try {
+      final id = await GroupService.joinViaInvite(token);
+      if (!mounted) return;
+      await _bootstrap();
+      if (!mounted) return;
+      context.pushNamed('chat', pathParameters: {'id': id});
+    } catch (_) {
+      if (mounted) {
+        _toastMsg('Could not join — the link may be invalid or expired.');
+      }
+    }
+  }
+
+  /// Accept either a full invite URL (…join.html?g=TOKEN) or a bare token.
+  String? _extractInviteToken(String input) {
+    final uri = Uri.tryParse(input);
+    final fromQuery = uri?.queryParameters['g'];
+    if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
+    if (!input.contains(' ') && !input.contains('/')) return input;
+    return null;
+  }
+
+  void _toastMsg(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.darkNavy,
+        content: Text(
+          message,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
   }
 
   @override

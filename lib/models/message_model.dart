@@ -1,3 +1,24 @@
+/// Per-user pin/mute/archive flags for a conversation (patch_058).
+class ConversationState {
+  const ConversationState({
+    this.pinned = false,
+    this.muted = false,
+    this.archived = false,
+  });
+
+  final bool pinned;
+  final bool muted;
+  final bool archived;
+
+  factory ConversationState.fromJson(Map<String, dynamic> json) {
+    return ConversationState(
+      pinned: json['pinned'] == true,
+      muted: json['muted'] == true,
+      archived: json['archived'] == true,
+    );
+  }
+}
+
 class Conversation {
   const Conversation({
     required this.id,

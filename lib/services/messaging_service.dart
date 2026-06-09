@@ -884,6 +884,47 @@ class MessagingService {
     }
   }
 
+  /// Per-user pin/mute/archive flags, keyed by conversation id. Empty
+  /// map on error so the inbox still renders with default (unflagged)
+  /// state.
+  static Future<Map<String, ConversationState>>
+      fetchConversationStates() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const {};
+    try {
+      final rows = await _client
+          .from('conversation_state')
+          .select()
+          .eq('user_id', user.id);
+      return {
+        for (final r in (rows as List))
+          (r as Map)['conversation_id'].toString():
+              ConversationState.fromJson(Map<String, dynamic>.from(r)),
+      };
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Set one or more pin/mute/archive flags for a conversation (upsert).
+  static Future<void> setConversationFlags(
+    String conversationId, {
+    bool? pinned,
+    bool? muted,
+    bool? archived,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    await _client.from('conversation_state').upsert({
+      'user_id': user.id,
+      'conversation_id': int.parse(conversationId),
+      'pinned': ?pinned,
+      'muted': ?muted,
+      'archived': ?archived,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'user_id,conversation_id');
+  }
+
   /// All messages the viewer has starred, across every chat, newest
   /// star first. Used by the Starred-messages screen.
   static Future<List<Message>> fetchStarredMessages() async {

@@ -36,6 +36,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   late final Animation<double> _slide;
 
   List<Conversation> _conversations = [];
+  Map<String, ConversationState> _convStates = const {};
   List<Story> _stories = const [];
   List<PendingFriendRequest> _friendRequests = const [];
   bool _loading = true;
@@ -158,12 +159,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         MessagingService.fetchConversations(),
         FeedService.fetchStories(),
         FeedService.fetchPendingFriendRequests(),
+        MessagingService.fetchConversationStates(),
       ]);
       if (!mounted) return;
       setState(() {
         _conversations = results[0] as List<Conversation>;
         _stories = results[1] as List<Story>;
         _friendRequests = results[2] as List<PendingFriendRequest>;
+        _convStates = results[3] as Map<String, ConversationState>;
         _loading = false;
         // Auto-route to Requests tab on first paint if the inbox is
         // empty but there are pending requests. Fixes the "chat icon
@@ -230,19 +233,39 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   /// alongside everything else). WhatsApp also fixes self-chat to a
   /// constant position.
   /// 1:1 chats (excludes groups + incoming requests). Self-chat pinned.
+  bool _isArchived(Conversation c) => _convStates[c.id]?.archived ?? false;
+  bool _isPinned(Conversation c) => _convStates[c.id]?.pinned ?? false;
+  bool _isMuted(Conversation c) => _convStates[c.id]?.muted ?? false;
+
+  /// Pinned conversations float to the top, preserving their existing
+  /// (recency) order within each group.
+  List<Conversation> _pinnedFirst(List<Conversation> list) {
+    final pinned = list.where(_isPinned).toList();
+    final rest = list.where((c) => !_isPinned(c)).toList();
+    return [...pinned, ...rest];
+  }
+
   List<Conversation> get _chats {
     final filtered = _conversations
         .where((c) =>
-            !c.isGroup && !c.isIncomingRequestFor(_currentUserId))
+            !c.isGroup &&
+            !c.isIncomingRequestFor(_currentUserId) &&
+            !_isArchived(c))
         .toList();
     final selfChats = filtered.where((c) => c.isSelfChat).toList();
-    final others = filtered.where((c) => !c.isSelfChat).toList();
+    final others = _pinnedFirst(filtered.where((c) => !c.isSelfChat).toList());
     return [...selfChats, ...others];
   }
 
-  /// Group chats the viewer belongs to.
-  List<Conversation> get _groups =>
-      _conversations.where((c) => c.isGroup).toList();
+  /// Group chats the viewer belongs to (archived ones move to Archived).
+  List<Conversation> get _groups => _pinnedFirst(
+      _conversations.where((c) => c.isGroup && !_isArchived(c)).toList());
+
+  /// Everything (1:1 or group) the viewer has archived.
+  List<Conversation> get _archived => _conversations
+      .where((c) =>
+          !c.isIncomingRequestFor(_currentUserId) && _isArchived(c))
+      .toList();
 
   List<Conversation> get _requests => _conversations
       .where((c) => !c.isGroup && c.isIncomingRequestFor(_currentUserId))
@@ -640,10 +663,16 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       case _ConversationsTab.status:
         return _buildStatusTab();
       case _ConversationsTab.archived:
-        return _buildEmptyState(
-          title: 'No archived chats',
-          body: 'Chats you archive will be kept here, out of your main list.',
-        );
+        final archived = _archived;
+        if (archived.isEmpty) {
+          return _buildEmptyState(
+            title: 'No archived chats',
+            body:
+                'Long-press a chat and tap Archive to keep it here, out of '
+                'your main list.',
+          );
+        }
+        return _conversationListView(archived);
     }
   }
 
@@ -801,6 +830,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               key: ValueKey(c.id),
               conversation: c,
               isLastFromMe: c.lastSenderId == _currentUserId,
+              pinned: _isPinned(c),
+              muted: _isMuted(c),
               onTap: () => _openChat(c),
               onLongPress: () => _openConversationActions(c),
             );
@@ -813,6 +844,47 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   /// WhatsApp-style long-press menu on an inbox tile. Bottom sheet with
   /// Mark as read / Delete — same pattern (and same set of actions) as
   /// the chat-screen overflow menu uses inside the conversation.
+  /// Optimistically flip a pin/mute/archive flag, then persist. On
+  /// failure the next _bootstrap reconciles from the server.
+  Future<void> _applyConversationFlag(
+    Conversation c, {
+    bool? pinned,
+    bool? muted,
+    bool? archived,
+  }) async {
+    final current = _convStates[c.id] ?? const ConversationState();
+    setState(() {
+      _convStates = {
+        ..._convStates,
+        c.id: ConversationState(
+          pinned: pinned ?? current.pinned,
+          muted: muted ?? current.muted,
+          archived: archived ?? current.archived,
+        ),
+      };
+    });
+    try {
+      await MessagingService.setConversationFlags(
+        c.id,
+        pinned: pinned,
+        muted: muted,
+        archived: archived,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.red,
+            content: Text(
+              'Could not update. Try again.',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _openConversationActions(Conversation c) async {
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -832,6 +904,35 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     color: AppColors.primaryBlue),
                 title: const Text('Mark as read'),
                 onTap: () => Navigator.of(sheetCtx).pop('read'),
+              ),
+              ListTile(
+                leading: Transform.rotate(
+                  angle: 0.785398,
+                  child: const Icon(Icons.push_pin_outlined,
+                      color: AppColors.primaryBlue),
+                ),
+                title: Text(_isPinned(c) ? 'Unpin' : 'Pin to top'),
+                onTap: () => Navigator.of(sheetCtx).pop('pin'),
+              ),
+              ListTile(
+                leading: Icon(
+                  _isMuted(c)
+                      ? Icons.volume_up_outlined
+                      : Icons.volume_off_outlined,
+                  color: AppColors.primaryBlue,
+                ),
+                title: Text(_isMuted(c) ? 'Unmute' : 'Mute notifications'),
+                onTap: () => Navigator.of(sheetCtx).pop('mute'),
+              ),
+              ListTile(
+                leading: Icon(
+                  _isArchived(c)
+                      ? Icons.unarchive_outlined
+                      : Icons.archive_outlined,
+                  color: AppColors.primaryBlue,
+                ),
+                title: Text(_isArchived(c) ? 'Unarchive' : 'Archive'),
+                onTap: () => Navigator.of(sheetCtx).pop('archive'),
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline,
@@ -858,6 +959,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         await MessagingService.markConversationRead(c.id);
         if (!mounted) return;
         await _bootstrap();
+        break;
+      case 'pin':
+        await _applyConversationFlag(c, pinned: !_isPinned(c));
+        break;
+      case 'mute':
+        await _applyConversationFlag(c, muted: !_isMuted(c));
+        break;
+      case 'archive':
+        await _applyConversationFlag(c, archived: !_isArchived(c));
         break;
       case 'delete':
         final confirmed = await showDialog<bool>(
@@ -1043,12 +1153,16 @@ class _ConversationTile extends StatelessWidget {
     required this.isLastFromMe,
     required this.onTap,
     this.onLongPress,
+    this.pinned = false,
+    this.muted = false,
   });
 
   final Conversation conversation;
   final bool isLastFromMe;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final bool pinned;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
@@ -1147,6 +1261,14 @@ class _ConversationTile extends StatelessWidget {
                             ),
                           ),
                         ],
+                        if (muted) ...[
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.volume_off_outlined,
+                            size: 14,
+                            color: context.palette.textMuted,
+                          ),
+                        ],
                         const SizedBox(width: 6),
                         Text(
                           _shortTime(conversation.lastMessageAt),
@@ -1208,6 +1330,17 @@ class _ConversationTile extends StatelessWidget {
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w800,
                               ),
+                            ),
+                          ),
+                        ],
+                        if (pinned) ...[
+                          const SizedBox(width: 6),
+                          Transform.rotate(
+                            angle: 0.785398, // 45° — WhatsApp pin look
+                            child: Icon(
+                              Icons.push_pin,
+                              size: 14,
+                              color: context.palette.textMuted,
                             ),
                           ),
                         ],

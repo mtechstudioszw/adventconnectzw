@@ -172,6 +172,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
       if (!mounted) return;
       ChatLaunchIntent.set(
         draft: 'Hi, is "${product.title}" still available?',
+        productId: product.id,
         productImageUrl: product.imageUrls.isNotEmpty
             ? product.imageUrls.first
             : null,

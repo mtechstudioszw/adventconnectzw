@@ -421,6 +421,7 @@ class _ChatScreenState extends State<ChatScreen>
   // #17: product preview shown above the composer when the chat was
   // opened from a marketplace product. Dismissible; cleared once the
   // first message is sent.
+  String? _productPreviewId;
   String? _productPreviewImage;
   String? _productPreviewTitle;
   String? _productPreviewPrice;
@@ -449,6 +450,7 @@ class _ChatScreenState extends State<ChatScreen>
         _inputController.text = draft;
         _hasText = true;
       }
+      _productPreviewId = ChatLaunchIntent.productId;
       _productPreviewImage = ChatLaunchIntent.productImageUrl;
       _productPreviewTitle = ChatLaunchIntent.productTitle;
       _productPreviewPrice = ChatLaunchIntent.productPrice;
@@ -1179,25 +1181,29 @@ class _ChatScreenState extends State<ChatScreen>
 
     final replyId = _replyTo?.id;
 
-    // If the chat was opened from a marketplace product, fold the
-    // product reference INTO the first message so the context persists
-    // in the thread. Previously the "Asking about X" chip was a local
-    // hint dropped on send, so the seller never learned which item the
-    // buyer meant and the tag vanished. (A richer product-card bubble
-    // with the thumbnail lands in the chat overhaul.)
-    final productTitle = _productPreviewTitle;
-    final productPrice = (_productPreviewPrice ?? '').trim();
-    final outgoing = productTitle == null
-        ? text
-        : '🛍️ Re: $productTitle'
-            '${productPrice.isNotEmpty ? ' ($productPrice)' : ''}\n$text';
+    // If the chat was opened from a marketplace product, send the FIRST
+    // message as a product card (message_type='product' + meta) so the
+    // thumbnail/title/price ride along and the seller can tap through to
+    // the listing — instead of folding it into plain text (which dropped
+    // the image).
+    final outgoing = text;
+    final hasProduct = (_productPreviewTitle ?? '').isNotEmpty ||
+        (_productPreviewImage ?? '').isNotEmpty;
+    final Map<String, dynamic>? productMeta = hasProduct
+        ? {
+            if ((_productPreviewId ?? '').isNotEmpty)
+              'product_id': _productPreviewId,
+            if ((_productPreviewImage ?? '').isNotEmpty)
+              'image': _productPreviewImage,
+            if ((_productPreviewTitle ?? '').isNotEmpty)
+              'title': _productPreviewTitle,
+            if ((_productPreviewPrice ?? '').isNotEmpty)
+              'price': _productPreviewPrice,
+          }
+        : null;
+    final messageType = hasProduct ? 'product' : 'text';
 
-    // Optimistic UI — show the bubble immediately in the _pending
-    // list. Use _optimisticTimestamp() so the new bubble is GUARANTEED
-    // to sort after everything else on screen (previously the bubble
-    // could briefly render above older messages if client/server
-    // clocks disagreed by a few hundred ms — what the user saw as
-    // "voice note jumps from top to bottom").
+    // Optimistic UI — show the bubble immediately in the _pending list.
     final tempId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     final optimistic = Message(
       id: tempId,
@@ -1206,6 +1212,8 @@ class _ChatScreenState extends State<ChatScreen>
       senderName: 'You',
       content: outgoing,
       createdAt: _optimisticTimestamp(),
+      messageType: messageType,
+      meta: productMeta,
     );
     setState(() {
       _pending.add(optimistic);
@@ -1218,6 +1226,7 @@ class _ChatScreenState extends State<ChatScreen>
       // after send, the toolbar reverts to mic immediately.
       _hasText = false;
       // First message sent — drop the product preview chip + reply chip.
+      _productPreviewId = null;
       _productPreviewImage = null;
       _productPreviewTitle = null;
       _productPreviewPrice = null;
@@ -1231,6 +1240,8 @@ class _ChatScreenState extends State<ChatScreen>
         conversationId: widget.conversationId,
         content: outgoing,
         replyToId: replyId,
+        messageType: messageType,
+        meta: productMeta,
       );
       // Replace the optimistic entry with the canonical message in
       // place. The stream tick that follows dedupes by id (now that
@@ -2846,6 +2857,9 @@ class _MessageBubble extends StatelessWidget {
         (message.mediaUrl ?? '').isNotEmpty) {
       return _ImageBubble(message: message, isMine: isMine);
     }
+    if (message.messageType == 'product' && message.meta != null) {
+      return _ProductBubble(message: message, isMine: isMine);
+    }
     final maxWidth = MediaQuery.of(context).size.width * 0.74;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -3375,6 +3389,130 @@ class _SwipeToReplyState extends State<_SwipeToReply> {
             child: widget.child,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A product card sent into the chat (image + title + price + the
+/// buyer's message). Tapping the card opens the listing.
+class _ProductBubble extends StatelessWidget {
+  const _ProductBubble({required this.message, required this.isMine});
+  final Message message;
+  final bool isMine;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = message.meta ?? const {};
+    final id = (meta['product_id'] ?? '').toString();
+    final image = (meta['image'] ?? '').toString();
+    final title = (meta['title'] ?? 'Product').toString();
+    final price = (meta['price'] ?? '').toString();
+    final maxWidth = MediaQuery.of(context).size.width * 0.74;
+    final fg = isMine ? AppColors.white : context.palette.text;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          gradient: isMine ? AppColors.primaryGradient : null,
+          color: isMine ? null : context.palette.card,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMine ? 18 : 4),
+            bottomRight: Radius.circular(isMine ? 4 : 18),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isMine
+                  ? AppColors.primaryBlue.withValues(alpha: 0.20)
+                  : Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Tappable product card.
+            GestureDetector(
+              onTap: id.isEmpty
+                  ? null
+                  : () => context.pushNamed('product_details',
+                      pathParameters: {'id': id}),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: image.isEmpty
+                          ? Container(
+                              color: context.palette.cardMuted,
+                              child: Icon(Icons.shopping_bag_outlined,
+                                  color: context.palette.textMuted),
+                            )
+                          : CachedImage(image, fit: BoxFit.cover),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: context.palette.text,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            if (price.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                price,
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.primaryBlue,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Icon(Icons.chevron_right,
+                          size: 18, color: context.palette.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (message.content.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                child: Text(
+                  message.content,
+                  style: AppTextStyles.bodyMedium.copyWith(color: fg),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

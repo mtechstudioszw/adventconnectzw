@@ -18,6 +18,7 @@ class ChatLaunchIntent {
   ChatLaunchIntent._();
 
   static String? draft;
+  static String? productId;
   static String? productImageUrl;
   static String? productTitle;
   static String? productPrice;
@@ -27,11 +28,13 @@ class ChatLaunchIntent {
 
   static void set({
     String? draft,
+    String? productId,
     String? productImageUrl,
     String? productTitle,
     String? productPrice,
   }) {
     ChatLaunchIntent.draft = draft;
+    ChatLaunchIntent.productId = productId;
     ChatLaunchIntent.productImageUrl = productImageUrl;
     ChatLaunchIntent.productTitle = productTitle;
     ChatLaunchIntent.productPrice = productPrice;
@@ -39,6 +42,7 @@ class ChatLaunchIntent {
 
   static void clear() {
     draft = null;
+    productId = null;
     productImageUrl = null;
     productTitle = null;
     productPrice = null;
@@ -641,6 +645,8 @@ class MessagingService {
     required String content,
     String? replyToId,
     bool forwarded = false,
+    String messageType = 'text',
+    Map<String, dynamic>? meta,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -651,6 +657,8 @@ class MessagingService {
       'conversation_id': conversationId,
       'sender_id': user.id,
       'content': body,
+      if (messageType != 'text') 'message_type': messageType,
+      'meta': ?meta,
       if (replyToId != null) 'reply_to_id': int.tryParse(replyToId),
       if (forwarded) 'forwarded': true,
     };

@@ -186,6 +186,7 @@ class Message {
     this.forwarded = false,
     this.editedAt,
     this.isDeleted = false,
+    this.meta,
   });
 
   final String id;
@@ -210,6 +211,9 @@ class Message {
   final DateTime? editedAt;
   // Soft-deleted "This message was deleted" tombstone (patch_063).
   final bool isDeleted;
+  // Arbitrary message metadata (patch_064). For message_type='product':
+  // {product_id, image, title, price}.
+  final Map<String, dynamic>? meta;
 
   bool get isEdited => editedAt != null;
 
@@ -231,6 +235,7 @@ class Message {
       forwarded: forwarded,
       editedAt: editedAt,
       isDeleted: isDeleted ?? this.isDeleted,
+      meta: meta,
     );
   }
 
@@ -259,6 +264,9 @@ class Message {
           ? null
           : DateTime.tryParse(json['edited_at'].toString()),
       isDeleted: json['is_deleted'] == true,
+      meta: json['meta'] is Map
+          ? Map<String, dynamic>.from(json['meta'] as Map)
+          : null,
     );
   }
 }

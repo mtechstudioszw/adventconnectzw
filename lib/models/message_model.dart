@@ -161,6 +161,9 @@ class Message {
     this.messageType = 'text',
     this.mediaUrl,
     this.mediaDurationSeconds,
+    this.replyToId,
+    this.forwarded = false,
+    this.editedAt,
   });
 
   final String id;
@@ -179,6 +182,12 @@ class Message {
   final String messageType;
   final String? mediaUrl;
   final int? mediaDurationSeconds;
+  // Phase 4: reply/quote, forward label, edit indicator.
+  final String? replyToId;
+  final bool forwarded;
+  final DateTime? editedAt;
+
+  bool get isEdited => editedAt != null;
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
@@ -199,6 +208,11 @@ class Message {
       messageType: (json['message_type'] ?? 'text') as String,
       mediaUrl: json['media_url'] as String?,
       mediaDurationSeconds: (json['media_duration_seconds'] as num?)?.toInt(),
+      replyToId: json['reply_to_id']?.toString(),
+      forwarded: json['forwarded'] == true,
+      editedAt: json['edited_at'] == null
+          ? null
+          : DateTime.tryParse(json['edited_at'].toString()),
     );
   }
 }

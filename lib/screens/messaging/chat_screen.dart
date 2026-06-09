@@ -12,6 +12,7 @@ import '../../models/friendship_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/gallery_service.dart';
 import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
@@ -124,7 +125,11 @@ class _ChatScreenState extends State<ChatScreen>
   /// the affordance honest).
   Future<void> _showMessageActions(Message m, bool isMine) async {
     HapticFeedback.selectionClick();
-    final hasText = (m.content.trim().isNotEmpty) && m.messageType != 'voice';
+    final isImage =
+        m.messageType == 'image' && (m.mediaUrl ?? '').isNotEmpty;
+    final hasText = m.content.trim().isNotEmpty &&
+        m.messageType != 'voice' &&
+        !isImage;
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: context.palette.sheet,
@@ -146,6 +151,28 @@ class _ChatScreenState extends State<ChatScreen>
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
+              // Quick-reaction row.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  for (final e in _reactionEmojis)
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx, 'react:$e'),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Text(e, style: const TextStyle(fontSize: 26)),
+                      ),
+                    ),
+                ],
+              ),
+              const Divider(height: 14),
+              ListTile(
+                leading: const Icon(Icons.reply, color: AppColors.primaryBlue),
+                title: Text('Reply',
+                    style: AppTextStyles.bodyLarge
+                        .copyWith(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, 'reply'),
+              ),
               if (hasText)
                 ListTile(
                   leading: const Icon(Icons.copy_outlined,
@@ -154,6 +181,36 @@ class _ChatScreenState extends State<ChatScreen>
                       style: AppTextStyles.bodyLarge
                           .copyWith(fontWeight: FontWeight.w600)),
                   onTap: () => Navigator.pop(ctx, 'copy'),
+                ),
+              ListTile(
+                leading: Icon(
+                  _starredIds.contains(m.id) ? Icons.star : Icons.star_border,
+                  color: AppColors.goldAccent,
+                ),
+                title: Text(
+                  _starredIds.contains(m.id) ? 'Unstar' : 'Star',
+                  style: AppTextStyles.bodyLarge
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+                onTap: () => Navigator.pop(ctx, 'star'),
+              ),
+              if (isImage)
+                ListTile(
+                  leading: const Icon(Icons.download_outlined,
+                      color: AppColors.primaryBlue),
+                  title: Text('Save to gallery',
+                      style: AppTextStyles.bodyLarge
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  onTap: () => Navigator.pop(ctx, 'save'),
+                ),
+              if (isMine && hasText)
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined,
+                      color: AppColors.primaryBlue),
+                  title: Text('Edit',
+                      style: AppTextStyles.bodyLarge
+                          .copyWith(fontWeight: FontWeight.w600)),
+                  onTap: () => Navigator.pop(ctx, 'edit'),
                 ),
               if (isMine)
                 ListTile(
@@ -177,7 +234,19 @@ class _ChatScreenState extends State<ChatScreen>
       ),
     );
     if (!mounted || action == null) return;
+    if (action.startsWith('react:')) {
+      await _react(m, action.substring(6));
+      return;
+    }
     switch (action) {
+      case 'reply':
+        _startReply(m);
+      case 'star':
+        await _toggleStar(m);
+      case 'edit':
+        _startEdit(m);
+      case 'save':
+        await _saveImageToGallery(m);
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.content));
         if (!mounted) return;
@@ -283,6 +352,13 @@ class _ChatScreenState extends State<ChatScreen>
   final Map<String, GroupMember> _memberById = {};
   bool get _isGroup => _conversation?.isGroup ?? false;
 
+  // Phase 4 message actions.
+  Message? _replyTo; // composing a reply to this message
+  Message? _editing; // editing this message instead of sending new
+  Set<String> _starredIds = <String>{};
+  Map<String, Map<String, int>> _reactions = const {};
+  static const List<String> _reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
   // #17: product preview shown above the composer when the chat was
   // opened from a marketplace product. Dismissible; cleared once the
   // first message is sent.
@@ -360,6 +436,92 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _wirePresence();
     _maybeLoadGroupMembers();
+  }
+
+  Future<void> _loadReactionsAndStars() async {
+    final results = await Future.wait([
+      MessagingService.fetchReactions(widget.conversationId),
+      MessagingService.fetchStarredIds(widget.conversationId),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _reactions = results[0] as Map<String, Map<String, int>>;
+      _starredIds = results[1] as Set<String>;
+    });
+  }
+
+  void _startReply(Message m) {
+    setState(() {
+      _replyTo = m;
+      _editing = null;
+    });
+  }
+
+  void _startEdit(Message m) {
+    setState(() {
+      _editing = m;
+      _replyTo = null;
+      _inputController.text = m.content;
+      _hasText = m.content.trim().isNotEmpty;
+    });
+  }
+
+  void _cancelComposeExtras() {
+    setState(() {
+      _replyTo = null;
+      if (_editing != null) {
+        _editing = null;
+        _inputController.clear();
+        _hasText = false;
+      }
+    });
+  }
+
+  Future<void> _toggleStar(Message m) async {
+    final starred = _starredIds.contains(m.id);
+    setState(() {
+      if (starred) {
+        _starredIds.remove(m.id);
+      } else {
+        _starredIds.add(m.id);
+      }
+    });
+    await MessagingService.toggleStar(m.id, starred: starred);
+  }
+
+  Future<void> _react(Message m, String emoji) async {
+    await MessagingService.toggleReaction(m.id, emoji);
+    _loadReactionsAndStars();
+  }
+
+  Future<void> _saveImageToGallery(Message m) async {
+    final media = m.mediaUrl ?? '';
+    if (media.isEmpty) return;
+    try {
+      // Remote images live in the private bucket — resolve a signed URL.
+      final url = media.startsWith('/')
+          ? media
+          : await MessagingService.signedChatMediaUrl(media);
+      final ok = await GalleryService.saveImageFromUrl(url);
+      if (!mounted) return;
+      _toast(ok ? 'Saved to gallery.' : 'Could not save the image.');
+    } catch (_) {
+      if (mounted) _toast('Could not save the image.');
+    }
+  }
+
+  /// Jump to the original message a reply quotes (if it's loaded).
+  void _scrollToMessage(String messageId) {
+    final idx = _messages.indexWhere((x) => x.id == messageId);
+    if (idx < 0 || !_scrollController.hasClients) return;
+    // Approximate offset; good enough to bring it into view.
+    final target = (idx / _messages.length) *
+        _scrollController.position.maxScrollExtent;
+    _scrollController.animateTo(
+      target.clamp(0.0, _scrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
 
   Future<void> _maybeLoadGroupMembers() async {
@@ -542,6 +704,7 @@ class _ChatScreenState extends State<ChatScreen>
         _loading = false;
       });
       _scrollToBottom();
+      _loadReactionsAndStars();
       // Mark anything they sent us as read. Awaited (not fire-and-
       // forget) so when the user pops back to the inbox the badge
       // refresh sees the new state instead of the pre-read snapshot —
@@ -826,6 +989,26 @@ class _ChatScreenState extends State<ChatScreen>
     if (text.isEmpty || _sending) return;
     final me = AuthService.currentUser?.id ?? '';
 
+    // Edit mode — update the existing message instead of sending a new
+    // one. The realtime stream echoes the UPDATE and refreshes the
+    // bubble (with its "edited" label).
+    final editing = _editing;
+    if (editing != null) {
+      setState(() {
+        _editing = null;
+        _hasText = false;
+      });
+      _inputController.clear();
+      try {
+        await MessagingService.editMessage(editing.id, text);
+      } catch (_) {
+        if (mounted) _toast('Could not edit the message.');
+      }
+      return;
+    }
+
+    final replyId = _replyTo?.id;
+
     // If the chat was opened from a marketplace product, fold the
     // product reference INTO the first message so the context persists
     // in the thread. Previously the "Asking about X" chip was a local
@@ -864,10 +1047,11 @@ class _ChatScreenState extends State<ChatScreen>
       // the user reopened the chat. WhatsApp/Telegram parity:
       // after send, the toolbar reverts to mic immediately.
       _hasText = false;
-      // First message sent — drop the product preview chip.
+      // First message sent — drop the product preview chip + reply chip.
       _productPreviewImage = null;
       _productPreviewTitle = null;
       _productPreviewPrice = null;
+      _replyTo = null;
     });
     _inputController.clear();
     _scrollToBottom();
@@ -876,6 +1060,7 @@ class _ChatScreenState extends State<ChatScreen>
       final canonical = await MessagingService.sendMessage(
         conversationId: widget.conversationId,
         content: outgoing,
+        replyToId: replyId,
       );
       // Replace the optimistic entry with the canonical message in
       // place. The stream tick that follows dedupes by id (now that
@@ -1142,6 +1327,100 @@ class _ChatScreenState extends State<ChatScreen>
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Quoted preview shown above a reply bubble; tap jumps to the original.
+  Widget _buildQuotedPreview(Message m, bool isMine) {
+    Message? original;
+    for (final x in _messages) {
+      if (x.id == m.replyToId) {
+        original = x;
+        break;
+      }
+    }
+    final me = AuthService.currentUser?.id;
+    final who = original == null
+        ? 'Message'
+        : (original.senderId == me
+            ? 'You'
+            : _memberById[original.senderId]?.fullName ??
+                _conversation?.otherUserName ??
+                'Message');
+    return GestureDetector(
+      onTap: m.replyToId == null ? null : () => _scrollToMessage(m.replyToId!),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 3),
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.66,
+        ),
+        decoration: BoxDecoration(
+          color: context.palette.cardMuted,
+          borderRadius: BorderRadius.circular(10),
+          border: const Border(
+            left: BorderSide(color: AppColors.primaryBlue, width: 3),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              who,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              original?.content ?? 'Original message unavailable',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Reaction chips under a bubble. [_reactions] maps message id to a
+  /// map of `emoji -> count` plus a `_mine_` prefixed key for own picks.
+  Widget _buildReactionChips(Message m) {
+    final data = _reactions[m.id] ?? const {};
+    final entries = data.entries
+        .where((e) => !e.key.startsWith('_mine_'))
+        .toList();
+    if (entries.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 2),
+      child: Wrap(
+        spacing: 4,
+        children: [
+          for (final e in entries)
+            GestureDetector(
+              onTap: () => _react(m, e.key),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: data.containsKey('_mine_${e.key}')
+                      ? AppColors.primaryBlue.withValues(alpha: 0.15)
+                      : context.palette.cardMuted,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.palette.divider),
+                ),
+                child: Text(
+                  '${e.key} ${e.value}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1617,8 +1896,22 @@ class _ChatScreenState extends State<ChatScreen>
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onLongPress: () => _showMessageActions(m, isMine),
-                  child: _MessageBubble(message: m, isMine: isMine),
+                  // Swipe the bubble to the right to reply (WhatsApp).
+                  onHorizontalDragEnd: (d) {
+                    if ((d.primaryVelocity ?? 0) > 120) _startReply(m);
+                  },
+                  child: Column(
+                    crossAxisAlignment: isMine
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      if (m.replyToId != null) _buildQuotedPreview(m, isMine),
+                      _MessageBubble(message: m, isMine: isMine),
+                    ],
+                  ),
                 ),
+                if ((_reactions[m.id] ?? const {}).isNotEmpty)
+                  _buildReactionChips(m),
                 if (showStamp)
                   Padding(
                     padding: EdgeInsets.fromLTRB(
@@ -1879,10 +2172,68 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  Widget _buildReplyEditPreview() {
+    final editing = _editing != null;
+    final m = _editing ?? _replyTo!;
+    final me = AuthService.currentUser?.id;
+    final who = editing
+        ? 'Editing message'
+        : (m.senderId == me
+            ? 'Replying to yourself'
+            : 'Replying to ${_memberById[m.senderId]?.fullName ?? _conversation?.otherUserName ?? 'message'}');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: context.palette.cardMuted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(color: AppColors.primaryBlue, width: 3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(editing ? Icons.edit_outlined : Icons.reply,
+              size: 16, color: AppColors.primaryBlue),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  who,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  m.content,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close, size: 18, color: context.palette.textMuted),
+            onPressed: _cancelComposeExtras,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildComposeBar() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (_replyTo != null || _editing != null) _buildReplyEditPreview(),
         if (_productPreviewTitle != null || _productPreviewImage != null)
           _buildProductPreview(),
         Row(
@@ -2203,13 +2554,56 @@ class _MessageBubble extends StatelessWidget {
             ),
           ],
         ),
-        child: Text(
-          message.content,
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: isMine ? AppColors.white : context.palette.text,
-            fontSize: 14.5,
-            height: 1.35,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message.forwarded)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.shortcut,
+                        size: 13,
+                        color: (isMine ? AppColors.white : context.palette.text)
+                            .withValues(alpha: 0.6)),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Forwarded',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color:
+                            (isMine ? AppColors.white : context.palette.text)
+                                .withValues(alpha: 0.6),
+                        fontStyle: FontStyle.italic,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Text(
+              message.content,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: isMine ? AppColors.white : context.palette.text,
+                fontSize: 14.5,
+                height: 1.35,
+              ),
+            ),
+            if (message.isEdited)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'edited',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: (isMine ? AppColors.white : context.palette.text)
+                        .withValues(alpha: 0.55),
+                    fontSize: 9.5,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

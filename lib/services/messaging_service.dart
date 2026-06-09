@@ -612,6 +612,8 @@ class MessagingService {
   static Future<Message> sendMessage({
     required String conversationId,
     required String content,
+    String? replyToId,
+    bool forwarded = false,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -622,6 +624,8 @@ class MessagingService {
       'conversation_id': conversationId,
       'sender_id': user.id,
       'content': body,
+      if (replyToId != null) 'reply_to_id': int.tryParse(replyToId),
+      if (forwarded) 'forwarded': true,
     };
 
     // Offline path — queue and surface an OutboxQueuedException so the
@@ -792,6 +796,107 @@ class MessagingService {
   /// to the other party so the bubble disappears on their side too.
   static Future<void> deleteMessage(String messageId) async {
     await _client.from(_messagesTable).delete().eq('id', messageId);
+  }
+
+  /// Edit a sent message's text (sender only — enforced by RLS). Stamps
+  /// edited_at so the UI can show an "edited" label.
+  static Future<void> editMessage(String messageId, String newContent) async {
+    await _client.from(_messagesTable).update({
+      'content': newContent.trim(),
+      'edited_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', messageId);
+  }
+
+  // ----- Reactions (patch_056) ---------------------------------------
+  /// Set (or replace) the current user's reaction on a message. Passing
+  /// the same emoji that's already set removes it (toggle).
+  static Future<void> toggleReaction(String messageId, String emoji) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    final id = int.tryParse(messageId);
+    if (id == null) return;
+    final existing = await _client
+        .from('message_reactions')
+        .select('emoji')
+        .eq('message_id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+    if (existing != null && existing['emoji'] == emoji) {
+      await _client
+          .from('message_reactions')
+          .delete()
+          .eq('message_id', id)
+          .eq('user_id', user.id);
+    } else {
+      await _client.from('message_reactions').upsert({
+        'message_id': id,
+        'user_id': user.id,
+        'emoji': emoji,
+      });
+    }
+  }
+
+  /// All reactions for a conversation, grouped by message id →
+  /// {emoji: count} plus the viewer's own emoji under key '_mine'.
+  static Future<Map<String, Map<String, int>>> fetchReactions(
+    String conversationId,
+  ) async {
+    final user = _client.auth.currentUser;
+    try {
+      final rows = await _client
+          .from('message_reactions')
+          .select('message_id, user_id, emoji, messages!inner(conversation_id)')
+          .eq('messages.conversation_id', int.parse(conversationId));
+      final out = <String, Map<String, int>>{};
+      for (final r in rows as List) {
+        final map = r as Map<String, dynamic>;
+        final mid = map['message_id'].toString();
+        final emoji = map['emoji'].toString();
+        final byMsg = out.putIfAbsent(mid, () => <String, int>{});
+        byMsg[emoji] = (byMsg[emoji] ?? 0) + 1;
+        if (user != null && map['user_id'].toString() == user.id) {
+          byMsg['_mine_$emoji'] = 1;
+        }
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  // ----- Starred messages (patch_056) --------------------------------
+  static Future<void> toggleStar(String messageId, {required bool starred}) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    final id = int.tryParse(messageId);
+    if (id == null) return;
+    if (starred) {
+      await _client
+          .from('starred_messages')
+          .delete()
+          .eq('message_id', id)
+          .eq('user_id', user.id);
+    } else {
+      await _client.from('starred_messages').upsert({
+        'message_id': id,
+        'user_id': user.id,
+      });
+    }
+  }
+
+  /// The set of message ids the viewer has starred in a conversation.
+  static Future<Set<String>> fetchStarredIds(String conversationId) async {
+    try {
+      final rows = await _client
+          .from('starred_messages')
+          .select('message_id, messages!inner(conversation_id)')
+          .eq('messages.conversation_id', int.parse(conversationId));
+      return (rows as List)
+          .map((r) => (r as Map)['message_id'].toString())
+          .toSet();
+    } catch (_) {
+      return <String>{};
+    }
   }
 
   static Future<void> markMessagesDelivered(List<String> messageIds) async {

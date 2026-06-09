@@ -527,6 +527,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 onSelected: (v) {
                   if (v == 'self') _openSelfChat();
                   if (v == 'privacy') context.pushNamed('chat_privacy');
+                  if (v == 'starred') context.pushNamed('starred_messages');
                 },
                 itemBuilder: (context) => const [
                   PopupMenuItem(
@@ -536,6 +537,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.bookmark_outline),
                       title: Text('Notes to self'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'starred',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.star_border),
+                      title: Text('Starred messages'),
                     ),
                   ),
                   PopupMenuItem(

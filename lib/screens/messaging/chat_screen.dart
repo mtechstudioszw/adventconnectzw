@@ -173,6 +173,14 @@ class _ChatScreenState extends State<ChatScreen>
                         .copyWith(fontWeight: FontWeight.w600)),
                 onTap: () => Navigator.pop(ctx, 'reply'),
               ),
+              ListTile(
+                leading:
+                    const Icon(Icons.shortcut, color: AppColors.primaryBlue),
+                title: Text('Forward',
+                    style: AppTextStyles.bodyLarge
+                        .copyWith(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, 'forward'),
+              ),
               if (hasText)
                 ListTile(
                   leading: const Icon(Icons.copy_outlined,
@@ -247,6 +255,8 @@ class _ChatScreenState extends State<ChatScreen>
         _startEdit(m);
       case 'save':
         await _saveImageToGallery(m);
+      case 'forward':
+        await _forwardMessage(m);
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.content));
         if (!mounted) return;
@@ -492,6 +502,78 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _react(Message m, String emoji) async {
     await MessagingService.toggleReaction(m.id, emoji);
     _loadReactionsAndStars();
+  }
+
+  /// Forward a (text) message: pick a destination chat, then re-send the
+  /// content with the "Forwarded" flag.
+  Future<void> _forwardMessage(Message m) async {
+    final convos = await MessagingService.fetchConversations();
+    if (!mounted) return;
+    final targetId = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (ctx, controller) => Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ctx.palette.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Forward to…',
+                style: AppTextStyles.titleMedium
+                    .copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: controller,
+                itemCount: convos.length,
+                itemBuilder: (context, i) {
+                  final c = convos[i];
+                  return ListTile(
+                    leading: _Avatar(
+                      name: c.otherUserName,
+                      size: 40,
+                      photoUrl: c.otherUserPhotoUrl,
+                    ),
+                    title: Text(c.otherUserName,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    onTap: () => Navigator.pop(ctx, c.id),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || targetId == null) return;
+    try {
+      await MessagingService.forwardMessage(
+        targetConversationId: targetId,
+        original: m,
+      );
+      if (!mounted) return;
+      _toast('Forwarded.');
+    } catch (_) {
+      if (mounted) _toast('Could not forward.');
+    }
   }
 
   Future<void> _saveImageToGallery(Message m) async {

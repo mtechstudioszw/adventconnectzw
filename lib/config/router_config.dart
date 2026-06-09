@@ -54,6 +54,7 @@ import '../screens/messaging/chat_screen.dart';
 import '../screens/messaging/conversations_screen.dart';
 import '../screens/messaging/create_group_screen.dart';
 import '../screens/messaging/group_info_screen.dart';
+import '../screens/messaging/starred_messages_screen.dart';
 import '../screens/news/advent_news_details_screen.dart';
 import '../screens/news/advent_news_screen.dart';
 import '../screens/news/post_advent_news_screen.dart';
@@ -403,6 +404,11 @@ final GoRouter appRouter = GoRouter(
           path: 'new-group',
           name: 'create_group',
           builder: (context, state) => const CreateGroupScreen(),
+        ),
+        GoRoute(
+          path: 'starred',
+          name: 'starred_messages',
+          builder: (context, state) => const StarredMessagesScreen(),
         ),
         GoRoute(
           path: ':id',

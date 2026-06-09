@@ -884,6 +884,26 @@ class MessagingService {
     }
   }
 
+  /// All messages the viewer has starred, across every chat, newest
+  /// star first. Used by the Starred-messages screen.
+  static Future<List<Message>> fetchStarredMessages() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const [];
+    try {
+      final rows = await _client
+          .from('starred_messages')
+          .select('created_at, messages!inner(*)')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+      return (rows as List)
+          .map((r) => Message.fromJson(
+              ((r as Map)['messages']) as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// The set of message ids the viewer has starred in a conversation.
   static Future<Set<String>> fetchStarredIds(String conversationId) async {
     try {
@@ -1145,6 +1165,59 @@ class MessagingService {
     }).eq('id', conversationId);
     AnalyticsService.messageSent(source: 'image');
     return message;
+  }
+
+  /// Forward a message to another conversation. Text re-sends the
+  /// content; image/voice copy the underlying storage object into the
+  /// target chat's folder (so the target's RLS lets its members read it)
+  /// and insert a fresh media message. All marked forwarded=true.
+  static Future<void> forwardMessage({
+    required String targetConversationId,
+    required Message original,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to forward.');
+    }
+    final type = original.messageType;
+    final src = original.mediaUrl ?? '';
+    if ((type == 'image' || type == 'voice') && src.isNotEmpty) {
+      final bucket = type == 'image' ? _chatMediaBucket : _voiceBucket;
+      final ext = src.contains('.')
+          ? src.split('.').last
+          : (type == 'image' ? 'jpg' : 'm4a');
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final dest = '$targetConversationId/${user.id}/$ts.$ext';
+      await _client.storage.from(bucket).copy(src, dest);
+      final content = type == 'image' ? '📷 Photo' : '🎙️ Voice note';
+      final response = await _client
+          .from(_messagesTable)
+          .insert({
+            'conversation_id': targetConversationId,
+            'sender_id': user.id,
+            'content': content,
+            'message_type': type,
+            'media_url': dest,
+            if (type == 'voice')
+              'media_duration_seconds': original.mediaDurationSeconds,
+            'forwarded': true,
+          })
+          .select()
+          .single();
+      final message = Message.fromJson(response);
+      await _client.from(_conversationsTable).update({
+        'last_message': content,
+        'last_sender_id': user.id,
+        'last_message_at': message.createdAt.toIso8601String(),
+      }).eq('id', targetConversationId);
+      AnalyticsService.messageSent(source: 'forward_$type');
+    } else {
+      await sendMessage(
+        conversationId: targetConversationId,
+        content: original.content,
+        forwarded: true,
+      );
+    }
   }
 
   /// Signed URL for a chat_media object, memoised until ~2 min before

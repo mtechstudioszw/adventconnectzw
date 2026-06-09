@@ -367,6 +367,9 @@ class _ChatScreenState extends State<ChatScreen>
   Message? _editing; // editing this message instead of sending new
   Set<String> _starredIds = <String>{};
   Map<String, Map<String, int>> _reactions = const {};
+  // Reply-jump highlight: the message id currently flashing + its timer.
+  String? _highlightedMessageId;
+  Timer? _highlightTimer;
   static const List<String> _reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
   // #17: product preview shown above the composer when the chat was
@@ -608,6 +611,12 @@ class _ChatScreenState extends State<ChatScreen>
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
+    // Flash the target so the user sees which message the reply points to.
+    _highlightTimer?.cancel();
+    setState(() => _highlightedMessageId = messageId);
+    _highlightTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _highlightedMessageId = null);
+    });
   }
 
   Future<void> _maybeLoadGroupMembers() async {
@@ -744,6 +753,7 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     _stream?.cancel();
+    _highlightTimer?.cancel();
     _typingExpiry?.cancel();
     _typingThrottle?.cancel();
     _recordingTimer?.cancel();
@@ -1380,6 +1390,23 @@ class _ChatScreenState extends State<ChatScreen>
     AppColors.darkNavy,
   ];
 
+  /// Open (or create) a 1:1 chat with [userId] — used when tapping a
+  /// group member's name/avatar.
+  Future<void> _openUserChat(String userId, String name) async {
+    final me = AuthService.currentUser?.id;
+    if (userId.isEmpty || userId == me) return;
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: userId,
+        otherUserName: name,
+      );
+      if (!mounted) return;
+      context.pushNamed('chat', pathParameters: {'id': convo.id});
+    } catch (_) {
+      if (mounted) _toast('Could not open chat with $name.');
+    }
+  }
+
   Widget _groupSenderLabel(Message m) {
     final member = _memberById[m.senderId];
     final name = member?.fullName ??
@@ -1389,9 +1416,14 @@ class _ChatScreenState extends State<ChatScreen>
     final isAdmin = member?.isAdmin ?? false;
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 2),
-      child: Row(
+      child: GestureDetector(
+        onTap: () => _openUserChat(m.senderId, name),
+        behavior: HitTestBehavior.opaque,
+        child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _Avatar(name: name, size: 20, photoUrl: member?.photoUrl),
+          const SizedBox(width: 6),
           Text(
             name,
             style: AppTextStyles.labelSmall.copyWith(
@@ -1419,6 +1451,7 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ],
         ],
+      ),
       ),
     );
   }
@@ -1984,7 +2017,15 @@ class _ChatScreenState extends State<ChatScreen>
               children: [
                 if (showDateSeparator) _DateSeparator(label: _dayLabel(m.createdAt)),
                 if (_isGroup && !isMine) _groupSenderLabel(m),
-                _SwipeToReply(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  decoration: BoxDecoration(
+                    color: _highlightedMessageId == m.id
+                        ? AppColors.primaryBlue.withValues(alpha: 0.14)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: _SwipeToReply(
                   onReply: () => _startReply(m),
                   child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -1997,6 +2038,7 @@ class _ChatScreenState extends State<ChatScreen>
                       if (m.replyToId != null) _buildQuotedPreview(m, isMine),
                       _MessageBubble(message: m, isMine: isMine),
                     ],
+                  ),
                   ),
                   ),
                 ),

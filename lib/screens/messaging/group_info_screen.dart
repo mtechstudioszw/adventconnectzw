@@ -182,7 +182,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 
   Future<void> _memberActions(GroupMember m) async {
-    if (!_amAdmin || m.userId == _myId) return;
+    // Tapping yourself does nothing. Everyone can message / view a member;
+    // admins additionally get role + remove actions.
+    if (m.userId == _myId) return;
+    final firstName = m.fullName.split(' ').first;
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: context.palette.sheet,
@@ -196,40 +199,65 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           children: [
             const SizedBox(height: 12),
             ListTile(
-              leading: Icon(
-                m.isAdmin ? Icons.remove_moderator : Icons.shield_outlined,
-                color: AppColors.primaryBlue,
-              ),
-              title: Text(m.isAdmin ? 'Dismiss as admin' : 'Make admin'),
-              onTap: () => Navigator.pop(ctx, 'role'),
+              leading: const Icon(Icons.chat_bubble_outline,
+                  color: AppColors.primaryBlue),
+              title: Text('Message $firstName'),
+              onTap: () => Navigator.pop(ctx, 'message'),
             ),
             ListTile(
-              leading: const Icon(Icons.person_remove, color: AppColors.red),
-              title: Text(
-                'Remove from group',
-                style: TextStyle(color: AppColors.red),
-              ),
-              onTap: () => Navigator.pop(ctx, 'remove'),
+              leading: const Icon(Icons.person_outline,
+                  color: AppColors.primaryBlue),
+              title: const Text('View profile'),
+              onTap: () => Navigator.pop(ctx, 'profile'),
             ),
+            if (_amAdmin) ...[
+              ListTile(
+                leading: Icon(
+                  m.isAdmin ? Icons.remove_moderator : Icons.shield_outlined,
+                  color: AppColors.primaryBlue,
+                ),
+                title: Text(m.isAdmin ? 'Dismiss as admin' : 'Make admin'),
+                onTap: () => Navigator.pop(ctx, 'role'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_remove, color: AppColors.red),
+                title: const Text(
+                  'Remove from group',
+                  style: TextStyle(color: AppColors.red),
+                ),
+                onTap: () => Navigator.pop(ctx, 'remove'),
+              ),
+            ],
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
-    if (action == null) return;
+    if (action == null || !mounted) return;
     try {
-      if (action == 'role') {
+      if (action == 'message') {
+        final convo = await MessagingService.createConversation(
+          otherUserId: m.userId,
+          otherUserName: m.fullName,
+        );
+        if (!mounted) return;
+        context.pushNamed('chat', pathParameters: {'id': convo.id});
+      } else if (action == 'profile') {
+        context.pushNamed('user_profile',
+            pathParameters: {'userId': m.userId});
+      } else if (action == 'role') {
         await GroupService.setAdmin(
           widget.conversationId,
           m.userId,
           makeAdmin: !m.isAdmin,
         );
+        _load();
       } else if (action == 'remove') {
         await GroupService.removeMember(widget.conversationId, m.userId);
+        _load();
       }
-      _load();
     } catch (_) {
-      _toast('Action failed.', error: true);
+      if (mounted) _toast('Action failed.', error: true);
     }
   }
 

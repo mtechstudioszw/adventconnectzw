@@ -14,6 +14,7 @@ import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/gallery_service.dart';
 import '../../services/group_service.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../services/storage_service.dart';
@@ -497,7 +498,17 @@ class _ChatScreenState extends State<ChatScreen>
     });
   }
 
+  /// Guard server-only actions (react/forward/star/edit) behind a
+  /// connectivity check so they tell the user instead of failing silently.
+  bool _ensureOnline(String action) {
+    if (ConnectivityService.isOnline) return true;
+    _toast("You're offline — can't $action right now. "
+        'Try again when you reconnect.');
+    return false;
+  }
+
   Future<void> _toggleStar(Message m) async {
+    if (!_ensureOnline('star messages')) return;
     final starred = _starredIds.contains(m.id);
     setState(() {
       if (starred) {
@@ -510,13 +521,19 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _react(Message m, String emoji) async {
-    await MessagingService.toggleReaction(m.id, emoji);
-    _loadReactionsAndStars();
+    if (!_ensureOnline('react')) return;
+    try {
+      await MessagingService.toggleReaction(m.id, emoji);
+      _loadReactionsAndStars();
+    } catch (_) {
+      if (mounted) _toast('Could not add your reaction. Try again.');
+    }
   }
 
   /// Forward a (text) message: pick a destination chat, then re-send the
   /// content with the "Forwarded" flag.
   Future<void> _forwardMessage(Message m) async {
+    if (!_ensureOnline('forward messages')) return;
     final convos = await MessagingService.fetchConversations();
     if (!mounted) return;
     final targetId = await showModalBottomSheet<String>(
@@ -904,6 +921,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _startRecording() async {
     if (_recording || _sending) return;
+    if (!_ensureOnline('send voice notes')) return;
     final granted = await _ensureMicPermission();
     if (!granted) {
       if (mounted) {
@@ -1103,6 +1121,7 @@ class _ChatScreenState extends State<ChatScreen>
     // bubble (with its "edited" label).
     final editing = _editing;
     if (editing != null) {
+      if (!_ensureOnline('edit messages')) return;
       setState(() {
         _editing = null;
         _hasText = false;
@@ -2296,6 +2315,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _pickAndSendImage({required bool fromCamera}) async {
+    if (!_ensureOnline('send photos')) return;
     try {
       final result = await StorageService.pickChatImage(fromCamera: fromCamera);
       if (result == null) return;

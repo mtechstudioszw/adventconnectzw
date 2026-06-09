@@ -838,6 +838,17 @@ class MessagingService {
     await _client.from(_messagesTable).delete().eq('id', messageId);
   }
 
+  /// "Delete for everyone" — soft delete (sender only, via RLS). Clears
+  /// content + media and flags the row so both sides render a
+  /// "This message was deleted" tombstone (the row stays).
+  static Future<void> softDeleteMessage(String messageId) async {
+    await _client.from(_messagesTable).update({
+      'is_deleted': true,
+      'content': '',
+      'media_url': null,
+    }).eq('id', messageId);
+  }
+
   /// Edit a sent message's text (sender only — enforced by RLS). Stamps
   /// edited_at so the UI can show an "edited" label.
   static Future<void> editMessage(String messageId, String newContent) async {

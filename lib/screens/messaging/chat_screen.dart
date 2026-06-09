@@ -126,6 +126,42 @@ class _ChatScreenState extends State<ChatScreen>
   /// the affordance honest).
   Future<void> _showMessageActions(Message m, bool isMine) async {
     HapticFeedback.selectionClick();
+    // A "deleted" tombstone: the recipient can't act on it at all; the
+    // sender can only remove it from the thread.
+    if (m.isDeleted) {
+      if (!isMine) return;
+      final remove = await showModalBottomSheet<bool>(
+        context: context,
+        backgroundColor: context.palette.sheet,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: ListTile(
+              leading: const Icon(Icons.delete_outline, color: AppColors.red),
+              title: Text('Delete',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                      color: AppColors.red, fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, true),
+            ),
+          ),
+        ),
+      );
+      if (remove == true) {
+        setState(() {
+          _serverMessages.removeWhere((x) => x.id == m.id);
+          _pending.removeWhere((x) => x.id == m.id);
+        });
+        try {
+          await MessagingService.deleteMessage(m.id);
+        } catch (_) {
+          if (mounted) _toast('Could not delete. Try again.');
+        }
+      }
+      return;
+    }
     final isImage =
         m.messageType == 'image' && (m.mediaUrl ?? '').isNotEmpty;
     final hasText = m.content.trim().isNotEmpty &&
@@ -212,7 +248,8 @@ class _ChatScreenState extends State<ChatScreen>
                           .copyWith(fontWeight: FontWeight.w600)),
                   onTap: () => Navigator.pop(ctx, 'save'),
                 ),
-              if (isMine && hasText)
+              // Edit only before the other person has read it (WhatsApp).
+              if (isMine && hasText && !m.read)
                 ListTile(
                   leading: const Icon(Icons.edit_outlined,
                       color: AppColors.primaryBlue),
@@ -230,7 +267,7 @@ class _ChatScreenState extends State<ChatScreen>
                           color: AppColors.red,
                           fontWeight: FontWeight.w600)),
                   subtitle: Text(
-                    'Removes the message from this chat for both of you.',
+                    "Both of you will see \"This message was deleted\".",
                     style: AppTextStyles.bodySmall.copyWith(
                       color: ctx.palette.textMuted,
                     ),
@@ -271,14 +308,19 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         );
       case 'delete':
-        // Optimistic removal so the bubble vanishes immediately; the
-        // realtime stream will replay the DELETE for the other party.
+        if (!_ensureOnline('delete messages')) return;
+        // Soft delete -> "This message was deleted" tombstone on BOTH
+        // sides (optimistically flip locally; the realtime UPDATE echoes
+        // it to the other party).
         setState(() {
-          _serverMessages.removeWhere((x) => x.id == m.id);
+          _serverMessages = _serverMessages
+              .map((x) =>
+                  x.id == m.id ? x.copyWith(isDeleted: true, content: '') : x)
+              .toList();
           _pending.removeWhere((x) => x.id == m.id);
         });
         try {
-          await MessagingService.deleteMessage(m.id);
+          await MessagingService.softDeleteMessage(m.id);
         } catch (_) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2758,6 +2800,44 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Soft-deleted tombstone — same for both sides, regardless of the
+    // original message type.
+    if (message.isDeleted) {
+      final maxW = MediaQuery.of(context).size.width * 0.74;
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxW),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isMine
+                ? AppColors.primaryBlue.withValues(alpha: 0.10)
+                : context.palette.cardMuted,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(18),
+              topRight: const Radius.circular(18),
+              bottomLeft: Radius.circular(isMine ? 18 : 4),
+              bottomRight: Radius.circular(isMine ? 4 : 18),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.block, size: 15, color: context.palette.textMuted),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'This message was deleted',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.palette.textMuted,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     if (message.messageType == 'voice' &&
         (message.mediaUrl ?? '').isNotEmpty) {
       return _VoiceBubble(message: message, isMine: isMine);

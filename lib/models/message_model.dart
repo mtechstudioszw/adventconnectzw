@@ -185,6 +185,7 @@ class Message {
     this.replyToId,
     this.forwarded = false,
     this.editedAt,
+    this.isDeleted = false,
   });
 
   final String id;
@@ -207,8 +208,31 @@ class Message {
   final String? replyToId;
   final bool forwarded;
   final DateTime? editedAt;
+  // Soft-deleted "This message was deleted" tombstone (patch_063).
+  final bool isDeleted;
 
   bool get isEdited => editedAt != null;
+
+  Message copyWith({String? content, bool? isDeleted}) {
+    return Message(
+      id: id,
+      conversationId: conversationId,
+      senderId: senderId,
+      senderName: senderName,
+      content: content ?? this.content,
+      createdAt: createdAt,
+      read: read,
+      readAt: readAt,
+      deliveredAt: deliveredAt,
+      messageType: messageType,
+      mediaUrl: mediaUrl,
+      mediaDurationSeconds: mediaDurationSeconds,
+      replyToId: replyToId,
+      forwarded: forwarded,
+      editedAt: editedAt,
+      isDeleted: isDeleted ?? this.isDeleted,
+    );
+  }
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
@@ -234,6 +258,7 @@ class Message {
       editedAt: json['edited_at'] == null
           ? null
           : DateTime.tryParse(json['edited_at'].toString()),
+      isDeleted: json['is_deleted'] == true,
     );
   }
 }

@@ -2744,6 +2744,9 @@ class _VoiceBubble extends StatelessWidget {
         ? AppColors.white.withValues(alpha: 0.30)
         : context.palette.divider;
     final declared = Duration(seconds: message.mediaDurationSeconds ?? 0);
+    // Optimistic outgoing note still uploading (tempId). Show a spinner
+    // where the play button goes so it clearly reads as "sending".
+    final uploading = isMine && message.id.startsWith('pending-');
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth, minWidth: 240),
       child: Container(
@@ -2767,7 +2770,32 @@ class _VoiceBubble extends StatelessWidget {
             ),
           ],
         ),
-        child: AnimatedBuilder(
+        child: uploading
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      valueColor: AlwaysStoppedAnimation<Color>(fg),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Icon(Icons.mic_rounded, color: muted, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Sending voice note…',
+                      style: AppTextStyles.bodySmall.copyWith(color: muted),
+                    ),
+                  ),
+                  Text(_fmt(declared),
+                      style: AppTextStyles.labelSmall.copyWith(color: muted)),
+                ],
+              )
+            : AnimatedBuilder(
           animation: Listenable.merge([
             svc.activeId,
             svc.loadingId,
@@ -3108,7 +3136,31 @@ class _ImageBubbleState extends State<_ImageBubble> {
           child: Container(
             constraints: const BoxConstraints(minWidth: 160, minHeight: 160),
             color: context.palette.cardMuted,
-            child: _buildImage(),
+            child: Stack(
+              fit: StackFit.passthrough,
+              children: [
+                _buildImage(),
+                // WhatsApp-style upload overlay: while the optimistic
+                // (local) bubble is still uploading, dim the photo and
+                // show a spinner so it's clearly "sending", not gone.
+                if (_isLocal && isMine)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.38),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

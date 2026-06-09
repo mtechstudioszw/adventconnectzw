@@ -257,6 +257,9 @@ class MessagingService {
     // honour the new soft-delete). RLS is participant-scoped so the
     // count is naturally limited to the caller's threads.
     final unreadById = await fetchUnreadCounts();
+    // Group unread comes from a separate per-member last-read marker
+    // (patch_060) since messages.read is a single 1:1 boolean.
+    unreadById.addAll(await fetchGroupUnreadCounts());
     // Splice the unread count into each raw row BEFORE caching so a
     // cache-restore preserves badges accurately — caching the raw
     // server response (without counts) was the source of the
@@ -306,6 +309,26 @@ class MessagingService {
     } catch (_) {
       // RPC missing or RLS error — degrade gracefully to zero badges
       // rather than blanking the whole inbox.
+      return const {};
+    }
+  }
+
+  /// Per-group unread counts (patch_060). Keyed by conversation id.
+  static Future<Map<String, int>> fetchGroupUnreadCounts() async {
+    try {
+      final rows = await _client.rpc('get_group_unread_counts');
+      if (rows is! List) return const {};
+      final result = <String, int>{};
+      for (final raw in rows) {
+        if (raw is Map) {
+          final id = raw['conversation_id']?.toString();
+          final count = raw['unread_count'];
+          if (id == null) continue;
+          if (count is num) result[id] = count.toInt();
+        }
+      }
+      return result;
+    } catch (_) {
       return const {};
     }
   }
@@ -1041,6 +1064,15 @@ class MessagingService {
       );
     } catch (_) {
       // Read receipts are best-effort — never block chat rendering.
+    }
+    // Groups don't use the 1:1 read boolean — stamp the per-member
+    // last-read marker so the group's unread badge clears (patch_060).
+    try {
+      await _client.rpc('mark_group_read', params: {
+        'p_conversation': int.tryParse(conversationId) ?? conversationId,
+      });
+    } catch (_) {
+      // Not a group / RPC issue — ignore.
     }
   }
 

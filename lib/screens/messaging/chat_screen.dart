@@ -1984,13 +1984,11 @@ class _ChatScreenState extends State<ChatScreen>
               children: [
                 if (showDateSeparator) _DateSeparator(label: _dayLabel(m.createdAt)),
                 if (_isGroup && !isMine) _groupSenderLabel(m),
-                GestureDetector(
+                _SwipeToReply(
+                  onReply: () => _startReply(m),
+                  child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onLongPress: () => _showMessageActions(m, isMine),
-                  // Swipe the bubble to the right to reply (WhatsApp).
-                  onHorizontalDragEnd: (d) {
-                    if ((d.primaryVelocity ?? 0) > 120) _startReply(m);
-                  },
                   child: Column(
                     crossAxisAlignment: isMine
                         ? CrossAxisAlignment.end
@@ -1999,6 +1997,7 @@ class _ChatScreenState extends State<ChatScreen>
                       if (m.replyToId != null) _buildQuotedPreview(m, isMine),
                       _MessageBubble(message: m, isMine: isMine),
                     ],
+                  ),
                   ),
                 ),
                 if ((_reactions[m.id] ?? const {}).isNotEmpty)
@@ -3087,6 +3086,74 @@ class _AttachOption extends StatelessWidget {
 /// Image-message bubble. Renders the local file optimistically while the
 /// upload runs, then a signed-URL image from the private bucket. Tap to
 /// open full-screen.
+/// Drag a bubble to the right to reply (WhatsApp). Distance-based (not
+/// velocity) so slow, deliberate swipes work; shows a reply arrow that
+/// grows as you drag and fires once past the threshold.
+class _SwipeToReply extends StatefulWidget {
+  const _SwipeToReply({required this.child, required this.onReply});
+  final Widget child;
+  final VoidCallback onReply;
+
+  @override
+  State<_SwipeToReply> createState() => _SwipeToReplyState();
+}
+
+class _SwipeToReplyState extends State<_SwipeToReply> {
+  static const double _trigger = 56;
+  static const double _max = 84;
+  double _dx = 0;
+  bool _fired = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragUpdate: (d) {
+        final next = (_dx + d.delta.dx).clamp(0.0, _max);
+        if (next != _dx) setState(() => _dx = next);
+        if (!_fired && _dx >= _trigger) {
+          _fired = true;
+          HapticFeedback.selectionClick();
+        }
+      },
+      onHorizontalDragEnd: (_) {
+        if (_dx >= _trigger) widget.onReply();
+        setState(() {
+          _dx = 0;
+          _fired = false;
+        });
+      },
+      onHorizontalDragCancel: () => setState(() {
+        _dx = 0;
+        _fired = false;
+      }),
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          if (_dx > 4)
+            Opacity(
+              opacity: (_dx / _trigger).clamp(0.0, 1.0),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Icon(
+                  Icons.reply,
+                  size: 20,
+                  color: _dx >= _trigger
+                      ? AppColors.primaryBlue
+                      : context.palette.textMuted,
+                ),
+              ),
+            ),
+          Transform.translate(
+            offset: Offset(_dx, 0),
+            child: widget.child,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ImageBubble extends StatefulWidget {
   const _ImageBubble({required this.message, required this.isMine});
   final Message message;

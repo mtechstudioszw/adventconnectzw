@@ -370,6 +370,9 @@ class _ChatScreenState extends State<ChatScreen>
   // Reply-jump highlight: the message id currently flashing + its timer.
   String? _highlightedMessageId;
   Timer? _highlightTimer;
+  // True when this is a group the viewer has left / been removed from —
+  // the composer is replaced with a locked banner.
+  bool _notAMember = false;
   static const List<String> _reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
   // #17: product preview shown above the composer when the chat was
@@ -624,11 +627,16 @@ class _ChatScreenState extends State<ChatScreen>
     try {
       final members = await GroupService.fetchMembers(widget.conversationId);
       if (!mounted) return;
+      final myId = AuthService.currentUser?.id;
       setState(() {
         _groupMembers = members;
         _memberById
           ..clear()
           ..addEntries(members.map((m) => MapEntry(m.userId, m)));
+        // No longer a member (left or removed) — lock the composer.
+        _notAMember = members.isNotEmpty &&
+            myId != null &&
+            !members.any((m) => m.userId == myId);
       });
     } catch (_) {
       // Non-fatal — bubbles fall back to the stored sender_name.
@@ -1994,6 +2002,19 @@ class _ChatScreenState extends State<ChatScreen>
         itemCount: _messages.length,
         itemBuilder: (context, i) {
           final m = _messages[i];
+          // System events (joined / left / removed / admin changes) render
+          // as a centred pill, not a chat bubble.
+          if (m.messageType == 'system') {
+            final prevSys = i > 0 ? _messages[i - 1] : null;
+            final showSep = prevSys == null ||
+                !_sameLocalDay(prevSys.createdAt, m.createdAt);
+            return Column(
+              children: [
+                if (showSep) _DateSeparator(label: _dayLabel(m.createdAt)),
+                _SystemMessage(text: m.content),
+              ],
+            );
+          }
           final isMine = m.senderId == currentUserId;
           // Per user request: every message gets its own timestamp,
           // not just the last one in a sender-grouped cluster. This
@@ -2120,6 +2141,38 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildInputBar() {
+    // Left / removed from this group — no composer, just a notice
+    // (WhatsApp shows "You can't send messages to this group").
+    if (_notAMember) {
+      return Container(
+        color: context.palette.card,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.info_outline,
+                    size: 16, color: context.palette.textMuted),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    "You can't send messages to this group because you're no "
+                    'longer a member.',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: context.palette.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     // When the viewer has blocked this contact, hide the composer
     // entirely (WhatsApp does exactly this) and replace it with a
     // tappable strip that opens the Unblock confirmation.
@@ -2617,6 +2670,37 @@ class _ChatScreenState extends State<ChatScreen>
 }
 
 /// Centered day-divider chip between messages from different days.
+/// Centred grey pill for group system events (joined / left / removed).
+class _SystemMessage extends StatelessWidget {
+  const _SystemMessage({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: context.palette.cardMuted,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: context.palette.textMuted,
+              fontSize: 11.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DateSeparator extends StatelessWidget {
   const _DateSeparator({required this.label});
   final String label;

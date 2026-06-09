@@ -410,6 +410,10 @@ class _ChatScreenState extends State<ChatScreen>
     // Continuous voice playback — when one note finishes, the shared
     // player rolls on to the next voice note in this thread.
     VoicePlayerService.instance.nextResolver = _voiceQueueResolver;
+    // Tell the global mini-bar this chat is on screen, so it hides while
+    // we're here (the bubble already shows playback) and reappears after
+    // we leave with a note still playing.
+    VoicePlayerService.openChatId.value = widget.conversationId;
   }
 
   /// Resolves the next voice note after [currentId] in this thread for
@@ -747,6 +751,11 @@ class _ChatScreenState extends State<ChatScreen>
     // Stop continuous-play hand-off, but DON'T stop playback — a note in
     // progress keeps playing after the user leaves the chat.
     VoicePlayerService.instance.detachResolver(_voiceQueueResolver);
+    // Leaving this chat — clear the "open chat" flag so the global voice
+    // mini-bar reappears if a note is still playing.
+    if (VoicePlayerService.openChatId.value == widget.conversationId) {
+      VoicePlayerService.openChatId.value = null;
+    }
     final listener = _presenceListener;
     if (listener != null) {
       PresenceService.onChange.removeListener(listener);
@@ -2716,6 +2725,7 @@ class _VoiceBubble extends StatelessWidget {
         messageId: message.id,
         storagePath: message.mediaUrl!,
         durationSeconds: message.mediaDurationSeconds,
+        conversationId: message.conversationId,
       ));
     } catch (_) {
       if (context.mounted) {

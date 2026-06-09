@@ -14,11 +14,15 @@ class VoiceNote {
     required this.messageId,
     required this.storagePath,
     this.durationSeconds,
+    this.conversationId,
   });
 
   final String messageId;
   final String storagePath;
   final int? durationSeconds;
+  // The chat this note belongs to — lets the global mini-bar hide itself
+  // while the user is actually viewing that chat (the bubble is enough).
+  final String? conversationId;
 }
 
 /// Given the currently-finished note's id, return the next one to play
@@ -55,6 +59,11 @@ class VoicePlayerService {
   final ValueNotifier<Duration> position = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> duration = ValueNotifier(Duration.zero);
   final ValueNotifier<double> speed = ValueNotifier(1.0);
+  // The conversation the active note belongs to, and which chat (if any)
+  // is currently on screen. The global mini-bar shows only when these
+  // differ — i.e. a note is playing while you're NOT in its chat.
+  final ValueNotifier<String?> activeConversationId = ValueNotifier(null);
+  static final ValueNotifier<String?> openChatId = ValueNotifier(null);
 
   /// Set by the chat screen to enable continuous play; cleared on leave.
   VoiceQueueResolver? nextResolver;
@@ -80,6 +89,7 @@ class VoicePlayerService {
         }
       }
       activeId.value = null;
+      activeConversationId.value = null;
     });
   }
 
@@ -101,6 +111,7 @@ class VoicePlayerService {
   Future<void> play(VoiceNote note) async {
     await _player.stop();
     activeId.value = note.messageId;
+    activeConversationId.value = note.conversationId;
     position.value = Duration.zero;
     duration.value = Duration(seconds: note.durationSeconds ?? 0);
     try {
@@ -157,6 +168,17 @@ class VoicePlayerService {
   }
 
   Future<void> pause() => _player.pause();
+
+  Future<void> resume() => _player.resume();
+
+  /// Fully stop playback and dismiss the mini-bar.
+  Future<void> stop() async {
+    await _player.stop();
+    playing.value = false;
+    position.value = Duration.zero;
+    activeId.value = null;
+    activeConversationId.value = null;
+  }
 
   /// Called when the conversation is left. Stops continuous-play hand-off
   /// but deliberately does NOT stop playback — a note in progress keeps

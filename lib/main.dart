@@ -20,6 +20,7 @@ import 'services/push_service.dart';
 import 'services/theme_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
+import 'widgets/voice_mini_bar.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -254,8 +255,17 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.light,
       routerConfig: appRouter,
-      builder: (context, child) =>
+      builder: (context, child) => Stack(
+        children: [
           OfflineBanner(child: child ?? const SizedBox.shrink()),
+          // Global voice-note bar — shows at the top whenever a note plays
+          // outside its own chat (WhatsApp parity).
+          const Align(
+            alignment: Alignment.topCenter,
+            child: VoiceMiniBar(),
+          ),
+        ],
+      ),
     );
   }
 }

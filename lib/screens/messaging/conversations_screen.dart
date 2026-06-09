@@ -27,7 +27,7 @@ class ConversationsScreen extends StatefulWidget {
   State<ConversationsScreen> createState() => _ConversationsScreenState();
 }
 
-enum _ConversationsTab { inbox, requests }
+enum _ConversationsTab { chats, groups, status, archived }
 
 class _ConversationsScreenState extends State<ConversationsScreen>
     with SingleTickerProviderStateMixin {
@@ -40,7 +40,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   List<PendingFriendRequest> _friendRequests = const [];
   bool _loading = true;
   String? _error;
-  _ConversationsTab _tab = _ConversationsTab.inbox;
+  _ConversationsTab _tab = _ConversationsTab.chats;
+  /// Requests aren't a tab anymore — they open from a banner on the Chats
+  /// tab into an inline requests view. This flag drives that view.
+  bool _showRequests = false;
   /// Once we've auto-jumped to the Requests tab on first load (because
   /// inbox was empty but friend requests existed), we stop doing it so
   /// the user can navigate freely afterwards.
@@ -57,9 +60,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   void initState() {
     super.initState();
     if (widget.initialTab == 'requests') {
-      _tab = _ConversationsTab.requests;
-      // Caller asked for Requests tab explicitly — don't let the
-      // "auto-pick" heuristic in _bootstrap override that choice.
+      _showRequests = true;
+      // Caller asked for Requests explicitly — don't let the "auto-pick"
+      // heuristic in _bootstrap override that choice.
       _autoTabResolved = true;
     }
     _entrance = AnimationController(
@@ -176,7 +179,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 (c) => c.isIncomingRequestFor(_currentUserId),
               );
           if (!inboxHasContent && hasRequests) {
-            _tab = _ConversationsTab.requests;
+            _showRequests = true;
           }
         }
       });
@@ -226,17 +229,23 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   /// position on each refresh because it was sorted by last_message_at
   /// alongside everything else). WhatsApp also fixes self-chat to a
   /// constant position.
-  List<Conversation> get _inbox {
+  /// 1:1 chats (excludes groups + incoming requests). Self-chat pinned.
+  List<Conversation> get _chats {
     final filtered = _conversations
-        .where((c) => !c.isIncomingRequestFor(_currentUserId))
+        .where((c) =>
+            !c.isGroup && !c.isIncomingRequestFor(_currentUserId))
         .toList();
     final selfChats = filtered.where((c) => c.isSelfChat).toList();
     final others = filtered.where((c) => !c.isSelfChat).toList();
     return [...selfChats, ...others];
   }
 
+  /// Group chats the viewer belongs to.
+  List<Conversation> get _groups =>
+      _conversations.where((c) => c.isGroup).toList();
+
   List<Conversation> get _requests => _conversations
-      .where((c) => c.isIncomingRequestFor(_currentUserId))
+      .where((c) => !c.isGroup && c.isIncomingRequestFor(_currentUserId))
       .toList();
 
   Future<void> _accept(Conversation c) async {
@@ -248,7 +257,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             .map((x) =>
                 x.id == c.id ? x.copyWith(requestStatus: 'accepted') : x)
             .toList();
-        _tab = _ConversationsTab.inbox;
+        // Accepting the last request returns to the Chats list.
+        if (_requests.isEmpty) _showRequests = false;
       });
     } catch (_) {
       if (!mounted) return;
@@ -452,17 +462,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       body: Column(
         children: [
           _buildHero(),
-          Container(
-            color: context.palette.card,
-            child: StoriesRail(
-              stories: _stories,
-              viewerId: _currentUserId,
-              viewerName: _viewerName(),
-              viewerPhotoUrl: _viewerPhotoUrl(),
-              onAddStory: _openStoryComposer,
-              onAuthorTapped: (_, list) => _openStoryViewer(list),
-            ),
-          ),
           _buildTabBar(),
           Expanded(
             child: RefreshIndicator(
@@ -486,80 +485,71 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
+  /// Slim chat app bar — title + search + overflow (self-chat, privacy).
+  /// Replaces the old two-line "ADVENT CHAT / Your chats" hero so the
+  /// list starts ~90px higher.
   Widget _buildHero() {
-    return ClipPath(
-      clipper: _HeroClipper(),
-      child: Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _CircleIconButton(
-                      icon: Icons.arrow_back,
-                      onTap: () => context.canPop()
-                          ? context.pop()
-                          : context.goNamed('home'),
-                    ),
-                    const Spacer(),
-                    _CircleIconButton(
-                      icon: Icons.bookmark_outline,
-                      onTap: _openSelfChat,
-                    ),
-                    const SizedBox(width: 8),
-                    _CircleIconButton(
-                      icon: Icons.search,
-                      // Reuse the cross-content Search screen so tapping
-                      // the magnifier in the inbox finds people the same
-                      // way the Home tab does — and falls back to
-                      // "Suggestions for you" when there's no match.
-                      onTap: () => context.pushNamed('search'),
-                    ),
-                    const SizedBox(width: 8),
-                    _CircleIconButton(
-                      icon: Icons.tune,
-                      // Dedicated chat-privacy screen (last-seen / online /
-                      // read-receipt opt-outs) — WhatsApp's "Settings → Privacy"
-                      // pattern but reachable directly from the inbox.
-                      onTap: () => context.pushNamed('chat_privacy'),
-                    ),
-                  ],
+    return Container(
+      decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 6, 8, 10),
+          child: Row(
+            children: [
+              _CircleIconButton(
+                icon: Icons.arrow_back,
+                onTap: () => context.canPop()
+                    ? context.pop()
+                    : context.goNamed('home'),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Chats',
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
                 ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ADVENT CHAT',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.55),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.8,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Your chats',
-                        style: AppTextStyles.displayMedium.copyWith(
-                          color: AppColors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
+              ),
+              const Spacer(),
+              _CircleIconButton(
+                icon: Icons.search,
+                onTap: () => context.pushNamed('search'),
+              ),
+              const SizedBox(width: 6),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, color: AppColors.white),
+                color: context.palette.card,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                onSelected: (v) {
+                  if (v == 'self') _openSelfChat();
+                  if (v == 'privacy') context.pushNamed('chat_privacy');
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'self',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.bookmark_outline),
+                      title: Text('Notes to self'),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  PopupMenuItem(
+                    value: 'privacy',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.lock_outline),
+                      title: Text('Chat privacy'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -567,9 +557,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   Widget _buildTabBar() {
-    final requestCount = _requests.length;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
       child: Container(
         height: 44,
         decoration: BoxDecoration(
@@ -586,17 +575,36 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         child: Row(
           children: [
             _TabPill(
-              label: 'Inbox',
-              selected: _tab == _ConversationsTab.inbox,
-              onTap: () =>
-                  setState(() => _tab = _ConversationsTab.inbox),
+              label: 'Chats',
+              selected: _tab == _ConversationsTab.chats && !_showRequests,
+              onTap: () => setState(() {
+                _tab = _ConversationsTab.chats;
+                _showRequests = false;
+              }),
             ),
             _TabPill(
-              label: 'Requests',
-              badge: requestCount,
-              selected: _tab == _ConversationsTab.requests,
-              onTap: () =>
-                  setState(() => _tab = _ConversationsTab.requests),
+              label: 'Groups',
+              selected: _tab == _ConversationsTab.groups,
+              onTap: () => setState(() {
+                _tab = _ConversationsTab.groups;
+                _showRequests = false;
+              }),
+            ),
+            _TabPill(
+              label: 'Status',
+              selected: _tab == _ConversationsTab.status,
+              onTap: () => setState(() {
+                _tab = _ConversationsTab.status;
+                _showRequests = false;
+              }),
+            ),
+            _TabPill(
+              label: 'Archived',
+              selected: _tab == _ConversationsTab.archived,
+              onTap: () => setState(() {
+                _tab = _ConversationsTab.archived;
+                _showRequests = false;
+              }),
             ),
           ],
         ),
@@ -613,93 +621,173 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (_error != null && _conversations.isEmpty) {
       return _buildErrorState();
     }
-    final list = _tab == _ConversationsTab.inbox ? _inbox : _requests;
-    // The Requests tab can render two distinct things:
-    //   - Friend requests (someone wants to friend you)
-    //   - Message requests (someone you don't know yet messaged you)
-    // Either or both may be empty. Surface friend requests at the top
-    // so users see them — the red badge on the floating chat used to
-    // light up with nothing visible inside, which felt like a bug.
-    if (_tab == _ConversationsTab.requests) {
-      final hasFriendRequests = _friendRequests.isNotEmpty;
-      final hasMessageRequests = list.isNotEmpty;
-      if (!hasFriendRequests && !hasMessageRequests) {
+    if (_showRequests) return _buildRequestsView();
+    switch (_tab) {
+      case _ConversationsTab.chats:
+        return _buildChatsTab();
+      case _ConversationsTab.groups:
+        return _buildGroupsTab();
+      case _ConversationsTab.status:
+        return _buildStatusTab();
+      case _ConversationsTab.archived:
         return _buildEmptyState(
-          title: 'No requests',
-          body:
-              'Friend requests and messages from people you haven\'t chatted '
-              'with yet will land here.',
+          title: 'No archived chats',
+          body: 'Chats you archive will be kept here, out of your main list.',
         );
-      }
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        children: [
-          if (hasFriendRequests) ...[
-            _RequestsSectionHeader(
-              label: 'Friend requests',
-              count: _friendRequests.length,
-            ),
-            const SizedBox(height: 10),
-            for (final req in _friendRequests) ...[
-              _FriendRequestTile(
-                request: req,
-                onAccept: () => _acceptFriendRequest(req),
-                onDecline: () => _declineFriendRequest(req),
-                onOpenProfile: () => context.pushNamed(
-                  'user_profile',
-                  pathParameters: {'userId': req.requesterId},
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            const SizedBox(height: 8),
-          ],
-          if (hasMessageRequests) ...[
-            _RequestsSectionHeader(
-              label: 'Message requests',
-              count: list.length,
-            ),
-            const SizedBox(height: 10),
-            for (final c in list) ...[
-              _RequestTile(
-                conversation: c,
-                onAccept: () => _accept(c),
-                onDecline: () => _decline(c),
-                onPreview: () => _openChat(c),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ],
-        ],
-      );
     }
-    if (list.isEmpty) {
+  }
+
+  // ----- Chats tab: requests banner + 1:1 conversation list -----------
+  Widget _buildChatsTab() {
+    final list = _chats;
+    final requestCount = _requests.length + _friendRequests.length;
+    if (list.isEmpty && requestCount == 0) {
       return _buildEmptyState(
         title: 'No conversations yet',
         body:
-            'Reach out from a member directory or church page to start chatting.',
+            'Tap the pencil button to start a new chat, or reach out from a '
+            'member directory or church page.',
       );
     }
-    // Rebuild when the presence roster changes so newly online users
-    // get a green dot without forcing a refresh.
+    return _conversationListView(
+      list,
+      banner: requestCount == 0
+          ? null
+          : _RequestsBanner(
+              count: requestCount,
+              onTap: () => setState(() => _showRequests = true),
+            ),
+    );
+  }
+
+  // ----- Groups tab ---------------------------------------------------
+  Widget _buildGroupsTab() {
+    final list = _groups;
+    if (list.isEmpty) {
+      return _buildEmptyState(
+        title: 'No groups yet',
+        body: 'Create a group from the pencil button to chat with several '
+            'people at once.',
+      );
+    }
+    return _conversationListView(list);
+  }
+
+  // ----- Status tab: the stories rail (moved off the chat list) -------
+  Widget _buildStatusTab() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(top: 8, bottom: 32),
+      children: [
+        StoriesRail(
+          stories: _stories,
+          viewerId: _currentUserId,
+          viewerName: _viewerName(),
+          viewerPhotoUrl: _viewerPhotoUrl(),
+          onAddStory: _openStoryComposer,
+          onAuthorTapped: (_, list) => _openStoryViewer(list),
+        ),
+        if (_stories.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
+            child: Text(
+              'No status updates yet. Tap the + to share one — it disappears '
+              'after 24 hours.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ----- Requests view (opened from the Chats banner) -----------------
+  Widget _buildRequestsView() {
+    final list = _requests;
+    final hasFriendRequests = _friendRequests.isNotEmpty;
+    final hasMessageRequests = list.isNotEmpty;
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _showRequests = false),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('Back to chats'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primaryBlue,
+            ),
+          ),
+        ),
+        if (!hasFriendRequests && !hasMessageRequests)
+          Padding(
+            padding: const EdgeInsets.only(top: 40),
+            child: _buildEmptyState(
+              title: 'No requests',
+              body: 'Friend requests and messages from people you haven\'t '
+                  'chatted with yet land here.',
+            ),
+          ),
+        if (hasFriendRequests) ...[
+          _RequestsSectionHeader(
+            label: 'Friend requests',
+            count: _friendRequests.length,
+          ),
+          const SizedBox(height: 10),
+          for (final req in _friendRequests) ...[
+            _FriendRequestTile(
+              request: req,
+              onAccept: () => _acceptFriendRequest(req),
+              onDecline: () => _declineFriendRequest(req),
+              onOpenProfile: () => context.pushNamed(
+                'user_profile',
+                pathParameters: {'userId': req.requesterId},
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 8),
+        ],
+        if (hasMessageRequests) ...[
+          _RequestsSectionHeader(
+            label: 'Message requests',
+            count: list.length,
+          ),
+          const SizedBox(height: 10),
+          for (final c in list) ...[
+            _RequestTile(
+              conversation: c,
+              onAccept: () => _accept(c),
+              onDecline: () => _decline(c),
+              onPreview: () => _openChat(c),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// Shared conversation list (used by Chats + Groups). Rebuilds on the
+  /// presence roster so green dots update without a refetch. Tiles are
+  /// keyed by id so reorders on realtime refetch don't flicker.
+  Widget _conversationListView(List<Conversation> list, {Widget? banner}) {
     return ValueListenableBuilder<Set<String>>(
       valueListenable: PresenceService.onChange,
       builder: (context, _, _) {
         return ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          itemCount: list.length,
+          itemCount: list.length + (banner == null ? 0 : 1),
           separatorBuilder: (context, index) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
-            final c = list[i];
+            if (banner != null && i == 0) return banner;
+            final c = list[i - (banner == null ? 0 : 1)];
             return _ConversationTile(
-              // Stable per-conversation key so Flutter matches each tile
-              // to the SAME conversation across the frequent realtime
-              // refetches. Without it, tiles were recycled by index — so
-              // when a chat jumped to the top after a new message, the
-              // list visibly glitched (tiles swapping content / flashing
-              // avatars). The key makes reorders animate cleanly instead.
               key: ValueKey(c.id),
               conversation: c,
               isLastFromMe: c.lastSenderId == _currentUserId,
@@ -852,9 +940,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    _tab == _ConversationsTab.inbox
-                        ? Icons.forum_outlined
-                        : Icons.mark_email_unread_outlined,
+                    _tab == _ConversationsTab.groups
+                        ? Icons.groups_outlined
+                        : Icons.forum_outlined,
                     color: AppColors.primaryBlue,
                     size: 40,
                   ),
@@ -890,13 +978,11 @@ class _TabPill extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
-    this.badge = 0,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -923,42 +1009,15 @@ class _TabPill extends StatelessWidget {
                   : null,
             ),
             alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color:
-                        selected ? AppColors.white : context.palette.text,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (badge > 0) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AppColors.white.withValues(alpha: 0.22)
-                          : AppColors.red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$badge',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: selected ? AppColors.white : context.palette.text,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -1636,24 +1695,51 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-class _HeroClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 24);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 24,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
+/// Slim "Message requests (N) ›" banner shown atop the Chats tab.
+class _RequestsBanner extends StatelessWidget {
+  const _RequestsBanner({required this.count, required this.onTap});
+  final int count;
+  final VoidCallback onTap;
 
   @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.20),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.person_add_alt_1,
+                  color: AppColors.primaryBlue, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  count == 1
+                      ? '1 message / friend request'
+                      : '$count message / friend requests',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.primaryBlue),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CircleIconButton extends StatelessWidget {

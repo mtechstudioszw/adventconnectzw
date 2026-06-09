@@ -722,12 +722,21 @@ class MessagingService {
       final user = _client.auth.currentUser;
       if (user == null) return const [];
       final list = jsonDecode(raw) as List;
-      return list
+      final convos = list
           .map((row) => Conversation.fromJson(
                 Map<String, dynamic>.from(row as Map),
                 currentUserId: user.id,
               ))
           .toList();
+      // Sort identically to the live fetch (self-chat first, then newest
+      // first) so the cache-first paint matches the fresh result and the
+      // tiles don't visibly jump into place on refresh.
+      convos.sort((a, b) {
+        if (a.isSelfChat && !b.isSelfChat) return -1;
+        if (b.isSelfChat && !a.isSelfChat) return 1;
+        return b.lastMessageAt.compareTo(a.lastMessageAt);
+      });
+      return convos;
     } catch (_) {
       return const [];
     }

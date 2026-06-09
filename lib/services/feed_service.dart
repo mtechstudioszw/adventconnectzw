@@ -406,6 +406,24 @@ class FeedService {
     await _client.from(_storiesTable).delete().eq('id', storyId);
   }
 
+  /// Story ids the current user has already viewed — used to grey out
+  /// viewed status rings and order unviewed first.
+  static Future<Set<String>> fetchMyViewedStoryIds() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return <String>{};
+    try {
+      final rows = await _client
+          .from('story_views')
+          .select('story_id')
+          .eq('viewer_id', user.id);
+      return (rows as List)
+          .map((r) => (r as Map)['story_id'].toString())
+          .toSet();
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
   /// Record that the current viewer has watched [storyId]. Idempotent
   /// — re-watching the same story is a no-op (PK collision on the
   /// (story_id, viewer_id) pair is silently swallowed). Authors

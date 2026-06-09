@@ -22,6 +22,7 @@ class StoriesRail extends StatelessWidget {
     required this.viewerPhotoUrl,
     required this.onAddStory,
     required this.onAuthorTapped,
+    this.viewedStoryIds = const {},
   });
 
   final List<Story> stories;
@@ -29,7 +30,13 @@ class StoriesRail extends StatelessWidget {
   final String viewerName;
   final String? viewerPhotoUrl;
   final VoidCallback onAddStory;
-  final void Function(String authorId, List<Story> authorStories) onAuthorTapped;
+  // Called with a PLAY-ORDER (oldest-first) reel. For a tapped author it
+  // also chains the following still-unviewed authors so playback rolls on
+  // through unviewed stories until they're done (WhatsApp).
+  final void Function(String authorId, List<Story> reel) onAuthorTapped;
+  // Story ids the viewer has already watched — greys the ring and pushes
+  // those authors to the end.
+  final Set<String> viewedStoryIds;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +48,31 @@ class StoriesRail extends StatelessWidget {
       byAuthor.putIfAbsent(story.authorId, () => []).add(story);
     }
     final ownStories = byAuthor.remove(viewerId);
-    final otherAuthors = byAuthor.keys.toList();
+
+    bool authorViewed(String id) =>
+        byAuthor[id]!.every((s) => viewedStoryIds.contains(s.id));
+    // Unviewed authors first, then viewed — like WhatsApp's status list.
+    final otherAuthors = byAuthor.keys.toList()
+      ..sort((a, b) {
+        final av = authorViewed(a), bv = authorViewed(b);
+        if (av != bv) return av ? 1 : -1;
+        return 0;
+      });
+
+    // Play order (oldest-first) for a single author.
+    List<Story> playOrder(List<Story> list) => list.reversed.toList();
+
+    // Tapping an author plays their stories then chains the following
+    // still-unviewed authors, so the viewer rolls through everything new.
+    List<Story> reelFrom(int index) {
+      final reel = <Story>[];
+      for (var i = index; i < otherAuthors.length; i++) {
+        final id = otherAuthors[i];
+        if (i != index && authorViewed(id)) continue;
+        reel.addAll(playOrder(byAuthor[id]!));
+      }
+      return reel;
+    }
 
     return SizedBox(
       height: 200,
@@ -58,7 +89,7 @@ class StoriesRail extends StatelessWidget {
               onAdd: onAddStory,
               onView: ownStories == null
                   ? null
-                  : () => onAuthorTapped(viewerId, ownStories),
+                  : () => onAuthorTapped(viewerId, playOrder(ownStories)),
             );
           }
           final authorId = otherAuthors[index - 1];
@@ -66,7 +97,8 @@ class StoriesRail extends StatelessWidget {
           final preview = list.first;
           return _FriendStoryCard(
             story: preview,
-            onTap: () => onAuthorTapped(authorId, list),
+            viewed: authorViewed(authorId),
+            onTap: () => onAuthorTapped(authorId, reelFrom(index - 1)),
           );
         },
       ),
@@ -231,10 +263,15 @@ class _YourStoryCard extends StatelessWidget {
 
 /// Vertical 3:4 card for someone else's story.
 class _FriendStoryCard extends StatelessWidget {
-  const _FriendStoryCard({required this.story, required this.onTap});
+  const _FriendStoryCard({
+    required this.story,
+    required this.onTap,
+    this.viewed = false,
+  });
 
   final Story story;
   final VoidCallback onTap;
+  final bool viewed;
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +318,10 @@ class _FriendStoryCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(2.5),
                     decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
+                      gradient: viewed ? null : AppColors.primaryGradient,
+                      color: viewed
+                          ? AppColors.white.withValues(alpha: 0.45)
+                          : null,
                       shape: BoxShape.circle,
                     ),
                     child: Container(

@@ -74,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen>
   int _unreadNotifications = 0;
   List<Post> _posts = [];
   List<Story> _stories = [];
+  Set<String> _viewedStoryIds = const {};
   // Authors whose story the viewer has opened this session — greys their
   // post-card story ring.
   final Set<String> _viewedStoryAuthors = {};
@@ -201,6 +202,7 @@ class _HomeScreenState extends State<HomeScreen>
         PrayerService.fetchPrayers(),
         MarketplaceService.fetchProducts(),
         JobService.fetchJobs(),
+        FeedService.fetchMyViewedStoryIds(),
       ]);
       if (!mounted) return;
       // Drop events whose start time is more than a few hours in the
@@ -243,6 +245,7 @@ class _HomeScreenState extends State<HomeScreen>
         _suggestedMembers = results[6] as List<MemberDirectoryEntry>;
         _posts = feedPosts;
         _stories = results[8] as List<Story>;
+        _viewedStoryIds = results[16] as Set<String>;
         _friendshipsByUser = friendsByUser;
         _pendingFriendRequests = results[10] as int;
         _unreadMessages = unreadMessages;
@@ -391,10 +394,10 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() => _stories = [story, ..._stories]);
   }
 
-  Future<void> _openStoryViewer(List<Story> authorStories) {
-    // Newest-first comes from the server; the viewer plays oldest→newest
-    // like Facebook does, so flip the list before showing.
-    return StoryViewer.show(context, authorStories.reversed.toList());
+  Future<void> _openStoryViewer(List<Story> reel) {
+    // The rail hands us a play-order (oldest-first) reel — including
+    // auto-advance across unviewed authors — so show it as-is.
+    return StoryViewer.show(context, reel);
   }
 
   List<Story> _storiesForAuthor(String authorId) =>
@@ -457,7 +460,8 @@ class _HomeScreenState extends State<HomeScreen>
     if (!mounted) return;
     if (choice == 'story') {
       setState(() => _viewedStoryAuthors.add(post.authorId));
-      await _openStoryViewer(stories);
+      // _storiesForAuthor is newest-first; play oldest-first.
+      await _openStoryViewer(stories.reversed.toList());
     } else if (choice == 'profile') {
       _openAuthorProfile(post);
     }
@@ -660,6 +664,7 @@ class _HomeScreenState extends State<HomeScreen>
                   viewerPhotoUrl: _viewerPhotoUrl(),
                   onAddStory: _openStoryComposer,
                   onAuthorTapped: (_, list) => _openStoryViewer(list),
+                  viewedStoryIds: _viewedStoryIds,
                 ),
                 const SizedBox(height: 16),
                 Padding(

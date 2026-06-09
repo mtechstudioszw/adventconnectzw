@@ -39,6 +39,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   List<Conversation> _conversations = [];
   Map<String, ConversationState> _convStates = const {};
   List<Story> _stories = const [];
+  Set<String> _viewedStoryIds = const {};
   List<PendingFriendRequest> _friendRequests = const [];
   bool _loading = true;
   String? _error;
@@ -161,6 +162,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         FeedService.fetchStories(),
         FeedService.fetchPendingFriendRequests(),
         MessagingService.fetchConversationStates(),
+        FeedService.fetchMyViewedStoryIds(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -168,6 +170,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _stories = results[1] as List<Story>;
         _friendRequests = results[2] as List<PendingFriendRequest>;
         _convStates = results[3] as Map<String, ConversationState>;
+        _viewedStoryIds = results[4] as Set<String>;
         _loading = false;
         // Auto-route to Requests tab on first paint if the inbox is
         // empty but there are pending requests. Fixes the "chat icon
@@ -205,8 +208,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     setState(() => _stories = [story, ..._stories]);
   }
 
-  Future<void> _openStoryViewer(List<Story> stories) {
-    return StoryViewer.show(context, stories.reversed.toList());
+  Future<void> _openStoryViewer(List<Story> reel) {
+    // The rail now hands us a play-order (oldest-first) reel, including
+    // auto-advance across unviewed authors — show it as-is.
+    return StoryViewer.show(context, reel);
   }
 
   String? _viewerPhotoUrl() {
@@ -809,6 +814,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           viewerPhotoUrl: _viewerPhotoUrl(),
           onAddStory: _openStoryComposer,
           onAuthorTapped: (_, list) => _openStoryViewer(list),
+          viewedStoryIds: _viewedStoryIds,
         ),
         if (_stories.isEmpty)
           Padding(

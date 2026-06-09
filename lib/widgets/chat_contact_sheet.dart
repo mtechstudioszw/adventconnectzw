@@ -7,6 +7,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
+import 'full_image_viewer.dart';
 
 /// WhatsApp-style contact preview sheet. Surfaces only the chat-
 /// relevant subset of the other user's profile — big photo, name,
@@ -121,11 +122,16 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
               SizedBox(
                 height: 120,
                 child: (coverUrl ?? '').isNotEmpty
-                    ? CachedImage(
-                        coverUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                    ? GestureDetector(
+                        onTap: () => FullImageViewer.show(context, coverUrl),
+                        child: CachedImage(
+                          coverUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                            color:
+                                AppColors.primaryBlue.withValues(alpha: 0.08),
+                          ),
                         ),
                       )
                     : Container(
@@ -134,7 +140,12 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
               ),
               const SizedBox(height: 12),
               Center(
-                child: _bigAvatar(name: name, photoUrl: photoUrl),
+                child: GestureDetector(
+                  onTap: (photoUrl ?? '').isNotEmpty
+                      ? () => FullImageViewer.show(context, photoUrl)
+                      : null,
+                  child: _bigAvatar(name: name, photoUrl: photoUrl),
+                ),
               ),
               const SizedBox(height: 14),
               Padding(

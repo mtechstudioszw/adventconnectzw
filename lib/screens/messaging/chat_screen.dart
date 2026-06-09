@@ -12,6 +12,7 @@ import '../../models/friendship_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../services/storage_service.dart';
@@ -277,6 +278,11 @@ class _ChatScreenState extends State<ChatScreen>
   static const int _maxRecordingSeconds = 300;
   bool _hasText = false;
 
+  // Group chats: member roster for sender labels + admin badges.
+  List<GroupMember> _groupMembers = const [];
+  final Map<String, GroupMember> _memberById = {};
+  bool get _isGroup => _conversation?.isGroup ?? false;
+
   // #17: product preview shown above the composer when the chat was
   // opened from a marketplace product. Dismissible; cleared once the
   // first message is sent.
@@ -353,6 +359,23 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
     _wirePresence();
+    _maybeLoadGroupMembers();
+  }
+
+  Future<void> _maybeLoadGroupMembers() async {
+    if (!_isGroup) return;
+    try {
+      final members = await GroupService.fetchMembers(widget.conversationId);
+      if (!mounted) return;
+      setState(() {
+        _groupMembers = members;
+        _memberById
+          ..clear()
+          ..addEntries(members.map((m) => MapEntry(m.userId, m)));
+      });
+    } catch (_) {
+      // Non-fatal — bubbles fall back to the stored sender_name.
+    }
   }
 
   void _wirePresence() {
@@ -1073,13 +1096,71 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  // Per-sender label colour for group bubbles — cycled from the approved
+  // palette only (no off-scheme colours).
+  static const List<Color> _senderColors = [
+    AppColors.primaryBlue,
+    AppColors.successGreen,
+    AppColors.darkNavy,
+  ];
+
+  Widget _groupSenderLabel(Message m) {
+    final member = _memberById[m.senderId];
+    final name = member?.fullName ??
+        (m.senderName.trim().isEmpty ? 'Member' : m.senderName);
+    final color =
+        _senderColors[m.senderId.hashCode.abs() % _senderColors.length];
+    final isAdmin = member?.isAdmin ?? false;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            name,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 11.5,
+            ),
+          ),
+          if (isAdmin) ...[
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'admin',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     final convo = _conversation;
+    final isGroup = convo?.isGroup ?? false;
     final name = convo?.otherUserName ?? 'Conversation';
     final photoUrl = convo?.otherUserPhotoUrl;
     final otherUserId = convo?.otherUserId;
-    final canOpenProfile =
-        otherUserId != null && otherUserId.isNotEmpty && !(convo?.isSelfChat ?? false);
+    final canOpenProfile = !isGroup &&
+        otherUserId != null &&
+        otherUserId.isNotEmpty &&
+        !(convo?.isSelfChat ?? false);
+    void openGroupInfo() => context.pushNamed(
+          'group_info',
+          pathParameters: {'id': widget.conversationId},
+        );
     return ClipPath(
       clipper: _HeaderClipper(),
       child: Container(
@@ -1109,14 +1190,16 @@ class _ChatScreenState extends State<ChatScreen>
                     // Previously the tap deep-linked straight to the
                     // full profile, which felt too much for a quick
                     // glance.
-                    onTap: canOpenProfile
-                        ? () => showChatContactSheet(
-                              context,
-                              userId: otherUserId,
-                              fallbackName: name,
-                              fallbackPhotoUrl: photoUrl,
-                            )
-                        : null,
+                    onTap: isGroup
+                        ? openGroupInfo
+                        : canOpenProfile
+                            ? () => showChatContactSheet(
+                                  context,
+                                  userId: otherUserId,
+                                  fallbackName: name,
+                                  fallbackPhotoUrl: photoUrl,
+                                )
+                            : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
@@ -1142,7 +1225,20 @@ class _ChatScreenState extends State<ChatScreen>
                                 AnimatedSwitcher(
                                   duration:
                                       const Duration(milliseconds: 220),
-                                  child: _buildPresenceSubtitle(),
+                                  child: isGroup
+                                      ? Text(
+                                          _groupMembers.isEmpty
+                                              ? 'Tap for group info'
+                                              : '${_groupMembers.length} members',
+                                          key: const ValueKey('group-sub'),
+                                          style:
+                                              AppTextStyles.labelSmall.copyWith(
+                                            color: AppColors.white
+                                                .withValues(alpha: 0.75),
+                                            fontSize: 11,
+                                          ),
+                                        )
+                                      : _buildPresenceSubtitle(),
                                 ),
                               ],
                             ),
@@ -1152,7 +1248,13 @@ class _ChatScreenState extends State<ChatScreen>
                     ),
                   ),
                 ),
-                _buildOverflowMenu(canOpenProfile, otherUserId),
+                if (isGroup)
+                  _CircleIconButton(
+                    icon: Icons.info_outline,
+                    onTap: openGroupInfo,
+                  )
+                else
+                  _buildOverflowMenu(canOpenProfile, otherUserId),
               ],
             ),
           ),
@@ -1511,6 +1613,7 @@ class _ChatScreenState extends State<ChatScreen>
                   isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 if (showDateSeparator) _DateSeparator(label: _dayLabel(m.createdAt)),
+                if (_isGroup && !isMine) _groupSenderLabel(m),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onLongPress: () => _showMessageActions(m, isMine),

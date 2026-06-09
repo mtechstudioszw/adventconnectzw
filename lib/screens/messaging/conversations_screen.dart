@@ -380,10 +380,75 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
+  /// FAB → New chat / New group (WhatsApp's creation entry point).
+  Future<void> _openNewChatSheet() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ctx.palette.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: AppColors.primaryBlue,
+                child: Icon(Icons.group_add, color: AppColors.white),
+              ),
+              title: Text(
+                'New group',
+                style:
+                    AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+              ),
+              onTap: () => Navigator.pop(ctx, 'group'),
+            ),
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.successGreen,
+                child: const Icon(Icons.person_add_alt, color: AppColors.white),
+              ),
+              title: Text(
+                'New chat',
+                style:
+                    AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+              ),
+              onTap: () => Navigator.pop(ctx, 'chat'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'group') {
+      context.pushNamed('create_group');
+    } else {
+      context.pushNamed('member_directory');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.primaryBlue,
+        foregroundColor: AppColors.white,
+        onPressed: _openNewChatSheet,
+        child: const Icon(Icons.edit_square),
+      ),
       body: Column(
         children: [
           _buildHero(),

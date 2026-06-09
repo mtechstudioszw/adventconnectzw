@@ -52,6 +52,8 @@ import '../screens/marketplace/product_details_screen.dart';
 import '../screens/messaging/chat_privacy_screen.dart';
 import '../screens/messaging/chat_screen.dart';
 import '../screens/messaging/conversations_screen.dart';
+import '../screens/messaging/create_group_screen.dart';
+import '../screens/messaging/group_info_screen.dart';
 import '../screens/news/advent_news_details_screen.dart';
 import '../screens/news/advent_news_screen.dart';
 import '../screens/news/post_advent_news_screen.dart';
@@ -398,6 +400,11 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const ChatPrivacyScreen(),
         ),
         GoRoute(
+          path: 'new-group',
+          name: 'create_group',
+          builder: (context, state) => const CreateGroupScreen(),
+        ),
+        GoRoute(
           path: ':id',
           name: 'chat',
           builder: (context, state) {
@@ -410,6 +417,15 @@ final GoRouter appRouter = GoRouter(
               initialConversation: initial,
             );
           },
+          routes: [
+            GoRoute(
+              path: 'info',
+              name: 'group_info',
+              builder: (context, state) => GroupInfoScreen(
+                conversationId: state.pathParameters['id'] ?? '',
+              ),
+            ),
+          ],
         ),
       ],
     ),

@@ -107,10 +107,13 @@ flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
   remove_alpha_ios: true
-  image_path: "assets/icon/logo.png"
-  # Adaptive icon background matches the dark navy from CLAUDE.md.
-  # Use the same logo as the foreground — the system overlays it on
-  # the navy background for round / squircle launchers.
-  adaptive_icon_background: "#0D1B3E"
-  adaptive_icon_foreground: "assets/icon/logo.png"
+  # icon_foreground.png = just the "A" mark, cropped out of the full
+  # logo lockup (logo.png has the wordmark + white bg, which the adaptive
+  # mask cropped). Symbol is centred with safe-zone padding on white.
+  image_path: "assets/icon/icon_foreground.png"
+  # White background so the adaptive icon reads as a clean white tile
+  # matching the logo's own canvas (the foreground is opaque white, so
+  # this only shows at the masked edges).
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
   min_sdk_android: 21

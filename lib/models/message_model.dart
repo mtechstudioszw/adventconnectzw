@@ -12,6 +12,7 @@ class Conversation {
     this.initiatorId,
     this.isBusiness = false,
     this.isSelfChat = false,
+    this.isGroup = false,
   });
 
   final String id;
@@ -26,6 +27,10 @@ class Conversation {
   final String? initiatorId;
   final bool isBusiness;
   final bool isSelfChat;
+  // Group chats (patch_052): a conversations row with is_group=TRUE. For
+  // groups, [otherUserName]/[otherUserPhotoUrl] hold the GROUP name + icon
+  // so inbox tiles and the chat header render uniformly with 1:1 chats.
+  final bool isGroup;
 
   /// True when this conversation is a pending message request the
   /// current viewer hasn't accepted yet *and* isn't the initiator of —
@@ -37,6 +42,26 @@ class Conversation {
     Map<String, dynamic> json, {
     required String currentUserId,
   }) {
+    final isGroup = json['is_group'] == true;
+    if (isGroup) {
+      return Conversation(
+        id: json['id'].toString(),
+        otherUserId: '',
+        otherUserName:
+            (json['name'] as String?)?.trim().isNotEmpty == true
+                ? (json['name'] as String).trim()
+                : 'Group',
+        otherUserPhotoUrl: json['photo_url'] as String?,
+        lastMessage: (json['last_message'] ?? '') as String,
+        lastMessageAt: DateTime.tryParse(
+                json['last_message_at']?.toString() ?? '') ??
+            DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+            DateTime.now(),
+        unreadCount: _readInt(json['unread_count']),
+        lastSenderId: json['last_sender_id']?.toString(),
+        isGroup: true,
+      );
+    }
     final participantA = (json['participant_a_id'] ?? '').toString();
     final participantB = (json['participant_b_id'] ?? '').toString();
     final selfChat =
@@ -95,6 +120,7 @@ class Conversation {
     String? initiatorId,
     bool? isBusiness,
     bool? isSelfChat,
+    bool? isGroup,
     String? otherUserPhotoUrl,
   }) {
     return Conversation(
@@ -110,6 +136,7 @@ class Conversation {
       initiatorId: initiatorId ?? this.initiatorId,
       isBusiness: isBusiness ?? this.isBusiness,
       isSelfChat: isSelfChat ?? this.isSelfChat,
+      isGroup: isGroup ?? this.isGroup,
     );
   }
 

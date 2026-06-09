@@ -240,6 +240,45 @@ class StorageService {
     return urls;
   }
 
+  /// Max chat-image upload size (validated AFTER compression, before
+  /// upload). Compression keeps real photos well under this; the guard
+  /// catches pathological files.
+  static const int maxChatImageBytes = 5 * 1024 * 1024;
+
+  /// Pick + compress a single image for a chat message. Gallery by
+  /// default, camera when [fromCamera] is true. Returns the compressed
+  /// bytes + normalised extension, or null if cancelled. Throws
+  /// [FileTooLargeException] when the result still exceeds 5 MB.
+  static Future<({Uint8List bytes, String ext})?> pickChatImage({
+    bool fromCamera = false,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to send photos.');
+    }
+    XFile? picked;
+    try {
+      picked = await _picker.pickImage(
+        source: fromCamera ? ImageSource.camera : ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 80,
+        requestFullMetadata: false,
+      );
+    } catch (e, st) {
+      debugPrint('StorageService.pickChatImage failed: $e\n$st');
+      return null;
+    }
+    if (picked == null) return null;
+    final bytes = await picked.readAsBytes();
+    if (bytes.length > maxChatImageBytes) {
+      throw const FileTooLargeException(
+        'That image is over 5 MB. Please choose a smaller one.',
+      );
+    }
+    return (bytes: bytes, ext: _extensionOf(picked.name));
+  }
+
   /// Upload pre-supplied bytes (used by tests or non-picker flows).
   static Future<String> uploadBytes({
     required String bucket,
@@ -310,4 +349,13 @@ class _CropSpec {
   final int outputWidth;
   final int outputQuality;
   final String title;
+}
+
+/// Thrown when a picked attachment exceeds its size limit. [message] is
+/// user-facing — show it directly.
+class FileTooLargeException implements Exception {
+  const FileTooLargeException(this.message);
+  final String message;
+  @override
+  String toString() => message;
 }

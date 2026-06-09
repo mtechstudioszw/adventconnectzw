@@ -629,6 +629,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           itemBuilder: (context, i) {
             final c = list[i];
             return _ConversationTile(
+              // Stable per-conversation key so Flutter matches each tile
+              // to the SAME conversation across the frequent realtime
+              // refetches. Without it, tiles were recycled by index — so
+              // when a chat jumped to the top after a new message, the
+              // list visibly glitched (tiles swapping content / flashing
+              // avatars). The key makes reorders animate cleanly instead.
+              key: ValueKey(c.id),
               conversation: c,
               isLastFromMe: c.lastSenderId == _currentUserId,
               onTap: () => _openChat(c),
@@ -897,6 +904,7 @@ class _TabPill extends StatelessWidget {
 
 class _ConversationTile extends StatelessWidget {
   const _ConversationTile({
+    super.key,
     required this.conversation,
     required this.isLastFromMe,
     required this.onTap,

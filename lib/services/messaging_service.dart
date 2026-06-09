@@ -197,14 +197,31 @@ class MessagingService {
     }
     List<dynamic> response;
     try {
-      response = await _client
-          .from(_conversationsTable)
-          .select(_conversationSelect)
-          .or(
-            'participant_a_id.eq.${user.id},participant_b_id.eq.${user.id}',
-          )
-          .order('last_message_at', ascending: false)
-          .limit(100) as List;
+      // 1:1 chats (explicit participant filter) + group chats the viewer
+      // belongs to (is_group rows; patch_052 RLS already limits these to
+      // the caller's memberships, so no extra filter is needed). Fetched
+      // in parallel and merged.
+      final results = await Future.wait([
+        _client
+            .from(_conversationsTable)
+            .select(_conversationSelect)
+            .or(
+              'participant_a_id.eq.${user.id},participant_b_id.eq.${user.id}',
+            )
+            .order('last_message_at', ascending: false)
+            .limit(100),
+        _client
+            .from(_conversationsTable)
+            .select(_conversationSelect)
+            .eq('is_group', true)
+            .order('last_message_at', ascending: false)
+            .limit(100),
+      ]);
+      final merged = <String, dynamic>{};
+      for (final row in [...(results[0] as List), ...(results[1] as List)]) {
+        merged[(row as Map)['id'].toString()] = row;
+      }
+      response = merged.values.toList();
     } catch (_) {
       // Connectivity check raced — fall back to cache rather than
       // surfacing a generic failure on the inbox.
@@ -965,6 +982,104 @@ class MessagingService {
         .from(_voiceBucket)
         .createSignedUrl(storagePath, ttlSeconds);
   }
+
+  /// Downloads the raw bytes of a voice note from the private bucket.
+  /// Used by VoicePlayerService to cache the clip locally and play it
+  /// from disk (streaming a signed URL truncated long notes on Android).
+  static Future<Uint8List> downloadVoiceBytes(String storagePath) {
+    return _client.storage.from(_voiceBucket).download(storagePath);
+  }
+
+  // ===================================================================
+  // CHAT MEDIA (images / documents — patch_051, private chat_media bucket)
+  // ===================================================================
+
+  static const _chatMediaBucket = 'chat_media';
+  // Signed-URL memo so re-rendering an image bubble doesn't mint a fresh
+  // URL each build (and so CachedImage can cache by a stable URL).
+  static final Map<String, _SignedUrlEntry> _signedMediaCache = {};
+
+  /// Uploads a compressed image to the private chat_media bucket and
+  /// inserts a `message_type='image'` row. Path is conversation-scoped
+  /// so the patch_051 RLS limits reads to participants.
+  static Future<Message> sendImageMessage({
+    required String conversationId,
+    required Uint8List bytes,
+    required String ext,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to send photos.');
+    }
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final storagePath = '$conversationId/${user.id}/$ts.$ext';
+    await _client.storage.from(_chatMediaBucket).uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: _imageMime(ext),
+            upsert: false,
+          ),
+        );
+    final response = await _client
+        .from(_messagesTable)
+        .insert({
+          'conversation_id': conversationId,
+          'sender_id': user.id,
+          'content': '📷 Photo',
+          'message_type': 'image',
+          'media_url': storagePath,
+        })
+        .select()
+        .single();
+    final message = Message.fromJson(response);
+    await _client.from(_conversationsTable).update({
+      'last_message': '📷 Photo',
+      'last_sender_id': user.id,
+      'last_message_at': message.createdAt.toIso8601String(),
+    }).eq('id', conversationId);
+    AnalyticsService.messageSent(source: 'image');
+    return message;
+  }
+
+  /// Signed URL for a chat_media object, memoised until ~2 min before
+  /// expiry so repeated bubble rebuilds don't hammer the API.
+  static Future<String> signedChatMediaUrl(
+    String storagePath, {
+    int ttlSeconds = 3600,
+  }) async {
+    final now = DateTime.now();
+    final cached = _signedMediaCache[storagePath];
+    if (cached != null &&
+        cached.expiry.isAfter(now.add(const Duration(minutes: 2)))) {
+      return cached.url;
+    }
+    final url = await _client.storage
+        .from(_chatMediaBucket)
+        .createSignedUrl(storagePath, ttlSeconds);
+    _signedMediaCache[storagePath] =
+        _SignedUrlEntry(url, now.add(Duration(seconds: ttlSeconds)));
+    return url;
+  }
+
+  static String _imageMime(String ext) {
+    switch (ext.toLowerCase()) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      default:
+        return 'image/jpeg';
+    }
+  }
+}
+
+class _SignedUrlEntry {
+  const _SignedUrlEntry(this.url, this.expiry);
+  final String url;
+  final DateTime expiry;
 }
 
 /// Thrown by [MessagingService.sendMessage] when the device is offline

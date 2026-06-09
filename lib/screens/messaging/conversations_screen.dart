@@ -483,7 +483,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     } else if (choice == 'join') {
       await _joinWithLink();
     } else {
-      context.pushNamed('member_directory');
+      context.pushNamed('new_chat');
     }
   }
 
@@ -612,7 +612,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ),
               const SizedBox(width: 6),
               Text(
-                'Chats',
+                'Advent Chat',
                 style: AppTextStyles.titleLarge.copyWith(
                   color: AppColors.white,
                   fontWeight: FontWeight.w700,

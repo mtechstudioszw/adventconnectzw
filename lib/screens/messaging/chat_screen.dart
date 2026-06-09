@@ -2176,6 +2176,11 @@ class _ChatScreenState extends State<ChatScreen>
                           //   ✓   sent    — server has the row
                           //   ✓✓  delivered — recipient device received it
                           //   ✓✓  read    — recipient opened the chat (blue)
+                          // In GROUPS, read/delivered are single shared
+                          // columns (not per-member), so a blue "read by
+                          // everyone" tick would be misleading. Show only
+                          // sent (✓) / delivered (✓✓ grey) there — never
+                          // blue. 1:1 keeps the full three-state tick.
                           Icon(
                             m.id.startsWith('pending-')
                                 ? Icons.access_time
@@ -2183,7 +2188,7 @@ class _ChatScreenState extends State<ChatScreen>
                                     ? Icons.done_all
                                     : Icons.done),
                             size: 13,
-                            color: m.read
+                            color: (m.read && !_isGroup)
                                 ? AppColors.primaryBlue
                                 : context.palette.textMuted,
                           ),

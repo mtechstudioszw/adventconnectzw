@@ -54,6 +54,7 @@ import '../screens/messaging/chat_screen.dart';
 import '../screens/messaging/conversations_screen.dart';
 import '../screens/messaging/create_group_screen.dart';
 import '../screens/messaging/group_info_screen.dart';
+import '../screens/messaging/new_chat_screen.dart';
 import '../screens/messaging/starred_messages_screen.dart';
 import '../screens/news/advent_news_details_screen.dart';
 import '../screens/news/advent_news_screen.dart';
@@ -399,6 +400,11 @@ final GoRouter appRouter = GoRouter(
           path: 'privacy',
           name: 'chat_privacy',
           builder: (context, state) => const ChatPrivacyScreen(),
+        ),
+        GoRoute(
+          path: 'new-chat',
+          name: 'new_chat',
+          builder: (context, state) => const NewChatScreen(),
         ),
         GoRoute(
           path: 'new-group',

@@ -69,10 +69,14 @@ class _SearchScreenState extends State<SearchScreen> {
   List<String> _recent = const [];
   bool _seeAllRecent = false;
 
-  // "People you may know" — shown on the no-query landing state so the
-  // search screen always surfaces someone to connect with (tester #11),
-  // not just an empty recents list.
+  // Mixed discovery for the no-query landing state — people, products,
+  // churches, events and jobs, so search always surfaces something to
+  // explore (not just people, and not an empty recents list).
   List<MemberDirectoryEntry> _suggestions = const [];
+  List<Church> _suggChurches = const [];
+  List<Event> _suggEvents = const [];
+  List<Product> _suggProducts = const [];
+  List<Job> _suggJobs = const [];
   bool _seeAllSuggestions = false;
 
   @override
@@ -86,14 +90,29 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _loadSuggestions() async {
-    try {
-      final list = await DirectoryService.fetchSuggestedMembers(limit: 20);
-      if (!mounted) return;
-      setState(() => _suggestions = list);
-    } catch (_) {
-      // Suggestions are best-effort — a failure just leaves the landing
-      // state showing recents only.
+    Future<List<T>> safe<T>(Future<List<T>> Function() fn) async {
+      try {
+        return await fn();
+      } catch (_) {
+        return const [];
+      }
     }
+
+    final results = await Future.wait([
+      safe(() => DirectoryService.fetchSuggestedMembers(limit: 20)),
+      safe(() => ChurchService.fetchChurches()),
+      safe(() => EventService.fetchEvents(upcomingOnly: true)),
+      safe(() => MarketplaceService.fetchProducts()),
+      safe(() => JobService.fetchJobs()),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _suggestions = results[0] as List<MemberDirectoryEntry>;
+      _suggChurches = (results[1] as List<Church>).take(6).toList();
+      _suggEvents = (results[2] as List<Event>).take(6).toList();
+      _suggProducts = (results[3] as List<Product>).take(6).toList();
+      _suggJobs = (results[4] as List<Job>).take(6).toList();
+    });
   }
 
   @override
@@ -566,62 +585,170 @@ class _SearchScreenState extends State<SearchScreen> {
               onRemove: () => _removeRecent(q),
             ),
         ],
-        if (_suggestions.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-            child: Row(
-              children: [
-                Text(
-                  'People you may know',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                if (_suggestions.length > 6)
-                  TextButton(
-                    onPressed: () => setState(
-                      () => _seeAllSuggestions = !_seeAllSuggestions,
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primaryBlue,
-                      minimumSize: const Size(0, 36),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    child: Text(
-                      _seeAllSuggestions ? 'Show less' : 'See all',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                for (final p in (_seeAllSuggestions
-                    ? _suggestions
-                    : _suggestions.take(6)))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _PersonRow(
-                      person: p,
-                      onTap: () => context.pushNamed(
-                        'user_profile',
-                        pathParameters: {'userId': p.userId},
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+        ..._buildLandingSuggestions(),
       ],
+    );
+  }
+
+  /// Mixed discovery rails for the no-query landing state: people,
+  /// products, churches, events and jobs. Each section is hidden when
+  /// empty; "People you may know" keeps its inline See-all toggle, the
+  /// rest link to their tab.
+  List<Widget> _buildLandingSuggestions() {
+    final sections = <Widget>[];
+
+    if (_suggestions.isNotEmpty) {
+      sections.add(_landingHeader(
+        'People you may know',
+        actionLabel: _suggestions.length > 6
+            ? (_seeAllSuggestions ? 'Show less' : 'See all')
+            : null,
+        onAction: _suggestions.length > 6
+            ? () => setState(() => _seeAllSuggestions = !_seeAllSuggestions)
+            : null,
+      ));
+      sections.add(_landingList([
+        for (final p in (_seeAllSuggestions
+            ? _suggestions
+            : _suggestions.take(6)))
+          _PersonRow(
+            person: p,
+            onTap: () => context.pushNamed(
+              'user_profile',
+              pathParameters: {'userId': p.userId},
+            ),
+          ),
+      ]));
+    }
+
+    if (_suggProducts.isNotEmpty) {
+      sections.add(_landingHeader(
+        'In the marketplace',
+        actionLabel: 'See all',
+        onAction: () => context.goNamed('marketplace'),
+      ));
+      sections.add(_landingList([
+        for (final p in _suggProducts)
+          _ProductRow(
+            product: p,
+            onTap: () => context.pushNamed(
+              'product_details',
+              pathParameters: {'id': p.id},
+              extra: p,
+            ),
+          ),
+      ]));
+    }
+
+    if (_suggChurches.isNotEmpty) {
+      sections.add(_landingHeader(
+        'Churches near you',
+        actionLabel: 'See all',
+        onAction: () => context.goNamed('churches'),
+      ));
+      sections.add(_landingList([
+        for (final c in _suggChurches)
+          _ChurchRow(
+            church: c,
+            onTap: () => context.pushNamed(
+              'church_details',
+              pathParameters: {'id': c.id},
+              extra: c,
+            ),
+          ),
+      ]));
+    }
+
+    if (_suggEvents.isNotEmpty) {
+      sections.add(_landingHeader(
+        'Upcoming events',
+        actionLabel: 'See all',
+        onAction: () => context.goNamed('events'),
+      ));
+      sections.add(_landingList([
+        for (final e in _suggEvents)
+          _EventRow(
+            event: e,
+            onTap: () => context.pushNamed(
+              'event_details',
+              pathParameters: {'id': e.id},
+              extra: e,
+            ),
+          ),
+      ]));
+    }
+
+    if (_suggJobs.isNotEmpty) {
+      sections.add(_landingHeader(
+        'Jobs & opportunities',
+        actionLabel: 'See all',
+        onAction: () => context.goNamed('jobs'),
+      ));
+      sections.add(_landingList([
+        for (final j in _suggJobs)
+          _JobRow(
+            job: j,
+            onTap: () => context.pushNamed(
+              'job_details',
+              pathParameters: {'id': j.id},
+              extra: j,
+            ),
+          ),
+      ]));
+    }
+
+    return sections;
+  }
+
+  Widget _landingHeader(
+    String title, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: AppTextStyles.titleMedium.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          if (actionLabel != null && onAction != null)
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: Text(
+                actionLabel,
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _landingList(List<Widget> rows) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: [
+          for (final r in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: r,
+            ),
+        ],
+      ),
     );
   }
 

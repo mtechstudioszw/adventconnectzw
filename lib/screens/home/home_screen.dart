@@ -7,10 +7,12 @@ import '../../models/advent_news_model.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../models/friendship_model.dart';
+import '../../models/job_model.dart';
 import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
 import '../../models/post_model.dart';
 import '../../models/prayer_model.dart';
+import '../../models/product_model.dart';
 import '../../models/story_model.dart';
 import '../../services/advent_news_service.dart';
 import '../../services/auth_service.dart';
@@ -21,6 +23,8 @@ import '../../services/directory_service.dart';
 import '../../services/gallery_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/job_service.dart';
+import '../../services/marketplace_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/prayer_service.dart';
@@ -36,6 +40,8 @@ import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
+import '../../widgets/job_card.dart';
+import '../../widgets/product_card.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/last_updated_strip.dart';
@@ -67,6 +73,8 @@ class _HomeScreenState extends State<HomeScreen>
   int _unreadNotifications = 0;
   List<Post> _posts = [];
   List<Story> _stories = [];
+  List<Product> _products = const [];
+  List<Job> _jobs = const [];
   // userId -> friendship row (if any) so the suggestion cards know
   // whether to show "Add friend" / "Pending" / "Friends".
   Map<String, Friendship> _friendshipsByUser = <String, Friendship>{};
@@ -187,6 +195,8 @@ class _HomeScreenState extends State<HomeScreen>
         MessagingService.fetchConversations(),
         AdventNewsService.fetchTopNews(limit: 3),
         PrayerService.fetchPrayers(),
+        MarketplaceService.fetchProducts(),
+        JobService.fetchJobs(),
       ]);
       if (!mounted) return;
       // Drop events whose start time is more than a few hours in the
@@ -234,6 +244,8 @@ class _HomeScreenState extends State<HomeScreen>
         _unreadMessages = unreadMessages;
         _topNews = results[12] as List<AdventNews>;
         _prayers = (results[13] as List<Prayer>).take(5).toList();
+        _products = (results[14] as List<Product>).take(10).toList();
+        _jobs = (results[15] as List<Job>).take(8).toList();
         _loading = false;
       });
       // Best-effort cache write — failures here must never surface.
@@ -894,6 +906,62 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  /// Horizontal rail of marketplace products for the mixed home feed.
+  /// ProductCard is built to stretch in a grid, so each is width-boxed
+  /// to behave like the events / prayers rails.
+  Widget _buildProductsRow() {
+    return SizedBox(
+      height: 252,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _products.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemBuilder: (context, i) {
+          final p = _products[i];
+          return SizedBox(
+            width: 168,
+            child: ProductCard(
+              product: p,
+              onTap: () => context.pushNamed(
+                'product_details',
+                pathParameters: {'id': p.id},
+                extra: p,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Horizontal rail of open job listings for the mixed home feed.
+  Widget _buildJobsRow() {
+    return SizedBox(
+      height: 150,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _jobs.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemBuilder: (context, i) {
+          final j = _jobs[i];
+          return SizedBox(
+            width: 290,
+            child: JobCard(
+              job: j,
+              onTap: () => context.pushNamed(
+                'job_details',
+                pathParameters: {'id': j.id},
+                extra: j,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildChurchGrid() {
     if (_loading && _churches.isEmpty) {
       return SizedBox(
@@ -1108,6 +1176,28 @@ class _HomeScreenState extends State<HomeScreen>
           action: 'See all',
           onAction: () => context.goNamed('churches'),
           child: _buildChurchGrid(),
+        ),
+      ));
+    }
+    if (_products.isNotEmpty) {
+      discoverable.add(_DiscoverySlot(
+        key: 'marketplace',
+        widget: _discoverySection(
+          title: 'From the marketplace',
+          action: 'See all',
+          onAction: () => context.goNamed('marketplace'),
+          child: _buildProductsRow(),
+        ),
+      ));
+    }
+    if (_jobs.isNotEmpty) {
+      discoverable.add(_DiscoverySlot(
+        key: 'jobs',
+        widget: _discoverySection(
+          title: 'Jobs & opportunities',
+          action: 'See all',
+          onAction: () => context.goNamed('jobs'),
+          child: _buildJobsRow(),
         ),
       ));
     }

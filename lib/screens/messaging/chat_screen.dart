@@ -863,7 +863,7 @@ class _ChatScreenState extends State<ChatScreen>
         _applyServerMessages(cached);
         _loading = false;
       });
-      _scrollToBottom();
+      _scrollToBottom(animate: false);
     }
     try {
       final list =
@@ -873,7 +873,7 @@ class _ChatScreenState extends State<ChatScreen>
         _applyServerMessages(list);
         _loading = false;
       });
-      _scrollToBottom();
+      _scrollToBottom(animate: false);
       _loadReactionsAndStars();
       // Mark anything they sent us as read. Awaited (not fire-and-
       // forget) so when the user pops back to the inbox the badge
@@ -1134,14 +1134,28 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animate = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOut,
-      );
+      final target = _scrollController.position.maxScrollExtent;
+      if (animate) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+        );
+      } else {
+        // Open / first paint: land AT the bottom instantly (WhatsApp).
+        // Animating from the top on open looked like a glitchy "scroll
+        // down" every time the chat opened.
+        _scrollController.jumpTo(target);
+        // Images/bubbles can finish laying out a frame later and grow
+        // maxScrollExtent — re-pin to the true bottom once that settles.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_scrollController.hasClients) return;
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        });
+      }
     });
   }
 

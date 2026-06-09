@@ -808,6 +808,19 @@ class MessagingService {
 
   // ---------- read / delivered receipts ----------
 
+  /// Mark EVERY undelivered incoming message (1:1 + group) as delivered
+  /// for the current user. Called on app resume / reconnect so a sender's
+  /// tick goes ✓✓ once the recipient comes back online, regardless of
+  /// which screen they land on (patch_062). Best-effort.
+  static Future<void> markAllIncomingDelivered() async {
+    if (_client.auth.currentUser == null) return;
+    try {
+      await _client.rpc('mark_all_incoming_delivered');
+    } catch (_) {
+      // Best-effort — screen-level passes still cover the common case.
+    }
+  }
+
   /// Mark unread messages from [otherSenderIds] as delivered (but
   /// not read). WhatsApp fires this when the recipient's device has
   /// the message in hand — before they've actually opened the chat.

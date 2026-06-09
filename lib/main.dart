@@ -214,6 +214,10 @@ class _AdventConnectAppState extends State<AdventConnectApp>
     }
     if (state == AppLifecycleState.resumed) {
       _maybeRequireBiometric();
+      // Returning to the app — flip any messages that arrived while we
+      // were away to delivered, so senders' ticks update even if we don't
+      // open Chats (patch_062).
+      unawaited(MessagingService.markAllIncomingDelivered());
     }
   }
 

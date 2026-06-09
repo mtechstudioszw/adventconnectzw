@@ -16,6 +16,10 @@ class PostCard extends StatelessWidget {
     required this.onCommentsTapped,
     required this.onImageTapped,
     this.onAuthorTapped,
+    this.onAuthorAvatarTapped,
+    this.hasStory = false,
+    this.storyViewed = false,
+    this.onStoryRingTapped,
     this.onEdit,
     this.onDelete,
     this.onToggleVisibility,
@@ -29,6 +33,13 @@ class PostCard extends StatelessWidget {
   final VoidCallback onCommentsTapped;
   final VoidCallback onImageTapped;
   final VoidCallback? onAuthorTapped;
+  // Tapping the avatar opens a quick profile preview (vs the name, which
+  // opens the full profile). Story ring: green when the author has an
+  // unviewed story, grey once viewed; tapping it asks story-or-profile.
+  final VoidCallback? onAuthorAvatarTapped;
+  final bool hasStory;
+  final bool storyViewed;
+  final VoidCallback? onStoryRingTapped;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleVisibility;
@@ -75,10 +86,16 @@ class PostCard extends StatelessWidget {
       child: Row(
         children: [
           GestureDetector(
-            onTap: onAuthorTapped,
-            child: _Avatar(
-              name: post.authorName,
-              photoUrl: post.authorPhotoUrl,
+            onTap: hasStory
+                ? onStoryRingTapped
+                : (onAuthorAvatarTapped ?? onAuthorTapped),
+            child: _StoryRing(
+              hasStory: hasStory,
+              viewed: storyViewed,
+              child: _Avatar(
+                name: post.authorName,
+                photoUrl: post.authorPhotoUrl,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -281,6 +298,46 @@ class PostCard extends StatelessWidget {
     if (months < 12) return '${months}mo';
     final years = (diff.inDays / 365).floor();
     return '${years}y';
+  }
+}
+
+/// WhatsApp-style status ring around an avatar: green when there's an
+/// unviewed story, grey once it's been viewed, nothing when no story.
+class _StoryRing extends StatelessWidget {
+  const _StoryRing({
+    required this.hasStory,
+    required this.viewed,
+    required this.child,
+  });
+  final bool hasStory;
+  final bool viewed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasStory) return child;
+    return Container(
+      padding: const EdgeInsets.all(2.5),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: viewed
+            ? null
+            : const LinearGradient(
+                colors: [AppColors.successGreen, Color(0xFF66BB6A)],
+              ),
+        border: viewed
+            ? Border.all(color: context.palette.divider, width: 2)
+            : null,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: context.palette.card,
+        ),
+        child: child,
+      ),
+    );
   }
 }
 

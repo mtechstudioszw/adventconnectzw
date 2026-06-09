@@ -46,6 +46,7 @@ import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/home/story_viewer.dart';
+import '../../widgets/chat_contact_sheet.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../widgets/cached_image.dart';
@@ -73,6 +74,9 @@ class _HomeScreenState extends State<HomeScreen>
   int _unreadNotifications = 0;
   List<Post> _posts = [];
   List<Story> _stories = [];
+  // Authors whose story the viewer has opened this session — greys their
+  // post-card story ring.
+  final Set<String> _viewedStoryAuthors = {};
   List<Product> _products = const [];
   List<Job> _jobs = const [];
   // userId -> friendship row (if any) so the suggestion cards know
@@ -391,6 +395,72 @@ class _HomeScreenState extends State<HomeScreen>
     // Newest-first comes from the server; the viewer plays oldest→newest
     // like Facebook does, so flip the list before showing.
     return StoryViewer.show(context, authorStories.reversed.toList());
+  }
+
+  List<Story> _storiesForAuthor(String authorId) =>
+      _stories.where((s) => s.authorId == authorId).toList();
+
+  bool _authorHasStory(String authorId) =>
+      _stories.any((s) => s.authorId == authorId);
+
+  /// Quick profile preview (avatar tap on a post).
+  void _previewAuthor(Post post) {
+    final me = AuthService.currentUser?.id;
+    if (post.authorId == me) {
+      context.goNamed('profile');
+      return;
+    }
+    showChatContactSheet(
+      context,
+      userId: post.authorId,
+      fallbackName: post.authorName,
+      fallbackPhotoUrl: post.authorPhotoUrl,
+    );
+  }
+
+  /// Tapping a post author's story ring — view the story or the profile.
+  Future<void> _onAuthorStoryRing(Post post) async {
+    final stories = _storiesForAuthor(post.authorId);
+    if (stories.isEmpty) {
+      _previewAuthor(post);
+      return;
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            ListTile(
+              leading: const Icon(Icons.auto_stories_outlined,
+                  color: AppColors.primaryBlue),
+              title: const Text('View status'),
+              onTap: () => Navigator.pop(ctx, 'story'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline,
+                  color: AppColors.primaryBlue),
+              title: const Text('View profile'),
+              onTap: () => Navigator.pop(ctx, 'profile'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'story') {
+      setState(() => _viewedStoryAuthors.add(post.authorId));
+      await _openStoryViewer(stories);
+    } else if (choice == 'profile') {
+      _openAuthorProfile(post);
+    }
   }
 
   Future<void> _toggleLike(Post post) async {
@@ -1082,6 +1152,10 @@ class _HomeScreenState extends State<HomeScreen>
         onToggleVisibility: () => _togglePostVisibility(post),
         onReport: () => _reportPost(post),
         onAuthorTapped: () => _openAuthorProfile(post),
+        onAuthorAvatarTapped: () => _previewAuthor(post),
+        hasStory: _authorHasStory(post.authorId),
+        storyViewed: _viewedStoryAuthors.contains(post.authorId),
+        onStoryRingTapped: () => _onAuthorStoryRing(post),
         onSaveImage: () => _savePostImage(post),
       ));
       if ((i + 1) % _discoveryEveryNPosts == 0 &&

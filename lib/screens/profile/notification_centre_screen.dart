@@ -26,6 +26,9 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   /// Categories the user has tapped "See more" on. Collapsed by default.
   final Set<_NotifCategory> _expanded = <_NotifCategory>{};
 
+  /// Active category filter chip. Null = "All".
+  _NotifCategory? _filter;
+
   @override
   void initState() {
     super.initState();
@@ -266,13 +269,82 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       _NotifCategory.announcements,
       _NotifCategory.activity,
     ];
+    final present =
+        order.where((c) => grouped[c]?.isNotEmpty ?? false).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _buildFilterChips(present),
         for (final cat in order)
-          if (grouped[cat]?.isNotEmpty ?? false)
+          if ((grouped[cat]?.isNotEmpty ?? false) &&
+              (_filter == null || _filter == cat))
             ..._buildSection(cat, grouped[cat]!),
       ],
+    );
+  }
+
+  /// Horizontal category filter chips (All + each present category).
+  /// Hidden when there's only one category — nothing to filter.
+  Widget _buildFilterChips(List<_NotifCategory> present) {
+    if (present.length < 2) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: SizedBox(
+        height: 38,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.zero,
+          children: [
+            _notifChip(
+              label: 'All',
+              selected: _filter == null,
+              onTap: () => setState(() => _filter = null),
+            ),
+            for (final c in present) ...[
+              const SizedBox(width: 8),
+              _notifChip(
+                label: _categoryLabel(c),
+                selected: _filter == c,
+                onTap: () => setState(() => _filter = c),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _notifChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primaryBlue : context.palette.chipBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color:
+                  selected ? AppColors.primaryBlue : context.palette.divider,
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: selected ? AppColors.white : context.palette.text,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

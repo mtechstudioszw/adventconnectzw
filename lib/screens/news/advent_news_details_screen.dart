@@ -11,6 +11,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/full_image_viewer.dart';
 
 /// Article view for a single Advent News piece. Arrives either with
 /// the full [initialItem] pre-loaded from the list screen, or just an
@@ -396,7 +397,11 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
           width: double.infinity,
           height: 280,
           child: hasCover
-              ? CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover)
+              ? GestureDetector(
+                  onTap: () =>
+                      FullImageViewer.show(context, item.coverPhotoUrl),
+                  child: CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover),
+                )
               : const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: AppColors.appBarGradient,

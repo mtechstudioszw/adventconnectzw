@@ -20,6 +20,7 @@ import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
+import '../../widgets/full_image_viewer.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../widgets/cached_image.dart';
@@ -868,12 +869,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                   fit: StackFit.expand,
                   children: [
                     if (coverUrl != null)
-                      CachedImage(
-                        coverUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          decoration: const BoxDecoration(
-                            gradient: AppColors.appBarGradient,
+                      GestureDetector(
+                        onTap: () => FullImageViewer.show(context, coverUrl),
+                        child: CachedImage(
+                          coverUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                            decoration: const BoxDecoration(
+                              gradient: AppColors.appBarGradient,
+                            ),
                           ),
                         ),
                       ),
@@ -960,15 +965,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                           fontSize: 38,
                         ),
                       )
-                    : CachedImage(
-                        photoUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Text(
-                          _initials(),
-                          style: AppTextStyles.displayMedium.copyWith(
-                            color: AppColors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 38,
+                    : GestureDetector(
+                        onTap: () => FullImageViewer.show(context, photoUrl),
+                        child: CachedImage(
+                          photoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Text(
+                            _initials(),
+                            style: AppTextStyles.displayMedium.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 38,
+                            ),
                           ),
                         ),
                       ),

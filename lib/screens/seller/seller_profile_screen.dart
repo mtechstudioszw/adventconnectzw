@@ -13,6 +13,7 @@ import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/full_image_viewer.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/rate_seller_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -463,16 +464,19 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         // text + circle avatar legible no matter how bright the cover.
         Positioned.fill(
           child: hasCover
-              ? CachedNetworkImage(
-                  imageUrl: cover,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => const DecoratedBox(
-                    decoration:
-                        BoxDecoration(gradient: AppColors.appBarGradient),
-                  ),
-                  errorWidget: (context, url, error) => const DecoratedBox(
-                    decoration:
-                        BoxDecoration(gradient: AppColors.appBarGradient),
+              ? GestureDetector(
+                  onTap: () => FullImageViewer.show(context, cover),
+                  child: CachedNetworkImage(
+                    imageUrl: cover,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const DecoratedBox(
+                      decoration:
+                          BoxDecoration(gradient: AppColors.appBarGradient),
+                    ),
+                    errorWidget: (context, url, error) => const DecoratedBox(
+                      decoration:
+                          BoxDecoration(gradient: AppColors.appBarGradient),
+                    ),
                   ),
                 )
               : const DecoratedBox(
@@ -518,7 +522,11 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
               ),
               const SizedBox(height: 18),
               Center(
-                child: Container(
+                child: GestureDetector(
+                  onTap: hasPhoto
+                      ? () => FullImageViewer.show(context, photo)
+                      : null,
+                  child: Container(
                   width: 96,
                   height: 96,
                   decoration: BoxDecoration(
@@ -547,6 +555,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                           color: AppColors.white,
                           size: 42,
                         ),
+                ),
                 ),
               ),
               const SizedBox(height: 14),

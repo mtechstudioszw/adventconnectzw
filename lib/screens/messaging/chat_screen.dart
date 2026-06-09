@@ -767,6 +767,19 @@ class _ChatScreenState extends State<ChatScreen>
     if (text.isEmpty || _sending) return;
     final me = AuthService.currentUser?.id ?? '';
 
+    // If the chat was opened from a marketplace product, fold the
+    // product reference INTO the first message so the context persists
+    // in the thread. Previously the "Asking about X" chip was a local
+    // hint dropped on send, so the seller never learned which item the
+    // buyer meant and the tag vanished. (A richer product-card bubble
+    // with the thumbnail lands in the chat overhaul.)
+    final productTitle = _productPreviewTitle;
+    final productPrice = (_productPreviewPrice ?? '').trim();
+    final outgoing = productTitle == null
+        ? text
+        : '🛍️ Re: $productTitle'
+            '${productPrice.isNotEmpty ? ' ($productPrice)' : ''}\n$text';
+
     // Optimistic UI — show the bubble immediately in the _pending
     // list. Use _optimisticTimestamp() so the new bubble is GUARANTEED
     // to sort after everything else on screen (previously the bubble
@@ -779,7 +792,7 @@ class _ChatScreenState extends State<ChatScreen>
       conversationId: widget.conversationId,
       senderId: me,
       senderName: 'You',
-      content: text,
+      content: outgoing,
       createdAt: _optimisticTimestamp(),
     );
     setState(() {
@@ -803,7 +816,7 @@ class _ChatScreenState extends State<ChatScreen>
     try {
       final canonical = await MessagingService.sendMessage(
         conversationId: widget.conversationId,
-        content: text,
+        content: outgoing,
       );
       // Replace the optimistic entry with the canonical message in
       // place. The stream tick that follows dedupes by id (now that

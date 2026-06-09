@@ -7,6 +7,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/church_map.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/full_image_viewer.dart';
 
 class ChurchDetailsScreen extends StatefulWidget {
   const ChurchDetailsScreen({
@@ -189,15 +190,19 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                     ),
                   ),
                 )
-              : CachedImage(
-                  church.coverPhotoUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: context.palette.cardMuted,
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      size: 56,
-                      color: context.palette.textMuted,
+              : GestureDetector(
+                  onTap: () =>
+                      FullImageViewer.show(context, church.coverPhotoUrl),
+                  child: CachedImage(
+                    church.coverPhotoUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: context.palette.cardMuted,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: 56,
+                        color: context.palette.textMuted,
+                      ),
                     ),
                   ),
                 ),

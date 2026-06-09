@@ -257,6 +257,25 @@ Deno.serve(async (req: Request) => {
     return new Response(`Skipped: ${category} muted`, { status: 200 });
   }
 
+  // Honour per-conversation mute (patch_058). Message notifications carry
+  // reference_type 'conversation' + reference_id = the conversation id; if
+  // the recipient muted that thread, suppress the push (the in-app inbox
+  // still updates).
+  if (referenceType === "conversation" && referenceId) {
+    const convId = Number(referenceId);
+    if (!Number.isNaN(convId)) {
+      const { data: cs } = await supabase
+        .from("conversation_state")
+        .select("muted")
+        .eq("user_id", userId)
+        .eq("conversation_id", convId)
+        .maybeSingle();
+      if (cs?.muted === true) {
+        return new Response("Skipped: conversation muted", { status: 200 });
+      }
+    }
+  }
+
   let account: ServiceAccount;
   try {
     const raw = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON");

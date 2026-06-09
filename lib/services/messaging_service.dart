@@ -589,12 +589,16 @@ class MessagingService {
     }
     List<dynamic> response;
     try {
-      response = await _client
+      // Fetch the NEWEST 500 (descending), then reverse to chronological
+      // for display. Ordering ascending + limit returned the OLDEST 500,
+      // which hid recent messages once a thread passed 500 messages.
+      final newestFirst = await _client
           .from(_messagesTable)
           .select()
           .eq('conversation_id', conversationId)
-          .order('created_at', ascending: true)
+          .order('created_at', ascending: false)
           .limit(500) as List;
+      response = newestFirst.reversed.toList();
     } catch (_) {
       return readCachedMessages(conversationId);
     }

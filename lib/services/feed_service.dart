@@ -83,6 +83,30 @@ class FeedService {
     return _diversify(posts).take(limit).toList();
   }
 
+  /// A single author's posts, strictly newest-first (for profile Posts
+  /// tabs). Unlike [fetchFeed] this is NOT reshuffled by the personalised
+  /// ranking — a profile should read latest → oldest as you scroll down.
+  static Future<List<Post>> fetchPostsByAuthor(
+    String authorId, {
+    int limit = 100,
+  }) async {
+    final response = await _client
+        .from(_postsTable)
+        .select(
+          '*, '
+          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+          'post_likes(user_id), '
+          'post_comments(id)',
+        )
+        .eq('author_id', authorId)
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return (response as List)
+        .map((row) =>
+            Post.fromJson(row as Map<String, dynamic>, viewerId: _viewerId))
+        .toList();
+  }
+
   /// Composite ranking score — higher = nearer the top of the feed.
   /// Pure function of post + viewer id + refresh nonce.
   static double _personalisedScore(Post p, String viewerId, int nonce) {

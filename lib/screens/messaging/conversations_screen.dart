@@ -60,6 +60,67 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   StreamSubscription<List<Map<String, dynamic>>>? _activitySub;
   Timer? _refreshDebounce;
   late final PageController _pageController;
+  // Inbox multi-select (delete several chats at once).
+  bool _chatSelect = false;
+  final Set<String> _selectedChats = <String>{};
+
+  void _enterChatSelect(Conversation c) {
+    if (c.isChurchGroup) return; // church groups can't be deleted
+    setState(() {
+      _chatSelect = true;
+      _selectedChats.add(c.id);
+    });
+  }
+
+  void _toggleChat(Conversation c) {
+    if (c.isChurchGroup) return;
+    setState(() {
+      if (_selectedChats.contains(c.id)) {
+        _selectedChats.remove(c.id);
+      } else {
+        _selectedChats.add(c.id);
+      }
+      if (_selectedChats.isEmpty) _chatSelect = false;
+    });
+  }
+
+  void _exitChatSelect() {
+    setState(() {
+      _chatSelect = false;
+      _selectedChats.clear();
+    });
+  }
+
+  Future<void> _deleteSelectedChats() async {
+    final ids = _selectedChats.toList();
+    final count = ids.length;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: Text('Delete $count chat${count == 1 ? '' : 's'}?'),
+        content: const Text('This removes them and their messages for you.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(dctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    _exitChatSelect();
+    for (final id in ids) {
+      try {
+        await MessagingService.declineRequest(id);
+      } catch (_) {}
+    }
+    if (mounted) await _bootstrap();
+  }
 
   @override
   void initState() {
@@ -612,7 +673,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       ),
       body: Column(
         children: [
-          _buildHero(),
+          _chatSelect ? _buildChatSelectionBar() : _buildHero(),
           _buildTabBar(),
           Expanded(
             child: RefreshIndicator(
@@ -632,6 +693,42 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Slim selection bar shown while multi-selecting chats: close + count
+  /// + delete, matching the hero's navy gradient.
+  Widget _buildChatSelectionBar() {
+    final count = _selectedChats.length;
+    return Container(
+      decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 6, 8, 10),
+          child: Row(
+            children: [
+              _CircleIconButton(icon: Icons.close, onTap: _exitChatSelect),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$count selected',
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: AppColors.white),
+                tooltip: 'Delete',
+                onPressed: count == 0 ? null : _deleteSelectedChats,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -967,8 +1064,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               isLastFromMe: c.lastSenderId == _currentUserId,
               pinned: _isPinned(c),
               muted: _isMuted(c),
-              onTap: () => _openChat(c),
-              onLongPress: () => _openConversationActions(c),
+              selected: _chatSelect && _selectedChats.contains(c.id),
+              onTap: _chatSelect
+                  ? () => _toggleChat(c)
+                  : () => _openChat(c),
+              onLongPress: _chatSelect
+                  ? null
+                  : () => _openConversationActions(c),
             );
           },
         );
@@ -1040,6 +1142,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 title: const Text('Mark as read'),
                 onTap: () => Navigator.of(sheetCtx).pop('read'),
               ),
+              if (!c.isChurchGroup)
+                ListTile(
+                  leading: const Icon(Icons.checklist_rtl,
+                      color: AppColors.primaryBlue),
+                  title: const Text('Select'),
+                  onTap: () => Navigator.of(sheetCtx).pop('select'),
+                ),
               // Church groups are anchored — no pin/archive/delete; only
               // mute is allowed.
               if (!c.isChurchGroup)
@@ -1095,6 +1204,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
     if (!mounted || action == null) return;
     switch (action) {
+      case 'select':
+        _enterChatSelect(c);
+        break;
       case 'read':
         await MessagingService.markConversationRead(c.id);
         if (!mounted) return;
@@ -1295,6 +1407,7 @@ class _ConversationTile extends StatelessWidget {
     this.onLongPress,
     this.pinned = false,
     this.muted = false,
+    this.selected = false,
   });
 
   final Conversation conversation;
@@ -1303,12 +1416,15 @@ class _ConversationTile extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool pinned;
   final bool muted;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final unread = conversation.unreadCount > 0 && !isLastFromMe;
     return Material(
-      color: Colors.transparent,
+      color: selected
+          ? AppColors.primaryBlue.withValues(alpha: 0.12)
+          : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,

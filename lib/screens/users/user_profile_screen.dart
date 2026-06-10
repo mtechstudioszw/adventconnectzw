@@ -100,10 +100,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Future<void> _loadPosts() async {
     try {
-      final all = await FeedService.fetchFeed(limit: 120);
+      // Profile posts are strictly newest-first (NOT the personalised
+      // home-feed order) so the profile reads latest → oldest.
+      final posts = await FeedService.fetchPostsByAuthor(widget.userId);
       if (!mounted) return;
       setState(() {
-        _posts = all.where((p) => p.authorId == widget.userId).toList();
+        _posts = posts;
       });
     } catch (_) {
       // ignore — empty posts state is fine.

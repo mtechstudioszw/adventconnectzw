@@ -71,7 +71,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       final results = await Future.wait([
         ChurchService.fetchUserFollowedChurchIds(),
         EventService.fetchUserRsvpedEventIds(),
-        FeedService.fetchFeed(limit: 120),
+        // Own posts newest-first (profile order), NOT the home feed's
+        // personalised order.
+        FeedService.fetchPostsByAuthor(AuthService.currentUser?.id ?? ''),
         ChurchService.fetchChurches(),
       ]);
       if (!mounted) return;

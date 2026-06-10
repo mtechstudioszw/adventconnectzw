@@ -95,6 +95,12 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   Future<void> _save() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
+    // Home church is MANDATORY — block saving with none selected so an
+    // account can never end up with "no church".
+    if (_selectedChurchId == null || _selectedChurchId!.isEmpty) {
+      setState(() => _error = 'Please choose your home church.');
+      return;
+    }
     setState(() => _saving = true);
     final previousChurchId =
         AuthService.currentUser?.userMetadata?['church_id'] as String?;
@@ -971,23 +977,13 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                           controller: scrollController,
                           padding: const EdgeInsets.fromLTRB(
                               8, 4, 8, 24),
-                          itemCount: filtered.length + 1,
+                          // A home church is MANDATORY — no "No church"
+                          // option (every account must belong to one).
+                          itemCount: filtered.length,
                           separatorBuilder: (context, index) =>
                               const SizedBox(height: 2),
                           itemBuilder: (ctx, i) {
-                            if (i == 0) {
-                              final selected =
-                                  widget.selectedId == null ||
-                                      widget.selectedId!.isEmpty;
-                              return _PickerRow(
-                                title: 'No church',
-                                subtitle: 'Skip choosing a home church',
-                                selected: selected,
-                                onTap: () =>
-                                    Navigator.of(ctx).pop(''),
-                              );
-                            }
-                            final c = filtered[i - 1];
+                            final c = filtered[i];
                             return _PickerRow(
                               title: c.name,
                               subtitle: c.city,

@@ -25,6 +25,11 @@ class AdventNewsService {
       final response = await _client
           .from(_table)
           .select('*, $_authorEmbed')
+          // Only APPROVED news in the public feed. RLS additionally lets
+          // the author/super-admin read pending rows, but the feed must
+          // not surface them (the author was seeing their own pending post
+          // and thinking it had gone live).
+          .eq('status', 'approved')
           .order('is_pinned', ascending: false)
           .order('published_at', ascending: false)
           .limit(limit * 4);
@@ -54,7 +59,10 @@ class AdventNewsService {
     int limit = 50,
   }) async {
     try {
-      var query = _client.from(_table).select('*, $_authorEmbed');
+      var query = _client
+          .from(_table)
+          .select('*, $_authorEmbed')
+          .eq('status', 'approved'); // approved-only in the public feed
       if (category != null) {
         query = query.eq('category', category.code);
       }

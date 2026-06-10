@@ -87,6 +87,9 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
   Future<void> _publish() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
+    // Dismiss the keyboard so it doesn't linger over the screen we return
+    // to after posting.
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _saving = true);
     try {
       final result = _isEdit
@@ -122,7 +125,11 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
           ),
         ),
       );
-      context.pop(result);
+      // Return a bool — the caller awaits pushNamed<bool>. Popping the
+      // AdventNews object here threw a type-cast error on return (the
+      // "error that flashes" + the screen jank / stuck back button).
+      result; // referenced so the edit/update result isn't flagged unused
+      context.pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() {

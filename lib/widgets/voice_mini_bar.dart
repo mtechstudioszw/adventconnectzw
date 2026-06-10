@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../config/router_config.dart';
 import '../services/voice_player_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
 /// WhatsApp-style global voice-note bar. Pinned just under the status bar,
-/// it appears whenever a voice note is playing while the user is NOT in
-/// that note's chat — play/pause, scrub progress, and a close button.
+/// it appears whenever a voice note is playing (or finished, paused) while
+/// the user is NOT in that note's chat. Play/pause, a DRAGGABLE scrub bar,
+/// tap to jump to the chat it came from, and a close button (the only
+/// thing that dismisses it).
 class VoiceMiniBar extends StatelessWidget {
   const VoiceMiniBar({super.key});
 
@@ -30,9 +33,9 @@ class VoiceMiniBar extends StatelessWidget {
       ]),
       builder: (context, _) {
         final activeId = svc.activeId.value;
-        final inItsChat = svc.activeConversationId.value != null &&
-            svc.activeConversationId.value ==
-                VoicePlayerService.openChatId.value;
+        final convId = svc.activeConversationId.value;
+        final inItsChat =
+            convId != null && convId == VoicePlayerService.openChatId.value;
         // Show only when a note is active and we're outside its chat.
         final show = activeId != null && !inItsChat;
         return AnimatedSwitcher(
@@ -46,7 +49,12 @@ class VoiceMiniBar extends StatelessWidget {
                   fmt: _fmt,
                   onToggle: () =>
                       svc.playing.value ? svc.pause() : svc.resume(),
+                  onSeek: (f) => svc.seekFraction(f),
                   onClose: () => svc.stop(),
+                  onOpen: convId == null
+                      ? null
+                      : () => appRouter
+                          .pushNamed('chat', pathParameters: {'id': convId}),
                 ),
         );
       },
@@ -61,7 +69,9 @@ class _Bar extends StatelessWidget {
     required this.duration,
     required this.fmt,
     required this.onToggle,
+    required this.onSeek,
     required this.onClose,
+    required this.onOpen,
   });
 
   final bool playing;
@@ -69,7 +79,9 @@ class _Bar extends StatelessWidget {
   final Duration duration;
   final String Function(Duration) fmt;
   final VoidCallback onToggle;
+  final ValueChanged<double> onSeek;
   final VoidCallback onClose;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +96,7 @@ class _Bar extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           color: AppColors.darkNavy,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               children: [
                 IconButton(
@@ -95,14 +107,14 @@ class _Bar extends StatelessWidget {
                   ),
                   onPressed: onToggle,
                 ),
-                const Icon(Icons.mic_rounded,
-                    color: AppColors.white, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // Tapping the label/icon jumps to the chat the note is from.
+                GestureDetector(
+                  onTap: onOpen,
+                  child: Row(
                     children: [
+                      const Icon(Icons.mic_rounded,
+                          color: AppColors.white, size: 18),
+                      const SizedBox(width: 6),
                       Text(
                         'Voice note',
                         style: AppTextStyles.labelMedium.copyWith(
@@ -110,23 +122,30 @@ class _Bar extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: fraction,
-                          minHeight: 3,
-                          backgroundColor:
-                              AppColors.white.withValues(alpha: 0.25),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.goldAccent,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
+                // Draggable scrubber.
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      activeTrackColor: AppColors.goldAccent,
+                      inactiveTrackColor:
+                          AppColors.white.withValues(alpha: 0.25),
+                      thumbColor: AppColors.goldAccent,
+                      thumbShape:
+                          const RoundSliderThumbShape(enabledThumbRadius: 6),
+                      overlayShape:
+                          const RoundSliderOverlayShape(overlayRadius: 12),
+                    ),
+                    child: Slider(
+                      value: fraction,
+                      onChanged: onSeek,
+                    ),
+                  ),
+                ),
                 Text(
                   fmt(position),
                   style: AppTextStyles.labelSmall.copyWith(

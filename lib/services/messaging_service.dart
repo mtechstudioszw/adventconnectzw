@@ -642,21 +642,54 @@ class MessagingService {
     }
   }
 
+  /// Per-user "cleared chat" marker (patch_081) — messages at or before
+  /// this time are hidden for the caller.
+  static Future<DateTime?> _clearedAt(String conversationId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+    try {
+      final row = await _client
+          .from('conversation_state')
+          .select('cleared_at')
+          .eq('user_id', user.id)
+          .eq('conversation_id', int.parse(conversationId))
+          .maybeSingle();
+      final raw = row?['cleared_at'];
+      return raw == null ? null : DateTime.tryParse(raw.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Clear the chat for the current user only (WhatsApp parity).
+  static Future<void> clearConversation(String conversationId) async {
+    await _client.rpc('clear_conversation', params: {
+      'p_conversation': int.parse(conversationId),
+    });
+  }
+
   static Future<List<Message>> fetchMessages(String conversationId) async {
     // Offline → serve from cache so the user can still read older
     // messages with no connection (WhatsApp parity).
     if (!ConnectivityService.isOnline) {
       return readCachedMessages(conversationId);
     }
+    // "Clear chat" (patch_081): only show messages newer than the
+    // caller's per-user cleared_at marker.
+    final clearedAt = await _clearedAt(conversationId);
     List<dynamic> response;
     try {
       // Fetch the NEWEST 500 (descending), then reverse to chronological
       // for display. Ordering ascending + limit returned the OLDEST 500,
       // which hid recent messages once a thread passed 500 messages.
-      final newestFirst = await _client
+      var query = _client
           .from(_messagesTable)
           .select()
-          .eq('conversation_id', conversationId)
+          .eq('conversation_id', conversationId);
+      if (clearedAt != null) {
+        query = query.gt('created_at', clearedAt.toIso8601String());
+      }
+      final newestFirst = await query
           .order('created_at', ascending: false)
           .limit(500) as List;
       response = newestFirst.reversed.toList();

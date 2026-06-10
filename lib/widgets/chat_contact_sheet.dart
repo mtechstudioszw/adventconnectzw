@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/story_model.dart';
+import '../services/block_service.dart';
+import '../services/feed_service.dart';
+import '../services/messaging_service.dart';
 import '../services/presence_service.dart';
 import '../services/user_profile_service.dart';
 import '../theme/app_colors.dart';
@@ -8,19 +12,20 @@ import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
 import 'full_image_viewer.dart';
+import 'home/report_sheet.dart';
+import 'home/story_viewer.dart';
 
-/// WhatsApp-style contact preview sheet. Surfaces only the chat-
-/// relevant subset of the other user's profile — big photo, name,
-/// online/last-seen, bio — with a "View full profile" CTA that pushes
-/// to the full UserProfileScreen for things like their posts grid.
+/// WhatsApp-style contact preview sheet. Big photo (with a story ring if
+/// they have a status), name, online/last-seen, bio, a "View full profile"
+/// CTA, and quick actions (mute, block, report, create group, clear chat).
 ///
-/// Opened by tapping the chat header in chat_screen.dart. Tapping
-/// outside dismisses; tapping the big photo dismisses too.
+/// Opened by tapping the chat header in chat_screen.dart.
 Future<void> showChatContactSheet(
   BuildContext context, {
   required String userId,
   required String fallbackName,
   String? fallbackPhotoUrl,
+  String? conversationId,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -30,6 +35,7 @@ Future<void> showChatContactSheet(
       userId: userId,
       fallbackName: fallbackName,
       fallbackPhotoUrl: fallbackPhotoUrl,
+      conversationId: conversationId,
     ),
   );
 }
@@ -39,11 +45,13 @@ class _ChatContactSheet extends StatefulWidget {
     required this.userId,
     required this.fallbackName,
     this.fallbackPhotoUrl,
+    this.conversationId,
   });
 
   final String userId;
   final String fallbackName;
   final String? fallbackPhotoUrl;
+  final String? conversationId;
 
   @override
   State<_ChatContactSheet> createState() => _ChatContactSheetState();
@@ -53,6 +61,12 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
   PublicUserProfile? _profile;
   DateTime? _lastSeen;
   bool _loading = true;
+  List<Story> _stories = const [];
+  bool _allViewed = false;
+  bool _muted = false;
+  bool _busy = false;
+
+  bool get _hasStory => _stories.isNotEmpty;
 
   @override
   void initState() {
@@ -64,13 +78,91 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
     final results = await Future.wait([
       UserProfileService.fetch(widget.userId),
       PresenceService.fetchLastSeen(widget.userId),
+      FeedService.fetchStories(),
+      FeedService.fetchMyViewedStoryIds(),
+      MessagingService.fetchConversationStates(),
     ]);
     if (!mounted) return;
+    final allStories = results[2] as List<Story>;
+    final viewed = results[3] as Set<String>;
+    final mine = allStories.where((s) => s.authorId == widget.userId).toList();
+    final states = results[4] as Map;
     setState(() {
       _profile = results[0] as PublicUserProfile?;
       _lastSeen = results[1] as DateTime?;
+      _stories = mine;
+      _allViewed = mine.isNotEmpty && mine.every((s) => viewed.contains(s.id));
+      if (widget.conversationId != null) {
+        final st = states[widget.conversationId];
+        _muted = (st as dynamic)?.muted ?? false;
+      }
       _loading = false;
     });
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  Future<void> _onAvatarTap(String? photoUrl) async {
+    if (_hasStory) {
+      await StoryViewer.show(context, _stories);
+      if (mounted) _load();
+    } else if ((photoUrl ?? '').isNotEmpty) {
+      FullImageViewer.show(context, photoUrl);
+    }
+  }
+
+  Future<void> _toggleMute() async {
+    final id = widget.conversationId;
+    if (id == null) return;
+    setState(() => _muted = !_muted);
+    try {
+      await MessagingService.setConversationFlags(id, muted: _muted);
+      _toast(_muted ? 'Muted' : 'Unmuted');
+    } catch (_) {
+      if (mounted) setState(() => _muted = !_muted);
+    }
+  }
+
+  Future<void> _block(String name) async {
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Block $name?'),
+        content: const Text(
+          "They won't be able to message you or see your profile, posts, "
+          'stories and prayers.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await BlockService.block(widget.userId);
+      if (!mounted) return;
+      nav.pop();
+      messenger.showSnackBar(SnackBar(content: Text('$name blocked.')));
+    } catch (_) {
+      if (mounted) {
+        messenger
+            .showSnackBar(const SnackBar(content: Text('Could not block.')));
+      }
+    }
   }
 
   @override
@@ -90,9 +182,9 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
             : 'Offline');
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.55,
+      initialChildSize: 0.62,
       minChildSize: 0.4,
-      maxChildSize: 0.85,
+      maxChildSize: 0.92,
       expand: false,
       builder: (ctx, controller) => Container(
         decoration: BoxDecoration(
@@ -105,7 +197,6 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Grab handle
               Center(
                 child: Container(
                   margin: const EdgeInsets.only(top: 10, bottom: 14),
@@ -117,8 +208,6 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                   ),
                 ),
               ),
-              // Cover photo strip — falls back to a flat colour so the
-              // layout stays consistent for users without a cover.
               SizedBox(
                 height: 120,
                 child: (coverUrl ?? '').isNotEmpty
@@ -141,12 +230,29 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
               const SizedBox(height: 12),
               Center(
                 child: GestureDetector(
-                  onTap: (photoUrl ?? '').isNotEmpty
-                      ? () => FullImageViewer.show(context, photoUrl)
-                      : null,
-                  child: _bigAvatar(name: name, photoUrl: photoUrl),
+                  onTap: () => _onAvatarTap(photoUrl),
+                  child: _StoryRingAvatar(
+                    name: name,
+                    photoUrl: photoUrl,
+                    hasStory: _hasStory,
+                    allViewed: _allViewed,
+                  ),
                 ),
               ),
+              if (_hasStory) ...[
+                const SizedBox(height: 6),
+                Center(
+                  child: Text(
+                    _allViewed ? 'Tap to view status' : 'New status · tap to view',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: _allViewed
+                          ? context.palette.textMuted
+                          : AppColors.successGreen,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -208,7 +314,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                   ),
                 ),
               ],
-              const SizedBox(height: 22),
+              const SizedBox(height: 18),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: FilledButton.icon(
@@ -229,9 +335,92 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  label: const Text('View full profile'),
+                  icon: const Icon(Icons.person_outline, size: 18),
+                  label: const Text('View profile'),
                 ),
+              ),
+              const SizedBox(height: 8),
+              // Quick actions.
+              if (widget.conversationId != null)
+                _ActionRow(
+                  icon: _muted
+                      ? Icons.notifications_off
+                      : Icons.notifications_none,
+                  label: _muted ? 'Unmute notifications' : 'Mute notifications',
+                  onTap: _toggleMute,
+                ),
+              _ActionRow(
+                icon: Icons.group_add_outlined,
+                label: 'Create group with $name',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.pushNamed('create_group');
+                },
+              ),
+              _ActionRow(
+                icon: Icons.flag_outlined,
+                label: 'Report',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  showReportSheet(
+                    context,
+                    contentType: 'user',
+                    contentId: widget.userId,
+                    contentLabel: name,
+                  );
+                },
+              ),
+              if (widget.conversationId != null)
+                _ActionRow(
+                  icon: Icons.cleaning_services_outlined,
+                  label: 'Clear chat',
+                  onTap: () async {
+                    final nav = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (dctx) => AlertDialog(
+                        title: const Text('Clear chat?'),
+                        content: const Text(
+                          'Messages will be hidden for you only.',
+                        ),
+                        actions: [
+                          TextButton(
+                              onPressed: () => Navigator.pop(dctx, false),
+                              child: const Text('Cancel')),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.red),
+                            onPressed: () => Navigator.pop(dctx, true),
+                            child: const Text('Clear'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ok != true || _busy) return;
+                    _busy = true;
+                    try {
+                      await MessagingService.clearConversation(
+                          widget.conversationId!);
+                      if (!mounted) return;
+                      nav.pop();
+                      messenger.showSnackBar(
+                          const SnackBar(content: Text('Chat cleared.')));
+                    } catch (_) {
+                      if (mounted) {
+                        messenger.showSnackBar(const SnackBar(
+                            content: Text('Could not clear chat.')));
+                      }
+                    } finally {
+                      _busy = false;
+                    }
+                  },
+                ),
+              _ActionRow(
+                icon: Icons.block,
+                label: 'Block',
+                danger: true,
+                onTap: () => _block(name),
               ),
             ],
           ),
@@ -239,8 +428,53 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       ),
     );
   }
+}
 
-  Widget _bigAvatar({required String name, required String? photoUrl}) {
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? AppColors.red : AppColors.primaryBlue;
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: color),
+      title: Text(
+        label,
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: danger ? AppColors.red : context.palette.text,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+/// Avatar with a WhatsApp-style status ring: green when there's an
+/// unviewed story, grey when all viewed, none when there's no story.
+class _StoryRingAvatar extends StatelessWidget {
+  const _StoryRingAvatar({
+    required this.name,
+    required this.photoUrl,
+    required this.hasStory,
+    required this.allViewed,
+  });
+  final String name;
+  final String? photoUrl;
+  final bool hasStory;
+  final bool allViewed;
+
+  @override
+  Widget build(BuildContext context) {
     final parts =
         name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     final initials = parts.isEmpty
@@ -250,44 +484,48 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
             : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
                 .toUpperCase();
     final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
+    final ringColor = !hasStory
+        ? Colors.transparent
+        : (allViewed ? context.palette.divider : AppColors.successGreen);
+
     return Container(
-      width: 96,
-      height: 96,
-      clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
+      width: 104,
+      height: 104,
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        gradient: hasPhoto ? null : AppColors.primaryGradient,
-        color: hasPhoto ? context.palette.cardMuted : null,
         shape: BoxShape.circle,
-        border: Border.all(color: context.palette.sheet, width: 4),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.22),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        border: Border.all(
+          color: ringColor,
+          width: hasStory ? 3 : 0,
+        ),
       ),
-      child: hasPhoto
-          ? CachedImage(
-              photoUrl!,
-              fit: BoxFit.cover,
-              width: 96,
-              height: 96,
-              errorBuilder: (context, error, stackTrace) => _initialsLabel(initials),
-            )
-          : _initialsLabel(initials),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: hasPhoto ? null : AppColors.primaryGradient,
+          color: hasPhoto ? context.palette.cardMuted : null,
+          shape: BoxShape.circle,
+          border: Border.all(color: context.palette.sheet, width: 3),
+        ),
+        child: hasPhoto
+            ? CachedImage(
+                photoUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    _initials(initials),
+              )
+            : _initials(initials),
+      ),
     );
   }
 
-  Widget _initialsLabel(String initials) {
-    return Text(
-      initials,
-      style: AppTextStyles.titleLarge.copyWith(
-        color: AppColors.white,
-        fontWeight: FontWeight.w800,
-        fontSize: 32,
-      ),
-    );
-  }
+  Widget _initials(String initials) => Text(
+        initials,
+        style: AppTextStyles.titleLarge.copyWith(
+          color: AppColors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 30,
+        ),
+      );
 }

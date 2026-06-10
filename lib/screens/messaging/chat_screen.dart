@@ -1992,6 +1992,7 @@ class _ChatScreenState extends State<ChatScreen>
                                   userId: otherUserId,
                                   fallbackName: name,
                                   fallbackPhotoUrl: photoUrl,
+                                  conversationId: widget.conversationId,
                                 )
                             : null,
                     child: Padding(

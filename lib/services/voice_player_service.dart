@@ -88,8 +88,9 @@ class VoicePlayerService {
           return;
         }
       }
-      activeId.value = null;
-      activeConversationId.value = null;
+      // No next note: DON'T dismiss — keep the bar/bubble visible, paused
+      // at the start, so the user can replay or scrub. Only the X button
+      // (stop()) tears it down. WhatsApp parity.
     });
   }
 

@@ -439,6 +439,19 @@ class AuthService {
     } on AuthException catch (e) {
       return AuthResult.failure(_friendlyAuthError(e.message));
     } catch (e) {
+      final s = e.toString();
+      // ApiException 10 / DEVELOPER_ERROR = the running build's signing
+      // certificate SHA isn't registered in Firebase (e.g. the Play App
+      // Signing key, which a brand-new Play account can't expose yet).
+      // Tell the tester to use email instead of showing a raw SDK error.
+      if (s.contains('ApiException: 10') ||
+          s.contains('sign_in_failed') ||
+          s.toUpperCase().contains('DEVELOPER_ERROR')) {
+        return AuthResult.failure(
+          "Google sign-in isn't available on this build yet — "
+          'please sign up or sign in with your email instead.',
+        );
+      }
       // Run through the friendly mapper so offline / DNS / handshake
       // failures from the Google SDK get the same human-readable
       // copy as the email path instead of the raw exception toString.

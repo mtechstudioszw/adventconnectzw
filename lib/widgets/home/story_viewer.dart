@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -54,6 +55,11 @@ class _StoryViewerState extends State<StoryViewer>
   final Map<String, bool> _liked = <String, bool>{};
   final Map<String, int> _likeCounts = <String, int>{};
 
+  // Reply-to-status composer.
+  final TextEditingController _replyController = TextEditingController();
+  final FocusNode _replyFocus = FocusNode();
+  bool _sendingReply = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +71,52 @@ class _StoryViewerState extends State<StoryViewer>
       });
     _progress.forward();
     _onStoryShown();
+    // Pause the timer while the reply field is focused so the story
+    // doesn't advance mid-typing; resume when focus leaves.
+    _replyFocus.addListener(() {
+      if (_replyFocus.hasFocus) {
+        _progress.stop();
+      } else if (!_paused && mounted) {
+        _progress.forward();
+      }
+    });
+  }
+
+  Future<void> _sendReply(Story story) async {
+    final text = _replyController.text.trim();
+    if (text.isEmpty || _sendingReply) return;
+    setState(() => _sendingReply = true);
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: story.authorId,
+        otherUserName: story.authorName,
+      );
+      await MessagingService.sendMessage(
+        conversationId: convo.id,
+        content: text,
+        messageType: 'story_reply',
+        meta: {
+          'story_id': story.id,
+          'story_image': story.mediaUrl,
+          if ((story.caption ?? '').isNotEmpty) 'caption': story.caption,
+        },
+      );
+      _replyController.clear();
+      _replyFocus.unfocus();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Reply sent.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not send reply.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sendingReply = false);
+    }
   }
 
   bool _isMyStory(Story s) => s.authorId == AuthService.currentUser?.id;
@@ -132,6 +184,8 @@ class _StoryViewerState extends State<StoryViewer>
 
   @override
   void dispose() {
+    _replyController.dispose();
+    _replyFocus.dispose();
     _progress.dispose();
     super.dispose();
   }
@@ -334,7 +388,7 @@ class _StoryViewerState extends State<StoryViewer>
               Positioned(
                 left: 16,
                 right: _isMyStory(story) ? 16 : 72,
-                bottom: _isMyStory(story) ? 78 : 32,
+                bottom: _isMyStory(story) ? 78 : 86,
                 child: Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -381,6 +435,64 @@ class _StoryViewerState extends State<StoryViewer>
                           size: 26,
                         ),
                       ),
+                    ),
+                  ),
+                ),
+              ),
+            // Reply-to-status bar (non-own stories). Sits left of the
+            // heart; focusing it pauses the story timer.
+            if (!_isMyStory(story))
+              Positioned(
+                left: 12,
+                right: 68,
+                bottom: 18,
+                child: AnimatedOpacity(
+                  opacity: _paused ? 0 : 1,
+                  duration: const Duration(milliseconds: 180),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(
+                          color: AppColors.white.withValues(alpha: 0.25)),
+                    ),
+                    padding: const EdgeInsets.only(left: 16, right: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _replyController,
+                            focusNode: _replyFocus,
+                            style: const TextStyle(color: AppColors.white),
+                            cursorColor: AppColors.white,
+                            minLines: 1,
+                            maxLines: 3,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: (_) => _sendReply(story),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              hintText: 'Reply to status…',
+                              hintStyle: TextStyle(
+                                  color:
+                                      AppColors.white.withValues(alpha: 0.7)),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: _sendingReply
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: AppColors.white),
+                                )
+                              : const Icon(Icons.send,
+                                  color: AppColors.white, size: 20),
+                          onPressed:
+                              _sendingReply ? null : () => _sendReply(story),
+                        ),
+                      ],
                     ),
                   ),
                 ),

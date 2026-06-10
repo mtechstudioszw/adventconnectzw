@@ -3267,6 +3267,9 @@ class _MessageBubble extends StatelessWidget {
     if (message.messageType == 'product' && message.meta != null) {
       return _ProductBubble(message: message, isMine: isMine);
     }
+    if (message.messageType == 'story_reply') {
+      return _StoryReplyBubble(message: message, isMine: isMine);
+    }
     final maxWidth = MediaQuery.of(context).size.width * 0.74;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -3963,6 +3966,99 @@ class _ProductBubble extends StatelessWidget {
                   style: AppTextStyles.bodyMedium.copyWith(color: fg),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A reply sent from someone's Status/story — shows a small preview of the
+/// story (tap to view it) above the reply text.
+class _StoryReplyBubble extends StatelessWidget {
+  const _StoryReplyBubble({required this.message, required this.isMine});
+  final Message message;
+  final bool isMine;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = message.meta ?? const <String, dynamic>{};
+    final img = (meta['story_image'] ?? '').toString();
+    final onText = isMine ? AppColors.white : context.palette.text;
+    final maxWidth = MediaQuery.of(context).size.width * 0.74;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          gradient: isMine ? AppColors.primaryGradient : null,
+          color: isMine ? null : context.palette.card,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMine ? 18 : 4),
+            bottomRight: Radius.circular(isMine ? 4 : 18),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: img.isEmpty
+                  ? null
+                  : () => FullImageViewer.show(context, img),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: (isMine ? AppColors.white : AppColors.primaryBlue)
+                      .withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border(
+                    left: BorderSide(
+                      color: isMine ? AppColors.white : AppColors.primaryBlue,
+                      width: 3,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (img.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: SizedBox(
+                          width: 38,
+                          height: 38,
+                          child: CachedImage(img, fit: BoxFit.cover),
+                        ),
+                      ),
+                    if (img.isNotEmpty) const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        isMine
+                            ? 'You replied to a status'
+                            : 'Replied to your status',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: onText.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (message.content.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text(
+                  message.content,
+                  style: AppTextStyles.bodyMedium.copyWith(color: onText),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -72,15 +72,23 @@ class NotificationService {
         .eq('user_id', user.id);
   }
 
-  /// Save the device FCM token onto the user's profile so the push
-  /// worker (later, once Firebase is wired) can target this device.
+  /// Save the device FCM token onto the user's profile, and CLAIM it
+  /// exclusively — clearing it from any other account that still carries
+  /// the same token (patch_077). Stops a device from receiving another
+  /// account's pushes (the "I get a notification for my own message" bug
+  /// when several accounts share one device).
   static Future<void> updateFcmToken(String token) async {
     final user = _client.auth.currentUser;
-    if (user == null) return;
-    await _client
-        .from('profiles')
-        .update({'fcm_token': token})
-        .eq('id', user.id);
+    if (user == null || token.trim().isEmpty) return;
+    try {
+      await _client.rpc('claim_fcm_token', params: {'p_token': token});
+    } catch (_) {
+      // Fall back to a plain self-update if the RPC is unavailable.
+      await _client
+          .from('profiles')
+          .update({'fcm_token': token})
+          .eq('id', user.id);
+    }
   }
 }
 

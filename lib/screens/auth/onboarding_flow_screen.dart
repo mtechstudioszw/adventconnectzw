@@ -354,15 +354,14 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
                 error: _error,
                 onBack: () => _go(_index - 1),
                 // Home church is MANDATORY — Continue is disabled on the
-                // church step until one is picked, and that step has no
-                // Skip. It anchors the user to a congregation + their
-                // auto church group (patch_065).
-                onNext: (_index == 1 && _homeChurchId == null)
+                // church step (index 2) until one is picked, and that step
+                // has no Skip. It anchors the user to a congregation + their
+                // auto church group (patch_065). Every other step (profile,
+                // personalization, permissions) stays passable.
+                onNext: (_index == 2 && _homeChurchId == null)
                     ? null
                     : _saveAndNext,
-                onSkip: _index == 0 || _index == 1
-                    ? null
-                    : () => _go(_index + 1),
+                onSkip: _index == 2 ? null : () => _go(_index + 1),
               ),
           ],
         ),

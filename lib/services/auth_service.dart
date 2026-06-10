@@ -796,6 +796,20 @@ class AuthService {
         return AuthResult.failure('Sign in to update your profile.');
       }
 
+      // Home church change is gated by a 90-day cooldown (patch_069). Do
+      // it FIRST in its own statement so a rejected change surfaces the
+      // exact message and we DON'T desync auth metadata / other fields
+      // (which the later upsert's catch would otherwise swallow).
+      if (churchId != null) {
+        try {
+          await _client.from('profiles').update({
+            'church_id': churchId.isEmpty ? null : int.tryParse(churchId),
+          }).eq('id', user.id);
+        } on PostgrestException catch (e) {
+          return AuthResult.failure(e.message);
+        }
+      }
+
       final current = user.userMetadata ?? const {};
       final next = <String, dynamic>{...current};
       String? sentinelOrNull(String? v) =>

@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
+import '../../widgets/church_group_avatar.dart';
 import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -58,10 +59,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   // pull-to-refresh from the user.
   StreamSubscription<List<Map<String, dynamic>>>? _activitySub;
   Timer? _refreshDebounce;
+  late final PageController _pageController;
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _tab.index);
     if (widget.initialTab == 'requests') {
       _showRequests = true;
       // Caller asked for Requests explicitly — don't let the "auto-pick"
@@ -85,7 +88,31 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     _refreshDebounce?.cancel();
     _activitySub?.cancel();
     _entrance.dispose();
+    _pageController.dispose();
     super.dispose();
+  }
+
+  /// Switch sub-tab via the pager so the transition animates (and a swipe
+  /// updates the selected pill).
+  void _selectTab(_ConversationsTab tab) {
+    setState(() => _tab = tab);
+    void go() {
+      if (!_pageController.hasClients) return;
+      if (_pageController.page?.round() == tab.index) return;
+      _pageController.animateToPage(
+        tab.index,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    if (_pageController.hasClients) {
+      go();
+    } else {
+      // Pager not attached yet (e.g. coming back from the requests view) —
+      // animate once it is.
+      WidgetsBinding.instance.addPostFrameCallback((_) => go());
+    }
   }
 
   /// Listen for any message activity (insert / status change) and
@@ -600,7 +627,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     child: child,
                   ),
                 ),
-                child: _buildActiveList(),
+                child: _buildTabPager(),
               ),
             ),
           ),
@@ -711,34 +738,34 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             _TabPill(
               label: 'Chats',
               selected: _tab == _ConversationsTab.chats && !_showRequests,
-              onTap: () => setState(() {
-                _tab = _ConversationsTab.chats;
-                _showRequests = false;
-              }),
+              onTap: () {
+                if (_showRequests) setState(() => _showRequests = false);
+                _selectTab(_ConversationsTab.chats);
+              },
             ),
             _TabPill(
               label: 'Groups',
               selected: _tab == _ConversationsTab.groups,
-              onTap: () => setState(() {
-                _tab = _ConversationsTab.groups;
-                _showRequests = false;
-              }),
+              onTap: () {
+                if (_showRequests) setState(() => _showRequests = false);
+                _selectTab(_ConversationsTab.groups);
+              },
             ),
             _TabPill(
               label: 'Status',
               selected: _tab == _ConversationsTab.status,
-              onTap: () => setState(() {
-                _tab = _ConversationsTab.status;
-                _showRequests = false;
-              }),
+              onTap: () {
+                if (_showRequests) setState(() => _showRequests = false);
+                _selectTab(_ConversationsTab.status);
+              },
             ),
             _TabPill(
               label: 'Archived',
               selected: _tab == _ConversationsTab.archived,
-              onTap: () => setState(() {
-                _tab = _ConversationsTab.archived;
-                _showRequests = false;
-              }),
+              onTap: () {
+                if (_showRequests) setState(() => _showRequests = false);
+                _selectTab(_ConversationsTab.archived);
+              },
             ),
           ],
         ),
@@ -746,7 +773,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  Widget _buildActiveList() {
+  Widget _buildTabPager() {
     if (_loading && _conversations.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.primaryBlue),
@@ -756,25 +783,31 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       return _buildErrorState();
     }
     if (_showRequests) return _buildRequestsView();
-    switch (_tab) {
-      case _ConversationsTab.chats:
-        return _buildChatsTab();
-      case _ConversationsTab.groups:
-        return _buildGroupsTab();
-      case _ConversationsTab.status:
-        return _buildStatusTab();
-      case _ConversationsTab.archived:
-        final archived = _archived;
-        if (archived.isEmpty) {
-          return _buildEmptyState(
-            title: 'No archived chats',
-            body:
-                'Long-press a chat and tap Archive to keep it here, out of '
-                'your main list.',
-          );
-        }
-        return _conversationListView(archived);
+    // Swipe between Chats / Groups / Status / Archived with a smooth
+    // animated transition (order matches _ConversationsTab).
+    return PageView(
+      controller: _pageController,
+      onPageChanged: (i) =>
+          setState(() => _tab = _ConversationsTab.values[i]),
+      children: [
+        _buildChatsTab(),
+        _buildGroupsTab(),
+        _buildStatusTab(),
+        _buildArchivedTab(),
+      ],
+    );
+  }
+
+  Widget _buildArchivedTab() {
+    final archived = _archived;
+    if (archived.isEmpty) {
+      return _buildEmptyState(
+        title: 'No archived chats',
+        body: 'Long-press a chat and tap Archive to keep it here, out of '
+            'your main list.',
+      );
     }
+    return _conversationListView(archived);
   }
 
   // ----- Chats tab: requests banner + 1:1 conversation list -----------
@@ -1297,11 +1330,16 @@ class _ConversationTile extends StatelessWidget {
             children: [
               Stack(
                 children: [
-                  _Avatar(
-                    name: conversation.otherUserName,
-                    photoUrl: conversation.otherUserPhotoUrl,
-                    isSelfChat: conversation.isSelfChat,
-                  ),
+                  conversation.isChurchGroup
+                      ? ChurchGroupAvatar(
+                          photoUrl: conversation.otherUserPhotoUrl,
+                          size: 52,
+                        )
+                      : _Avatar(
+                          name: conversation.otherUserName,
+                          photoUrl: conversation.otherUserPhotoUrl,
+                          isSelfChat: conversation.isSelfChat,
+                        ),
                   // Small green dot on the avatar's bottom-right when
                   // the other user is currently online (WhatsApp-style).
                   // Hidden for self-chats and pending requests.

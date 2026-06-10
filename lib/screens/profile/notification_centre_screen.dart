@@ -122,6 +122,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case 'event':
       case 'prayer':
       case 'conversation':
+      case 'job':
         return hasId;
       case 'friend_request':
       case 'seller':
@@ -159,6 +160,11 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case 'conversation':
         if (id.isNotEmpty) {
           context.pushNamed('chat', pathParameters: {'id': id});
+        }
+        break;
+      case 'job':
+        if (id.isNotEmpty) {
+          context.pushNamed('job_details', pathParameters: {'id': id});
         }
         break;
       case 'friend_request':
@@ -263,18 +269,27 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     for (final n in _items) {
       grouped.putIfAbsent(_categoryFor(n), () => []).add(n);
     }
+    // Announcements lead — they're the most important and the founder
+    // wants them prioritised (their chip sits right after "All" and their
+    // section renders first).
     const order = [
+      _NotifCategory.announcements,
       _NotifCategory.messages,
       _NotifCategory.social,
-      _NotifCategory.announcements,
       _NotifCategory.activity,
     ];
     final present =
         order.where((c) => grouped[c]?.isNotEmpty ?? false).toList();
+    // Categories with at least one UNREAD notification — their chip shows
+    // a dot.
+    final unreadCats = <_NotifCategory>{
+      for (final c in present)
+        if (grouped[c]!.any((n) => !n.isRead)) c,
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildFilterChips(present),
+        _buildFilterChips(present, unreadCats),
         for (final cat in order)
           if ((grouped[cat]?.isNotEmpty ?? false) &&
               (_filter == null || _filter == cat))
@@ -284,8 +299,12 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   }
 
   /// Horizontal category filter chips (All + each present category).
-  /// Hidden when there's only one category — nothing to filter.
-  Widget _buildFilterChips(List<_NotifCategory> present) {
+  /// Hidden when there's only one category — nothing to filter. Chips for
+  /// categories with unread notifications show a dot.
+  Widget _buildFilterChips(
+    List<_NotifCategory> present,
+    Set<_NotifCategory> unreadCats,
+  ) {
     if (present.length < 2) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -298,6 +317,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
             _notifChip(
               label: 'All',
               selected: _filter == null,
+              hasUnread: unreadCats.isNotEmpty,
               onTap: () => setState(() => _filter = null),
             ),
             for (final c in present) ...[
@@ -305,6 +325,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
               _notifChip(
                 label: _categoryLabel(c),
                 selected: _filter == c,
+                hasUnread: unreadCats.contains(c),
                 onTap: () => setState(() => _filter = c),
               ),
             ],
@@ -318,6 +339,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     required String label,
     required bool selected,
     required VoidCallback onTap,
+    bool hasUnread = false,
   }) {
     return Material(
       color: Colors.transparent,
@@ -335,13 +357,29 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
                   selected ? AppColors.primaryBlue : context.palette.divider,
             ),
           ),
-          child: Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: selected ? AppColors.white : context.palette.text,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: selected ? AppColors.white : context.palette.text,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              if (hasUnread) ...[
+                const SizedBox(width: 6),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: selected ? AppColors.white : AppColors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),

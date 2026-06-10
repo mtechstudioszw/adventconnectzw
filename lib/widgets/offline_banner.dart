@@ -44,7 +44,7 @@ class _OfflineBannerState extends State<OfflineBanner> {
   void _flashRestored() {
     _restoreTimer?.cancel();
     setState(() => _showRestored = true);
-    _restoreTimer = Timer(const Duration(seconds: 3), () {
+    _restoreTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _showRestored = false);
     });
   }
@@ -64,14 +64,14 @@ class _OfflineBannerState extends State<OfflineBanner> {
         Positioned(
           left: 0,
           right: 0,
-          top: 0,
+          bottom: 0,
           child: IgnorePointer(
             child: SafeArea(
-              bottom: false,
+              top: false,
               child: AnimatedSize(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOut,
-                alignment: Alignment.topCenter,
+                alignment: Alignment.bottomCenter,
                 child: _showRestored
                     ? Container(
                         height: 24,

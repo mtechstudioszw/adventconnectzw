@@ -282,6 +282,10 @@ class _HomeScreenState extends State<HomeScreen>
         // rendering empty on a flaky fetch until a manual refresh.
         // Painting the last-known set first hides that gap.
         'stories': _stories.map((s) => s.toJson()).toList(),
+        // Advent News card + the "N churches followed" stat — so they
+        // paint instantly on launch instead of popping in after the fetch.
+        'news': _topNews.map((n) => n.toJson()).toList(),
+        'followedChurchIds': _followedChurchIds.toList(),
       });
       await CacheService.writeString('home_feed', payload);
     } catch (_) {
@@ -312,17 +316,26 @@ class _HomeScreenState extends State<HomeScreen>
           .map((s) => Story.fromJson(s as Map<String, dynamic>))
           .where((s) => !s.isExpired)
           .toList();
+      final news = ((decoded['news'] as List?) ?? const [])
+          .map((n) => AdventNews.fromJson(n as Map<String, dynamic>))
+          .toList();
+      final followed = ((decoded['followedChurchIds'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toSet();
       if (!mounted) return;
       setState(() {
         if (_events.isEmpty) _events = events;
         if (_churches.isEmpty) _churches = churches;
         if (_posts.isEmpty) _posts = posts;
         if (_stories.isEmpty) _stories = stories;
+        if (_topNews.isEmpty) _topNews = news;
+        if (_followedChurchIds.isEmpty) _followedChurchIds = followed;
         // Paint instantly when cache hits — no spinner.
         if (events.isNotEmpty ||
             churches.isNotEmpty ||
             posts.isNotEmpty ||
-            stories.isNotEmpty) {
+            stories.isNotEmpty ||
+            news.isNotEmpty) {
           _loading = false;
         }
       });

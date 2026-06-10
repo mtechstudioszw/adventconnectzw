@@ -75,4 +75,21 @@ class AdventNews {
               DateTime.now(),
     );
   }
+
+  /// For the home cache (paint Advent News instantly on launch). Nests
+  /// the author name back under `profiles` so [fromJson] round-trips.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'summary': summary,
+        'body': body,
+        'cover_photo_url': coverPhotoUrl,
+        'category': category.code,
+        'source_url': sourceUrl,
+        'source_label': sourceLabel,
+        'author_id': authorId,
+        'is_pinned': isPinned,
+        'published_at': publishedAt.toIso8601String(),
+        if (authorName != null) 'profiles': {'full_name': authorName},
+      };
 }

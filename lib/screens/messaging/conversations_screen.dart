@@ -17,6 +17,7 @@ import '../../widgets/home/composer_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/full_image_viewer.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key, this.initialTab});
@@ -1078,6 +1079,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               onLongPress: _chatSelect
                   ? null
                   : () => _openConversationActions(c),
+              // Tap the avatar to view the full profile/group photo
+              // (WhatsApp). Disabled in multi-select so the tap toggles.
+              onAvatarTap: _chatSelect
+                  ? () => _toggleChat(c)
+                  : (c.otherUserPhotoUrl ?? '').isNotEmpty
+                      ? () => FullImageViewer.show(context, c.otherUserPhotoUrl)
+                      : () => _openChat(c),
             );
           },
         );
@@ -1422,6 +1430,7 @@ class _ConversationTile extends StatelessWidget {
     this.pinned = false,
     this.muted = false,
     this.selected = false,
+    this.onAvatarTap,
   });
 
   final Conversation conversation;
@@ -1431,6 +1440,7 @@ class _ConversationTile extends StatelessWidget {
   final bool pinned;
   final bool muted;
   final bool selected;
+  final VoidCallback? onAvatarTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1465,7 +1475,9 @@ class _ConversationTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Stack(
+              GestureDetector(
+                onTap: onAvatarTap,
+                child: Stack(
                 children: [
                   conversation.isChurchGroup
                       ? ChurchGroupAvatar(
@@ -1476,6 +1488,7 @@ class _ConversationTile extends StatelessWidget {
                           name: conversation.otherUserName,
                           photoUrl: conversation.otherUserPhotoUrl,
                           isSelfChat: conversation.isSelfChat,
+                          isGroup: conversation.isGroup,
                         ),
                   // Multi-select check badge over the avatar.
                   if (selected)
@@ -1516,6 +1529,7 @@ class _ConversationTile extends StatelessWidget {
                       ),
                     ),
                 ],
+              ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -2079,10 +2093,12 @@ class _Avatar extends StatelessWidget {
     required this.name,
     this.photoUrl,
     this.isSelfChat = false,
+    this.isGroup = false,
   });
   final String name;
   final String? photoUrl;
   final bool isSelfChat;
+  final bool isGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -2118,6 +2134,8 @@ class _Avatar extends StatelessWidget {
               color: AppColors.white,
               size: 22,
             )
+          : (isGroup && !hasPhoto)
+              ? const Icon(Icons.groups, color: AppColors.white, size: 26)
           : hasPhoto
               ? CachedImage(
                   photoUrl!,

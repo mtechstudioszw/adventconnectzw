@@ -21,6 +21,19 @@ class BlockService {
         .toList();
   }
 
+  /// True when [userId] has blocked the current viewer (so their profile
+  /// should read as unavailable). Uses the SECURITY DEFINER is_blocked_by
+  /// RPC (patch_071) since RLS hides the other user's block row.
+  static Future<bool> amIBlockedBy(String userId) async {
+    try {
+      final res =
+          await _client.rpc('is_blocked_by', params: {'p_author': userId});
+      return res == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> block(String userId) async {
     final user = _client.auth.currentUser;
     if (user == null) {

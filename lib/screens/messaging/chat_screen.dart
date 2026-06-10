@@ -60,6 +60,10 @@ class _ChatScreenState extends State<ChatScreen>
   // and nothing reorders after the server confirms.
   List<Message> _serverMessages = [];
   final List<Message> _pending = [];
+  // Optimistic ids the send "completed" for locally but the server never
+  // accepted (recipient blocked the sender — silent block). They show a
+  // single grey ✓ instead of the pending clock (WhatsApp parity).
+  final Set<String> _localSentIds = <String>{};
   bool _loading = true;
   bool _sending = false;
   String? _error;
@@ -1149,7 +1153,9 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       final isRlsBlock = e.code == '42501' ||
           e.message.toLowerCase().contains('row-level security');
-      if (!isRlsBlock) {
+      if (isRlsBlock) {
+        setState(() => _localSentIds.add(tempId));
+      } else {
         setState(() => _pending.removeWhere((m) => m.id == tempId));
         _toast('Could not send voice note. Please try again.');
       }
@@ -1335,7 +1341,9 @@ class _ChatScreenState extends State<ChatScreen>
       final isRlsBlock = e.code == '42501' ||
           (e.message).toLowerCase().contains('row-level security');
       if (isRlsBlock) {
-        return; // bubble stays, single tick stays, no toast
+        // Bubble stays as a single grey ✓ (sent), never delivers, no toast.
+        setState(() => _localSentIds.add(tempId));
+        return;
       }
       // Any other Postgrest error → existing rollback + retry path.
       setState(() => _pending.removeWhere((m) => m.id == tempId));
@@ -2263,7 +2271,8 @@ class _ChatScreenState extends State<ChatScreen>
                           // sent (✓) / delivered (✓✓ grey) there — never
                           // blue. 1:1 keeps the full three-state tick.
                           Icon(
-                            m.id.startsWith('pending-')
+                            (m.id.startsWith('pending-') &&
+                                    !_localSentIds.contains(m.id))
                                 ? Icons.access_time
                                 : (m.deliveredAt != null || m.read
                                     ? Icons.done_all

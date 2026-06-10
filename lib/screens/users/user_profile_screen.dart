@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/friendship_model.dart';
 import '../../models/post_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/block_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
@@ -55,8 +56,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       final results = await Future.wait([
         UserProfileService.fetch(widget.userId),
         FeedService.fetchMyFriendships(),
+        BlockService.amIBlockedBy(widget.userId),
       ]);
       if (!mounted) return;
+      // If this user blocked the viewer, their profile reads as
+      // unavailable (no about/posts/stories — those are RLS-hidden too).
+      if (results[2] as bool) {
+        setState(() {
+          _loading = false;
+          _error = 'This account is unavailable.';
+        });
+        return;
+      }
       final profile = results[0] as PublicUserProfile?;
       final friendships = results[1] as List<Friendship>;
       Friendship? f;

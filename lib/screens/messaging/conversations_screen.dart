@@ -116,7 +116,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     _exitChatSelect();
     for (final id in ids) {
       try {
-        await MessagingService.declineRequest(id);
+        final c = _conversations.firstWhere((x) => x.id == id);
+        if (c.isGroup) {
+          await GroupService.deleteGroupConversation(id);
+        } else {
+          await MessagingService.declineRequest(id);
+        }
       } catch (_) {}
     }
     if (mounted) await _bootstrap();
@@ -1246,7 +1251,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         );
         if (confirmed != true || !mounted) return;
         try {
-          await MessagingService.declineRequest(c.id);
+          // Groups: remove my membership row so the group disappears from
+          // my list cleanly (patch_079) — declineRequest only worked for
+          // 1:1 rows and left a stale group preview behind.
+          if (c.isGroup) {
+            await GroupService.deleteGroupConversation(c.id);
+          } else {
+            await MessagingService.declineRequest(c.id);
+          }
           if (!mounted) return;
           await _bootstrap();
         } catch (_) {

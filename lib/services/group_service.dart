@@ -77,6 +77,14 @@ class GroupService {
     });
   }
 
+  /// Remove the group from MY list (after I've left) — deletes my
+  /// membership row only (patch_079). The group stays for everyone else.
+  static Future<void> deleteGroupConversation(String conversationId) {
+    return _client.rpc('delete_group_conversation', params: {
+      'p_conversation': int.parse(conversationId),
+    });
+  }
+
   /// Members of a group, each as {user_id, role, full_name,
   /// profile_photo_url}. Admins first, then alphabetical.
   static Future<List<GroupMember>> fetchMembers(String conversationId) async {
@@ -87,7 +95,9 @@ class GroupService {
           'profiles!conversation_members_user_id_fkey('
           'id, full_name, profile_photo_url)',
         )
-        .eq('conversation_id', int.parse(conversationId));
+        .eq('conversation_id', int.parse(conversationId))
+        // Members who left (patch_079) keep their row but aren't shown.
+        .isFilter('left_at', null);
     final list = (rows as List).map((r) {
       final map = r as Map<String, dynamic>;
       final p = map['profiles'] as Map<String, dynamic>?;

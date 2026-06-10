@@ -198,10 +198,58 @@ class _ChatScreenState extends State<ChatScreen>
         .where((m) => _selectedMsgIds.contains(m.id) && !m.isDeleted)
         .toList()
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    _exitSelect();
-    for (final m in selected) {
-      await _forwardMessage(m);
+    if (selected.isEmpty) return;
+    final textMsgs =
+        selected.where((m) => m.messageType == 'text').toList();
+    final mediaMsgs =
+        selected.where((m) => m.messageType != 'text').toList();
+    // WhatsApp parity: can't mix text + photos/audio into one forward.
+    if (textMsgs.isNotEmpty && mediaMsgs.isNotEmpty) {
+      _toast("Can't forward text, photos and audio together — "
+          'forward text only, then photos only.');
+      return;
     }
+    final target = await _pickForwardTarget();
+    if (!mounted || target == null) return;
+    _exitSelect();
+    try {
+      if (mediaMsgs.isEmpty) {
+        // All text → compile into ONE message with timestamps + sender.
+        final compiled = _compileForwardedText(textMsgs);
+        await MessagingService.sendMessage(
+          conversationId: target,
+          content: compiled,
+          forwarded: true,
+        );
+      } else {
+        // All media → forward each item to the chosen chat.
+        for (final m in mediaMsgs) {
+          await MessagingService.forwardMessage(
+            targetConversationId: target,
+            original: m,
+          );
+        }
+      }
+      if (mounted) _toast('Forwarded.');
+    } catch (_) {
+      if (mounted) _toast('Could not forward.');
+    }
+  }
+
+  /// Compile several text messages into one forwarded block, WhatsApp-style:
+  ///   [10:30] You: first message
+  ///   [10:31] Michael: second message
+  String _compileForwardedText(List<Message> msgs) {
+    final me = AuthService.currentUser?.id;
+    final buf = StringBuffer();
+    for (final m in msgs) {
+      final who = m.senderId == me ? 'You' : m.senderName;
+      final t = m.createdAt.toLocal();
+      final hh = t.hour.toString().padLeft(2, '0');
+      final mm = t.minute.toString().padLeft(2, '0');
+      buf.writeln('[$hh:$mm] $who: ${m.content}');
+    }
+    return buf.toString().trimRight();
   }
 
   Future<void> _showMessageActions(Message m, bool isMine) async {
@@ -689,11 +737,12 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// Forward a (text) message: pick a destination chat, then re-send the
   /// content with the "Forwarded" flag.
-  Future<void> _forwardMessage(Message m) async {
-    if (!_ensureOnline('forward messages')) return;
+  /// Shared "Forward to…" chat picker. Returns the chosen conversation id.
+  Future<String?> _pickForwardTarget() async {
+    if (!_ensureOnline('forward messages')) return null;
     final convos = await MessagingService.fetchConversations();
-    if (!mounted) return;
-    final targetId = await showModalBottomSheet<String>(
+    if (!mounted) return null;
+    return showModalBottomSheet<String>(
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,
@@ -747,6 +796,10 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _forwardMessage(Message m) async {
+    final targetId = await _pickForwardTarget();
     if (!mounted || targetId == null) return;
     try {
       await MessagingService.forwardMessage(
@@ -1294,6 +1347,40 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_scrollController.hasClients) return true;
     final pos = _scrollController.position;
     return pos.maxScrollExtent - pos.pixels < 120;
+  }
+
+  /// Delete a group you've left from your list (WhatsApp: a left group is
+  /// read-only until you delete it). Removes your membership row so it
+  /// disappears for you only, then returns to the inbox.
+  Future<void> _deleteLeftGroupConversation() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete conversation?'),
+        content: const Text(
+          'This removes the group and its messages from your chats. It stays '
+          'for the other members.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await GroupService.deleteGroupConversation(widget.conversationId);
+    } catch (_) {}
+    if (mounted) {
+      context.canPop() ? context.pop() : context.goNamed('messages');
+    }
   }
 
   Future<void> _send() async {
@@ -2331,10 +2418,21 @@ class _ChatScreenState extends State<ChatScreen>
             final prevSys = i > 0 ? _messages[i - 1] : null;
             final showSep = prevSys == null ||
                 !_sameLocalDay(prevSys.createdAt, m.createdAt);
+            // A system event is authored by the actor (sender_id). For the
+            // actor themselves, show "You left/joined" instead of their own
+            // name — WhatsApp parity (others still see "Michael left").
+            final sysMine = m.senderId == (AuthService.currentUser?.id ?? '');
+            final sysText = sysMine
+                ? (m.content.endsWith(' left')
+                    ? 'You left'
+                    : m.content.endsWith(' joined')
+                        ? 'You joined'
+                        : m.content)
+                : m.content;
             return Column(
               children: [
                 if (showSep) _DateSeparator(label: _dayLabel(m.createdAt)),
-                _SystemMessage(text: m.content),
+                _SystemMessage(text: sysText),
               ],
             );
           }
@@ -2514,23 +2612,38 @@ class _ChatScreenState extends State<ChatScreen>
         child: SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.info_outline,
-                    size: 16, color: context.palette.textMuted),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    "You can't send messages to this group because you're no "
-                    'longer a member.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.textMuted,
-                      fontWeight: FontWeight.w500,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.info_outline,
+                        size: 16, color: context.palette.textMuted),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        "You can't send messages to this group because you're "
+                        'no longer a member.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: context.palette.textMuted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // WhatsApp parity: a left group stays read-only until you
+                // delete the conversation, which removes it from your list.
+                TextButton.icon(
+                  onPressed: _deleteLeftGroupConversation,
+                  icon: const Icon(Icons.delete_outline,
+                      size: 18, color: AppColors.red),
+                  label: const Text('Delete conversation',
+                      style: TextStyle(color: AppColors.red)),
                 ),
               ],
             ),

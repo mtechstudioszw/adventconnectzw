@@ -353,7 +353,13 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
                 saving: _saving,
                 error: _error,
                 onBack: () => _go(_index - 1),
-                onNext: _saveAndNext,
+                // Home church is MANDATORY — Continue is disabled on the
+                // church step until one is picked, and that step has no
+                // Skip. It anchors the user to a congregation + their
+                // auto church group (patch_065).
+                onNext: (_index == 1 && _homeChurchId == null)
+                    ? null
+                    : _saveAndNext,
                 onSkip: _index == 0 || _index == 1
                     ? null
                     : () => _go(_index + 1),
@@ -419,7 +425,7 @@ class _NavBar extends StatelessWidget {
   final bool saving;
   final String? error;
   final VoidCallback onBack;
-  final VoidCallback onNext;
+  final VoidCallback? onNext;
   final VoidCallback? onSkip;
 
   @override

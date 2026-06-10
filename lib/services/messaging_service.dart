@@ -952,6 +952,29 @@ class MessagingService {
     }
   }
 
+  /// Lazily create the caller's church channel + members conversations
+  /// (patch_066). Best-effort — called on chat-list load.
+  static Future<void> ensureMyChurchConversations() async {
+    if (_client.auth.currentUser == null) return;
+    try {
+      await _client.rpc('ensure_my_church_conversations');
+    } catch (_) {
+      // No church set / RPC issue — non-fatal.
+    }
+  }
+
+  /// Whether the caller may post in a church ANNOUNCEMENT channel
+  /// (verified church admin / super admin). Members chat is open.
+  static Future<bool> canPostToChurchChannel(String conversationId) async {
+    try {
+      final res = await _client.rpc('can_post_church_channel',
+          params: {'p_conv': int.tryParse(conversationId) ?? conversationId});
+      return res == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Per-user pin/mute/archive flags, keyed by conversation id. Empty
   /// map on error so the inbox still renders with default (unflagged)
   /// state.

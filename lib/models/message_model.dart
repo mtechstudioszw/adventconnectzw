@@ -34,6 +34,7 @@ class Conversation {
     this.isBusiness = false,
     this.isSelfChat = false,
     this.isGroup = false,
+    this.churchKind,
   });
 
   final String id;
@@ -52,6 +53,13 @@ class Conversation {
   // groups, [otherUserName]/[otherUserPhotoUrl] hold the GROUP name + icon
   // so inbox tiles and the chat header render uniformly with 1:1 chats.
   final bool isGroup;
+  // Church groups (patch_065): 'channel' (admin-post announcements) or
+  // 'members' (open church chat). Null for normal chats/groups. These are
+  // force-pinned and can't be left/unpinned.
+  final String? churchKind;
+
+  bool get isChurchGroup => churchKind != null;
+  bool get isChurchChannel => churchKind == 'channel';
 
   /// True when this conversation is a pending message request the
   /// current viewer hasn't accepted yet *and* isn't the initiator of —
@@ -81,6 +89,7 @@ class Conversation {
         unreadCount: _readInt(json['unread_count']),
         lastSenderId: json['last_sender_id']?.toString(),
         isGroup: true,
+        churchKind: json['church_kind'] as String?,
       );
     }
     final participantA = (json['participant_a_id'] ?? '').toString();
@@ -158,6 +167,7 @@ class Conversation {
       isBusiness: isBusiness ?? this.isBusiness,
       isSelfChat: isSelfChat ?? this.isSelfChat,
       isGroup: isGroup ?? this.isGroup,
+      churchKind: churchKind,
     );
   }
 

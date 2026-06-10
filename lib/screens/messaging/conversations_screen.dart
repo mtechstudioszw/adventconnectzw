@@ -157,6 +157,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       });
     }
     try {
+      // Make sure the viewer's church channel + members conversations
+      // exist before we fetch, so they show on first open.
+      await MessagingService.ensureMyChurchConversations();
       final results = await Future.wait([
         MessagingService.fetchConversations(),
         FeedService.fetchStories(),
@@ -239,8 +242,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   /// alongside everything else). WhatsApp also fixes self-chat to a
   /// constant position.
   /// 1:1 chats (excludes groups + incoming requests). Self-chat pinned.
-  bool _isArchived(Conversation c) => _convStates[c.id]?.archived ?? false;
-  bool _isPinned(Conversation c) => _convStates[c.id]?.pinned ?? false;
+  // Church groups (channel + members) are always pinned and can't be
+  // archived/unpinned — they anchor the top of the list.
+  bool _isArchived(Conversation c) =>
+      !c.isChurchGroup && (_convStates[c.id]?.archived ?? false);
+  bool _isPinned(Conversation c) =>
+      c.isChurchGroup || (_convStates[c.id]?.pinned ?? false);
   bool _isMuted(Conversation c) => _convStates[c.id]?.muted ?? false;
 
   /// Pinned conversations float to the top, preserving their existing
@@ -252,20 +259,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   List<Conversation> get _chats {
+    // 1:1 chats + church groups (church groups are pinned to the very
+    // top). User-created groups live in the Groups tab, not here.
     final filtered = _conversations
         .where((c) =>
-            !c.isGroup &&
+            (!c.isGroup || c.isChurchGroup) &&
             !c.isIncomingRequestFor(_currentUserId) &&
             !_isArchived(c))
         .toList();
     final selfChats = filtered.where((c) => c.isSelfChat).toList();
-    final others = _pinnedFirst(filtered.where((c) => !c.isSelfChat).toList());
+    final others = _pinnedFirst(
+        filtered.where((c) => !c.isSelfChat).toList());
     return [...selfChats, ...others];
   }
 
-  /// Group chats the viewer belongs to (archived ones move to Archived).
-  List<Conversation> get _groups => _pinnedFirst(
-      _conversations.where((c) => c.isGroup && !_isArchived(c)).toList());
+  /// User-created group chats (church groups are excluded — they sit at
+  /// the top of the Chats tab). Archived ones move to Archived.
+  List<Conversation> get _groups => _pinnedFirst(_conversations
+      .where((c) => c.isGroup && !c.isChurchGroup && !_isArchived(c))
+      .toList());
 
   /// Everything (1:1 or group) the viewer has archived.
   List<Conversation> get _archived => _conversations
@@ -995,15 +1007,18 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 title: const Text('Mark as read'),
                 onTap: () => Navigator.of(sheetCtx).pop('read'),
               ),
-              ListTile(
-                leading: Transform.rotate(
-                  angle: 0.785398,
-                  child: const Icon(Icons.push_pin_outlined,
-                      color: AppColors.primaryBlue),
+              // Church groups are anchored — no pin/archive/delete; only
+              // mute is allowed.
+              if (!c.isChurchGroup)
+                ListTile(
+                  leading: Transform.rotate(
+                    angle: 0.785398,
+                    child: const Icon(Icons.push_pin_outlined,
+                        color: AppColors.primaryBlue),
+                  ),
+                  title: Text(_isPinned(c) ? 'Unpin' : 'Pin to top'),
+                  onTap: () => Navigator.of(sheetCtx).pop('pin'),
                 ),
-                title: Text(_isPinned(c) ? 'Unpin' : 'Pin to top'),
-                onTap: () => Navigator.of(sheetCtx).pop('pin'),
-              ),
               ListTile(
                 leading: Icon(
                   _isMuted(c)
@@ -1014,25 +1029,27 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 title: Text(_isMuted(c) ? 'Unmute' : 'Mute notifications'),
                 onTap: () => Navigator.of(sheetCtx).pop('mute'),
               ),
-              ListTile(
-                leading: Icon(
-                  _isArchived(c)
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined,
-                  color: AppColors.primaryBlue,
+              if (!c.isChurchGroup)
+                ListTile(
+                  leading: Icon(
+                    _isArchived(c)
+                        ? Icons.unarchive_outlined
+                        : Icons.archive_outlined,
+                    color: AppColors.primaryBlue,
+                  ),
+                  title: Text(_isArchived(c) ? 'Unarchive' : 'Archive'),
+                  onTap: () => Navigator.of(sheetCtx).pop('archive'),
                 ),
-                title: Text(_isArchived(c) ? 'Unarchive' : 'Archive'),
-                onTap: () => Navigator.of(sheetCtx).pop('archive'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline,
-                    color: AppColors.red),
-                title: const Text(
-                  'Delete conversation',
-                  style: TextStyle(color: AppColors.red),
+              if (!c.isChurchGroup)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline,
+                      color: AppColors.red),
+                  title: const Text(
+                    'Delete conversation',
+                    style: TextStyle(color: AppColors.red),
+                  ),
+                  onTap: () => Navigator.of(sheetCtx).pop('delete'),
                 ),
-                onTap: () => Navigator.of(sheetCtx).pop('delete'),
-              ),
               ListTile(
                 leading: Icon(Icons.close, color: context.palette.text),
                 title: const Text('Cancel'),

@@ -404,6 +404,11 @@ class _ChatScreenState extends State<ChatScreen>
   List<GroupMember> _groupMembers = const [];
   final Map<String, GroupMember> _memberById = {};
   bool get _isGroup => _conversation?.isGroup ?? false;
+  bool get _isChurchGroup => _conversation?.isChurchGroup ?? false;
+  bool get _isChurchChannel => _conversation?.isChurchChannel ?? false;
+  // For a church announcement channel: whether THIS viewer may post
+  // (verified church admin / super admin). Members chat is always open.
+  bool _channelCanPost = false;
 
   // Phase 4 message actions.
   Message? _replyTo; // composing a reply to this message
@@ -685,6 +690,18 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _maybeLoadGroupMembers() async {
     if (!_isGroup) return;
+    // Church groups use IMPLICIT membership (profiles.church_id match) —
+    // they have no conversation_members rows, so skip the not-a-member
+    // lockout. For an announcement channel, gate the composer on posting
+    // permission (verified church admin / super admin).
+    if (_isChurchGroup) {
+      if (_isChurchChannel) {
+        final canPost = await MessagingService.canPostToChurchChannel(
+            widget.conversationId);
+        if (mounted) setState(() => _channelCanPost = canPost);
+      }
+      return;
+    }
     try {
       final members = await GroupService.fetchMembers(widget.conversationId);
       if (!mounted) return;
@@ -1687,16 +1704,21 @@ class _ChatScreenState extends State<ChatScreen>
                     // Previously the tap deep-linked straight to the
                     // full profile, which felt too much for a quick
                     // glance.
-                    onTap: isGroup
-                        ? openGroupInfo
-                        : canOpenProfile
-                            ? () => showChatContactSheet(
-                                  context,
-                                  userId: otherUserId,
-                                  fallbackName: name,
-                                  fallbackPhotoUrl: photoUrl,
-                                )
-                            : null,
+                    // Church groups use implicit membership, so the
+                    // member-based group-info screen doesn't apply — header
+                    // isn't tappable for them.
+                    onTap: _isChurchGroup
+                        ? null
+                        : isGroup
+                            ? openGroupInfo
+                            : canOpenProfile
+                                ? () => showChatContactSheet(
+                                      context,
+                                      userId: otherUserId,
+                                      fallbackName: name,
+                                      fallbackPhotoUrl: photoUrl,
+                                    )
+                                : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
@@ -1724,9 +1746,13 @@ class _ChatScreenState extends State<ChatScreen>
                                       const Duration(milliseconds: 220),
                                   child: isGroup
                                       ? Text(
-                                          _groupMembers.isEmpty
-                                              ? 'Tap for group info'
-                                              : '${_groupMembers.length} members',
+                                          _isChurchChannel
+                                              ? 'Church announcements'
+                                              : _isChurchGroup
+                                                  ? 'Church group'
+                                                  : _groupMembers.isEmpty
+                                                      ? 'Tap for group info'
+                                                      : '${_groupMembers.length} members',
                                           key: const ValueKey('group-sub'),
                                           style:
                                               AppTextStyles.labelSmall.copyWith(
@@ -2232,6 +2258,37 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildInputBar() {
+    // Church announcement channel + viewer isn't a church admin — read
+    // only. Members chat and admins fall through to the normal composer.
+    if (_isChurchChannel && !_channelCanPost) {
+      return Container(
+        color: context.palette.card,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.campaign_outlined,
+                    size: 16, color: context.palette.textMuted),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Only church admins can post in this announcement channel.',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: context.palette.textMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     // Left / removed from this group — no composer, just a notice
     // (WhatsApp shows "You can't send messages to this group").
     if (_notAMember) {

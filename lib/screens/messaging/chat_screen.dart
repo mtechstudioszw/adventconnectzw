@@ -140,6 +140,70 @@ class _ChatScreenState extends State<ChatScreen>
   /// Delete only shows for messages the current user sent (RLS rejects
   /// deletes on incoming rows anyway, but hiding the menu item makes
   /// the affordance honest).
+  void _enterSelect(Message m) {
+    setState(() {
+      _selectMode = true;
+      _selectedMsgIds.add(m.id);
+    });
+  }
+
+  void _toggleSelect(Message m) {
+    setState(() {
+      if (_selectedMsgIds.contains(m.id)) {
+        _selectedMsgIds.remove(m.id);
+      } else {
+        _selectedMsgIds.add(m.id);
+      }
+      if (_selectedMsgIds.isEmpty) _selectMode = false;
+    });
+  }
+
+  void _exitSelect() {
+    setState(() {
+      _selectMode = false;
+      _selectedMsgIds.clear();
+    });
+  }
+
+  /// Delete the selected messages. Own messages become "deleted for
+  /// everyone" tombstones; messages from others are skipped (can't delete
+  /// someone else's for everyone).
+  Future<void> _deleteSelected() async {
+    if (!_ensureOnline('delete messages')) return;
+    final me = AuthService.currentUser?.id;
+    final mine = _messages
+        .where((m) => _selectedMsgIds.contains(m.id) && m.senderId == me)
+        .toList();
+    final skipped = _selectedMsgIds.length - mine.length;
+    setState(() {
+      _serverMessages = _serverMessages
+          .map((x) => mine.any((m) => m.id == x.id)
+              ? x.copyWith(isDeleted: true, content: '')
+              : x)
+          .toList();
+    });
+    _exitSelect();
+    for (final m in mine) {
+      try {
+        await MessagingService.softDeleteMessage(m.id);
+      } catch (_) {}
+    }
+    if (mounted && skipped > 0) {
+      _toast("You can only delete your own messages for everyone.");
+    }
+  }
+
+  Future<void> _forwardSelected() async {
+    final selected = _messages
+        .where((m) => _selectedMsgIds.contains(m.id) && !m.isDeleted)
+        .toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    _exitSelect();
+    for (final m in selected) {
+      await _forwardMessage(m);
+    }
+  }
+
   Future<void> _showMessageActions(Message m, bool isMine) async {
     HapticFeedback.selectionClick();
     // A "deleted" tombstone: the recipient can't act on it at all; the
@@ -274,6 +338,14 @@ class _ChatScreenState extends State<ChatScreen>
                           .copyWith(fontWeight: FontWeight.w600)),
                   onTap: () => Navigator.pop(ctx, 'edit'),
                 ),
+              ListTile(
+                leading: const Icon(Icons.checklist_rtl,
+                    color: AppColors.primaryBlue),
+                title: Text('Select',
+                    style: AppTextStyles.bodyLarge
+                        .copyWith(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, 'select'),
+              ),
               if (!isMine)
                 ListTile(
                   leading: const Icon(Icons.flag_outlined, color: AppColors.red),
@@ -311,6 +383,8 @@ class _ChatScreenState extends State<ChatScreen>
     switch (action) {
       case 'reply':
         _startReply(m);
+      case 'select':
+        _enterSelect(m);
       case 'star':
         await _toggleStar(m);
       case 'edit':
@@ -449,6 +523,9 @@ class _ChatScreenState extends State<ChatScreen>
   // Reply-jump highlight: the message id currently flashing + its timer.
   String? _highlightedMessageId;
   Timer? _highlightTimer;
+  // Multi-select mode (delete/forward several messages at once).
+  bool _selectMode = false;
+  final Set<String> _selectedMsgIds = <String>{};
   // True when this is a group the viewer has left / been removed from —
   // the composer is replaced with a locked banner.
   bool _notAMember = false;
@@ -1381,7 +1458,7 @@ class _ChatScreenState extends State<ChatScreen>
       backgroundColor: context.palette.scaffoldBg,
       body: Column(
         children: [
-          _buildHeader(),
+          _selectMode ? _buildSelectionBar() : _buildHeader(),
           _buildFriendshipBanner(),
           Expanded(child: _buildBody()),
           _buildInputBar(),
@@ -1699,6 +1776,74 @@ class _ChatScreenState extends State<ChatScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildSelectionBar() {
+    final count = _selectedMsgIds.length;
+    return ClipPath(
+      clipper: _HeaderClipper(),
+      child: Container(
+        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 12, 22),
+            child: Row(
+              children: [
+                _CircleIconButton(icon: Icons.close, onTap: _exitSelect),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$count selected',
+                    style: AppTextStyles.titleLarge.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 17,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.shortcut, color: AppColors.white),
+                  tooltip: 'Forward',
+                  onPressed: count == 0 ? null : _forwardSelected,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: AppColors.white),
+                  tooltip: 'Delete',
+                  onPressed: count == 0 ? null : _confirmDeleteSelected,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteSelected() async {
+    final count = _selectedMsgIds.length;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete $count message${count == 1 ? '' : 's'}?'),
+        content: const Text(
+          'Your own messages will show "This message was deleted" for '
+          'everyone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _deleteSelected();
   }
 
   Widget _buildHeader() {
@@ -2201,11 +2346,15 @@ class _ChatScreenState extends State<ChatScreen>
           final prev = i > 0 ? _messages[i - 1] : null;
           final showDateSeparator = prev == null ||
               !_sameLocalDay(prev.createdAt, m.createdAt);
-          return Padding(
+          return _SelectableMessage(
             // Key by message id so deletes/inserts in the middle of the
             // thread don't make Flutter recycle bubbles by index (which
             // flashed the wrong message into a slot for a frame).
             key: ValueKey('msg-${m.id}'),
+            selectMode: _selectMode,
+            selected: _selectedMsgIds.contains(m.id),
+            onToggle: () => _toggleSelect(m),
+            child: Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Column(
               crossAxisAlignment:
@@ -2287,6 +2436,7 @@ class _ChatScreenState extends State<ChatScreen>
                     ),
                   ),
               ],
+            ),
             ),
           );
         },
@@ -3466,6 +3616,51 @@ class _AttachOption extends StatelessWidget {
 /// Image-message bubble. Renders the local file optimistically while the
 /// upload runs, then a signed-URL image from the private bucket. Tap to
 /// open full-screen.
+/// Wraps a message row for multi-select mode: a leading check, a
+/// highlight, tap-to-toggle, and absorbs the bubble's own gestures so a
+/// tap selects instead of replying/playing.
+class _SelectableMessage extends StatelessWidget {
+  const _SelectableMessage({
+    super.key,
+    required this.child,
+    required this.selectMode,
+    required this.selected,
+    required this.onToggle,
+  });
+  final Widget child;
+  final bool selectMode;
+  final bool selected;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!selectMode) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onToggle,
+      child: Container(
+        color: selected
+            ? AppColors.primaryBlue.withValues(alpha: 0.10)
+            : Colors.transparent,
+        padding: const EdgeInsets.only(left: 6),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 20,
+              color: selected
+                  ? AppColors.primaryBlue
+                  : context.palette.divider,
+            ),
+            const SizedBox(width: 6),
+            Expanded(child: AbsorbPointer(child: child)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Drag a bubble to the right to reply (WhatsApp). Distance-based (not
 /// velocity) so slow, deliberate swipes work; shows a reply arrow that
 /// grows as you drag and fires once past the threshold.

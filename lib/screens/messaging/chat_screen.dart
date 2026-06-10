@@ -25,6 +25,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/church_group_avatar.dart';
+import '../../widgets/home/report_sheet.dart';
 import '../../widgets/chat_contact_sheet.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -259,6 +260,14 @@ class _ChatScreenState extends State<ChatScreen>
                           .copyWith(fontWeight: FontWeight.w600)),
                   onTap: () => Navigator.pop(ctx, 'edit'),
                 ),
+              if (!isMine)
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined, color: AppColors.red),
+                  title: Text('Report',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                          color: AppColors.red, fontWeight: FontWeight.w600)),
+                  onTap: () => Navigator.pop(ctx, 'report'),
+                ),
               if (isMine)
                 ListTile(
                   leading:
@@ -296,6 +305,13 @@ class _ChatScreenState extends State<ChatScreen>
         await _saveImageToGallery(m);
       case 'forward':
         await _forwardMessage(m);
+      case 'report':
+        await showReportSheet(
+          context,
+          contentType: 'message',
+          contentId: m.id,
+          contentLabel: 'this message',
+        );
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.content));
         if (!mounted) return;
@@ -1819,6 +1835,14 @@ class _ChatScreenState extends State<ChatScreen>
           case 'delete':
             await _confirmDeleteConversation();
             break;
+          case 'report_group':
+            await showReportSheet(
+              context,
+              contentType: 'group',
+              contentId: widget.conversationId,
+              contentLabel: _conversation?.otherUserName ?? 'this group',
+            );
+            break;
         }
       },
       itemBuilder: (context) => [
@@ -1867,18 +1891,30 @@ class _ChatScreenState extends State<ChatScreen>
             title: Text('Clear chat'),
           ),
         ),
-        const PopupMenuItem(
-          value: 'delete',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.delete_outline, color: AppColors.red),
-            title: Text(
-              'Delete conversation',
-              style: TextStyle(color: AppColors.red),
+        if (_isGroup)
+          const PopupMenuItem(
+            value: 'report_group',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.flag_outlined, color: AppColors.red),
+              title: Text('Report group',
+                  style: TextStyle(color: AppColors.red)),
             ),
           ),
-        ),
+        if (!_isChurchGroup)
+          const PopupMenuItem(
+            value: 'delete',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.delete_outline, color: AppColors.red),
+              title: Text(
+                'Delete conversation',
+                style: TextStyle(color: AppColors.red),
+              ),
+            ),
+          ),
       ],
     );
   }

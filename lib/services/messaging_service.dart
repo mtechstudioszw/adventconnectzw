@@ -647,6 +647,7 @@ class MessagingService {
     bool forwarded = false,
     String messageType = 'text',
     Map<String, dynamic>? meta,
+    String? clientId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -659,6 +660,7 @@ class MessagingService {
       'content': body,
       if (messageType != 'text') 'message_type': messageType,
       'meta': ?meta,
+      'client_id': ?clientId,
       if (replyToId != null) 'reply_to_id': int.tryParse(replyToId),
       if (forwarded) 'forwarded': true,
     };

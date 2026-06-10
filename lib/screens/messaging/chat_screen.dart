@@ -106,7 +106,17 @@ class _ChatScreenState extends State<ChatScreen>
   void _applyServerMessages(List<Message> list) {
     _serverMessages = list;
     final serverIds = list.map((m) => m.id).toSet();
-    _pending.removeWhere((p) => serverIds.contains(p.id));
+    // Server-echoed client_ids — drop any optimistic row the server now
+    // has, whether matched by id (online send) or client_id (offline
+    // outbox flush, where the temp id never became canonical). This stops
+    // the "offline message shows twice after reconnect" duplicate.
+    final serverClientIds = list
+        .map((m) => m.clientId)
+        .whereType<String>()
+        .toSet();
+    _pending.removeWhere((p) =>
+        serverIds.contains(p.id) ||
+        (p.clientId != null && serverClientIds.contains(p.clientId)));
   }
 
   /// Called after sendMessage returns the canonical row. Swaps the
@@ -1253,6 +1263,9 @@ class _ChatScreenState extends State<ChatScreen>
 
     // Optimistic UI — show the bubble immediately in the _pending list.
     final tempId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
+    // Idempotency key so the optimistic row dedupes against the server
+    // echo even if the temp id never becomes canonical (offline flush).
+    final clientId = 'c-${DateTime.now().microsecondsSinceEpoch}-$me';
     final optimistic = Message(
       id: tempId,
       conversationId: widget.conversationId,
@@ -1262,6 +1275,7 @@ class _ChatScreenState extends State<ChatScreen>
       createdAt: _optimisticTimestamp(),
       messageType: messageType,
       meta: productMeta,
+      clientId: clientId,
     );
     setState(() {
       _pending.add(optimistic);
@@ -1290,6 +1304,7 @@ class _ChatScreenState extends State<ChatScreen>
         replyToId: replyId,
         messageType: messageType,
         meta: productMeta,
+        clientId: clientId,
       );
       // Replace the optimistic entry with the canonical message in
       // place. The stream tick that follows dedupes by id (now that

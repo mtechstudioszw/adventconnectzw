@@ -197,6 +197,7 @@ class Message {
     this.editedAt,
     this.isDeleted = false,
     this.meta,
+    this.clientId,
   });
 
   final String id;
@@ -224,6 +225,10 @@ class Message {
   // Arbitrary message metadata (patch_064). For message_type='product':
   // {product_id, image, title, price}.
   final Map<String, dynamic>? meta;
+  // Client idempotency key (patch_070) — lets optimistic rows dedupe
+  // against the server echo even when the temp id never became canonical
+  // (offline outbox flush).
+  final String? clientId;
 
   bool get isEdited => editedAt != null;
 
@@ -246,6 +251,7 @@ class Message {
       editedAt: editedAt,
       isDeleted: isDeleted ?? this.isDeleted,
       meta: meta,
+      clientId: clientId,
     );
   }
 
@@ -277,6 +283,7 @@ class Message {
       meta: json['meta'] is Map
           ? Map<String, dynamic>.from(json['meta'] as Map)
           : null,
+      clientId: json['client_id'] as String?,
     );
   }
 }

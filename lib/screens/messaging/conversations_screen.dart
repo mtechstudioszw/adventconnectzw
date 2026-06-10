@@ -1548,14 +1548,23 @@ class _ConversationTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        // Inbox tick was always showing done_all for any
-                        // outgoing last message, which made it look
-                        // "delivered" even when the recipient was offline
-                        // and the chat screen still showed a single grey
-                        // tick. Hidden here intentionally — the in-chat
-                        // tick remains accurate. Will reinstate once we
-                        // surface per-conversation last-message status on
-                        // the conversations row.
+                        // Tick on the last message, but ONLY when the
+                        // viewer sent it (patch_075 surfaces its real
+                        // delivered/read state): ✓ sent, ✓✓ delivered,
+                        // ✓✓ blue read (blue only in 1:1, like in-chat).
+                        if (isLastFromMe && !conversation.isSelfChat) ...[
+                          Icon(
+                            (conversation.lastDelivered || conversation.lastRead)
+                                ? Icons.done_all
+                                : Icons.done,
+                            size: 14,
+                            color:
+                                (conversation.lastRead && !conversation.isGroup)
+                                    ? AppColors.primaryBlue
+                                    : context.palette.textMuted,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         Expanded(
                           child: Text(
                             conversation.lastMessage.isEmpty

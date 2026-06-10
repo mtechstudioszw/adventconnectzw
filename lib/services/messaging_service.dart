@@ -264,6 +264,9 @@ class MessagingService {
     // Group unread comes from a separate per-member last-read marker
     // (patch_060) since messages.read is a single 1:1 boolean.
     unreadById.addAll(await fetchGroupUnreadCounts());
+    // Delivery state of each thread's last message when WE sent it, for
+    // the inbox tick (patch_075).
+    final lastStatus = await fetchLastOutgoingStatus();
     // Splice the unread count into each raw row BEFORE caching so a
     // cache-restore preserves badges accurately — caching the raw
     // server response (without counts) was the source of the
@@ -277,9 +280,14 @@ class MessagingService {
         })
         .toList();
     unawaited(_writeInboxCache(enriched));
-    final list = enriched
-        .map((raw) => Conversation.fromJson(raw, currentUserId: user.id))
-        .toList();
+    final list = enriched.map((raw) {
+      var c = Conversation.fromJson(raw, currentUserId: user.id);
+      final st = lastStatus[c.id];
+      if (st != null) {
+        c = c.copyWith(lastDelivered: st.delivered, lastRead: st.read);
+      }
+      return c;
+    }).toList();
     list.sort((a, b) {
       if (a.isSelfChat && !b.isSelfChat) return -1;
       if (b.isSelfChat && !a.isSelfChat) return 1;
@@ -313,6 +321,32 @@ class MessagingService {
     } catch (_) {
       // RPC missing or RLS error — degrade gracefully to zero badges
       // rather than blanking the whole inbox.
+      return const {};
+    }
+  }
+
+  /// Delivery state of each conversation's last message WHEN the caller
+  /// sent it (patch_075). Keyed by conversation id → (delivered, read).
+  /// Used for the inbox tick. Conversations whose last message is from the
+  /// other party are absent.
+  static Future<Map<String, ({bool delivered, bool read})>>
+      fetchLastOutgoingStatus() async {
+    try {
+      final rows = await _client.rpc('last_outgoing_message_status');
+      if (rows is! List) return const {};
+      final result = <String, ({bool delivered, bool read})>{};
+      for (final raw in rows) {
+        if (raw is Map) {
+          final id = raw['conversation_id']?.toString();
+          if (id == null) continue;
+          result[id] = (
+            delivered: raw['delivered'] == true,
+            read: raw['is_read'] == true,
+          );
+        }
+      }
+      return result;
+    } catch (_) {
       return const {};
     }
   }

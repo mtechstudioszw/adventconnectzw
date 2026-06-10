@@ -35,6 +35,8 @@ class Conversation {
     this.isSelfChat = false,
     this.isGroup = false,
     this.churchKind,
+    this.lastDelivered = false,
+    this.lastRead = false,
   });
 
   final String id;
@@ -57,6 +59,10 @@ class Conversation {
   // 'members' (open church chat). Null for normal chats/groups. These are
   // force-pinned and can't be left/unpinned.
   final String? churchKind;
+  // Delivery state of the LAST message when the viewer sent it (patch_075)
+  // — drives the inbox tick (✓ / ✓✓ / ✓✓ blue). Both false otherwise.
+  final bool lastDelivered;
+  final bool lastRead;
 
   bool get isChurchGroup => churchKind != null;
   bool get isChurchChannel => churchKind == 'channel';
@@ -152,6 +158,8 @@ class Conversation {
     bool? isSelfChat,
     bool? isGroup,
     String? otherUserPhotoUrl,
+    bool? lastDelivered,
+    bool? lastRead,
   }) {
     return Conversation(
       id: id,
@@ -168,6 +176,8 @@ class Conversation {
       isSelfChat: isSelfChat ?? this.isSelfChat,
       isGroup: isGroup ?? this.isGroup,
       churchKind: churchKind,
+      lastDelivered: lastDelivered ?? this.lastDelivered,
+      lastRead: lastRead ?? this.lastRead,
     );
   }
 

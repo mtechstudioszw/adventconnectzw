@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -26,8 +28,45 @@ class CacheService {
     try {
       await Hive.initFlutter();
       _box = await Hive.openBox<String>(_boxName);
+      // Hive boxes are an append-only log: every feed/inbox/chat refresh
+      // appends a fresh copy and tombstones the previous one, so the file
+      // grows unbounded and the NEXT cold-start openBox gets slower and
+      // slower (the "app got slower over time" symptom). Prune stale
+      // entries + compact in the background so it never blocks launch but
+      // keeps the box small for subsequent starts.
+      unawaited(_pruneAndCompact());
     } catch (e, st) {
       debugPrint('CacheService: init failed: $e\n$st');
+    }
+  }
+
+  /// Drop expired cached payloads, then rewrite the box to drop all the
+  /// dead/overwritten log entries. Best-effort, off the critical path.
+  static Future<void> _pruneAndCompact() async {
+    final box = _box;
+    if (box == null) return;
+    try {
+      final now = DateTime.now().toUtc();
+      final toDelete = <String>[];
+      for (final key in box.keys) {
+        if (key is! String || key.endsWith('__ts') || key.startsWith('pref:')) {
+          continue;
+        }
+        final tsRaw = box.get('${key}__ts');
+        final ts = tsRaw == null ? null : DateTime.tryParse(tsRaw);
+        if (ts == null) continue;
+        // Chat/inbox caches are read "stale" for offline, so give them a
+        // longer 7-day window; everything else follows the 24h TTL.
+        final isChat = key == 'inbox' || key.startsWith('chat:');
+        final limit = isChat ? const Duration(days: 7) : _maxAge;
+        if (now.difference(ts) > limit) {
+          toDelete..add(key)..add('${key}__ts');
+        }
+      }
+      if (toDelete.isNotEmpty) await box.deleteAll(toDelete);
+      await box.compact();
+    } catch (_) {
+      // Pruning is best-effort — never let it break startup.
     }
   }
 

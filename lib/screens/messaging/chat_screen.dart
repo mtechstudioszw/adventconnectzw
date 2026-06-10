@@ -1298,7 +1298,12 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _send() async {
     final text = _inputController.text.trim();
-    if (text.isEmpty || _sending) return;
+    // Don't gate text sends on _sending — the optimistic bubble is added
+    // synchronously below, so on a slow network you can still fire several
+    // messages back-to-back (WhatsApp parity) instead of waiting for each
+    // to confirm. The input is cleared immediately, so a double-tap can't
+    // resend the same text.
+    if (text.isEmpty) return;
     final me = AuthService.currentUser?.id ?? '';
 
     // Edit mode — update the existing message instead of sending a new
@@ -1889,21 +1894,19 @@ class _ChatScreenState extends State<ChatScreen>
                     // Previously the tap deep-linked straight to the
                     // full profile, which felt too much for a quick
                     // glance.
-                    // Church groups use implicit membership, so the
-                    // member-based group-info screen doesn't apply — header
-                    // isn't tappable for them.
-                    onTap: _isChurchGroup
-                        ? null
-                        : isGroup
-                            ? openGroupInfo
-                            : canOpenProfile
-                                ? () => showChatContactSheet(
-                                      context,
-                                      userId: otherUserId,
-                                      fallbackName: name,
-                                      fallbackPhotoUrl: photoUrl,
-                                    )
-                                : null,
+                    // Tapping a group header (including church groups +
+                    // the announcements channel) opens its info screen,
+                    // WhatsApp-style.
+                    onTap: isGroup
+                        ? openGroupInfo
+                        : canOpenProfile
+                            ? () => showChatContactSheet(
+                                  context,
+                                  userId: otherUserId,
+                                  fallbackName: name,
+                                  fallbackPhotoUrl: photoUrl,
+                                )
+                            : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
@@ -2021,7 +2024,7 @@ class _ChatScreenState extends State<ChatScreen>
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.person_outline),
-              title: Text('View contact'),
+              title: Text('View profile'),
             ),
           ),
         if (canOpenProfile && !_isBlocked)

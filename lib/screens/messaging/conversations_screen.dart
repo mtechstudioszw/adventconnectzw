@@ -347,11 +347,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   List<Conversation> get _chats {
-    // 1:1 chats + church groups (church groups are pinned to the very
-    // top). User-created groups live in the Groups tab, not here.
+    // 1:1 chats + the church ANNOUNCEMENTS channel (WhatsApp-channel
+    // style — pinned to the very top). The church MEMBERS group and all
+    // user-created groups live in the Groups tab, not here.
     final filtered = _conversations
         .where((c) =>
-            (!c.isGroup || c.isChurchGroup) &&
+            (!c.isGroup || c.isChurchChannel) &&
             !c.isIncomingRequestFor(_currentUserId) &&
             !_isArchived(c))
         .toList();
@@ -361,10 +362,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return [...selfChats, ...others];
   }
 
-  /// User-created group chats (church groups are excluded — they sit at
-  /// the top of the Chats tab). Archived ones move to Archived.
+  /// Group chats: user-created groups + the church MEMBERS group (pinned
+  /// to the top, can't be unpinned). The announcements channel is NOT
+  /// here — it sits in the Chats tab. Archived ones move to Archived.
   List<Conversation> get _groups => _pinnedFirst(_conversations
-      .where((c) => c.isGroup && !c.isChurchGroup && !_isArchived(c))
+      .where((c) => c.isGroup && !c.isChurchChannel && !_isArchived(c))
       .toList());
 
   /// Everything (1:1 or group) the viewer has archived.
@@ -1422,9 +1424,7 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final unread = conversation.unreadCount > 0 && !isLastFromMe;
     return Material(
-      color: selected
-          ? AppColors.primaryBlue.withValues(alpha: 0.12)
-          : Colors.transparent,
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -1432,7 +1432,16 @@ class _ConversationTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: context.palette.card,
+            // Strong, obvious tint + border when multi-selected so it's
+            // clear which chats are picked.
+            color: selected
+                ? Color.alphaBlend(
+                    AppColors.primaryBlue.withValues(alpha: 0.16),
+                    context.palette.card)
+                : context.palette.card,
+            border: selected
+                ? Border.all(color: AppColors.primaryBlue, width: 1.6)
+                : null,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -1456,6 +1465,22 @@ class _ConversationTile extends StatelessWidget {
                           photoUrl: conversation.otherUserPhotoUrl,
                           isSelfChat: conversation.isSelfChat,
                         ),
+                  // Multi-select check badge over the avatar.
+                  if (selected)
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: context.palette.card, width: 2),
+                        ),
+                        child: const Icon(Icons.check,
+                            size: 14, color: AppColors.white),
+                      ),
+                    ),
                   // Small green dot on the avatar's bottom-right when
                   // the other user is currently online (WhatsApp-style).
                   // Hidden for self-chats and pending requests.

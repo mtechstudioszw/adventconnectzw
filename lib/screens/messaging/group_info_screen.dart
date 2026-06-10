@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/church_service.dart';
 import '../../services/directory_service.dart';
 import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
@@ -36,7 +37,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   String get _myId => AuthService.currentUser?.id ?? '';
   bool get _amAdmin =>
-      _members.any((m) => m.userId == _myId && m.isAdmin);
+      !_isChurch && _members.any((m) => m.userId == _myId && m.isAdmin);
+  bool get _isChurch => _group?.isChurchGroup ?? false;
+  bool get _isChannel => _group?.isChurchChannel ?? false;
 
   @override
   void initState() {
@@ -46,18 +49,54 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   Future<void> _load() async {
     try {
-      final results = await Future.wait([
-        MessagingService.fetchConversation(widget.conversationId),
-        GroupService.fetchMembers(widget.conversationId),
-      ]);
+      final convo =
+          await MessagingService.fetchConversation(widget.conversationId);
+      // Church groups have implicit membership (patch_078) — fetch from
+      // profiles.church_id, not conversation_members. The announcements
+      // channel shows only the count, so skip the list there.
+      final isChurch = convo?.isChurchGroup ?? false;
+      final isChannel = convo?.isChurchChannel ?? false;
+      final List<GroupMember> members;
+      if (isChannel) {
+        members = await GroupService.fetchChurchMembers(widget.conversationId);
+      } else if (isChurch) {
+        members = await GroupService.fetchChurchMembers(widget.conversationId);
+      } else {
+        members = await GroupService.fetchMembers(widget.conversationId);
+      }
       if (!mounted) return;
       setState(() {
-        _group = results[0] as Conversation?;
-        _members = results[1] as List<GroupMember>;
+        _group = convo;
+        _members = members;
         _loading = false;
       });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _claimAdmin() async {
+    final churchId = _group?.churchId;
+    if (churchId == null) {
+      _toast('Could not identify this church.', error: true);
+      return;
+    }
+    final ok = await _confirm(
+      'Request to post announcements?',
+      'Your request to become this church\'s announcements admin will be '
+          'sent for approval. Once approved you can post announcements that '
+          'all members see.',
+      'Send request',
+    );
+    if (ok != true) return;
+    try {
+      await ChurchService.applyForChurchAdmin(
+        churchId: churchId,
+        role: 'admin',
+      );
+      if (mounted) _toast('Request sent — pending approval.');
+    } catch (_) {
+      if (mounted) _toast('Could not send request.', error: true);
     }
   }
 
@@ -379,7 +418,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.darkNavy,
         foregroundColor: AppColors.white,
-        title: const Text('Group info'),
+        title: Text(_isChannel
+            ? 'Channel info'
+            : _isChurch
+                ? 'Group info'
+                : 'Group info'),
         actions: [
           if (_amAdmin)
             IconButton(
@@ -416,56 +459,110 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 const SizedBox(height: 4),
                 Center(
                   child: Text(
-                    '${_members.length} members',
+                    _isChannel
+                        ? '${_members.length} members · Channel'
+                        : '${_members.length} members',
                     style: AppTextStyles.bodySmall
                         .copyWith(color: context.palette.textMuted),
                   ),
                 ),
                 const SizedBox(height: 16),
-                _ActionTile(
-                  icon: Icons.link,
-                  label: 'Invite to group via link',
-                  onTap: _shareInvite,
-                ),
-                if (_amAdmin)
-                  _ActionTile(
-                    icon: Icons.person_add_alt_1,
-                    label: 'Add members',
-                    onTap: _addMembers,
-                  ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
-                  child: Text(
-                    '${_members.length} MEMBERS',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: context.palette.textMuted,
-                      letterSpacing: 1.2,
-                      fontWeight: FontWeight.w700,
+
+                // ---- CHURCH ANNOUNCEMENTS CHANNEL ----------------------
+                // WhatsApp-channel style: description + member count only,
+                // a claim-admin request, and NO member list / leave /
+                // delete / invite.
+                if (_isChannel) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'Official announcements channel. Only approved church '
+                      'admins can post here; everyone in the church receives '
+                      'the announcements.',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: context.palette.textMuted),
                     ),
                   ),
-                ),
-                for (final m in _members)
-                  _MemberTile(
-                    member: m,
-                    isSelf: m.userId == _myId,
-                    onTap: () => _memberActions(m),
-                  ),
-                const SizedBox(height: 16),
-                _ActionTile(
-                  icon: Icons.logout,
-                  label: 'Leave group',
-                  danger: true,
-                  onTap: _leave,
-                ),
-                if (_amAdmin)
+                  const SizedBox(height: 16),
                   _ActionTile(
-                    icon: Icons.delete_outline,
-                    label: 'Delete group',
-                    danger: true,
-                    onTap: _delete,
+                    icon: Icons.verified_user_outlined,
+                    label: 'Request to post announcements',
+                    onTap: _claimAdmin,
                   ),
-                const SizedBox(height: 32),
+                  const SizedBox(height: 24),
+                ]
+
+                // ---- CHURCH MEMBERS GROUP -----------------------------
+                // WhatsApp-group style: show the member list. No admins,
+                // no leave/delete/invite (membership is automatic).
+                else if (_isChurch) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+                    child: Text(
+                      '${_members.length} MEMBERS',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: context.palette.textMuted,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  for (final m in _members)
+                    _MemberTile(
+                      member: m,
+                      isSelf: m.userId == _myId,
+                      onTap: () => _memberActions(m),
+                    ),
+                  const SizedBox(height: 32),
+                ]
+
+                // ---- NORMAL USER-CREATED GROUP ------------------------
+                else ...[
+                  _ActionTile(
+                    icon: Icons.link,
+                    label: 'Invite to group via link',
+                    onTap: _shareInvite,
+                  ),
+                  if (_amAdmin)
+                    _ActionTile(
+                      icon: Icons.person_add_alt_1,
+                      label: 'Add members',
+                      onTap: _addMembers,
+                    ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+                    child: Text(
+                      '${_members.length} MEMBERS',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: context.palette.textMuted,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  for (final m in _members)
+                    _MemberTile(
+                      member: m,
+                      isSelf: m.userId == _myId,
+                      onTap: () => _memberActions(m),
+                    ),
+                  const SizedBox(height: 16),
+                  _ActionTile(
+                    icon: Icons.logout,
+                    label: 'Leave group',
+                    danger: true,
+                    onTap: _leave,
+                  ),
+                  if (_amAdmin)
+                    _ActionTile(
+                      icon: Icons.delete_outline,
+                      label: 'Delete group',
+                      danger: true,
+                      onTap: _delete,
+                    ),
+                  const SizedBox(height: 32),
+                ],
               ],
             ),
     );

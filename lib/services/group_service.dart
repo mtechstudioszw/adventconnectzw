@@ -107,6 +107,27 @@ class GroupService {
     return list;
   }
 
+  /// Members of a CHURCH group (implicit membership via profiles.church_id,
+  /// patch_078). No admins/roles — everyone is a plain member.
+  static Future<List<GroupMember>> fetchChurchMembers(
+      String conversationId) async {
+    final rows = await _client.rpc('church_conversation_members', params: {
+      'p_conv': int.parse(conversationId),
+    });
+    if (rows is! List) return const [];
+    return rows.map((r) {
+      final map = r as Map<String, dynamic>;
+      return GroupMember(
+        userId: map['user_id'].toString(),
+        role: 'member',
+        fullName: (map['full_name'] as String?)?.trim().isNotEmpty == true
+            ? (map['full_name'] as String).trim()
+            : 'Member',
+        photoUrl: map['photo_url'] as String?,
+      );
+    }).toList();
+  }
+
   /// Get (or lazily create) the shareable invite token for a group.
   static Future<String> inviteToken(String conversationId) async {
     final token = await _client.rpc('get_or_create_group_invite', params: {

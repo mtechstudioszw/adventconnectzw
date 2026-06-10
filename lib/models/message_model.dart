@@ -35,6 +35,7 @@ class Conversation {
     this.isSelfChat = false,
     this.isGroup = false,
     this.churchKind,
+    this.churchId,
     this.lastDelivered = false,
     this.lastRead = false,
   });
@@ -59,6 +60,9 @@ class Conversation {
   // 'members' (open church chat). Null for normal chats/groups. These are
   // force-pinned and can't be left/unpinned.
   final String? churchKind;
+  // The church this group belongs to (patch_065) — used to submit an
+  // admin claim from the announcements channel.
+  final String? churchId;
   // Delivery state of the LAST message when the viewer sent it (patch_075)
   // — drives the inbox tick (✓ / ✓✓ / ✓✓ blue). Both false otherwise.
   final bool lastDelivered;
@@ -96,6 +100,7 @@ class Conversation {
         lastSenderId: json['last_sender_id']?.toString(),
         isGroup: true,
         churchKind: json['church_kind'] as String?,
+        churchId: json['church_id']?.toString(),
       );
     }
     final participantA = (json['participant_a_id'] ?? '').toString();
@@ -176,6 +181,7 @@ class Conversation {
       isSelfChat: isSelfChat ?? this.isSelfChat,
       isGroup: isGroup ?? this.isGroup,
       churchKind: churchKind,
+      churchId: churchId,
       lastDelivered: lastDelivered ?? this.lastDelivered,
       lastRead: lastRead ?? this.lastRead,
     );

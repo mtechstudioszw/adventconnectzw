@@ -34,6 +34,9 @@ class AdventNewsDetailsScreen extends StatefulWidget {
 class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
   AdventNews? _item;
   bool _loading = false;
+  // True once this story was edited or deleted, so the list we return to
+  // refreshes (fixes "deleted post lingers / delete twice").
+  bool _changed = false;
 
   @override
   void initState() {
@@ -95,14 +98,16 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
   Future<void> _editStory() async {
     final item = _item;
     if (item == null) return;
-    final updated = await context.pushNamed<AdventNews>(
+    // The composer now returns a bool (true = saved). Re-fetch the fresh
+    // row instead of relying on a returned object so the details view and
+    // the list never show stale edits.
+    final changed = await context.pushNamed<bool>(
       'post_news',
       extra: item,
     );
     if (!mounted) return;
-    if (updated != null) {
-      setState(() => _item = updated);
-    } else {
+    if (changed == true) {
+      _changed = true;
       _refreshQuietly();
     }
   }
@@ -157,7 +162,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
         ),
       );
       if (context.canPop()) {
-        context.pop();
+        context.pop(true); // signal the list to refresh
       } else {
         context.goNamed('news');
       }
@@ -259,7 +264,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: context.palette.text),
             onPressed: () => context.canPop()
-                ? context.pop()
+                ? context.pop(_changed)
                 : context.goNamed('news'),
           ),
         ),
@@ -440,7 +445,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                 _CircleIconButton(
                   icon: Icons.arrow_back,
                   onTap: () => context.canPop()
-                      ? context.pop()
+                      ? context.pop(_changed)
                       : context.goNamed('news'),
                 ),
                 const Spacer(),

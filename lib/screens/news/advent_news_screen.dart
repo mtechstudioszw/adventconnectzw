@@ -283,12 +283,15 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
     );
   }
 
-  void _openDetails(AdventNews item) {
-    context.pushNamed(
+  Future<void> _openDetails(AdventNews item) async {
+    // Details returns true when the story was edited/deleted — refresh so
+    // a deleted story doesn't linger in the list (the "delete twice" bug).
+    final changed = await context.pushNamed<bool>(
       'news_details',
       pathParameters: {'id': item.id},
       extra: item,
     );
+    if (changed == true && mounted) await _load();
   }
 }
 

@@ -645,7 +645,7 @@ class MessagingService {
   /// Per-user message visibility floor (patch_085): the latest of
   /// cleared_at, group joined_at, and church-join time. Messages at/before
   /// this are hidden for the caller (clear-chat + history-from-join).
-  static Future<DateTime?> _messageFloor(String conversationId) async {
+  static Future<DateTime?> messageFloor(String conversationId) async {
     if (_client.auth.currentUser == null) return null;
     try {
       final res = await _client
@@ -673,7 +673,7 @@ class MessagingService {
       return readCachedMessages(conversationId);
     }
     // Visibility floor (patch_085): clear-chat + history-from-join.
-    final clearedAt = await _messageFloor(conversationId);
+    final clearedAt = await messageFloor(conversationId);
     List<dynamic> response;
     try {
       // Fetch the NEWEST 500 (descending), then reverse to chronological

@@ -107,7 +107,16 @@ class _ChatScreenState extends State<ChatScreen>
   /// (which broke when a blocked send had the same body as an earlier
   /// real message), and no flicker (the canonical replaces the pending
   /// in-place, never both visible).
+  // Visibility floor (patch_085): hide messages from before the user
+  // joined / cleared the chat. The realtime stream is unfiltered, so we
+  // apply it here — the single chokepoint for cached + fetched + streamed.
+  DateTime? _floor;
+
   void _applyServerMessages(List<Message> list) {
+    final floor = _floor;
+    if (floor != null) {
+      list = list.where((m) => m.createdAt.isAfter(floor)).toList();
+    }
     _serverMessages = list;
     final serverIds = list.map((m) => m.id).toSet();
     // Server-echoed client_ids — drop any optimistic row the server now
@@ -1046,6 +1055,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _bootstrap() async {
+    // Resolve the visibility floor first (clear-chat + history-from-join,
+    // patch_085) so cached/fetched/streamed messages are all filtered and
+    // cleared/pre-join messages never flash in.
+    _floor = await MessagingService.messageFloor(widget.conversationId);
     // Show cached messages immediately so the screen never blanks on
     // open — even on a slow network. The fresh fetch below will
     // replace this with server state in a moment.

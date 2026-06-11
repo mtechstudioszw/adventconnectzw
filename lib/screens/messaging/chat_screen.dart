@@ -861,6 +861,21 @@ class _ChatScreenState extends State<ChatScreen>
             widget.conversationId);
         if (mounted) setState(() => _channelCanPost = canPost);
       }
+      // Resolve church member names so message senders show their real
+      // name instead of "Member" (church groups have implicit membership
+      // so there are no conversation_members rows to read).
+      try {
+        final members =
+            await GroupService.fetchChurchMembers(widget.conversationId);
+        if (mounted) {
+          setState(() {
+            _groupMembers = members;
+            _memberById
+              ..clear()
+              ..addEntries(members.map((m) => MapEntry(m.userId, m)));
+          });
+        }
+      } catch (_) {}
       return;
     }
     try {
@@ -2283,6 +2298,13 @@ class _ChatScreenState extends State<ChatScreen>
       ),
     );
     if (confirmed != true || !mounted) return;
+    // Persist the clear (patch_081 cleared_at) so the messages stay hidden
+    // after re-opening — previously this only cleared local state, so a
+    // re-fetch brought them all back.
+    try {
+      await MessagingService.clearConversation(widget.conversationId);
+    } catch (_) {}
+    if (!mounted) return;
     setState(() {
       _serverMessages = const [];
       _pending.clear();
@@ -2428,7 +2450,9 @@ class _ChatScreenState extends State<ChatScreen>
                     ? 'You left'
                     : m.content.endsWith(' joined')
                         ? 'You joined'
-                        : m.content)
+                        : m.content.contains('created the group')
+                            ? 'You created the group'
+                            : m.content)
                 : m.content;
             return Column(
               children: [

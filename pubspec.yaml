@@ -107,13 +107,10 @@ flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
   remove_alpha_ios: true
-  # icon_foreground.png = just the "A" mark, cropped out of the full
-  # logo lockup (logo.png has the wordmark + white bg, which the adaptive
-  # mask cropped). Symbol is centred with safe-zone padding on white.
-  image_path: "assets/icon/icon_foreground.png"
-  # White background so the adaptive icon reads as a clean white tile
-  # matching the logo's own canvas (the foreground is opaque white, so
-  # this only shows at the masked edges).
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  # New brand logo (transparent) on the Dark Navy brand background, so the
+  # launcher icon matches the splash/in-app logo instead of the old mark.
+  image_path: "assets/icon/logo.png"
+  background_color_ios: "#0D1B3E"
+  adaptive_icon_background: "#0D1B3E"
+  adaptive_icon_foreground: "assets/icon/logo.png"
   min_sdk_android: 21

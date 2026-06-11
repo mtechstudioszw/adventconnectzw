@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#0D1B3E</color>
+    <!-- Dark Navy brand colour for the native launch window (the first
+         frame before the Flutter splash). -->
+    <color name="launch_background">#0D1B3E</color>
 </resources>

@@ -2645,7 +2645,11 @@ class _ChatScreenState extends State<ChatScreen>
                                     ? Icons.done_all
                                     : Icons.done),
                             size: 13,
-                            color: (m.read && !_isGroup)
+                            // Blue only when read_at is set — a recipient
+                            // who turned read receipts OFF reports read=true
+                            // with read_at=null, so they stay grey ✓✓
+                            // (delivered) instead of wrongly lighting blue.
+                            color: (m.readAt != null && !_isGroup)
                                 ? AppColors.primaryBlue
                                 : context.palette.textMuted,
                           ),

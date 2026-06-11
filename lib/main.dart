@@ -33,15 +33,20 @@ void main() async {
   // future inside _navigate() before any auth.currentUser read.
   unawaited(AppBootstrap.startSupabaseInit());
 
-  // Cheap disk reads several services consume synchronously on first
-  // build. Parallelised so the slowest one bounds total latency
-  // instead of summing them. None of these depend on Supabase.
+  // Cheap LOCAL reads the MaterialApp/theme need before the first frame.
+  // Kept tiny so the splash paints almost immediately.
   await Future.wait([
-    CacheService.initialize(),
     ConnectivityService.initialize(),
     AccountModeService.init(),
     ThemeService.init(),
   ]);
+
+  // CacheService opens a Hive box (reads the WHOLE box into memory). If it
+  // ever grew large that openBox blocked the first frame for many seconds
+  // (the "navy screen for ~13s" symptom). Move it OFF the critical path —
+  // the splash awaits it (timeboxed) before routing home, and every cache
+  // read already tolerates a not-yet-open box.
+  unawaited(CacheService.initialize());
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

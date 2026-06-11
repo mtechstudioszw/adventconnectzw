@@ -1208,7 +1208,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   title: Text(_isArchived(c) ? 'Unarchive' : 'Archive'),
                   onTap: () => Navigator.of(sheetCtx).pop('archive'),
                 ),
-              if (!c.isChurchGroup)
+              // Groups can't be deleted from the inbox — you delete a group
+              // chat only from inside it, and only after you've left or
+              // been removed (the in-chat "Delete conversation" button).
+              if (!c.isGroup)
                 ListTile(
                   leading: const Icon(Icons.delete_outline,
                       color: AppColors.red),

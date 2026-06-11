@@ -157,9 +157,20 @@ class _SplashScreenState extends State<SplashScreen>
     // parallel — main.dart no longer awaits Supabase before runApp,
     // so we MUST wait for it here before the AuthService reads
     // below (they'd throw "Supabase has not been initialized").
+    // Timebox the Supabase wait. initialize() restores the saved session
+    // locally (fast) but then does a NETWORK token refresh that can hang
+    // for many seconds on a slow connection — we must NOT block the splash
+    // on that. After ~2.5s we proceed (the local session is already
+    // restored, so routing is correct) and the refresh finishes in the
+    // background while home paints from cache.
     await Future.wait([
       Future.delayed(_minLoaderDuration),
-      AppBootstrap.awaitSupabaseReady(),
+      AppBootstrap.awaitSupabaseReady()
+          .timeout(const Duration(milliseconds: 1500), onTimeout: () {}),
+      // Cache box open (moved off the pre-runApp path). Timeboxed so a
+      // large/slow box can't stall the splash — home tolerates no cache.
+      CacheService.initialize()
+          .timeout(const Duration(milliseconds: 1500), onTimeout: () {}),
     ]);
     if (!mounted) return;
 

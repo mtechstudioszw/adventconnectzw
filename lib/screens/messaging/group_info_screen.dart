@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
-import '../../services/church_service.dart';
 import '../../services/directory_service.dart';
 import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
@@ -77,28 +77,32 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
   }
 
+  // Founder's WhatsApp number for announcement-admin verification.
+  // Country code first, NO '+' or spaces (e.g. Zimbabwe 077... -> 26377...).
+  // TODO(founder): replace with your real WhatsApp number.
+  static const String _announcementsWhatsApp = '263770000000';
+
   Future<void> _claimAdmin() async {
-    final churchId = _group?.churchId;
-    if (churchId == null) {
-      _toast('Could not identify this church.', error: true);
-      return;
-    }
+    final churchName = _group?.otherUserName ?? 'my church';
+    final me = AuthService.currentUser;
+    final myName =
+        (me?.userMetadata?['full_name'] as String?)?.trim() ?? 'a member';
+    final text = Uri.encodeComponent(
+      'Hello, I would like to be verified to post announcements for '
+      '"$churchName" on Advent Connect ZW. My name is $myName.',
+    );
+    final uri =
+        Uri.parse('https://wa.me/$_announcementsWhatsApp?text=$text');
     final ok = await _confirm(
-      'Request to post announcements?',
-      'Your request to become this church\'s announcements admin will be '
-          'sent for approval. Once approved you can post announcements that '
-          'all members see.',
-      'Send request',
+      'Request to post announcements',
+      'To post announcements you must be verified by the Advent Connect '
+          'team. This will open WhatsApp so you can send your request — '
+          'once verified you\'ll be granted access manually.',
+      'Open WhatsApp',
     );
     if (ok != true) return;
-    try {
-      await ChurchService.applyForChurchAdmin(
-        churchId: churchId,
-        role: 'standard',
-      );
-      if (mounted) _toast('Request sent — pending approval.');
-    } catch (_) {
-      if (mounted) _toast('Could not send request.', error: true);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) _toast('Could not open WhatsApp.', error: true);
     }
   }
 

@@ -984,7 +984,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   // ----- Requests view (opened from the Chats banner) -----------------
   Widget _buildRequestsView() {
-    final list = _requests;
+    // Don't show the same person twice: if they already appear under
+    // Friend requests, drop their message request from this view.
+    final friendIds = _friendRequests.map((r) => r.requesterId).toSet();
+    final list =
+        _requests.where((c) => !friendIds.contains(c.otherUserId)).toList();
     final hasFriendRequests = _friendRequests.isNotEmpty;
     final hasMessageRequests = list.isNotEmpty;
     return ListView(

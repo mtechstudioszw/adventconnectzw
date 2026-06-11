@@ -1083,23 +1083,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _bootstrap() async {
-    // Resolve the visibility floor first (clear-chat + history-from-join,
-    // patch_085) so cached/fetched/streamed messages are all filtered and
-    // cleared/pre-join messages never flash in.
-    // Resolve the floor + hidden ids in PARALLEL (one round-trip) before
-    // the cache paint so cleared/pre-join/deleted-for-me messages never
-    // flash in.
-    final pre = await Future.wait([
-      MessagingService.messageFloor(widget.conversationId),
-      MessagingService.fetchHiddenMessageIds(widget.conversationId),
-    ]);
-    _floor = pre[0] as DateTime?;
-    _hiddenIds
-      ..clear()
-      ..addAll(pre[1] as Set<String>);
-    // Show cached messages immediately so the screen never blanks on
-    // open — even on a slow network. The fresh fetch below will
-    // replace this with server state in a moment.
+    // Paint cached messages INSTANTLY (synchronous Hive read, no await) so
+    // opening a chat never shows a blank/loading screen — it doesn't
+    // "reload every time".
     final cached =
         MessagingService.readCachedMessages(widget.conversationId);
     if (cached.isNotEmpty) {
@@ -1108,6 +1094,20 @@ class _ChatScreenState extends State<ChatScreen>
         _loading = false;
       });
       _scrollToBottom(animate: false);
+    }
+    // Then resolve the visibility floor + hidden ids (parallel, one
+    // round-trip) and re-apply the filter so any cleared / pre-join /
+    // deleted-for-me messages are removed from the cached paint.
+    final pre = await Future.wait([
+      MessagingService.messageFloor(widget.conversationId),
+      MessagingService.fetchHiddenMessageIds(widget.conversationId),
+    ]);
+    _floor = pre[0] as DateTime?;
+    _hiddenIds
+      ..clear()
+      ..addAll(pre[1] as Set<String>);
+    if (mounted && cached.isNotEmpty) {
+      setState(() => _applyServerMessages(_serverMessages));
     }
     try {
       final list =

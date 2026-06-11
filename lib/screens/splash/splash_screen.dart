@@ -185,7 +185,10 @@ class _SplashScreenState extends State<SplashScreen>
         await _fadeOutThen(() => context.goNamed('profile_setup'));
         return;
       }
-      await _fadeOutThen(() => context.goNamed('home'));
+      // Warm start → home: navigate directly instead of fading the splash
+      // out first (which revealed a white frame — the "white thinking"
+      // gap). Home paints instantly from its cache.
+      context.goNamed('home');
       return;
     }
 

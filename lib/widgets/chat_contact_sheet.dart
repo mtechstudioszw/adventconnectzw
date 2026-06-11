@@ -20,14 +20,16 @@ import 'home/story_viewer.dart';
 /// CTA, and quick actions (mute, block, report, create group, clear chat).
 ///
 /// Opened by tapping the chat header in chat_screen.dart.
-Future<void> showChatContactSheet(
+/// Returns an action result the caller can react to: 'blocked',
+/// 'unblocked', or 'cleared' (or null if just dismissed).
+Future<String?> showChatContactSheet(
   BuildContext context, {
   required String userId,
   required String fallbackName,
   String? fallbackPhotoUrl,
   String? conversationId,
 }) {
-  return showModalBottomSheet<void>(
+  return showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -65,6 +67,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
   bool _allViewed = false;
   bool _muted = false;
   bool _busy = false;
+  bool _blockedByMe = false;
 
   bool get _hasStory => _stories.isNotEmpty;
 
@@ -81,6 +84,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       FeedService.fetchStories(),
       FeedService.fetchMyViewedStoryIds(),
       MessagingService.fetchConversationStates(),
+      MessagingService.isBlockedByMe(widget.userId),
     ]);
     if (!mounted) return;
     final allStories = results[2] as List<Story>;
@@ -92,6 +96,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       _lastSeen = results[1] as DateTime?;
       _stories = mine;
       _allViewed = mine.isNotEmpty && mine.every((s) => viewed.contains(s.id));
+      _blockedByMe = results[5] == true;
       if (widget.conversationId != null) {
         final st = states[widget.conversationId];
         _muted = (st as dynamic)?.muted ?? false;
@@ -128,7 +133,24 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
     }
   }
 
-  Future<void> _block(String name) async {
+  Future<void> _toggleBlock(String name) async {
+    // Unblock is immediate (no confirm); block confirms first.
+    if (_blockedByMe) {
+      final nav = Navigator.of(context);
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        await BlockService.unblock(widget.userId);
+        if (!mounted) return;
+        nav.pop('unblocked'); // tell the chat to refresh
+        messenger.showSnackBar(SnackBar(content: Text('$name unblocked.')));
+      } catch (_) {
+        if (mounted) {
+          messenger.showSnackBar(
+              const SnackBar(content: Text('Could not unblock.')));
+        }
+      }
+      return;
+    }
     final nav = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final ok = await showDialog<bool>(
@@ -155,7 +177,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
     try {
       await BlockService.block(widget.userId);
       if (!mounted) return;
-      nav.pop();
+      nav.pop('blocked'); // tell the chat to refresh its blocked state
       messenger.showSnackBar(SnackBar(content: Text('$name blocked.')));
     } catch (_) {
       if (mounted) {
@@ -403,7 +425,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                       await MessagingService.clearConversation(
                           widget.conversationId!);
                       if (!mounted) return;
-                      nav.pop();
+                      nav.pop('cleared'); // tell the chat to refresh
                       messenger.showSnackBar(
                           const SnackBar(content: Text('Chat cleared.')));
                     } catch (_) {
@@ -417,10 +439,10 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                   },
                 ),
               _ActionRow(
-                icon: Icons.block,
-                label: 'Block',
-                danger: true,
-                onTap: () => _block(name),
+                icon: _blockedByMe ? Icons.lock_open : Icons.block,
+                label: _blockedByMe ? 'Unblock' : 'Block',
+                danger: !_blockedByMe,
+                onTap: () => _toggleBlock(name),
               ),
             ],
           ),

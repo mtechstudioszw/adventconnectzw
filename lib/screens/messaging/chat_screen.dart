@@ -2056,13 +2056,30 @@ class _ChatScreenState extends State<ChatScreen>
                     onTap: isGroup
                         ? openGroupInfo
                         : canOpenProfile
-                            ? () => showChatContactSheet(
+                            ? () async {
+                                final r = await showChatContactSheet(
                                   context,
                                   userId: otherUserId,
                                   fallbackName: name,
                                   fallbackPhotoUrl: photoUrl,
                                   conversationId: widget.conversationId,
-                                )
+                                );
+                                if (!mounted) return;
+                                // Reflect mini-profile actions in the open
+                                // chat immediately (no leave + return).
+                                if (r == 'blocked' || r == 'unblocked') {
+                                  await _refreshBlockedState(otherUserId);
+                                } else if (r == 'cleared') {
+                                  _floor = await MessagingService.messageFloor(
+                                      widget.conversationId);
+                                  if (mounted) {
+                                    setState(() {
+                                      _serverMessages = const [];
+                                      _pending.clear();
+                                    });
+                                  }
+                                }
+                              }
                             : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),

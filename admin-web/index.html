@@ -362,34 +362,52 @@ async function sellers() {
   } catch (err) { view().innerHTML = head("Sellers","") + errBox(err); }
 }
 
-let reportFilter = "open";
+let reportFilter = "pending";
 async function reports() {
   view().innerHTML = head("Reports", "Review reported content and take action.") +
-    `<div class="toolbar">${statusSelect("rf", ["open","resolved","dismissed","all"], reportFilter)}</div>` + loading();
+    `<div class="toolbar">${statusSelect("rf", ["pending","actioned","dismissed","all"], reportFilter)}</div>` + loading();
   $("rf").onchange = (e) => { reportFilter = e.target.value; reports(); };
   try {
     const rows = await rpc("admin_list_reports", { p_status: reportFilter });
     const table = !rows.length ? empty("No reports.") : `<table><thead><tr>
         <th>Content</th><th>Reason</th><th>Reporter</th><th>Status</th><th></th></tr></thead><tbody>` +
-      rows.map(r => `<tr>
+      rows.map(r => {
+        // user/profile reports → content_id is the reported account, so we
+        // can ban them directly.
+        const banId = (r.content_type === "user" || r.content_type === "profile") ? r.content_id : "";
+        return `<tr>
         <td><b>${esc(r.content_type)}</b><div class="meta">id: ${esc(r.content_id)}</div></td>
         <td>${esc(r.reason)}${r.details ? `<div class="meta">${esc(r.details)}</div>` : ""}</td>
         <td>${esc(r.reporter_name)}<div class="meta">${fmtDate(r.created_at)}</div></td>
         <td>${statusChip(r.status)}${r.action_taken ? `<div class="meta">${esc(r.action_taken)}</div>` : ""}</td>
-        <td style="white-space:nowrap">${r.status === "open" ? `
+        <td style="white-space:nowrap">${r.status === "pending" ? `
+          <button class="btn primary" data-reply="${r.id}">Reply</button>
+          ${banId ? `<button class="btn red" data-banreport="${r.id}" data-banuser="${esc(banId)}">Ban &amp; resolve</button>` : ""}
           <button class="btn green" data-resolve="${r.id}">Resolve</button>
           <button class="btn ghost" data-dismiss="${r.id}">Dismiss</button>` : "—"}</td>
-      </tr>`).join("") + `</tbody></table>`;
+      </tr>`; }).join("") + `</tbody></table>`;
     view().querySelector(".loading")?.remove();
     view().insertAdjacentHTML("beforeend", table);
     view().querySelectorAll("[data-resolve]").forEach(b => b.onclick = async () => {
       const note = await ask({ title: "Resolve report", sub: "What action did you take?", placeholder: "e.g. Removed the post", okLabel: "Resolve", okClass: "green" });
       if (note === null) return;
-      try { await rpc("admin_resolve_report", { p_report_id: Number(b.dataset.resolve), p_status: "resolved", p_action: note }); reports(); refreshBadges(); }
+      try { await rpc("admin_resolve_report", { p_report_id: Number(b.dataset.resolve), p_status: "actioned", p_action: note }); reports(); refreshBadges(); }
       catch (e) { alert(e.message); }
     });
     view().querySelectorAll("[data-dismiss]").forEach(b => b.onclick = async () => {
       try { await rpc("admin_resolve_report", { p_report_id: Number(b.dataset.dismiss), p_status: "dismissed", p_action: "Dismissed — no action" }); reports(); refreshBadges(); }
+      catch (e) { alert(e.message); }
+    });
+    view().querySelectorAll("[data-reply]").forEach(b => b.onclick = async () => {
+      const reply = await ask({ title: "Reply to reporter", sub: "Sent to the reporter as an in-app notification.", placeholder: "Type your reply…", okLabel: "Send reply" });
+      if (!reply) return;
+      try { await rpc("admin_reply_report", { p_report_id: Number(b.dataset.reply), p_reply: reply }); alert("Reply sent."); }
+      catch (e) { alert(e.message); }
+    });
+    view().querySelectorAll("[data-banreport]").forEach(b => b.onclick = async () => {
+      const note = await ask({ title: "Ban user & resolve", sub: "Bans the reported account and marks the report actioned.", placeholder: "Reason (recorded)", okLabel: "Ban", okClass: "red" });
+      if (note === null) return;
+      try { await rpc("admin_resolve_report", { p_report_id: Number(b.dataset.banreport), p_status: "actioned", p_action: "Banned: " + note, p_ban_user_id: b.dataset.banuser }); reports(); refreshBadges(); }
       catch (e) { alert(e.message); }
     });
   } catch (err) { view().querySelector(".loading")?.remove(); view().insertAdjacentHTML("beforeend", errBox(err)); }

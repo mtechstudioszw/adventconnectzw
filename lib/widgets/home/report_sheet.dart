@@ -15,8 +15,9 @@ Future<bool?> showReportSheet(
   required String contentType,
   required String contentId,
   required String contentLabel,
-}) {
-  return showModalBottomSheet<bool>(
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final sent = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -26,6 +27,17 @@ Future<bool?> showReportSheet(
       contentLabel: contentLabel,
     ),
   );
+  // Confirm to the reporter wherever it's opened from (mini-profile,
+  // chat, profile) — previously only some callers showed feedback.
+  if (sent == true) {
+    messenger.showSnackBar(
+      const SnackBar(
+        backgroundColor: AppColors.successGreen,
+        content: Text('Report submitted. Our team will review it.'),
+      ),
+    );
+  }
+  return sent;
 }
 
 const _reasons = <String>[

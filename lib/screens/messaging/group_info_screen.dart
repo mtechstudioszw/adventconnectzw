@@ -92,7 +92,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     try {
       await ChurchService.applyForChurchAdmin(
         churchId: churchId,
-        role: 'admin',
+        role: 'standard',
       );
       if (mounted) _toast('Request sent — pending approval.');
     } catch (_) {

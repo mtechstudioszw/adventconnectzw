@@ -2526,13 +2526,17 @@ class _ChatScreenState extends State<ChatScreen>
             // name — WhatsApp parity (others still see "Michael left").
             final sysMine = m.senderId == (AuthService.currentUser?.id ?? '');
             final sysText = sysMine
-                ? (m.content.endsWith(' left')
-                    ? 'You left'
-                    : m.content.endsWith(' joined')
-                        ? 'You joined'
-                        : m.content.contains('created the group')
-                            ? 'You created the group'
-                            : m.content)
+                ? (m.content.contains('joined via link')
+                    ? 'You joined via link'
+                    : m.content.endsWith(' was removed')
+                        ? 'You were removed'
+                        : m.content.endsWith(' left')
+                            ? 'You left'
+                            : m.content.endsWith(' joined')
+                                ? 'You joined'
+                                : m.content.contains('created the group')
+                                    ? 'You created the group'
+                                    : m.content)
                 : m.content;
             return Column(
               children: [
@@ -2719,7 +2723,8 @@ class _ChatScreenState extends State<ChatScreen>
     }
     // Left / removed from this group — no composer, just a notice
     // (WhatsApp shows "You can't send messages to this group").
-    if (_notAMember) {
+    final deletedGroup = _conversation?.isDeletedGroup ?? false;
+    if (_notAMember || deletedGroup) {
       return Container(
         color: context.palette.card,
         child: SafeArea(
@@ -2737,8 +2742,11 @@ class _ChatScreenState extends State<ChatScreen>
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        "You can't send messages to this group because you're "
-                        'no longer a member.',
+                        deletedGroup
+                            ? 'This group was deleted. You can still read it '
+                                'or delete the conversation.'
+                            : "You can't send messages to this group because "
+                                "you're no longer a member.",
                         textAlign: TextAlign.center,
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: context.palette.textMuted,

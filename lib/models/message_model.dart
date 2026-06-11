@@ -36,6 +36,7 @@ class Conversation {
     this.isGroup = false,
     this.churchKind,
     this.churchId,
+    this.deletedAt,
     this.lastDelivered = false,
     this.lastRead = false,
   });
@@ -63,6 +64,9 @@ class Conversation {
   // The church this group belongs to (patch_065) — used to submit an
   // admin claim from the announcements channel.
   final String? churchId;
+  // Set when an admin soft-deleted the group (patch_095) — read-only.
+  final DateTime? deletedAt;
+  bool get isDeletedGroup => deletedAt != null;
   // Delivery state of the LAST message when the viewer sent it (patch_075)
   // — drives the inbox tick (✓ / ✓✓ / ✓✓ blue). Both false otherwise.
   final bool lastDelivered;
@@ -101,6 +105,9 @@ class Conversation {
         isGroup: true,
         churchKind: json['church_kind'] as String?,
         churchId: json['church_id']?.toString(),
+        deletedAt: json['deleted_at'] == null
+            ? null
+            : DateTime.tryParse(json['deleted_at'].toString()),
       );
     }
     final participantA = (json['participant_a_id'] ?? '').toString();

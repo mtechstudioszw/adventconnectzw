@@ -1626,7 +1626,9 @@ class _ConversationTile extends StatelessWidget {
                                 ? (conversation.isChurchChannel
                                     ? 'Church announcements appear here'
                                     : 'Say hello')
-                                : conversation.lastMessage,
+                                : (isLastFromMe
+                                    ? _selfSystemLabel(conversation.lastMessage)
+                                    : conversation.lastMessage),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.bodySmall.copyWith(
@@ -2092,6 +2094,17 @@ class _RequestTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Render the inbox preview of a self-authored group system event as
+/// "You …" (the raw row stores the actor's name, e.g. "Michael left").
+String _selfSystemLabel(String content) {
+  if (content.contains('joined via link')) return 'You joined via link';
+  if (content.endsWith(' was removed')) return 'You were removed';
+  if (content.endsWith(' left')) return 'You left';
+  if (content.endsWith(' joined')) return 'You joined';
+  if (content.contains('created the group')) return 'You created the group';
+  return content;
 }
 
 class _Avatar extends StatelessWidget {

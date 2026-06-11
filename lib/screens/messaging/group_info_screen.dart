@@ -38,6 +38,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   String get _myId => AuthService.currentUser?.id ?? '';
   bool get _amAdmin =>
       !_isChurch && _members.any((m) => m.userId == _myId && m.isAdmin);
+  // Active member (not left/removed). fetchMembers excludes left members.
+  bool get _amMember => _members.any((m) => m.userId == _myId);
   bool get _isChurch => _group?.isChurchGroup ?? false;
   bool get _isChannel => _group?.isChurchChannel ?? false;
 
@@ -318,14 +320,31 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   Future<void> _delete() async {
     final ok = await _confirm(
-      'Delete group?',
-      'The group and all its messages are removed for everyone. This '
-          'cannot be undone.',
+      'Delete group for everyone?',
+      'Members are notified the group was deleted. They keep a read-only '
+          'copy until they remove it. You can\'t undo this.',
       'Delete',
     );
     if (ok != true) return;
     try {
       await GroupService.deleteGroup(widget.conversationId);
+      if (!mounted) return;
+      context.goNamed('messages');
+    } catch (_) {
+      _toast('Could not delete.', error: true);
+    }
+  }
+
+  /// Remove a group I've LEFT from my own list (WhatsApp parity).
+  Future<void> _deleteConversation() async {
+    final ok = await _confirm(
+      'Delete conversation?',
+      'This removes the group from your chats. It stays for other members.',
+      'Delete',
+    );
+    if (ok != true) return;
+    try {
+      await GroupService.deleteGroupConversation(widget.conversationId);
       if (!mounted) return;
       context.goNamed('messages');
     } catch (_) {
@@ -548,18 +567,30 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                       onTap: () => _memberActions(m),
                     ),
                   const SizedBox(height: 16),
-                  _ActionTile(
-                    icon: Icons.logout,
-                    label: 'Leave group',
-                    danger: true,
-                    onTap: _leave,
-                  ),
-                  if (_amAdmin)
+                  // While a member: Leave (the only way to later delete is
+                  // to leave first). Once you've left: Delete conversation.
+                  if (_amMember) ...[
+                    _ActionTile(
+                      icon: Icons.logout,
+                      label: 'Leave group',
+                      danger: true,
+                      onTap: _leave,
+                    ),
+                    // Admins can delete the group for everyone (members are
+                    // notified + keep a read-only copy).
+                    if (_amAdmin)
+                      _ActionTile(
+                        icon: Icons.delete_outline,
+                        label: 'Delete group for everyone',
+                        danger: true,
+                        onTap: _delete,
+                      ),
+                  ] else
                     _ActionTile(
                       icon: Icons.delete_outline,
-                      label: 'Delete group',
+                      label: 'Delete conversation',
                       danger: true,
-                      onTap: _delete,
+                      onTap: _deleteConversation,
                     ),
                   const SizedBox(height: 32),
                 ],

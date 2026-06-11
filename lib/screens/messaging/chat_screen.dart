@@ -300,10 +300,14 @@ class _ChatScreenState extends State<ChatScreen>
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: context.palette.sheet,
+      // Scrollable so the full action list (incl. Delete for everyone)
+      // fits on short screens instead of overflowing at the bottom.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
           child: Column(
@@ -436,6 +440,7 @@ class _ChatScreenState extends State<ChatScreen>
                 ),
             ],
           ),
+        ),
         ),
       ),
     );

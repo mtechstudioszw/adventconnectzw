@@ -14,11 +14,14 @@ class ForceUpdateService {
   /// open (false) on any error so a flaky network never locks users out.
   static Future<bool> updateRequired() async {
     try {
+      // Timeboxed so a slow/cold network can never stall the splash — if
+      // the check doesn't return quickly we fail open and let the user in.
       final row = await _client
           .from('app_config')
           .select('value')
           .eq('key', 'min_build_android')
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 3));
       final min = int.tryParse((row?['value'] ?? '1').toString()) ?? 1;
       return kAppBuildNumber < min;
     } catch (_) {

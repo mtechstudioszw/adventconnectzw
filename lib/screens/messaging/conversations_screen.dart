@@ -343,6 +343,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   bool _isPinned(Conversation c) =>
       c.isChurchGroup || (_convStates[c.id]?.pinned ?? false);
   bool _isMuted(Conversation c) => _convStates[c.id]?.muted ?? false;
+  // The chat was cleared and the (shared) last message predates the
+  // clear — hide the stale preview for this user only.
+  bool _isPreviewCleared(Conversation c) {
+    final cl = _convStates[c.id]?.clearedAt;
+    return cl != null && !c.lastMessageAt.isAfter(cl);
+  }
 
   /// Pinned conversations float to the top, preserving their existing
   /// (recency) order within each group.
@@ -1090,6 +1096,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   : (c.otherUserPhotoUrl ?? '').isNotEmpty
                       ? () => FullImageViewer.show(context, c.otherUserPhotoUrl)
                       : () => _openChat(c),
+              previewCleared: _isPreviewCleared(c),
             );
           },
         );
@@ -1435,6 +1442,7 @@ class _ConversationTile extends StatelessWidget {
     this.muted = false,
     this.selected = false,
     this.onAvatarTap,
+    this.previewCleared = false,
   });
 
   final Conversation conversation;
@@ -1445,6 +1453,9 @@ class _ConversationTile extends StatelessWidget {
   final bool muted;
   final bool selected;
   final VoidCallback? onAvatarTap;
+  // True when the user cleared this chat — hide the stale last-message
+  // preview (the messages themselves are already hidden inside).
+  final bool previewCleared;
 
   @override
   Widget build(BuildContext context) {
@@ -1622,7 +1633,7 @@ class _ConversationTile extends StatelessWidget {
                         ],
                         Expanded(
                           child: Text(
-                            conversation.lastMessage.isEmpty
+                            (previewCleared || conversation.lastMessage.isEmpty)
                                 ? (conversation.isChurchChannel
                                     ? 'Church announcements appear here'
                                     : 'Say hello')

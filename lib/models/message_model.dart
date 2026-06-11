@@ -4,17 +4,24 @@ class ConversationState {
     this.pinned = false,
     this.muted = false,
     this.archived = false,
+    this.clearedAt,
   });
 
   final bool pinned;
   final bool muted;
   final bool archived;
+  // When the user cleared the chat (patch_081) — the inbox hides the
+  // preview of any message at/before this time.
+  final DateTime? clearedAt;
 
   factory ConversationState.fromJson(Map<String, dynamic> json) {
     return ConversationState(
       pinned: json['pinned'] == true,
       muted: json['muted'] == true,
       archived: json['archived'] == true,
+      clearedAt: json['cleared_at'] == null
+          ? null
+          : DateTime.tryParse(json['cleared_at'].toString()),
     );
   }
 }

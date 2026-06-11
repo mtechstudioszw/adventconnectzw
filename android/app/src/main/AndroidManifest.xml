@@ -18,12 +18,12 @@
          "granted" immediately on Android without ever showing the
          native dialog — which looks like a broken button to the user. -->
     <uses-permission android:name="android.permission.CAMERA"/>
-    <!-- Gallery / photo access. Android 13+ uses the granular media
-         permission, Android 12 and below use READ_EXTERNAL_STORAGE.
-         Declaring both keeps Permission.photos working across versions. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-                     android:maxSdkVersion="32"/>
+    <!-- NOTE: no READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE. Photo picking
+         goes through the Android Photo Picker (image_picker 1.x on API
+         33+) / ACTION_GET_CONTENT, which need no permission, and saving
+         received images uses gal's add-only access. This keeps the app
+         compliant with Google Play's Photo & Video Permissions policy
+         (no broad-access declaration required). -->
     <application
         android:label="Advent Connect ZW"
         android:name="${applicationName}"

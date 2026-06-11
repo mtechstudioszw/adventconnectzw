@@ -34,7 +34,6 @@ class _PermissionsScreenState extends State<PermissionsScreen>
   static const _all = [
     Permission.notification,
     Permission.camera,
-    Permission.photos,
     Permission.location,
   ];
 
@@ -150,16 +149,6 @@ class _PermissionsScreenState extends State<PermissionsScreen>
                 'Take profile, cover, and product photos directly from the app.',
             status: _statuses[Permission.camera]!,
             onTap: () => _handleTap(Permission.camera),
-          ),
-          const _Divider(),
-          _PermissionRow(
-            icon: Icons.photo_library_outlined,
-            label: 'Photos & Media',
-            description:
-                'Pick existing photos from your gallery when setting your '
-                'profile picture or posting content.',
-            status: _statuses[Permission.photos]!,
-            onTap: () => _handleTap(Permission.photos),
           ),
           const _Divider(),
           _PermissionRow(

@@ -78,9 +78,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 
   // Founder's WhatsApp number for announcement-admin verification.
-  // Country code first, NO '+' or spaces (e.g. Zimbabwe 077... -> 26377...).
-  // TODO(founder): replace with your real WhatsApp number.
-  static const String _announcementsWhatsApp = '263770000000';
+  // Country code first, NO '+' or spaces.
+  static const String _announcementsWhatsApp = '263778092494';
 
   Future<void> _claimAdmin() async {
     final churchName = _group?.otherUserName ?? 'my church';

@@ -1623,7 +1623,9 @@ class _ConversationTile extends StatelessWidget {
                         Expanded(
                           child: Text(
                             conversation.lastMessage.isEmpty
-                                ? 'Say hello'
+                                ? (conversation.isChurchChannel
+                                    ? 'Church announcements appear here'
+                                    : 'Say hello')
                                 : conversation.lastMessage,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

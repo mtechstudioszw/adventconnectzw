@@ -1314,6 +1314,9 @@ class _ChatScreenState extends State<ChatScreen>
     // and sees nothing until the stream tick lands, which is exactly
     // the "send shows nothing until refresh" bug reported.
     final me = AuthService.currentUser?.id ?? '';
+    // Carry the active reply so a voice note can quote a message/photo
+    // (the reply tag was being dropped for voice replies).
+    final replyId = _replyTo?.id;
     final tempId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     final optimistic = Message(
       id: tempId,
@@ -1323,6 +1326,7 @@ class _ChatScreenState extends State<ChatScreen>
       content: '🎙️ Voice note',
       messageType: 'voice',
       mediaDurationSeconds: duration,
+      replyToId: replyId,
       // Forced-after-latest timestamp so the bubble never briefly
       // sorts above older messages while the server roundtrip lands
       // ("voice note jumps from top to bottom" bug).
@@ -1331,6 +1335,7 @@ class _ChatScreenState extends State<ChatScreen>
     setState(() {
       _pending.add(optimistic);
       _sending = true;
+      _replyTo = null; // consume the reply chip
     });
     _scrollToBottom();
 
@@ -1339,6 +1344,7 @@ class _ChatScreenState extends State<ChatScreen>
         conversationId: widget.conversationId,
         localFilePath: path,
         durationSeconds: duration,
+        replyToId: replyId,
       );
       // Swap optimistic for the canonical row so the stream's later
       // tick dedupes by id rather than content.
@@ -2471,14 +2477,17 @@ class _ChatScreenState extends State<ChatScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                'Say hello',
+                _isChurchChannel ? 'Church announcements' : 'Say hello',
                 style: AppTextStyles.titleLarge.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                'Start the conversation with a friendly greeting.',
+                _isChurchChannel
+                    ? 'Announcements from your church admins will appear '
+                        'here. You can\'t send messages in this channel.'
+                    : 'Start the conversation with a friendly greeting.',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: context.palette.textMuted,
@@ -2561,11 +2570,19 @@ class _ChatScreenState extends State<ChatScreen>
                 if (_isGroup && !isMine) _groupSenderLabel(m),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
+                  padding: _highlightedMessageId == m.id
+                      ? const EdgeInsets.symmetric(horizontal: 6, vertical: 4)
+                      : EdgeInsets.zero,
                   decoration: BoxDecoration(
                     color: _highlightedMessageId == m.id
-                        ? AppColors.primaryBlue.withValues(alpha: 0.14)
+                        ? AppColors.primaryBlue.withValues(alpha: 0.30)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(14),
+                    border: _highlightedMessageId == m.id
+                        ? Border.all(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.6),
+                            width: 1.5)
+                        : null,
                   ),
                   child: _SwipeToReply(
                   onReply: () => _startReply(m),

@@ -47,8 +47,7 @@ class VoiceMiniBar extends StatelessWidget {
                   position: svc.position.value,
                   duration: svc.duration.value,
                   fmt: _fmt,
-                  onToggle: () =>
-                      svc.playing.value ? svc.pause() : svc.resume(),
+                  onToggle: svc.togglePlayback,
                   onSeek: (f) => svc.seekFraction(f),
                   onClose: () => svc.stop(),
                   onOpen: convId == null

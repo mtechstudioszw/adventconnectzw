@@ -52,6 +52,11 @@ class VoicePlayerService {
   /// messageId -> absolute local file path of the downloaded clip.
   final Map<String, String> _localCache = {};
 
+  // The currently-loaded note + whether it finished — so the play button
+  // can REPLAY a finished clip (resume() won't restart a completed one).
+  VoiceNote? _activeNote;
+  bool _completed = false;
+
   // Observable state — widgets listen to just what they need.
   final ValueNotifier<String?> activeId = ValueNotifier(null);
   final ValueNotifier<String?> loadingId = ValueNotifier(null);
@@ -79,6 +84,7 @@ class VoicePlayerService {
     _player.onPlayerComplete.listen((_) async {
       position.value = Duration.zero;
       playing.value = false;
+      _completed = true;
       final current = activeId.value;
       final resolver = nextResolver;
       if (current != null && resolver != null) {
@@ -101,6 +107,8 @@ class VoicePlayerService {
     if (activeId.value == note.messageId) {
       if (playing.value) {
         await _player.pause();
+      } else if (_completed) {
+        await play(note); // replay a finished clip
       } else {
         await _player.resume();
       }
@@ -109,8 +117,22 @@ class VoicePlayerService {
     await play(note);
   }
 
+  /// Play / pause toggle that also REPLAYS a finished clip (resume()
+  /// alone won't restart a completed player). Used by the mini-bar.
+  Future<void> togglePlayback() async {
+    if (playing.value) {
+      await _player.pause();
+    } else if (_completed && _activeNote != null) {
+      await play(_activeNote!);
+    } else {
+      await _player.resume();
+    }
+  }
+
   Future<void> play(VoiceNote note) async {
     await _player.stop();
+    _activeNote = note;
+    _completed = false;
     activeId.value = note.messageId;
     activeConversationId.value = note.conversationId;
     position.value = Duration.zero;

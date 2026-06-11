@@ -1310,6 +1310,7 @@ class MessagingService {
     required String conversationId,
     required String localFilePath,
     required int durationSeconds,
+    String? replyToId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -1339,6 +1340,7 @@ class MessagingService {
           'message_type': 'voice',
           'media_url': storagePath,
           'media_duration_seconds': durationSeconds,
+          if (replyToId != null) 'reply_to_id': int.tryParse(replyToId),
         })
         .select()
         .single();

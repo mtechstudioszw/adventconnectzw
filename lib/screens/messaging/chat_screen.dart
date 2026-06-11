@@ -111,12 +111,16 @@ class _ChatScreenState extends State<ChatScreen>
   // joined / cleared the chat. The realtime stream is unfiltered, so we
   // apply it here — the single chokepoint for cached + fetched + streamed.
   DateTime? _floor;
+  // Messages the viewer "deleted for me" (patch_087) — hidden locally.
+  final Set<String> _hiddenIds = <String>{};
 
   void _applyServerMessages(List<Message> list) {
     final floor = _floor;
-    if (floor != null) {
-      list = list.where((m) => m.createdAt.isAfter(floor)).toList();
-    }
+    list = list
+        .where((m) =>
+            (floor == null || m.createdAt.isAfter(floor)) &&
+            !_hiddenIds.contains(m.id))
+        .toList();
     _serverMessages = list;
     final serverIds = list.map((m) => m.id).toSet();
     // Server-echoed client_ids — drop any optimistic row the server now
@@ -174,32 +178,21 @@ class _ChatScreenState extends State<ChatScreen>
     });
   }
 
-  /// Delete the selected messages. Own messages become "deleted for
-  /// everyone" tombstones; messages from others are skipped (can't delete
-  /// someone else's for everyone).
+  /// Multi-select delete = "Delete for me" (patch_087). A selection can
+  /// include the other person's messages, which can't be deleted for
+  /// everyone — so the whole batch is hidden for the current user only.
   Future<void> _deleteSelected() async {
-    if (!_ensureOnline('delete messages')) return;
-    final me = AuthService.currentUser?.id;
-    final mine = _messages
-        .where((m) => _selectedMsgIds.contains(m.id) && m.senderId == me)
-        .toList();
-    final skipped = _selectedMsgIds.length - mine.length;
+    final ids = _selectedMsgIds.toList();
+    if (ids.isEmpty) return;
     setState(() {
-      _serverMessages = _serverMessages
-          .map((x) => mine.any((m) => m.id == x.id)
-              ? x.copyWith(isDeleted: true, content: '')
-              : x)
-          .toList();
+      _hiddenIds.addAll(ids);
+      _applyServerMessages(_serverMessages);
     });
     _exitSelect();
-    for (final m in mine) {
-      try {
-        await MessagingService.softDeleteMessage(m.id);
-      } catch (_) {}
-    }
-    if (mounted && skipped > 0) {
-      _toast("You can only delete your own messages for everyone.");
-    }
+    try {
+      await MessagingService.hideMessages(ids);
+    } catch (_) {}
+    if (mounted) _toast('Deleted for you.');
   }
 
   Future<void> _forwardSelected() async {
@@ -411,6 +404,20 @@ class _ChatScreenState extends State<ChatScreen>
                           color: AppColors.red, fontWeight: FontWeight.w600)),
                   onTap: () => Navigator.pop(ctx, 'report'),
                 ),
+              // Delete for me — available on ANY message (hides it for you).
+              ListTile(
+                leading: const Icon(Icons.visibility_off_outlined,
+                    color: AppColors.red),
+                title: Text('Delete for me',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                        color: AppColors.red, fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                  'Removed from your chat only.',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: ctx.palette.textMuted),
+                ),
+                onTap: () => Navigator.pop(ctx, 'delete_me'),
+              ),
               if (isMine)
                 ListTile(
                   leading:
@@ -469,6 +476,16 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
         );
+      case 'delete_me':
+        // Delete for me — hide locally + persist (patch_087).
+        setState(() {
+          _hiddenIds.add(m.id);
+          _applyServerMessages(_serverMessages);
+          _pending.removeWhere((x) => x.id == m.id);
+        });
+        try {
+          await MessagingService.hideMessages([m.id]);
+        } catch (_) {}
       case 'delete':
         if (!_ensureOnline('delete messages')) return;
         // Soft delete -> "This message was deleted" tombstone on BOTH
@@ -1059,6 +1076,10 @@ class _ChatScreenState extends State<ChatScreen>
     // patch_085) so cached/fetched/streamed messages are all filtered and
     // cleared/pre-join messages never flash in.
     _floor = await MessagingService.messageFloor(widget.conversationId);
+    _hiddenIds
+      ..clear()
+      ..addAll(await MessagingService.fetchHiddenMessageIds(
+          widget.conversationId));
     // Show cached messages immediately so the screen never blanks on
     // open — even on a slow network. The fresh fetch below will
     // replace this with server state in a moment.
@@ -1945,10 +1966,11 @@ class _ChatScreenState extends State<ChatScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete $count message${count == 1 ? '' : 's'}?'),
+        title: Text('Delete $count message${count == 1 ? '' : 's'} for you?'),
         content: const Text(
-          'Your own messages will show "This message was deleted" for '
-          'everyone.',
+          'They will be removed from your chat only. To delete one of your '
+          'own messages for everyone, open it and choose "Delete for '
+          'everyone".',
         ),
         actions: [
           TextButton(

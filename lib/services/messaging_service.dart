@@ -656,6 +656,28 @@ class MessagingService {
     }
   }
 
+  /// "Delete for me" — hide the given messages for the current user only.
+  static Future<void> hideMessages(List<String> messageIds) async {
+    final ids = messageIds
+        .map((e) => int.tryParse(e))
+        .whereType<int>()
+        .toList();
+    if (ids.isEmpty) return;
+    await _client.rpc('hide_messages', params: {'p_ids': ids});
+  }
+
+  /// Message ids the caller has hidden ("deleted for me") in a chat.
+  static Future<Set<String>> fetchHiddenMessageIds(String conversationId) async {
+    try {
+      final res = await _client.rpc('hidden_message_ids',
+          params: {'p_conv': int.parse(conversationId)});
+      if (res is List) return res.map((e) => e.toString()).toSet();
+      return const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
   /// Clear the chat for the current user only (WhatsApp parity). Persists
   /// cleared_at (server) and empties the local message cache so the
   /// messages don't reappear from cache on the next (offline) open.

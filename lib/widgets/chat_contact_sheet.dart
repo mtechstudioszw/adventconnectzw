@@ -376,7 +376,8 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                 label: 'Create group with $name',
                 onTap: () {
                   Navigator.of(context).pop();
-                  context.pushNamed('create_group');
+                  // Pre-select this contact in the create-group picker.
+                  context.pushNamed('create_group', extra: widget.userId);
                 },
               ),
               _ActionRow(

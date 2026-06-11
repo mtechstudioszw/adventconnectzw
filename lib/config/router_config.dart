@@ -415,7 +415,8 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'new-group',
           name: 'create_group',
-          builder: (context, state) => const CreateGroupScreen(),
+          builder: (context, state) =>
+              CreateGroupScreen(preselectUserId: state.extra as String?),
         ),
         GoRoute(
           path: 'starred',

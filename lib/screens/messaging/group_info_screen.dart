@@ -201,6 +201,22 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
   }
 
+  Future<void> _resetInvite() async {
+    final ok = await _confirm(
+      'Reset invite link?',
+      'The current link stops working. A new link is created that you can '
+          'share.',
+      'Reset',
+    );
+    if (ok != true) return;
+    try {
+      await GroupService.resetInvite(widget.conversationId);
+      if (mounted) _toast('Invite link reset.');
+    } catch (_) {
+      if (mounted) _toast('Could not reset the link.', error: true);
+    }
+  }
+
   Future<void> _addMembers() async {
     final existing = _members.map((m) => m.userId).toSet();
     final picked = await showModalBottomSheet<List<String>>(
@@ -542,12 +558,18 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     label: 'Invite to group via link',
                     onTap: _shareInvite,
                   ),
-                  if (_amAdmin)
+                  if (_amAdmin) ...[
                     _ActionTile(
                       icon: Icons.person_add_alt_1,
                       label: 'Add members',
                       onTap: _addMembers,
                     ),
+                    _ActionTile(
+                      icon: Icons.link_off,
+                      label: 'Reset invite link',
+                      onTap: _resetInvite,
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),

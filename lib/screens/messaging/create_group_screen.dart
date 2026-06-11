@@ -15,7 +15,11 @@ import '../../widgets/cached_image.dart';
 /// WhatsApp-style "New group": name + optional icon + description, pick
 /// members, create. On success it opens the new group chat.
 class CreateGroupScreen extends StatefulWidget {
-  const CreateGroupScreen({super.key});
+  const CreateGroupScreen({super.key, this.preselectUserId});
+
+  /// When opened from a contact ("Create group with X"), this member is
+  /// pre-selected once the people list loads.
+  final String? preselectUserId;
 
   @override
   State<CreateGroupScreen> createState() => _CreateGroupScreenState();
@@ -57,6 +61,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       setState(() {
         _results = list;
         _loadingPeople = false;
+        // Pre-select the contact this group was started with.
+        final pre = widget.preselectUserId;
+        if (pre != null && !_selected.containsKey(pre)) {
+          for (final m in list) {
+            if (m.userId == pre) {
+              _selected[m.userId] = m;
+              break;
+            }
+          }
+        }
       });
     } catch (_) {
       if (mounted) setState(() => _loadingPeople = false);

@@ -138,6 +138,14 @@ class GroupService {
     }).toList();
   }
 
+  /// Reset (revoke) the invite link — old links stop working (patch_096).
+  static Future<String> resetInvite(String conversationId) async {
+    final token = await _client.rpc('reset_group_invite', params: {
+      'p_conversation': int.parse(conversationId),
+    });
+    return token.toString();
+  }
+
   /// Get (or lazily create) the shareable invite token for a group.
   static Future<String> inviteToken(String conversationId) async {
     final token = await _client.rpc('get_or_create_group_invite', params: {

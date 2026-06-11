@@ -260,15 +260,19 @@ class MessagingService {
     // get_my_unread_counts() (patch_018, refined in patch_032 to
     // honour the new soft-delete). RLS is participant-scoped so the
     // count is naturally limited to the caller's threads.
-    final unreadById = await fetchUnreadCounts();
-    // Group unread comes from a separate per-member last-read marker
-    // (patch_060) since messages.read is a single 1:1 boolean.
-    unreadById.addAll(await fetchGroupUnreadCounts());
-    // Church groups (implicit membership) track unread via last_read_at
-    // (patch_090).
-    unreadById.addAll(await fetchChurchUnreadCounts());
-    // Delivery state of each thread's last message when WE sent it, for
-    // the inbox tick (patch_075).
+    // These four are independent RPCs — run them in PARALLEL (one
+    // round-trip instead of four) so the inbox loads fast on slow
+    // networks. 1:1 + group (patch_060) + church (patch_090) unread, plus
+    // the last-outgoing delivery state for the tick (patch_075).
+    final counts = await Future.wait([
+      fetchUnreadCounts(),
+      fetchGroupUnreadCounts(),
+      fetchChurchUnreadCounts(),
+    ]);
+    final unreadById = <String, int>{}
+      ..addAll(counts[0])
+      ..addAll(counts[1])
+      ..addAll(counts[2]);
     final lastStatus = await fetchLastOutgoingStatus();
     // Splice the unread count into each raw row BEFORE caching so a
     // cache-restore preserves badges accurately — caching the raw

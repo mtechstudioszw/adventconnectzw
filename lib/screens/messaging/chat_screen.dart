@@ -1086,11 +1086,17 @@ class _ChatScreenState extends State<ChatScreen>
     // Resolve the visibility floor first (clear-chat + history-from-join,
     // patch_085) so cached/fetched/streamed messages are all filtered and
     // cleared/pre-join messages never flash in.
-    _floor = await MessagingService.messageFloor(widget.conversationId);
+    // Resolve the floor + hidden ids in PARALLEL (one round-trip) before
+    // the cache paint so cleared/pre-join/deleted-for-me messages never
+    // flash in.
+    final pre = await Future.wait([
+      MessagingService.messageFloor(widget.conversationId),
+      MessagingService.fetchHiddenMessageIds(widget.conversationId),
+    ]);
+    _floor = pre[0] as DateTime?;
     _hiddenIds
       ..clear()
-      ..addAll(await MessagingService.fetchHiddenMessageIds(
-          widget.conversationId));
+      ..addAll(pre[1] as Set<String>);
     // Show cached messages immediately so the screen never blanks on
     // open — even on a slow network. The fresh fetch below will
     // replace this with server state in a moment.

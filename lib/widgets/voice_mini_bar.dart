@@ -126,24 +126,59 @@ class _Bar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // Draggable scrubber.
+                // Draggable scrubber. A custom bar (NOT a Slider) because
+                // the global mini-bar lives outside the Navigator's
+                // Overlay, and Slider's value-indicator OverlayPortal
+                // throws "No Overlay widget found" there.
                 Expanded(
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      activeTrackColor: AppColors.goldAccent,
-                      inactiveTrackColor:
-                          AppColors.white.withValues(alpha: 0.25),
-                      thumbColor: AppColors.goldAccent,
-                      thumbShape:
-                          const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      overlayShape:
-                          const RoundSliderOverlayShape(overlayRadius: 12),
-                    ),
-                    child: Slider(
-                      value: fraction,
-                      onChanged: onSeek,
-                    ),
+                  child: LayoutBuilder(
+                    builder: (ctx, c) {
+                      final w = c.maxWidth <= 0 ? 1.0 : c.maxWidth;
+                      void seekAt(double dx) =>
+                          onSeek((dx / w).clamp(0.0, 1.0));
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (d) => seekAt(d.localPosition.dx),
+                        onHorizontalDragUpdate: (d) =>
+                            seekAt(d.localPosition.dx),
+                        child: SizedBox(
+                          height: 24,
+                          child: Stack(
+                            alignment: Alignment.centerLeft,
+                            children: [
+                              Container(
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  color: AppColors.white.withValues(alpha: 0.25),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              FractionallySizedBox(
+                                widthFactor: fraction,
+                                child: Container(
+                                  height: 3,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.goldAccent,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                              Align(
+                                alignment: Alignment(fraction * 2 - 1, 0),
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.goldAccent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 Text(

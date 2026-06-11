@@ -210,6 +210,12 @@ class _AdventConnectAppState extends State<AdventConnectApp>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       _backgroundedAt = DateTime.now();
+      // Go offline + stop the heartbeat when truly backgrounded, so the
+      // green dot and "last seen" stop lying (the user shows online and
+      // their last-seen kept advancing while the app was actually closed).
+      if (state == AppLifecycleState.paused) {
+        unawaited(PresenceService.stop(clearRoster: false));
+      }
       return;
     }
     if (state == AppLifecycleState.resumed) {
@@ -218,6 +224,8 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       // were away to delivered, so senders' ticks update even if we don't
       // open Chats (patch_062).
       unawaited(MessagingService.markAllIncomingDelivered());
+      // Rejoin presence (online again + heartbeat resumes).
+      if (AuthService.isSignedIn) unawaited(PresenceService.start());
     }
   }
 

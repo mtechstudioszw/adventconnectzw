@@ -10,6 +10,7 @@ import '../screens/auth/email_verification_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/onboarding_flow_screen.dart';
 import '../screens/auth/reset_password_screen.dart';
+import '../screens/update/update_required_screen.dart';
 import '../screens/churches/church_announcements_screen.dart';
 import '../screens/churches/claim_church_coming_soon_screen.dart';
 import '../screens/churches/suggest_church_screen.dart';
@@ -145,6 +146,11 @@ final GoRouter appRouter = GoRouter(
       path: '/reset-password',
       name: 'reset_password',
       builder: (context, state) => const ResetPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/update-required',
+      name: 'update_required',
+      builder: (context, state) => const UpdateRequiredScreen(),
     ),
     GoRoute(
       path: '/home',

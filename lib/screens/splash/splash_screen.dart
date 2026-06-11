@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../config/app_bootstrap.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
+import '../../services/force_update_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -160,6 +161,15 @@ class _SplashScreenState extends State<SplashScreen>
       Future.delayed(_minLoaderDuration),
       AppBootstrap.awaitSupabaseReady(),
     ]);
+    if (!mounted) return;
+
+    // Force-update gate (patch_091): if this build is below the remote
+    // minimum, block here before anything else.
+    if (await ForceUpdateService.updateRequired()) {
+      if (!mounted) return;
+      context.goNamed('update_required');
+      return;
+    }
     if (!mounted) return;
 
     if (AuthService.isSignedIn) {

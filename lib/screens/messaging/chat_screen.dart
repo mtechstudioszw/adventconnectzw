@@ -576,7 +576,8 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _recordingTimer;
   Duration _recordingElapsed = Duration.zero;
   // Max voice-note length (5 min) — auto-sends at the cap.
-  static const int _maxRecordingSeconds = 300;
+  static const int _maxRecordingSeconds = 1800; // 30 minutes
+  bool _recordWarned = false;
   bool _hasText = false;
 
   // Group chats: member roster for sender labels + admin badges.
@@ -1224,16 +1225,24 @@ class _ChatScreenState extends State<ChatScreen>
         _activeRecordingPath = path;
         _recordingStartedAt = DateTime.now();
         _recordingElapsed = Duration.zero;
+        _recordWarned = false;
       });
       _recordingTimer =
           Timer.periodic(const Duration(milliseconds: 200), (_) {
         if (!mounted || _recordingStartedAt == null) return;
         final elapsed = DateTime.now().difference(_recordingStartedAt!);
         setState(() => _recordingElapsed = elapsed);
+        // Warn ~30s before the 30-minute cap so a long recording isn't
+        // cut off without notice.
+        final remaining = _maxRecordingSeconds - elapsed.inSeconds;
+        if (!_recordWarned && remaining <= 30 && remaining > 0) {
+          _recordWarned = true;
+          _toast('Recording stops at 30 minutes — about ${remaining}s left.');
+        }
         // Cap the length (WhatsApp-style limit) so a forgotten recording
         // can't balloon into a huge upload — auto-send at the cap.
         if (elapsed.inSeconds >= _maxRecordingSeconds) {
-          _toast('Voice note limit reached — sending.');
+          _toast('30-minute voice note limit reached — sending.');
           _stopAndSendRecording();
         }
       });

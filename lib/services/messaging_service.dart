@@ -264,6 +264,9 @@ class MessagingService {
     // Group unread comes from a separate per-member last-read marker
     // (patch_060) since messages.read is a single 1:1 boolean.
     unreadById.addAll(await fetchGroupUnreadCounts());
+    // Church groups (implicit membership) track unread via last_read_at
+    // (patch_090).
+    unreadById.addAll(await fetchChurchUnreadCounts());
     // Delivery state of each thread's last message when WE sent it, for
     // the inbox tick (patch_075).
     final lastStatus = await fetchLastOutgoingStatus();
@@ -361,6 +364,26 @@ class MessagingService {
         if (raw is Map) {
           final id = raw['conversation_id']?.toString();
           final count = raw['unread_count'];
+          if (id == null) continue;
+          if (count is num) result[id] = count.toInt();
+        }
+      }
+      return result;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Per-church-group unread counts (patch_090). Keyed by conversation id.
+  static Future<Map<String, int>> fetchChurchUnreadCounts() async {
+    try {
+      final rows = await _client.rpc('church_unread_counts');
+      if (rows is! List) return const {};
+      final result = <String, int>{};
+      for (final raw in rows) {
+        if (raw is Map) {
+          final id = raw['conversation_id']?.toString();
+          final count = raw['unread'];
           if (id == null) continue;
           if (count is num) result[id] = count.toInt();
         }
@@ -1214,6 +1237,10 @@ class MessagingService {
           'p_with_timestamp': wantsReceipts,
         },
       );
+      // Also stamp last_read_at so church groups (implicit membership,
+      // no per-message read flag) clear their unread badge (patch_090).
+      await _client.rpc('mark_conversation_read_at',
+          params: {'p_conv': int.tryParse(conversationId) ?? conversationId});
     } catch (_) {
       // Read receipts are best-effort — never block chat rendering.
     }

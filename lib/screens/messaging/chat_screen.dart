@@ -934,7 +934,12 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_refreshFriendship(otherId));
     _lastSeenRefreshTimer = Timer.periodic(
       const Duration(seconds: 30),
-      (_) => unawaited(_refreshLastSeen(otherId)),
+      (_) {
+        unawaited(_refreshLastSeen(otherId));
+        // Keep the friendship banner fresh — so a request that arrives
+        // while you're already in the chat flips it to "Accept".
+        unawaited(_refreshFriendship(otherId));
+      },
     );
     _presenceListener = () {
       if (mounted) setState(() {});

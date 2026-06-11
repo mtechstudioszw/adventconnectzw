@@ -657,16 +657,14 @@ class FeedService {
     if (user.id == addresseeId) {
       throw ArgumentError('Cannot friend yourself.');
     }
-    final inserted = await _client
-        .from(_friendshipsTable)
-        .insert({
-          'requester_id': user.id,
-          'addressee_id': addresseeId,
-          'status': 'pending',
-        })
-        .select()
-        .single();
-    return Friendship.fromJson(inserted);
+    // Idempotent server-side handling (patch_088): accepts an incoming
+    // request, re-opens a declined one, and never creates reverse
+    // duplicates — instead of a blind insert that failed with
+    // "could not send" when any row already existed.
+    final row = await _client
+        .rpc('send_friend_request', params: {'p_addressee': addresseeId});
+    final map = row is List ? (row.first as Map) : (row as Map);
+    return Friendship.fromJson(Map<String, dynamic>.from(map));
   }
 
   /// Accept a pending friend request. Beyond flipping `status` to

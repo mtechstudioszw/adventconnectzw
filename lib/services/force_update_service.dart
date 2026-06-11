@@ -21,7 +21,7 @@ class ForceUpdateService {
           .select('value')
           .eq('key', 'min_build_android')
           .maybeSingle()
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(milliseconds: 1500));
       final min = int.tryParse((row?['value'] ?? '1').toString()) ?? 1;
       return kAppBuildNumber < min;
     } catch (_) {

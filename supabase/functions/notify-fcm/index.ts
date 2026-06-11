@@ -311,28 +311,11 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Mark the recipient's incoming messages in this conversation as
-  // delivered now that the push has gone out — so the SENDER sees ✓✓
-  // even when the recipient is outside the app (the device receives the
-  // push but the app isn't running to mark delivery). Best-effort.
-  if (
-    referenceType === "conversation" && referenceId &&
-    (notifType === "message" || notifType === "announcement")
-  ) {
-    const convId = Number(referenceId);
-    if (!Number.isNaN(convId)) {
-      try {
-        await supabase
-          .from("messages")
-          .update({ delivered_at: new Date().toISOString() })
-          .eq("conversation_id", convId)
-          .neq("sender_id", userId)
-          .is("delivered_at", null);
-      } catch (_) {
-        // non-fatal — delivery ticks are cosmetic.
-      }
-    }
-  }
+  // NOTE: we deliberately do NOT mark messages delivered here. Dispatching
+  // a push does not mean the device received it (FCM queues for offline
+  // devices), so marking delivered on dispatch produced a false ✓✓ when
+  // the recipient's data was off. Delivery is marked by the recipient's
+  // app when it actually receives/streams the message.
 
   return new Response("ok", { status: 200 });
 });

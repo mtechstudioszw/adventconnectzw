@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../config/app_bootstrap.dart';
 import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
+import '../../services/secure_supabase_storage.dart';
 import '../../services/biometric_service.dart';
 import '../../services/force_update_service.dart';
 import '../../services/secure_storage_service.dart';
@@ -167,7 +168,7 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.wait([
       Future.delayed(_minLoaderDuration),
       AppBootstrap.awaitSupabaseReady()
-          .timeout(const Duration(milliseconds: 1500), onTimeout: () {}),
+          .timeout(const Duration(milliseconds: 2500), onTimeout: () {}),
       // Cache box open (moved off the pre-runApp path). Timeboxed so a
       // large/slow box can't stall the splash — home tolerates no cache.
       CacheService.initialize()
@@ -184,7 +185,17 @@ class _SplashScreenState extends State<SplashScreen>
     }
     if (!mounted) return;
 
-    if (AuthService.isSignedIn) {
+    // Decide signed-in from the PERSISTED session, not just the live one.
+    // When the access token has expired, Supabase restores the session by
+    // doing a NETWORK refresh first and only then exposes currentSession —
+    // so on a slow network currentSession can still be null here even
+    // though the user is logged in. Checking the persisted token (a local
+    // secure-storage read) means a returning user is NEVER bounced to
+    // login; the refresh finishes in the background.
+    final signedIn =
+        AuthService.isSignedIn || await SecureLocalStorage().hasAccessToken();
+    if (!mounted) return;
+    if (signedIn) {
       // WhatsApp-style biometric gate. If the user opted in, we hand
       // off to the dedicated lock screen instead of prompting + bailing
       // here — that way cancelling the OS prompt KEEPS the session
@@ -200,8 +211,12 @@ class _SplashScreenState extends State<SplashScreen>
       // Gate the home tab behind profile completion. A user can sign
       // up, start onboarding, kill the app halfway, then re-open — the
       // session still exists but their profile is empty. Sending them
-      // to home in that state lets them bypass onboarding entirely.
-      final completed = await AuthService.hasCompletedProfileSetup();
+      // to home in that state lets them bypass onboarding entirely. If
+      // the session is still refreshing (no currentUser yet) we can't
+      // read the metadata — a returning user with a persisted session has
+      // already onboarded, so default to completed and go home.
+      final completed = !AuthService.isSignedIn ||
+          await AuthService.hasCompletedProfileSetup();
       if (!mounted) return;
       if (!completed) {
         await _fadeOutThen(() => context.goNamed('profile_setup'));

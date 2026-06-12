@@ -30,7 +30,7 @@ class ConversationsScreen extends StatefulWidget {
   State<ConversationsScreen> createState() => _ConversationsScreenState();
 }
 
-enum _ConversationsTab { chats, groups, status, archived }
+enum _ConversationsTab { chats, groups, status }
 
 class _ConversationsScreenState extends State<ConversationsScreen>
     with SingleTickerProviderStateMixin {
@@ -870,14 +870,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 _selectTab(_ConversationsTab.status);
               },
             ),
-            _TabPill(
-              label: 'Archived',
-              selected: _tab == _ConversationsTab.archived,
-              onTap: () {
-                if (_showRequests) setState(() => _showRequests = false);
-                _selectTab(_ConversationsTab.archived);
-              },
-            ),
           ],
         ),
       ),
@@ -904,28 +896,84 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _buildChatsTab(),
         _buildGroupsTab(),
         _buildStatusTab(),
-        _buildArchivedTab(),
       ],
     );
   }
 
-  Widget _buildArchivedTab() {
-    final archived = _archived;
-    if (archived.isEmpty) {
-      return _buildEmptyState(
-        title: 'No archived chats',
-        body: 'Long-press a chat and tap Archive to keep it here, out of '
-            'your main list.',
-      );
-    }
-    return _conversationListView(archived);
+  /// WhatsApp-style: archived chats are hidden from the list and reached
+  /// through a small "Archived" row that opens them in a sheet.
+  void _openArchivedSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.scaffoldBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        maxChildSize: 0.95,
+        builder: (ctx, controller) => Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ctx.palette.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: Row(
+                children: [
+                  Text('Archived',
+                      style: AppTextStyles.titleMedium
+                          .copyWith(fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _archived.isEmpty
+                  ? Center(
+                      child: Text('No archived chats',
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(color: ctx.palette.textMuted)))
+                  : ListView(
+                      controller: controller,
+                      children: [
+                        for (final c in _archived)
+                          _ConversationTile(
+                            key: ValueKey('arch-${c.id}'),
+                            conversation: c,
+                            isLastFromMe: c.lastSenderId == _currentUserId,
+                            pinned: false,
+                            muted: _isMuted(c),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _openChat(c);
+                            },
+                            onLongPress: () {
+                              Navigator.pop(ctx);
+                              _openConversationActions(c);
+                            },
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ----- Chats tab: requests banner + 1:1 conversation list -----------
   Widget _buildChatsTab() {
     final list = _chats;
     final requestCount = _requests.length + _friendRequests.length;
-    if (list.isEmpty && requestCount == 0) {
+    if (list.isEmpty && requestCount == 0 && _archived.isEmpty) {
       return _buildEmptyState(
         title: 'No conversations yet',
         body:
@@ -933,14 +981,26 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             'member directory or church page.',
       );
     }
+    final headers = <Widget>[
+      if (requestCount > 0)
+        _RequestsBanner(
+          count: requestCount,
+          onTap: () => setState(() => _showRequests = true),
+        ),
+      if (_archived.isNotEmpty)
+        ListTile(
+          onTap: _openArchivedSheet,
+          leading: Icon(Icons.archive_outlined,
+              color: context.palette.textMuted),
+          title: const Text('Archived'),
+          trailing: Text('${_archived.length}',
+              style: AppTextStyles.labelMedium
+                  .copyWith(color: context.palette.textMuted)),
+        ),
+    ];
     return _conversationListView(
       list,
-      banner: requestCount == 0
-          ? null
-          : _RequestsBanner(
-              count: requestCount,
-              onTap: () => setState(() => _showRequests = true),
-            ),
+      banner: headers.isEmpty ? null : Column(children: headers),
     );
   }
 

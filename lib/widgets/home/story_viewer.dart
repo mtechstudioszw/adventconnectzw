@@ -445,9 +445,15 @@ class _StoryViewerState extends State<StoryViewer>
               Positioned(
                 left: 12,
                 right: 68,
-                bottom: 18,
+                // Lift above the keyboard — the viewer is a full-screen
+                // Stack (no Scaffold resize), so without this the reply
+                // field sits BEHIND the keyboard and you can't see what
+                // you type.
+                bottom: 18 + MediaQuery.of(context).viewInsets.bottom,
                 child: AnimatedOpacity(
-                  opacity: _paused ? 0 : 1,
+                  // Stay visible while typing (keyboard up) even though the
+                  // story is paused; only hide on a tap-and-hold pause.
+                  opacity: (_paused && !_replyFocus.hasFocus) ? 0 : 1,
                   duration: const Duration(milliseconds: 180),
                   child: Container(
                     decoration: BoxDecoration(

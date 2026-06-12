@@ -163,6 +163,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
               TextFormField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
+                keyboardType: TextInputType.visiblePassword,
+                enableSuggestions: false,
+                autocorrect: false,
                 validator: _validatePassword,
                 style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
                 decoration: _passwordDecoration(
@@ -187,6 +190,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
               TextFormField(
                 controller: _confirmController,
                 obscureText: _obscureConfirm,
+                keyboardType: TextInputType.visiblePassword,
+                enableSuggestions: false,
+                autocorrect: false,
                 validator: _validateConfirm,
                 style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
                 decoration: _passwordDecoration(

@@ -2624,6 +2624,13 @@ class _ChatScreenState extends State<ChatScreen>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Starred indicator (WhatsApp shows a small star on
+                        // the bubble for messages you've starred).
+                        if (_starredIds.contains(m.id)) ...[
+                          Icon(Icons.star,
+                              size: 11, color: context.palette.textMuted),
+                          const SizedBox(width: 3),
+                        ],
                         Text(
                           _stamp(m.createdAt),
                           style: AppTextStyles.labelSmall.copyWith(

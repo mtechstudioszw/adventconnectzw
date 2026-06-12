@@ -2056,6 +2056,11 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
       TextField(
         controller: _passwordController,
         obscureText: _obscurePassword,
+        // Force the alphanumeric password keyboard — without this it could
+        // inherit the numeric keyboard from the preceding 6-digit code step.
+        keyboardType: TextInputType.visiblePassword,
+        enableSuggestions: false,
+        autocorrect: false,
         decoration: InputDecoration(
           labelText: 'New password (at least 8 characters)',
           border: OutlineInputBorder(

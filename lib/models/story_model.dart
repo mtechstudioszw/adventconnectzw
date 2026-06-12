@@ -11,6 +11,9 @@ class Story {
     required this.expiresAt,
     this.authorPhotoUrl,
     this.caption,
+    this.kind = 'photo',
+    this.textContent,
+    this.backgroundColor,
   });
 
   final String id;
@@ -21,6 +24,13 @@ class Story {
   final String? caption;
   final DateTime createdAt;
   final DateTime expiresAt;
+  // Text status (patch_105): kind 'text' renders centred text on a
+  // coloured background instead of an image.
+  final String kind;
+  final String? textContent;
+  final String? backgroundColor;
+
+  bool get isText => kind == 'text';
 
   /// Time remaining until expiry. Negative means stale — the home
   /// screen drops anything where this is non-positive as a belt-and-
@@ -41,6 +51,9 @@ class Story {
         },
         'media_url': mediaUrl,
         'caption': caption,
+        'kind': kind,
+        'text_content': textContent,
+        'background_color': backgroundColor,
         'created_at': createdAt.toIso8601String(),
         'expires_at': expiresAt.toIso8601String(),
       };
@@ -65,6 +78,9 @@ class Story {
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
       mediaUrl: (json['media_url'] ?? '').toString(),
       caption: json['caption'] as String?,
+      kind: (json['kind'] as String?) ?? 'photo',
+      textContent: json['text_content'] as String?,
+      backgroundColor: json['background_color'] as String?,
       createdAt: createdAt,
       expiresAt: expiresAt,
     );

@@ -5,6 +5,15 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
 
+/// Parse a '#RRGGBB' text-status background colour (brand blue default).
+Color _storyBg(String? hex) {
+  if (hex == null || hex.isEmpty) return AppColors.primaryBlue;
+  var h = hex.replaceFirst('#', '');
+  if (h.length == 6) h = 'FF$h';
+  final v = int.tryParse(h, radix: 16);
+  return v == null ? AppColors.primaryBlue : Color(v);
+}
+
 /// Facebook-style horizontal stories rail with vertical 9:16-ish
 /// cards. First card is always "Your story" (full-bleed avatar +
 /// blue + button on the seam). Subsequent cards are per-author, each
@@ -150,15 +159,35 @@ class _YourStoryCard extends StatelessWidget {
                       // Top: ~70% image / avatar.
                       Expanded(
                         flex: 7,
-                        child: _hasStory
-                            ? CachedImage(
-                                ownStories!.first.mediaUrl,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    _avatarBackground(),
-                              )
-                            : _avatarBackground(),
+                        child: !_hasStory
+                            ? _avatarBackground()
+                            : ownStories!.first.isText
+                                ? Container(
+                                    width: double.infinity,
+                                    color: _storyBg(
+                                        ownStories!.first.backgroundColor),
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.all(6),
+                                    child: Text(
+                                      ownStories!.first.textContent ?? '',
+                                      textAlign: TextAlign.center,
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  )
+                                : CachedImage(
+                                    ownStories!.first.mediaUrl,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            _avatarBackground(),
+                                  ),
                       ),
                       // Bottom: white banner with label only — no overlay
                       // button to avoid the double-tap target the old
@@ -286,14 +315,33 @@ class _FriendStoryCard extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Layer 1: full-bleed story image.
-                CachedImage(
-                  story.mediaUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: AppColors.darkNavy,
+                // Layer 1: full-bleed story image, OR a coloured text
+                // status preview.
+                if (story.isText)
+                  Container(
+                    color: _storyBg(story.backgroundColor),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(8),
+                    child: Text(
+                      story.textContent ?? '',
+                      textAlign: TextAlign.center,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                else
+                  CachedImage(
+                    story.mediaUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: AppColors.darkNavy,
+                    ),
                   ),
-                ),
                 // Dark gradient to keep the name legible.
                 IgnorePointer(
                   child: DecoratedBox(

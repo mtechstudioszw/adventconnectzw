@@ -347,26 +347,28 @@ class _StoryComposer extends StatefulWidget {
 
 class _StoryComposerState extends State<_StoryComposer> {
   final _caption = TextEditingController();
+  final _statusText = TextEditingController();
   String? _mediaUrl;
   bool _uploading = false;
   bool _publishing = false;
-  bool _pickerLaunched = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Stories require an image, so launch the picker immediately.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_pickerLaunched) {
-        _pickerLaunched = true;
-        _pickImage();
-      }
-    });
-  }
+  // Text status (WhatsApp-style). Defaults ON so the user can just type;
+  // tapping the photo button switches to an image story.
+  bool _textMode = true;
+  int _bgIndex = 0;
+  static const List<int> _bgColors = [
+    0xFF1565C0, // brand blue
+    0xFF0D1B3E, // navy
+    0xFF2E7D32, // green
+    0xFFC8A951, // gold
+    0xFF6A1B9A, // purple
+    0xFFD32F2F, // red
+    0xFF00695C, // teal
+  ];
 
   @override
   void dispose() {
     _caption.dispose();
+    _statusText.dispose();
     super.dispose();
   }
 
@@ -379,12 +381,9 @@ class _StoryComposerState extends State<_StoryComposer> {
       setState(() {
         _mediaUrl = url ?? _mediaUrl;
         _uploading = false;
+        // A chosen photo switches the composer to image mode.
+        if (url != null) _textMode = false;
       });
-      // If the user cancelled the picker before adding anything, drop
-      // the sheet — there's nothing to do.
-      if (_mediaUrl == null && mounted) {
-        Navigator.of(context).maybePop();
-      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _uploading = false);
@@ -399,14 +398,26 @@ class _StoryComposerState extends State<_StoryComposer> {
     }
   }
 
+  bool get _canShare => _textMode
+      ? _statusText.text.trim().isNotEmpty
+      : (_mediaUrl != null && _mediaUrl!.isNotEmpty);
+
   Future<void> _publish() async {
-    if (_mediaUrl == null || _mediaUrl!.isEmpty) return;
+    if (!_canShare) return;
     setState(() => _publishing = true);
     try {
-      final story = await FeedService.createStory(
-        mediaUrl: _mediaUrl!,
-        caption: _caption.text.trim().isEmpty ? null : _caption.text.trim(),
-      );
+      final story = _textMode
+          ? await FeedService.createStory(
+              kind: 'text',
+              textContent: _statusText.text.trim(),
+              backgroundColor:
+                  '#${_bgColors[_bgIndex].toRadixString(16).substring(2)}',
+            )
+          : await FeedService.createStory(
+              mediaUrl: _mediaUrl!,
+              caption:
+                  _caption.text.trim().isEmpty ? null : _caption.text.trim(),
+            );
       if (!mounted) return;
       Navigator.of(context).pop(story);
     } catch (_) {
@@ -475,13 +486,13 @@ class _StoryComposerState extends State<_StoryComposer> {
                               ),
                             )
                           : TextButton(
-                              onPressed: _mediaUrl == null ? null : _publish,
+                              onPressed: _canShare ? _publish : null,
                               child: Text(
                                 'Share',
                                 style: AppTextStyles.buttonText.copyWith(
-                                  color: _mediaUrl == null
-                                      ? context.palette.textMuted
-                                      : AppColors.primaryBlue,
+                                  color: _canShare
+                                      ? AppColors.primaryBlue
+                                      : context.palette.textMuted,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
                                 ),
@@ -497,77 +508,162 @@ class _StoryComposerState extends State<_StoryComposer> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (_uploading)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 48),
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: AppColors.primaryBlue,
+                        if (_textMode) ...[
+                          // ---- TEXT STATUS editor ----
+                          AspectRatio(
+                            aspectRatio: 4 / 5,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Color(_bgColors[_bgIndex]),
+                                borderRadius: BorderRadius.circular(14),
                               ),
-                            ),
-                          )
-                        else if (_mediaUrl != null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: AspectRatio(
-                              // 4:5 keeps the preview tall enough to feel
-                              // like a story but short enough that the
-                              // caption + keyboard still fit on most
-                              // phones without scrolling.
-                              aspectRatio: 4 / 5,
-                              child: CachedImage(
-                                _mediaUrl!,
-                                fit: BoxFit.cover,
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.all(20),
+                              child: TextField(
+                                controller: _statusText,
+                                autofocus: true,
+                                textAlign: TextAlign.center,
+                                maxLines: 8,
+                                maxLength: 280,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                cursorColor: Colors.white,
+                                decoration: const InputDecoration(
+                                  counterText: '',
+                                  border: InputBorder.none,
+                                  hintText: 'Type a status…',
+                                  hintStyle: TextStyle(
+                                      color: Colors.white70, fontSize: 20),
+                                ),
+                                onChanged: (_) => setState(() {}),
                               ),
                             ),
                           ),
-                        const SizedBox(height: 12),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: context.palette.inputFill,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: context.palette.divider),
-                          ),
-                          child: TextField(
-                            controller: _caption,
-                            minLines: 1,
-                            maxLines: 3,
-                            textCapitalization: TextCapitalization.sentences,
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              fontSize: 14.5,
-                              color: context.palette.text,
+                          const SizedBox(height: 12),
+                          // Background colour picker.
+                          SizedBox(
+                            height: 34,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _bgColors.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 10),
+                              itemBuilder: (_, i) => GestureDetector(
+                                onTap: () => setState(() => _bgIndex = i),
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: Color(_bgColors[i]),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: _bgIndex == i
+                                          ? AppColors.primaryBlue
+                                          : Colors.transparent,
+                                      width: 3,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
-                            decoration: InputDecoration(
-                              hintText: 'Add a caption (optional)',
-                              hintStyle: AppTextStyles.bodyMedium.copyWith(
-                                color: context.palette.textMuted,
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: _uploading ? null : _pickImage,
+                            icon: const Icon(Icons.image_outlined,
+                                color: AppColors.primaryBlue, size: 20),
+                            label: Text('Use a photo instead',
+                                style: AppTextStyles.buttonText.copyWith(
+                                  color: AppColors.primaryBlue,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13.5,
+                                )),
+                          ),
+                        ] else ...[
+                          // ---- PHOTO STATUS ----
+                          if (_uploading)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 48),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primaryBlue,
+                                ),
+                              ),
+                            )
+                          else if (_mediaUrl != null)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: AspectRatio(
+                                aspectRatio: 4 / 5,
+                                child: CachedImage(_mediaUrl!,
+                                    fit: BoxFit.cover),
+                              ),
+                            ),
+                          const SizedBox(height: 12),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: context.palette.inputFill,
+                              borderRadius: BorderRadius.circular(14),
+                              border:
+                                  Border.all(color: context.palette.divider),
+                            ),
+                            child: TextField(
+                              controller: _caption,
+                              minLines: 1,
+                              maxLines: 3,
+                              textCapitalization:
+                                  TextCapitalization.sentences,
+                              style: AppTextStyles.bodyMedium.copyWith(
                                 fontSize: 14.5,
+                                color: context.palette.text,
                               ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.all(14),
-                            ),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextButton.icon(
-                          onPressed: _uploading ? null : _pickImage,
-                          icon: const Icon(
-                            Icons.image_outlined,
-                            color: AppColors.primaryBlue,
-                            size: 20,
-                          ),
-                          label: Text(
-                            _mediaUrl == null
-                                ? 'Choose a photo'
-                                : 'Replace photo',
-                            style: AppTextStyles.buttonText.copyWith(
-                              color: AppColors.primaryBlue,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13.5,
+                              decoration: InputDecoration(
+                                hintText: 'Add a caption (optional)',
+                                hintStyle: AppTextStyles.bodyMedium.copyWith(
+                                  color: context.palette.textMuted,
+                                  fontSize: 14.5,
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.all(14),
+                              ),
+                              onChanged: (_) => setState(() {}),
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              TextButton.icon(
+                                onPressed: _uploading ? null : _pickImage,
+                                icon: const Icon(Icons.image_outlined,
+                                    color: AppColors.primaryBlue, size: 20),
+                                label: Text('Replace photo',
+                                    style: AppTextStyles.buttonText.copyWith(
+                                      color: AppColors.primaryBlue,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13.5,
+                                    )),
+                              ),
+                              const Spacer(),
+                              TextButton.icon(
+                                onPressed: () =>
+                                    setState(() => _textMode = true),
+                                icon: const Icon(Icons.text_fields,
+                                    color: AppColors.primaryBlue, size: 20),
+                                label: Text('Text',
+                                    style: AppTextStyles.buttonText.copyWith(
+                                      color: AppColors.primaryBlue,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13.5,
+                                    )),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

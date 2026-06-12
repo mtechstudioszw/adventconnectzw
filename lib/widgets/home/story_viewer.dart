@@ -304,6 +304,15 @@ class _StoryViewerState extends State<StoryViewer>
     return '$hh:$mm';
   }
 
+  /// Parse a '#RRGGBB' story background colour, defaulting to brand blue.
+  Color _parseStoryColor(String? hex) {
+    if (hex == null || hex.isEmpty) return AppColors.primaryBlue;
+    var h = hex.replaceFirst('#', '');
+    if (h.length == 6) h = 'FF$h';
+    final v = int.tryParse(h, radix: 16);
+    return v == null ? AppColors.primaryBlue : Color(v);
+  }
+
   @override
   Widget build(BuildContext context) {
     final story = widget.stories[_index];
@@ -314,17 +323,37 @@ class _StoryViewerState extends State<StoryViewer>
           fit: StackFit.expand,
           children: [
             Center(
-              child: CachedImage(
-                story.mediaUrl,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Center(
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    size: 48,
-                    color: AppColors.white,
-                  ),
-                ),
-              ),
+              child: story.isText
+                  // Text status — centred text on a coloured background.
+                  ? Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      color: _parseStoryColor(story.backgroundColor),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        story.textContent ?? '',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          height: 1.3,
+                        ),
+                      ),
+                    )
+                  : CachedImage(
+                      story.mediaUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          size: 48,
+                          color: AppColors.white,
+                        ),
+                      ),
+                    ),
             ),
             // Gesture layer — WhatsApp Status semantics.
             //   - Tap LEFT third  → previous story

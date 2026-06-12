@@ -397,8 +397,11 @@ class FeedService {
   }
 
   static Future<Story> createStory({
-    required String mediaUrl,
+    String? mediaUrl,
     String? caption,
+    String kind = 'photo',
+    String? textContent,
+    String? backgroundColor,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -410,7 +413,11 @@ class FeedService {
           .from(_storiesTable)
           .insert({
             'author_id': user.id,
-            'media_url': mediaUrl,
+            'kind': kind,
+            if (mediaUrl != null && mediaUrl.isNotEmpty) 'media_url': mediaUrl,
+            if (textContent != null && textContent.trim().isNotEmpty)
+              'text_content': textContent.trim(),
+            if (backgroundColor != null) 'background_color': backgroundColor,
             if (caption != null && caption.trim().isNotEmpty)
               'caption': caption.trim(),
           })

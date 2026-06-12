@@ -129,12 +129,17 @@ class MarketplaceService {
       query = query.or('title.ilike.$term,description.ilike.$term');
     }
 
+    // Pull the most recent 200, then SHUFFLE so the grid is mixed rather
+    // than strictly newest-first — newer sellers' items still surface and
+    // the marketplace doesn't look like a chronological feed.
     final response =
         await query.order('created_at', ascending: false).limit(200);
 
-    return (response as List)
+    final list = (response as List)
         .map((row) => Product.fromJson(row as Map<String, dynamic>))
         .toList();
+    list.shuffle();
+    return list;
   }
 
   static Future<Product?> fetchProductById(String id) async {

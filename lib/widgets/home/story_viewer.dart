@@ -748,6 +748,19 @@ class _StoryPeopleSheetState extends State<_StoryPeopleSheet> {
     });
   }
 
+  /// "Just now / 5m ago / 3h ago / HH:mm" for when someone viewed.
+  String _viewedLabel(dynamic ts) {
+    final t = DateTime.tryParse(ts?.toString() ?? '')?.toLocal();
+    if (t == null) return '';
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return 'Just now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    final hh = t.hour.toString().padLeft(2, '0');
+    final mm = t.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -839,6 +852,14 @@ class _StoryPeopleSheetState extends State<_StoryPeopleSheet> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              subtitle: _isLikers
+                                  ? null
+                                  : Text(
+                                      _viewedLabel(v['viewed_at']),
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: ctx.palette.textMuted,
+                                      ),
+                                    ),
                             );
                           },
                         ),

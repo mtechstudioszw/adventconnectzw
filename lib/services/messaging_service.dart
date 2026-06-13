@@ -1377,6 +1377,35 @@ class MessagingService {
     return _client.storage.from(_voiceBucket).download(storagePath);
   }
 
+  /// Streams a voice note over its signed URL, reporting download progress
+  /// (0.0–1.0, or null when the server doesn't send a content-length) via
+  /// [onProgress] — so the bubble can show a WhatsApp-style download ring.
+  /// Falls back to a plain download if streaming fails.
+  static Future<Uint8List> downloadVoiceWithProgress(
+    String storagePath,
+    void Function(double? progress) onProgress,
+  ) async {
+    try {
+      final url = await signedVoiceUrl(storagePath);
+      final client = HttpClient();
+      final req = await client.getUrl(Uri.parse(url));
+      final resp = await req.close();
+      final total = resp.contentLength;
+      final builder = BytesBuilder(copy: false);
+      var received = 0;
+      await for (final chunk in resp) {
+        builder.add(chunk);
+        received += chunk.length;
+        onProgress(total > 0 ? received / total : null);
+      }
+      client.close();
+      return builder.takeBytes();
+    } catch (_) {
+      onProgress(null);
+      return downloadVoiceBytes(storagePath);
+    }
+  }
+
   // ===================================================================
   // CHAT MEDIA (images / documents — patch_051, private chat_media bucket)
   // ===================================================================

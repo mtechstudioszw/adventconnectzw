@@ -60,6 +60,9 @@ class VoicePlayerService {
   // Observable state — widgets listen to just what they need.
   final ValueNotifier<String?> activeId = ValueNotifier(null);
   final ValueNotifier<String?> loadingId = ValueNotifier(null);
+  // 0.0–1.0 download progress for the note currently loading (null =
+  // indeterminate). Drives the WhatsApp-style download ring.
+  final ValueNotifier<double?> downloadProgress = ValueNotifier(null);
   final ValueNotifier<bool> playing = ValueNotifier(false);
   final ValueNotifier<Duration> position = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> duration = ValueNotifier(Duration.zero);
@@ -139,12 +142,15 @@ class VoicePlayerService {
     duration.value = Duration(seconds: note.durationSeconds ?? 0);
     try {
       loadingId.value = note.messageId;
+      downloadProgress.value = null;
       final path = await _ensureLocal(note);
       loadingId.value = null;
+      downloadProgress.value = null;
       await _player.setPlaybackRate(speed.value);
       await _player.play(DeviceFileSource(path));
     } catch (e) {
       loadingId.value = null;
+      downloadProgress.value = null;
       activeId.value = null;
       rethrow;
     }
@@ -168,7 +174,10 @@ class VoicePlayerService {
       return file.path;
     }
 
-    final bytes = await MessagingService.downloadVoiceBytes(note.storagePath);
+    final bytes = await MessagingService.downloadVoiceWithProgress(
+      note.storagePath,
+      (p) => downloadProgress.value = p,
+    );
     await file.writeAsBytes(bytes, flush: true);
     _localCache[note.messageId] = file.path;
     return file.path;

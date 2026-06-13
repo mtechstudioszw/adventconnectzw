@@ -407,10 +407,21 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() => _stories = [story, ..._stories]);
   }
 
-  Future<void> _openStoryViewer(List<Story> reel) {
+  Future<void> _openStoryViewer(List<Story> reel) async {
+    // Optimistically grey the ring for the reel we're opening, so it
+    // doesn't keep showing as unviewed after you've seen it.
+    setState(() {
+      _viewedStoryIds = {..._viewedStoryIds, ...reel.map((s) => s.id)};
+    });
     // The rail hands us a play-order (oldest-first) reel — including
     // auto-advance across unviewed authors — so show it as-is.
-    return StoryViewer.show(context, reel);
+    await StoryViewer.show(context, reel);
+    // Reconcile with the server when the viewer closes (covers reels you
+    // exited early, or views from another device) so the ring is accurate.
+    try {
+      final ids = await FeedService.fetchMyViewedStoryIds();
+      if (mounted) setState(() => _viewedStoryIds = ids);
+    } catch (_) {}
   }
 
   List<Story> _storiesForAuthor(String authorId) =>

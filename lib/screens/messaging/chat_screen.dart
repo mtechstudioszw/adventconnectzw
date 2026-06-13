@@ -758,12 +758,32 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _react(Message m, String emoji) async {
-    if (!_ensureOnline('react')) return;
+    // Optimistic toggle so the reaction appears/clears INSTANTLY — on a
+    // slow network it must never look like nothing happened. We reconcile
+    // with the server right after.
+    final current = Map<String, int>.from(_reactions[m.id] ?? const {});
+    final mineKey = '_mine_$emoji';
+    if (current[mineKey] == 1) {
+      current.remove(mineKey);
+      final c = (current[emoji] ?? 1) - 1;
+      if (c <= 0) {
+        current.remove(emoji);
+      } else {
+        current[emoji] = c;
+      }
+    } else {
+      current[mineKey] = 1;
+      current[emoji] = (current[emoji] ?? 0) + 1;
+    }
+    setState(() => _reactions = {..._reactions, m.id: current});
     try {
       await MessagingService.toggleReaction(m.id, emoji);
-      _loadReactionsAndStars();
+      _loadReactionsAndStars(); // reconcile with server truth
     } catch (_) {
-      if (mounted) _toast('Could not add your reaction. Try again.');
+      if (mounted) {
+        _loadReactionsAndStars(); // revert to server truth on failure
+        _toast('Reaction will retry when you\'re back online.');
+      }
     }
   }
 
@@ -3595,6 +3615,7 @@ class _VoiceBubble extends StatelessWidget {
           animation: Listenable.merge([
             svc.activeId,
             svc.loadingId,
+            svc.downloadProgress,
             svc.playing,
             svc.position,
             svc.duration,
@@ -3634,10 +3655,13 @@ class _VoiceBubble extends StatelessWidget {
                     alignment: Alignment.center,
                     child: isLoading
                         ? SizedBox(
-                            width: 16,
-                            height: 16,
+                            width: 20,
+                            height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
+                              // Determinate download % (WhatsApp-style) when
+                              // the server reports a size; spins otherwise.
+                              value: svc.downloadProgress.value,
                               color: accent,
                             ),
                           )

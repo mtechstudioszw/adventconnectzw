@@ -55,18 +55,31 @@ class CachedImage extends StatelessWidget {
         }
         return _defaultErrorTile(width: width, height: height);
       },
-      placeholder: (context, url) => _placeholderTile(width: width, height: height),
-    );
-  }
-
-  static Widget _placeholderTile({double? width, double? height}) {
-    // TODO(dark-mode): static method has no BuildContext, so we can't
-    // read `context.palette.cardMuted`. Loading shimmer stays neutral
-    // light grey in both light + dark themes for now.
-    return Container(
-      width: width,
-      height: height,
-      color: AppColors.lightGrey,
+      // Show a download progress ring while the image streams in (WhatsApp
+      // style) so on a slow network a photo reads as "downloading", not a
+      // blank/broken tile. Tiny tiles (avatars) just show the grey
+      // placeholder — a ring would be bigger than the image.
+      progressIndicatorBuilder: (context, url, progress) {
+        final small = (width != null && width! < 80) ||
+            (height != null && height! < 80);
+        return Container(
+          width: width,
+          height: height,
+          color: AppColors.lightGrey,
+          alignment: Alignment.center,
+          child: small
+              ? null
+              : SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    value: progress.progress, // null → indeterminate
+                    color: AppColors.primaryBlue,
+                  ),
+                ),
+        );
+      },
     );
   }
 

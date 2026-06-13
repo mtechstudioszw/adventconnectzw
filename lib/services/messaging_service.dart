@@ -1324,6 +1324,7 @@ class MessagingService {
     required String localFilePath,
     required int durationSeconds,
     String? replyToId,
+    void Function(double progress)? onProgress,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -1335,14 +1336,14 @@ class MessagingService {
     }
     final ts = DateTime.now().millisecondsSinceEpoch;
     final storagePath = '$conversationId/${user.id}/$ts.m4a';
-    await _client.storage.from(_voiceBucket).upload(
-          storagePath,
-          file,
-          fileOptions: const FileOptions(
-            contentType: 'audio/aac',
-            upsert: false,
-          ),
-        );
+    final bytes = await file.readAsBytes();
+    await _uploadWithProgress(
+      bucket: _voiceBucket,
+      storagePath: storagePath,
+      bytes: bytes,
+      contentType: 'audio/aac',
+      onProgress: onProgress ?? (_) {},
+    );
 
     final response = await _client
         .from(_messagesTable)
@@ -1424,6 +1425,52 @@ class MessagingService {
   // URL each build (and so CachedImage can cache by a stable URL).
   static final Map<String, _SignedUrlEntry> _signedMediaCache = {};
 
+  /// Uploads bytes to a private bucket while reporting upload progress
+  /// (0.0–1.0) via [onProgress] — used so chat photo/voice bubbles can
+  /// show a real progress BAR. Streams a PUT to a signed upload URL; on
+  /// ANY failure it falls back to the plain SDK upload so a send never
+  /// breaks just because the streamed path didn't work.
+  static Future<void> _uploadWithProgress({
+    required String bucket,
+    required String storagePath,
+    required Uint8List bytes,
+    required String contentType,
+    required void Function(double progress) onProgress,
+  }) async {
+    try {
+      final signed =
+          await _client.storage.from(bucket).createSignedUploadUrl(storagePath);
+      final client = HttpClient();
+      final req = await client.putUrl(Uri.parse(signed.signedUrl));
+      req.headers.set(HttpHeaders.contentTypeHeader, contentType);
+      req.headers.set('x-upsert', 'false');
+      req.contentLength = bytes.length;
+      const chunk = 64 * 1024;
+      var sent = 0;
+      for (var i = 0; i < bytes.length; i += chunk) {
+        final end = (i + chunk < bytes.length) ? i + chunk : bytes.length;
+        req.add(bytes.sublist(i, end));
+        await req.flush();
+        sent = end;
+        onProgress(bytes.isEmpty ? 1.0 : sent / bytes.length);
+      }
+      final resp = await req.close();
+      await resp.drain();
+      client.close();
+      if (resp.statusCode >= 300) {
+        throw StorageException('Upload failed (${resp.statusCode})');
+      }
+    } catch (_) {
+      onProgress(0.99); // show near-complete while the fallback runs
+      await _client.storage.from(bucket).uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(contentType: contentType, upsert: false),
+          );
+      onProgress(1.0);
+    }
+  }
+
   /// Uploads a compressed image to the private chat_media bucket and
   /// inserts a `message_type='image'` row. Path is conversation-scoped
   /// so the patch_051 RLS limits reads to participants.
@@ -1431,6 +1478,7 @@ class MessagingService {
     required String conversationId,
     required Uint8List bytes,
     required String ext,
+    void Function(double progress)? onProgress,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -1438,14 +1486,13 @@ class MessagingService {
     }
     final ts = DateTime.now().millisecondsSinceEpoch;
     final storagePath = '$conversationId/${user.id}/$ts.$ext';
-    await _client.storage.from(_chatMediaBucket).uploadBinary(
-          storagePath,
-          bytes,
-          fileOptions: FileOptions(
-            contentType: _imageMime(ext),
-            upsert: false,
-          ),
-        );
+    await _uploadWithProgress(
+      bucket: _chatMediaBucket,
+      storagePath: storagePath,
+      bytes: bytes,
+      contentType: _imageMime(ext),
+      onProgress: onProgress ?? (_) {},
+    );
     final response = await _client
         .from(_messagesTable)
         .insert({

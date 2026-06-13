@@ -62,22 +62,25 @@ class CachedImage extends StatelessWidget {
       progressIndicatorBuilder: (context, url, progress) {
         final small = (width != null && width! < 80) ||
             (height != null && height! < 80);
-        return Container(
-          width: width,
-          height: height,
-          color: AppColors.lightGrey,
-          alignment: Alignment.center,
-          child: small
-              ? null
-              : SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    value: progress.progress, // null → indeterminate
-                    color: AppColors.primaryBlue,
+        // Tiny tiles (avatars) just show the grey placeholder. Larger
+        // media shows a download progress BAR pinned to the bottom.
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(width: width, height: height, color: AppColors.lightGrey),
+            if (!small)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: LinearProgressIndicator(
+                  value: progress.progress, // null → indeterminate
+                  minHeight: 4,
+                  backgroundColor: Colors.black.withValues(alpha: 0.12),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryBlue,
                   ),
                 ),
+              ),
+          ],
         );
       },
     );

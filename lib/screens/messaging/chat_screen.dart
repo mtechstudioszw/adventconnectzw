@@ -618,6 +618,9 @@ class _ChatScreenState extends State<ChatScreen>
   Set<String> _starredIds = <String>{};
   Map<String, Map<String, int>> _reactions = const {};
   String? _pinnedId; // pinned message id for this conversation (patch_106)
+  // Per-optimistic-message upload progress (0–1) for photos/voice notes,
+  // keyed by temp id — drives the sending progress BAR.
+  final Map<String, double> _uploadProgress = {};
   // Reply-jump highlight: the message id currently flashing + its timer.
   String? _highlightedMessageId;
   Timer? _highlightTimer;
@@ -1414,6 +1417,9 @@ class _ChatScreenState extends State<ChatScreen>
         localFilePath: path,
         durationSeconds: duration,
         replyToId: replyId,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress[tempId] = p);
+        },
       );
       // Swap optimistic for the canonical row so the stream's later
       // tick dedupes by id rather than content.
@@ -2792,7 +2798,11 @@ class _ChatScreenState extends State<ChatScreen>
                         : CrossAxisAlignment.start,
                     children: [
                       if (m.replyToId != null) _buildQuotedPreview(m, isMine),
-                      _MessageBubble(message: m, isMine: isMine),
+                      _MessageBubble(
+                        message: m,
+                        isMine: isMine,
+                        uploadProgress: _uploadProgress[m.id],
+                      ),
                     ],
                   ),
                   ),
@@ -3147,9 +3157,15 @@ class _ChatScreenState extends State<ChatScreen>
         conversationId: widget.conversationId,
         bytes: bytes,
         ext: ext,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress[tempId] = p);
+        },
       );
       if (mounted) {
-        setState(() => _replacePendingWithCanonical(tempId, canonical));
+        setState(() {
+          _uploadProgress.remove(tempId);
+          _replacePendingWithCanonical(tempId, canonical);
+        });
       }
     } catch (_) {
       if (mounted) {
@@ -3536,9 +3552,14 @@ class _DateSeparator extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message, required this.isMine});
+  const _MessageBubble({
+    required this.message,
+    required this.isMine,
+    this.uploadProgress,
+  });
   final Message message;
   final bool isMine;
+  final double? uploadProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -3582,11 +3603,19 @@ class _MessageBubble extends StatelessWidget {
     }
     if (message.messageType == 'voice' &&
         (message.mediaUrl ?? '').isNotEmpty) {
-      return _VoiceBubble(message: message, isMine: isMine);
+      return _VoiceBubble(
+        message: message,
+        isMine: isMine,
+        uploadProgress: uploadProgress,
+      );
     }
     if (message.messageType == 'image' &&
         (message.mediaUrl ?? '').isNotEmpty) {
-      return _ImageBubble(message: message, isMine: isMine);
+      return _ImageBubble(
+        message: message,
+        isMine: isMine,
+        uploadProgress: uploadProgress,
+      );
     }
     if (message.messageType == 'product' && message.meta != null) {
       return _ProductBubble(message: message, isMine: isMine);
@@ -3679,7 +3708,12 @@ class _MessageBubble extends StatelessWidget {
 /// note plays at a time, and the clip is downloaded once then replayed
 /// from disk (no re-load on every tap, no 30-second cut-out).
 class _VoiceBubble extends StatelessWidget {
-  const _VoiceBubble({required this.message, required this.isMine});
+  const _VoiceBubble({
+    required this.message,
+    required this.isMine,
+    this.uploadProgress,
+  });
+  final double? uploadProgress;
   final Message message;
   final bool isMine;
 
@@ -3754,28 +3788,38 @@ class _VoiceBubble extends StatelessWidget {
           ],
         ),
         child: uploading
-            ? Row(
+            ? Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
+                  Row(
+                    children: [
+                      Icon(Icons.mic_rounded, color: muted, size: 18),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          uploadProgress != null
+                              ? 'Sending… ${(uploadProgress! * 100).round()}%'
+                              : 'Sending voice note…',
+                          style:
+                              AppTextStyles.bodySmall.copyWith(color: muted),
+                        ),
+                      ),
+                      Text(_fmt(declared),
+                          style: AppTextStyles.labelSmall
+                              .copyWith(color: muted)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: uploadProgress, // null → indeterminate
+                      minHeight: 4,
+                      backgroundColor: trackBg,
                       valueColor: AlwaysStoppedAnimation<Color>(fg),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Icon(Icons.mic_rounded, color: muted, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Sending voice note…',
-                      style: AppTextStyles.bodySmall.copyWith(color: muted),
-                    ),
-                  ),
-                  Text(_fmt(declared),
-                      style: AppTextStyles.labelSmall.copyWith(color: muted)),
                 ],
               )
             : AnimatedBuilder(
@@ -3820,25 +3864,15 @@ class _VoiceBubble extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: isLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              // Determinate download % (WhatsApp-style) when
-                              // the server reports a size; spins otherwise.
-                              value: svc.downloadProgress.value,
-                              color: accent,
-                            ),
-                          )
-                        : Icon(
-                            isPlaying
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                            color: accent,
-                            size: 22,
-                          ),
+                    child: Icon(
+                      isLoading
+                          ? Icons.arrow_downward_rounded
+                          : isPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                      color: accent,
+                      size: 22,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -3847,13 +3881,29 @@ class _VoiceBubble extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _Waveform(
-                        messageId: message.id,
-                        progress: progress,
-                        playedColor: fg,
-                        trackColor: trackBg,
-                        onSeek: isActive ? svc.seekFraction : null,
-                      ),
+                      // While downloading, show a progress BAR in place of
+                      // the waveform (WhatsApp-style, no ring).
+                      if (isLoading)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: svc.downloadProgress.value,
+                              minHeight: 5,
+                              backgroundColor: trackBg,
+                              valueColor: AlwaysStoppedAnimation<Color>(fg),
+                            ),
+                          ),
+                        )
+                      else
+                        _Waveform(
+                          messageId: message.id,
+                          progress: progress,
+                          playedColor: fg,
+                          trackColor: trackBg,
+                          onSeek: isActive ? svc.seekFraction : null,
+                        ),
                       const SizedBox(height: 6),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -4407,7 +4457,12 @@ class _StoryReplyBubble extends StatelessWidget {
 }
 
 class _ImageBubble extends StatefulWidget {
-  const _ImageBubble({required this.message, required this.isMine});
+  const _ImageBubble({
+    required this.message,
+    required this.isMine,
+    this.uploadProgress,
+  });
+  final double? uploadProgress;
   final Message message;
   final bool isMine;
 
@@ -4472,22 +4527,37 @@ class _ImageBubbleState extends State<_ImageBubble> {
                 // WhatsApp-style upload overlay: while the optimistic
                 // (local) bubble is still uploading, dim the photo and
                 // show a spinner so it's clearly "sending", not gone.
-                if (_isLocal && isMine)
+                if (_isLocal && isMine) ...[
                   Positioned.fill(
                     child: Container(
-                      color: Colors.black.withValues(alpha: 0.38),
-                      child: const Center(
-                        child: SizedBox(
-                          width: 34,
-                          height: 34,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
+                      color: Colors.black.withValues(alpha: 0.32),
+                      alignment: Alignment.center,
+                      child: Text(
+                        widget.uploadProgress != null
+                            ? '${(widget.uploadProgress! * 100).round()}%'
+                            : '',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ),
+                  // Upload progress BAR pinned to the bottom of the photo.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: LinearProgressIndicator(
+                      value: widget.uploadProgress, // null → indeterminate
+                      minHeight: 4,
+                      backgroundColor: Colors.white.withValues(alpha: 0.30),
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

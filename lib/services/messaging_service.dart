@@ -973,6 +973,15 @@ class MessagingService {
   /// "Delete for everyone" — soft delete (sender only, via RLS). Clears
   /// content + media and flags the row so both sides render a
   /// "This message was deleted" tombstone (the row stays).
+  /// Pin (or unpin, with null) a message in a conversation (patch_106).
+  static Future<void> setPinnedMessage(
+      String conversationId, String? messageId) async {
+    await _client.rpc('set_pinned_message', params: {
+      'p_conv': int.tryParse(conversationId) ?? conversationId,
+      'p_message_id': messageId == null ? null : int.tryParse(messageId),
+    });
+  }
+
   static Future<void> softDeleteMessage(String messageId) async {
     await _client.from(_messagesTable).update({
       'is_deleted': true,

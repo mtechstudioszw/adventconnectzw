@@ -374,6 +374,20 @@ class _ChatScreenState extends State<ChatScreen>
                 ),
                 onTap: () => Navigator.pop(ctx, 'star'),
               ),
+              ListTile(
+                leading: Icon(
+                  _pinnedId == m.id
+                      ? Icons.push_pin
+                      : Icons.push_pin_outlined,
+                  color: AppColors.primaryBlue,
+                ),
+                title: Text(
+                  _pinnedId == m.id ? 'Unpin' : 'Pin',
+                  style: AppTextStyles.bodyLarge
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+                onTap: () => Navigator.pop(ctx, 'pin'),
+              ),
               if (isImage)
                 ListTile(
                   leading: const Icon(Icons.download_outlined,
@@ -457,6 +471,8 @@ class _ChatScreenState extends State<ChatScreen>
         _enterSelect(m);
       case 'star':
         await _toggleStar(m);
+      case 'pin':
+        await _togglePin(m);
       case 'edit':
         _startEdit(m);
       case 'save':
@@ -601,6 +617,7 @@ class _ChatScreenState extends State<ChatScreen>
   Message? _editing; // editing this message instead of sending new
   Set<String> _starredIds = <String>{};
   Map<String, Map<String, int>> _reactions = const {};
+  String? _pinnedId; // pinned message id for this conversation (patch_106)
   // Reply-jump highlight: the message id currently flashing + its timer.
   String? _highlightedMessageId;
   Timer? _highlightTimer;
@@ -693,6 +710,7 @@ class _ChatScreenState extends State<ChatScreen>
         setState(() => _conversation = fetched);
       }
     }
+    if (mounted) setState(() => _pinnedId = _conversation?.pinnedMessageId);
     _wirePresence();
     _maybeLoadGroupMembers();
   }
@@ -756,6 +774,21 @@ class _ChatScreenState extends State<ChatScreen>
       }
     });
     await MessagingService.toggleStar(m.id, starred: starred);
+  }
+
+  Future<void> _togglePin(Message m) async {
+    if (!_ensureOnline('pin messages')) return;
+    final wasPinned = _pinnedId == m.id;
+    setState(() => _pinnedId = wasPinned ? null : m.id);
+    try {
+      await MessagingService.setPinnedMessage(
+          widget.conversationId, wasPinned ? null : m.id);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _pinnedId = wasPinned ? m.id : null);
+        _toast('Could not update the pin.');
+      }
+    }
   }
 
   Future<void> _react(Message m, String emoji) async {
@@ -1661,6 +1694,7 @@ class _ChatScreenState extends State<ChatScreen>
       body: Column(
         children: [
           _selectMode ? _buildSelectionBar() : _buildHeader(),
+          _buildPinnedBanner(),
           _buildFriendshipBanner(),
           Expanded(child: _buildBody()),
           _buildInputBar(),
@@ -1674,6 +1708,81 @@ class _ChatScreenState extends State<ChatScreen>
   /// the friend graph. Three states map to three CTAs (Add friend,
   /// Accept, or just a sent-pending status). Hidden once they're
   /// friends. Mirrors how Facebook/Instagram surface stranger DMs.
+  Future<void> _unpin() async {
+    setState(() => _pinnedId = null);
+    try {
+      await MessagingService.setPinnedMessage(widget.conversationId, null);
+    } catch (_) {}
+  }
+
+  Widget _buildPinnedBanner() {
+    final id = _pinnedId;
+    if (id == null) return const SizedBox.shrink();
+    Message? msg;
+    for (final m in _messages) {
+      if (m.id == id) {
+        msg = m;
+        break;
+      }
+    }
+    final preview = msg == null
+        ? 'Tap to view'
+        : msg.isDeleted
+            ? 'This message was deleted'
+            : msg.messageType == 'voice'
+                ? '🎤 Voice note'
+                : msg.messageType == 'image'
+                    ? '📷 Photo'
+                    : (msg.content.trim().isEmpty
+                        ? 'Message'
+                        : msg.content.trim());
+    return Material(
+      color: context.palette.card,
+      child: InkWell(
+        onTap: msg == null ? null : () => _scrollToMessage(id),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              left: const BorderSide(color: AppColors.primaryBlue, width: 3),
+              bottom: BorderSide(color: context.palette.divider),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+          child: Row(
+            children: [
+              const Icon(Icons.push_pin, size: 15, color: AppColors.primaryBlue),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Pinned message',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                        )),
+                    Text(preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: context.palette.textMuted)),
+                  ],
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.close,
+                    size: 18, color: context.palette.textMuted),
+                onPressed: _unpin,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFriendshipBanner() {
     final convo = _conversation;
     if (convo == null) return const SizedBox.shrink();
@@ -2023,30 +2132,78 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _confirmDeleteSelected() async {
+    final me = AuthService.currentUser?.id;
+    final selected =
+        _messages.where((m) => _selectedMsgIds.contains(m.id)).toList();
+    // "Delete for everyone" is only offered when EVERY selected message is
+    // your own (you can't delete someone else's message for everyone).
+    final allMine =
+        selected.isNotEmpty && selected.every((m) => m.senderId == me);
     final count = _selectedMsgIds.length;
-    final ok = await showDialog<bool>(
+    final choice = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Delete $count message${count == 1 ? '' : 's'} for you?'),
-        content: const Text(
-          'They will be removed from your chat only. To delete one of your '
-          'own messages for everyone, open it and choose "Delete for '
-          'everyone".',
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+              child: Text(
+                'Delete $count message${count == 1 ? '' : 's'}?',
+                style: AppTextStyles.titleMedium
+                    .copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            if (allMine)
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: AppColors.red),
+                title: const Text('Delete for everyone',
+                    style: TextStyle(color: AppColors.red)),
+                onTap: () => Navigator.pop(ctx, 'everyone'),
+              ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: context.palette.text),
+              title: const Text('Delete for me'),
+              onTap: () => Navigator.pop(ctx, 'me'),
+            ),
+            ListTile(
+              title: Center(
+                child: Text('Cancel',
+                    style: TextStyle(color: context.palette.textMuted)),
+              ),
+              onTap: () => Navigator.pop(ctx),
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
-    if (ok == true) await _deleteSelected();
+    if (choice == 'everyone') {
+      await _deleteSelectedForEveryone();
+    } else if (choice == 'me') {
+      await _deleteSelected();
+    }
+  }
+
+  /// Soft-delete (for everyone) all selected messages that are YOUR own.
+  Future<void> _deleteSelectedForEveryone() async {
+    final me = AuthService.currentUser?.id;
+    final mine = _messages
+        .where((m) => _selectedMsgIds.contains(m.id) && m.senderId == me)
+        .map((m) => m.id)
+        .toList();
+    _exitSelect();
+    for (final id in mine) {
+      try {
+        await MessagingService.softDeleteMessage(id);
+      } catch (_) {}
+    }
+    if (mounted) _toast('Deleted for everyone.');
   }
 
   Widget _buildHeader() {

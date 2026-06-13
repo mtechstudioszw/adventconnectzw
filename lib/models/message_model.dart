@@ -44,6 +44,7 @@ class Conversation {
     this.churchKind,
     this.churchId,
     this.deletedAt,
+    this.pinnedMessageId,
     this.lastDelivered = false,
     this.lastRead = false,
   });
@@ -74,6 +75,8 @@ class Conversation {
   // Set when an admin soft-deleted the group (patch_095) — read-only.
   final DateTime? deletedAt;
   bool get isDeletedGroup => deletedAt != null;
+  // Pinned message id for this conversation (patch_106), or null.
+  final String? pinnedMessageId;
   // Delivery state of the LAST message when the viewer sent it (patch_075)
   // — drives the inbox tick (✓ / ✓✓ / ✓✓ blue). Both false otherwise.
   final bool lastDelivered;
@@ -112,6 +115,7 @@ class Conversation {
         isGroup: true,
         churchKind: json['church_kind'] as String?,
         churchId: json['church_id']?.toString(),
+        pinnedMessageId: json['pinned_message_id']?.toString(),
         deletedAt: json['deleted_at'] == null
             ? null
             : DateTime.tryParse(json['deleted_at'].toString()),
@@ -163,6 +167,7 @@ class Conversation {
       initiatorId: json['initiator_id']?.toString(),
       isBusiness: json['is_business'] == true,
       isSelfChat: selfChat,
+      pinnedMessageId: json['pinned_message_id']?.toString(),
     );
   }
 

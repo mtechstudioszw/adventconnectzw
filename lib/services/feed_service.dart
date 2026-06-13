@@ -430,6 +430,27 @@ class FeedService {
     return Story.fromJson(inserted);
   }
 
+  /// Fetch a single story by id (for opening a status-reply's tagged
+  /// story). Returns null if it's gone or expired (statuses last 24h), so
+  /// the caller can fall back to showing the saved image.
+  static Future<Story?> fetchStoryById(String storyId) async {
+    try {
+      final row = await _client
+          .from(_storiesTable)
+          .select(
+            '*, '
+            'profiles!stories_author_id_fkey(id, full_name, profile_photo_url)',
+          )
+          .eq('id', storyId)
+          .maybeSingle();
+      if (row == null) return null;
+      final s = Story.fromJson(row);
+      return s.isExpired ? null : s;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Delete a story. RLS gates this to the author only (per the
   /// stories_delete_author policy created in schema.sql); failures
   /// throw a PostgrestException the caller can surface.

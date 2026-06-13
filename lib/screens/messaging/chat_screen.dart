@@ -20,6 +20,7 @@ import '../../services/presence_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/voice_player_service.dart';
 import '../../widgets/full_image_viewer.dart';
+import '../../widgets/home/story_viewer.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -1153,6 +1154,15 @@ class _ChatScreenState extends State<ChatScreen>
         // by createdAt so nothing jumps position.
         final wasAtBottom = _isNearBottom();
         setState(() => _applyServerMessages(list));
+        // A message arriving from the OTHER person means they've stopped
+        // typing — clear the indicator immediately instead of waiting for
+        // the 3s expiry (the "typing… still showing after their message"
+        // bug).
+        final meId0 = AuthService.currentUser?.id;
+        if (_otherTyping && list.isNotEmpty && list.last.senderId != meId0) {
+          _typingExpiry?.cancel();
+          setState(() => _otherTyping = false);
+        }
         // Only auto-scroll if the user was already at the bottom — so
         // an incoming message doesn't yank them away from older
         // messages they're reading.
@@ -1188,7 +1198,7 @@ class _ChatScreenState extends State<ChatScreen>
           // Auto-clear if no follow-up ping arrives — sender is debouncing
           // at 2s so 4s of silence means they stopped.
           _typingExpiry?.cancel();
-          _typingExpiry = Timer(const Duration(seconds: 4), () {
+          _typingExpiry = Timer(const Duration(seconds: 3), () {
             if (mounted) setState(() => _otherTyping = false);
           });
         },
@@ -4166,9 +4176,21 @@ class _StoryReplyBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             GestureDetector(
-              onTap: img.isEmpty
-                  ? null
-                  : () => FullImageViewer.show(context, img),
+              onTap: () async {
+                // Open the live status if it's still up (24h); otherwise
+                // fall back to the saved snapshot image.
+                final storyId = (meta['story_id'] ?? '').toString();
+                if (storyId.isNotEmpty) {
+                  final story = await FeedService.fetchStoryById(storyId);
+                  if (story != null && context.mounted) {
+                    StoryViewer.show(context, [story]);
+                    return;
+                  }
+                }
+                if (img.isNotEmpty && context.mounted) {
+                  FullImageViewer.show(context, img);
+                }
+              },
               child: Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(

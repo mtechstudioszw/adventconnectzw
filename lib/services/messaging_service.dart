@@ -706,6 +706,35 @@ class MessagingService {
     }
   }
 
+  // ---- Local "deleted for me" cache --------------------------------------
+  // The server is the source of truth, but fetchHiddenMessageIds is a network
+  // round-trip. The message cache stores RAW rows that don't know they were
+  // hidden, so on reopen the cached paint flashed a just-deleted message back
+  // for ~1s until the server hidden-ids arrived. We mirror the hidden ids into
+  // a synchronous local cache so the paint can filter them INSTANTLY.
+  static String _hiddenCacheKey(String conversationId) =>
+      'chat_hidden:$conversationId';
+
+  /// Hidden ids persisted locally, read synchronously (no await) so the
+  /// cached-message paint filters them before any server round-trip.
+  static Set<String> readHiddenIdsCached(String conversationId) {
+    final raw = CacheService.readStringStale(_hiddenCacheKey(conversationId));
+    if (raw == null || raw.isEmpty) return <String>{};
+    try {
+      return (jsonDecode(raw) as List).map((e) => e.toString()).toSet();
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  /// Merge [ids] into the locally-persisted hidden set for a conversation.
+  static Future<void> addHiddenIdsCached(
+      String conversationId, Iterable<String> ids) async {
+    final merged = readHiddenIdsCached(conversationId)..addAll(ids);
+    await CacheService.writeString(
+        _hiddenCacheKey(conversationId), jsonEncode(merged.toList()));
+  }
+
   /// Clear the chat for the current user only (WhatsApp parity). Persists
   /// cleared_at (server) and empties the local message cache so the
   /// messages don't reappear from cache on the next (offline) open.

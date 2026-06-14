@@ -193,6 +193,9 @@ class _ChatScreenState extends State<ChatScreen>
       _applyServerMessages(_serverMessages);
     });
     _exitSelect();
+    // Persist locally FIRST so a reopen filters them before the server
+    // round-trip (no 1-second flashback), even if the network hide is slow.
+    unawaited(MessagingService.addHiddenIdsCached(widget.conversationId, ids));
     try {
       await MessagingService.hideMessages(ids);
     } catch (_) {}
@@ -508,6 +511,8 @@ class _ChatScreenState extends State<ChatScreen>
           _applyServerMessages(_serverMessages);
           _pending.removeWhere((x) => x.id == m.id);
         });
+        unawaited(
+            MessagingService.addHiddenIdsCached(widget.conversationId, [m.id]));
         try {
           await MessagingService.hideMessages([m.id]);
         } catch (_) {}
@@ -1143,6 +1148,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _bootstrap() async {
+    // Seed locally-persisted "deleted for me" ids SYNCHRONOUSLY first, so the
+    // cached paint below already filters them — otherwise a just-deleted
+    // message flashed back for ~1s on reopen until the server hidden-ids
+    // arrived.
+    _hiddenIds.addAll(MessagingService.readHiddenIdsCached(widget.conversationId));
     // Paint cached messages INSTANTLY (synchronous Hive read, no await) so
     // opening a chat never shows a blank/loading screen — it doesn't
     // "reload every time".

@@ -685,6 +685,20 @@ class _HomeScreenState extends State<HomeScreen>
                     child: _AdventNewsHero(items: _topNews),
                   ),
                 ],
+                if (_products.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _FeaturedProductCard(
+                      product: _products.first,
+                      onTap: () => context.pushNamed(
+                        'product_details',
+                        pathParameters: {'id': _products.first.id},
+                        extra: _products.first,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 18),
                 _buildSectionHeader(
                   'Stories',
@@ -3282,6 +3296,83 @@ class _DevotionCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A single random marketplace product, showcased on Home (separate from
+/// the products discovery row). Tapping opens the product.
+class _FeaturedProductCard extends StatelessWidget {
+  const _FeaturedProductCard({required this.product, required this.onTap});
+  final Product product;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final img = product.firstImage;
+    return Material(
+      color: context.palette.card,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 104,
+              height: 104,
+              child: img.isNotEmpty
+                  ? CachedImage(img, fit: BoxFit.cover)
+                  : Container(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                      child: const Icon(Icons.shopping_bag_outlined,
+                          color: AppColors.primaryBlue),
+                    ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'MARKETPLACE PICK',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.goldAccent,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                        fontSize: 10,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      product.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall
+                          .copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      product.formatPrice(),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Icon(Icons.chevron_right, color: context.palette.textMuted),
+            ),
+          ],
+        ),
       ),
     );
   }

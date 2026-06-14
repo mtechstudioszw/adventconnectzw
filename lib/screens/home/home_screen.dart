@@ -3287,37 +3287,65 @@ class _DevotionCard extends StatelessWidget {
   }
 }
 
-class _AdventNewsHero extends StatelessWidget {
+class _AdventNewsHero extends StatefulWidget {
   const _AdventNewsHero({required this.items});
 
   final List<AdventNews> items;
 
   @override
+  State<_AdventNewsHero> createState() => _AdventNewsHeroState();
+}
+
+class _AdventNewsHeroState extends State<_AdventNewsHero> {
+  final PageController _pc = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final items = widget.items.take(5).toList();
     if (items.isEmpty) return const SizedBox.shrink();
-    final lead = items.first;
-    final hasCover = (lead.coverPhotoUrl ?? '').isNotEmpty;
     return Material(
       color: context.palette.card,
       borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
-      child: InkWell(
-        onTap: () => context.pushNamed(
-          'news_details',
-          pathParameters: {'id': lead.id},
-          extra: lead,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 8.5,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AspectRatio(
+            aspectRatio: 16 / 8.5,
+            child: PageView.builder(
+              controller: _pc,
+              itemCount: items.length,
+              onPageChanged: (i) => setState(() => _page = i),
+              itemBuilder: (context, i) => _card(context, items[i]),
+            ),
+          ),
+          _footer(context, items.length),
+        ],
+      ),
+    );
+  }
+
+  Widget _card(BuildContext context, AdventNews item) {
+    final hasCover = (item.coverPhotoUrl ?? '').isNotEmpty;
+    return InkWell(
+      onTap: () => context.pushNamed(
+        'news_details',
+        pathParameters: {'id': item.id},
+        extra: item,
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
                   if (hasCover)
-                    CachedImage(lead.coverPhotoUrl!, fit: BoxFit.cover)
+                    CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover)
                   else
                     const DecoratedBox(
                       decoration:
@@ -3391,7 +3419,7 @@ class _AdventNewsHero extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        lead.category.label.toUpperCase(),
+                        item.category.label.toUpperCase(),
                         style: AppTextStyles.labelSmall.copyWith(
                           color: AppColors.white,
                           fontSize: 9.5,
@@ -3410,7 +3438,7 @@ class _AdventNewsHero extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          lead.title,
+                          item.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.headlineSmall.copyWith(
@@ -3422,7 +3450,7 @@ class _AdventNewsHero extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          lead.summary,
+                          item.summary,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodySmall.copyWith(
@@ -3436,48 +3464,40 @@ class _AdventNewsHero extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-            if (items.length > 1)
-              InkWell(
-                onTap: () => context.pushNamed('news'),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.dynamic_feed,
-                        size: 16,
-                        color: AppColors.primaryBlue,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${items.length} stories',
-                        style: AppTextStyles.labelMedium.copyWith(
-                          color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        'See all',
-                        style: AppTextStyles.labelMedium.copyWith(
-                          color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(
-                        Icons.chevron_right,
-                        size: 18,
-                        color: AppColors.primaryBlue,
-                      ),
-                    ],
-                  ),
+    );
+  }
+
+  Widget _footer(BuildContext context, int count) {
+    return InkWell(
+      onTap: () => context.pushNamed('news'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            for (int i = 0; count > 1 && i < count; i++)
+              Container(
+                width: i == _page ? 16 : 6,
+                height: 6,
+                margin: const EdgeInsets.only(right: 3),
+                decoration: BoxDecoration(
+                  color: i == _page
+                      ? AppColors.primaryBlue
+                      : context.palette.divider,
+                  borderRadius: BorderRadius.circular(3),
                 ),
               ),
+            const Spacer(),
+            Text(
+              'See all',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+              ),
+            ),
+            const SizedBox(width: 2),
+            const Icon(Icons.chevron_right,
+                size: 18, color: AppColors.primaryBlue),
           ],
         ),
       ),

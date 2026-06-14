@@ -713,20 +713,6 @@ class _HomeScreenState extends State<HomeScreen>
                     child: _AdventNewsHero(items: _topNews),
                   ),
                 ],
-                if (_products.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _FeaturedProductCard(
-                      product: _products.first,
-                      onTap: () => context.pushNamed(
-                        'product_details',
-                        pathParameters: {'id': _products.first.id},
-                        extra: _products.first,
-                      ),
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 6),
                 // _buildFeedList() is now a Facebook-style mixed feed:
                 // posts intercalated with discovery cards (suggested
@@ -1299,6 +1285,22 @@ class _HomeScreenState extends State<HomeScreen>
             : _buildPrayersStrip(),
       ),
     ));
+    if (_products.isNotEmpty) {
+      discoverable.add(_DiscoverySlot(
+        key: 'product_pick',
+        widget: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _FeaturedProductCard(
+            product: _products.first,
+            onTap: () => context.pushNamed(
+              'product_details',
+              pathParameters: {'id': _products.first.id},
+              extra: _products.first,
+            ),
+          ),
+        ),
+      ));
+    }
     if (_churches.isNotEmpty) {
       discoverable.add(_DiscoverySlot(
         key: 'churches',

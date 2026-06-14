@@ -446,7 +446,12 @@ class _StoryComposerState extends State<_StoryComposer> {
         constraints: BoxConstraints(maxHeight: maxSheetHeight),
         child: Container(
           decoration: BoxDecoration(
-            color: context.palette.sheet,
+            // In text-status mode the WHOLE sheet is the chosen colour
+            // (WhatsApp-style) so the white text always shows — there's no
+            // white card behind it.
+            color: _textMode
+                ? Color(_bgColors[_bgIndex])
+                : context.palette.sheet,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SafeArea(
@@ -473,6 +478,7 @@ class _StoryComposerState extends State<_StoryComposer> {
                         style: AppTextStyles.titleLarge.copyWith(
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
+                          color: _textMode ? AppColors.white : null,
                         ),
                       ),
                       const Spacer(),
@@ -490,9 +496,12 @@ class _StoryComposerState extends State<_StoryComposer> {
                               child: Text(
                                 'Share',
                                 style: AppTextStyles.buttonText.copyWith(
-                                  color: _canShare
-                                      ? AppColors.primaryBlue
-                                      : context.palette.textMuted,
+                                  color: _textMode
+                                      ? AppColors.white.withValues(
+                                          alpha: _canShare ? 1 : 0.5)
+                                      : (_canShare
+                                          ? AppColors.primaryBlue
+                                          : context.palette.textMuted),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
                                 ),

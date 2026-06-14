@@ -28,7 +28,7 @@ class EmailVerificationScreen extends StatefulWidget {
 }
 
 class _EmailVerificationScreenState extends State<EmailVerificationScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _entrance;
   late final AnimationController _pulse;
   late final Animation<double> _fade;
@@ -51,9 +51,20 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
   String? _error;
   final _otpController = TextEditingController();
 
+  // True while a clipboard-sourced code is being auto-verified, so we can
+  // show a tiny "code detected" hint instead of a silent jump.
+  bool _autoFilled = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Auto-verify the instant a full 6-digit code is entered or pasted —
+    // no "Verify" tap needed (WhatsApp-style).
+    _otpController.addListener(_onOtpChanged);
+    // If the user already copied the code (e.g. from a notification) before
+    // landing here, grab it on first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tryClipboardAutofill());
     _entrance = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -85,12 +96,44 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _entrance.dispose();
     _pulse.dispose();
     _authSub?.cancel();
     _cooldownTimer?.cancel();
     _otpController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Coming back from the email app — the user has likely just copied the
+    // code. Pull it straight off the clipboard and verify (WhatsApp-style).
+    if (state == AppLifecycleState.resumed) _tryClipboardAutofill();
+  }
+
+  /// Auto-verify as soon as a full 6-digit code is present.
+  void _onOtpChanged() {
+    if (_checking) return;
+    if (_otpController.text.length == 6) _verifyCode();
+  }
+
+  /// If a 6-digit code is sitting on the clipboard and the field is empty,
+  /// fill it in (which triggers [_onOtpChanged] -> auto-verify).
+  Future<void> _tryClipboardAutofill() async {
+    if (!mounted || _checking || _otpController.text.isNotEmpty) return;
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text ?? '';
+      final match = RegExp(r'(?<!\d)(\d{6})(?!\d)').firstMatch(text);
+      if (match == null) return;
+      if (!mounted || _otpController.text.isNotEmpty) return;
+      _autoFilled = true;
+      _otpController.text = match.group(1)!;
+    } catch (_) {
+      // Clipboard not readable (permissions / empty) — ignore silently.
+    }
   }
 
   String _maskedEmail() {
@@ -331,7 +374,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 ],
                 const SizedBox(height: 24),
                 _PrimaryButton(
-                  label: _checking ? 'Verifying…' : 'Verify code',
+                  label: _checking
+                      ? (_autoFilled ? 'Code detected — verifying…' : 'Verifying…')
+                      : 'Verify code',
                   busy: _checking,
                   onTap: _checking ? null : _verifyCode,
                 ),
@@ -532,6 +577,9 @@ class _OtpField extends StatelessWidget {
         keyboardType: TextInputType.number,
         textInputAction: TextInputAction.done,
         autofocus: true,
+        // Lets the OS offer the code as a one-tap suggestion above the
+        // keyboard (iOS surfaces one-time codes; Android offers clipboard).
+        autofillHints: const [AutofillHints.oneTimeCode],
         // Allow up to 10 digits — Supabase projects can be configured
         // for 6, 7, or 8-digit OTPs (and that's been the cause of
         // mysterious "token expired" errors when the field truncated

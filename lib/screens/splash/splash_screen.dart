@@ -195,6 +195,16 @@ class _SplashScreenState extends State<SplashScreen>
     final signedIn =
         AuthService.isSignedIn || await SecureLocalStorage().hasAccessToken();
     if (!mounted) return;
+    // Banned accounts hit a full lockout screen (backend already blocks
+    // their actions via user_is_active()).
+    if (signedIn && AuthService.isSignedIn) {
+      if (await AuthService.isCurrentUserBanned()) {
+        if (!mounted) return;
+        context.goNamed('account_banned');
+        return;
+      }
+      if (!mounted) return;
+    }
     if (signedIn) {
       // WhatsApp-style biometric gate. If the user opted in, we hand
       // off to the dedicated lock screen instead of prompting + bailing

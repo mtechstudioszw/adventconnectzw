@@ -794,6 +794,24 @@ class AuthService {
     await SecureStorageService.clearAll();
   }
 
+  /// True when the signed-in account is banned (profiles.is_banned).
+  /// Fails open (false) so a network blip never locks out a good user.
+  static Future<bool> isCurrentUserBanned() async {
+    final user = currentUser;
+    if (user == null) return false;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('is_banned')
+          .eq('id', user.id)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 3));
+      return row?['is_banned'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<AuthResult> updateProfile({
     String? fullName,
     String? bio,

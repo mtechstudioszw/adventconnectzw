@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -22,6 +23,7 @@ import '../../services/storage_service.dart';
 import '../../services/voice_player_service.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/home/story_viewer.dart';
+import '../../widgets/linkified_text.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -3553,6 +3555,33 @@ class _DateSeparator extends StatelessWidget {
   }
 }
 
+/// Opens a link tapped in a chat message. In-app group-invite links
+/// (…/join.html?g=TOKEN) join the group and open the chat; everything else
+/// opens in the browser.
+Future<void> openMessageLink(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return;
+  final token = uri.queryParameters['g'];
+  if (token != null && token.isNotEmpty && url.contains('join.html')) {
+    try {
+      final convId = await GroupService.joinViaInvite(token);
+      if (context.mounted) {
+        context.pushNamed('chat', pathParameters: {'id': convId});
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open that group link.')),
+        );
+      }
+    }
+    return;
+  }
+  try {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {}
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
@@ -3677,8 +3706,11 @@ class _MessageBubble extends StatelessWidget {
                   ],
                 ),
               ),
-            Text(
-              message.content,
+            LinkifiedText(
+              text: message.content,
+              onTapLink: (url) => openMessageLink(context, url),
+              linkColor:
+                  isMine ? AppColors.white : AppColors.primaryBlue,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: isMine ? AppColors.white : context.palette.text,
                 fontSize: 14.5,

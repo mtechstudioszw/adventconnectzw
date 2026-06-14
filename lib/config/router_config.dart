@@ -11,6 +11,7 @@ import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/onboarding_flow_screen.dart';
 import '../screens/auth/reset_password_screen.dart';
 import '../screens/update/update_required_screen.dart';
+import '../screens/banned/account_banned_screen.dart';
 import '../screens/churches/church_announcements_screen.dart';
 import '../screens/churches/claim_church_coming_soon_screen.dart';
 import '../screens/churches/suggest_church_screen.dart';
@@ -151,6 +152,11 @@ final GoRouter appRouter = GoRouter(
       path: '/update-required',
       name: 'update_required',
       builder: (context, state) => const UpdateRequiredScreen(),
+    ),
+    GoRoute(
+      path: '/account-banned',
+      name: 'account_banned',
+      builder: (context, state) => const AccountBannedScreen(),
     ),
     GoRoute(
       path: '/home',

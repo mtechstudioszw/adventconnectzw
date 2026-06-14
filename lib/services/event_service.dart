@@ -238,10 +238,16 @@ class EventService {
     if (user == null) {
       throw const AuthException('You must be signed in to RSVP.');
     }
-    await _client.from(_rsvpTable).insert({
+    // UPSERT (not insert) so re-RSVPing never fails on the
+    // UNIQUE(event_id, user_id) constraint — the previous plain insert
+    // threw a duplicate-key error when the local "going" state was stale,
+    // which is why RSVPs appeared to "forget". event_id is cast to int to
+    // match the bigint column.
+    await _client.from(_rsvpTable).upsert({
       'user_id': user.id,
-      'event_id': eventId,
-    });
+      'event_id': int.tryParse(eventId) ?? eventId,
+      'status': 'going',
+    }, onConflict: 'event_id,user_id');
     AnalyticsService.eventRsvp(int.tryParse(eventId) ?? 0, 'going');
   }
 
@@ -252,7 +258,7 @@ class EventService {
         .from(_rsvpTable)
         .delete()
         .eq('user_id', user.id)
-        .eq('event_id', eventId);
+        .eq('event_id', int.tryParse(eventId) ?? eventId);
   }
 
   static String _formatDate(DateTime d) {

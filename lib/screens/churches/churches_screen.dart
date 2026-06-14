@@ -2,9 +2,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../config/zimbabwe_cities.dart';
 import '../../models/church_model.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
@@ -35,22 +34,18 @@ class ChurchesScreen extends StatefulWidget {
 /// My Province â€” churches whose province matches the viewer's
 ///               profiles.province. Hidden if the viewer hasn't
 ///               set a province yet.
-enum _ChurchFilter { all, nearby, verified, myProvince }
-
 class _ChurchesScreenState extends State<ChurchesScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
 
   List<Church> _churches = [];
   bool _loading = true;
-  final bool _locating = false;
   String? _error;
   String? _locationError;
   LocationFailure? _locationFailure;
-  Position? _position;
-  static const _nearMeLimit = 5;
-  _ChurchFilter _activeFilter = _ChurchFilter.all;
-  String? _myProvince;
+  // Active city filter (null = all cities) + verified-only toggle.
+  String? _cityFilter;
+  bool _verifiedOnly = false;
 
   @override
   void initState() {
@@ -90,79 +85,8 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     super.dispose();
   }
 
-  /// Derived from _activeFilter so the rest of the screen (banner,
-  /// distance labels) keeps reading a single source of truth without
-  /// having to know about the chip enum.
-  bool get _nearMode => _activeFilter == _ChurchFilter.nearby;
-
   Future<void> _bootstrap() async {
-    // Kick off location lookup + viewer's province in parallel â€” both
-    // can take a few seconds and we don't want to block list paint.
-    _resolveLocation();
-    _loadMyProvince();
     await _loadChurches();
-  }
-
-  Future<void> _loadMyProvince() async {
-    try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
-      final row = await Supabase.instance.client
-          .from('profiles')
-          .select('province')
-          .eq('id', user.id)
-          .maybeSingle();
-      final province = (row?['province'] as String?)?.trim();
-      if (!mounted || province == null || province.isEmpty) return;
-      setState(() => _myProvince = province);
-    } catch (_) {
-      // Best-effort â€” chip just stays hidden if we can't read it.
-    }
-  }
-
-  Future<void> _resolveLocation() async {
-    final pos = await LocationService.getCurrentPosition();
-    if (!mounted || pos == null) return;
-    setState(() {
-      _position = pos;
-      _sortByDistance();
-    });
-  }
-
-  void _sortByDistance() {
-    final pos = _position;
-    if (pos == null) return;
-    _churches.sort((a, b) {
-      final ad = a.hasLocation
-          ? LocationService.distanceMeters(
-              fromLat: pos.latitude,
-              fromLng: pos.longitude,
-              toLat: a.latitude!,
-              toLng: a.longitude!,
-            )
-          : double.infinity;
-      final bd = b.hasLocation
-          ? LocationService.distanceMeters(
-              fromLat: pos.latitude,
-              fromLng: pos.longitude,
-              toLat: b.latitude!,
-              toLng: b.longitude!,
-            )
-          : double.infinity;
-      return ad.compareTo(bd);
-    });
-  }
-
-  String? _distanceLabelFor(Church c) {
-    final pos = _position;
-    if (pos == null || !c.hasLocation) return null;
-    final m = LocationService.distanceMeters(
-      fromLat: pos.latitude,
-      fromLng: pos.longitude,
-      toLat: c.latitude!,
-      toLng: c.longitude!,
-    );
-    return LocationService.formatDistance(m);
   }
 
   /// Visible list â€” composes the active chip filter with the loaded
@@ -170,109 +94,71 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   /// available yet (e.g. location not granted while Nearby is
   /// selected, or no churches have province set).
   List<Church> _visibleChurches() {
-    switch (_activeFilter) {
-      case _ChurchFilter.all:
-        return _churches;
-      case _ChurchFilter.nearby:
-        final pos = _position;
-        if (pos == null) return _churches;
-        // Lightweight, offline-friendly fallback chain so we always
-        // return up to 5 results even when the dataset has little
-        // GPS coverage:
-        //
-        //   1. Real GPS-tagged churches sorted by distance.
-        //   2. If too few, top up with churches in the viewer's
-        //      province (using profiles.province if we have it).
-        //   3. If still empty, top up with whatever else is loaded
-        //      so the chip never returns an empty list.
-        //
-        // Avoids any external geocoding (no Google Maps API) â€” pure
-        // client-side filter over data we already have on screen.
-        final geo = _churches.where((c) => c.hasLocation).toList()
-          ..sort((a, b) {
-            final ad = LocationService.distanceMeters(
-              fromLat: pos.latitude,
-              fromLng: pos.longitude,
-              toLat: a.latitude!,
-              toLng: a.longitude!,
-            );
-            final bd = LocationService.distanceMeters(
-              fromLat: pos.latitude,
-              fromLng: pos.longitude,
-              toLat: b.latitude!,
-              toLng: b.longitude!,
-            );
-            return ad.compareTo(bd);
-          });
-        final picked = <Church>[...geo.take(_nearMeLimit)];
-        final seen = picked.map((c) => c.id).toSet();
-        if (picked.length < _nearMeLimit && _myProvince != null) {
-          for (final c in _churches) {
-            if (picked.length >= _nearMeLimit) break;
-            if (seen.contains(c.id)) continue;
-            if ((c.province ?? '').toLowerCase() ==
-                _myProvince!.toLowerCase()) {
-              picked.add(c);
-              seen.add(c.id);
-            }
-          }
-        }
-        if (picked.length < _nearMeLimit) {
-          for (final c in _churches) {
-            if (picked.length >= _nearMeLimit) break;
-            if (seen.contains(c.id)) continue;
-            picked.add(c);
-            seen.add(c.id);
-          }
-        }
-        return picked;
-      case _ChurchFilter.verified:
-        return _churches.where((c) => c.isVerified).toList();
-      case _ChurchFilter.myProvince:
-        final p = _myProvince;
-        if (p == null || p.isEmpty) return _churches;
-        return _churches
-            .where((c) => (c.province ?? '').toLowerCase() == p.toLowerCase())
-            .toList();
+    var list = _churches;
+    if (_cityFilter != null) {
+      final cf = _cityFilter!.toLowerCase();
+      list = list.where((c) => c.city.toLowerCase() == cf).toList();
     }
+    if (_verifiedOnly) {
+      list = list.where((c) => c.isVerified).toList();
+    }
+    return list;
   }
 
-  /// Switch the active filter chip. Nearby is special-cased â€” if the
-  /// user hasn't granted location yet, tapping the chip kicks off the
-  /// permission request, then enables the filter only if granted.
-  Future<void> _setFilter(_ChurchFilter filter) async {
-    // Nearby: activate the real distance filter. _visibleChurches()
-    // already degrades gracefully (GPS distance â†’ viewer's province â†’
-    // any) so the list is never empty even before a GPS fix lands. If
-    // we don't have a position yet, kick off the permission request +
-    // fetch; the list re-sorts when it resolves.
-    if (filter == _ChurchFilter.nearby) {
-      setState(() {
-        _activeFilter = _ChurchFilter.nearby;
-        _locationError = null;
-        _locationFailure = null;
-      });
-      if (_position == null) {
-        unawaited(_resolveLocation());
-      }
-      return;
+  /// Top cities by church count (for the quick chips). Computed from the
+  /// loaded list so it reflects the real data.
+  List<String> _topCities({int limit = 8}) {
+    final counts = <String, int>{};
+    for (final c in _churches) {
+      final city = c.city.trim();
+      if (city.isEmpty) continue;
+      counts[city] = (counts[city] ?? 0) + 1;
     }
-    if (filter == _activeFilter) {
-      // Tapping the active chip again just clears the location
-      // error banner; otherwise it's a no-op.
-      if (_locationError != null) {
-        setState(() {
-          _locationError = null;
-          _locationFailure = null;
-        });
-      }
-      return;
-    }
+    final entries = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return entries.take(limit).map((e) => e.key).toList();
+  }
+
+  /// 📍 Near me — resolve the device GPS to the nearest Zimbabwe city and
+  /// filter to that city's churches (church rows have no coordinates, so
+  /// city-level is the best "near me" the data supports).
+  Future<void> _nearMe() async {
     setState(() {
-      _activeFilter = filter;
       _locationError = null;
       _locationFailure = null;
     });
+    final result = await LocationService.getCurrentPositionDetailed();
+    if (!mounted) return;
+    if (result.position == null) {
+      setState(() {
+        _locationFailure = result.failure;
+        _locationError = 'Turn on location to find churches near you.';
+      });
+      return;
+    }
+    final city = nearestZimbabweCity(
+        result.position!.latitude, result.position!.longitude);
+    if (city == null) return;
+    setState(() => _cityFilter = city);
+  }
+
+  /// Searchable picker over every city in the loaded data.
+  Future<void> _pickCity() async {
+    final cities = <String>{
+      for (final c in _churches)
+        if (c.city.trim().isNotEmpty) c.city.trim(),
+    }.toList()
+      ..sort();
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _CityPickerSheet(cities: cities),
+    );
+    if (picked != null && mounted) setState(() => _cityFilter = picked);
   }
 
   Future<void> _loadChurches() async {
@@ -288,7 +174,6 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       setState(() {
         _churches = list;
         _loading = false;
-        _sortByDistance();
       });
       if (_searchController.text.isEmpty) {
         unawaited(_writeCache(list));
@@ -312,11 +197,18 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     return MainScaffold(
       title: 'Churches',
       currentIndex: 1,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _nearMe,
+        backgroundColor: AppColors.primaryBlue,
+        icon: const Icon(Icons.my_location, color: AppColors.white),
+        label: Text('Near me',
+            style: AppTextStyles.buttonText.copyWith(color: AppColors.white)),
+      ),
       body: Column(
         children: [
           _buildSearchBar(),
           _buildFilterChips(),
-          if (_nearMode) _buildNearModeBanner(),
+          if (_cityFilter != null) _buildCityBanner(),
           if (_locationError != null) _buildLocationErrorBanner(),
           Expanded(child: _buildList()),
         ],
@@ -324,25 +216,8 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     );
   }
 
-  Widget _buildNearModeBanner() {
-    // Pick a label that matches whatever fallback level the
-    // _visibleChurches getter is actually using right now â€” so the
-    // user knows whether they're seeing real GPS distances or a
-    // province-based estimate.
-    final hasGeo = _churches.any((c) => c.hasLocation);
-    final hasProvincePool = _myProvince != null &&
-        _churches.any((c) =>
-            (c.province ?? '').toLowerCase() == _myProvince!.toLowerCase());
-    final String label;
-    if (hasGeo) {
-      label = 'Showing the 5 churches closest to you';
-    } else if (hasProvincePool) {
-      label = 'No mapped churches in your area yet â€” '
-          'showing nearby ones in $_myProvince';
-    } else {
-      label = 'We\'re showing churches near your region based on '
-          'available data.';
-    }
+  Widget _buildCityBanner() {
+    final count = _visibleChurches().length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Container(
@@ -350,30 +225,23 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         decoration: BoxDecoration(
           gradient: AppColors.primaryGradient,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryBlue.withValues(alpha: 0.25),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.location_on,
-              color: AppColors.white,
-              size: 18,
-            ),
+            const Icon(Icons.location_on, color: AppColors.white, size: 18),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                label,
+                '$count church${count == 1 ? '' : 'es'} in $_cityFilter',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.white,
                   fontWeight: FontWeight.w600,
                 ),
               ),
+            ),
+            GestureDetector(
+              onTap: () => setState(() => _cityFilter = null),
+              child: const Icon(Icons.close, color: AppColors.white, size: 18),
             ),
           ],
         ),
@@ -506,10 +374,11 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     );
   }
 
-  /// Master reference Part 15 â€” fixed filter chip row.
-  /// All / Nearby / Verified / My Province (My Province only renders
-  /// when the viewer's profile has a province set).
+  /// City-based filter row: All / Verified, the biggest cities as quick
+  /// chips, and a "More cities" entry that opens a searchable picker. The
+  /// 📍 Near me FAB resolves the device location to the nearest city.
   Widget _buildFilterChips() {
+    final top = _topCities();
     return SizedBox(
       height: 44,
       child: ListView(
@@ -519,33 +388,36 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           _FilterChip(
             label: 'All',
             icon: Icons.apps,
-            selected: _activeFilter == _ChurchFilter.all,
-            onTap: () => _setFilter(_ChurchFilter.all),
-          ),
-          const SizedBox(width: 8),
-          _FilterChip(
-            label: 'Nearby',
-            icon: Icons.my_location,
-            selected: _activeFilter == _ChurchFilter.nearby,
-            busy: _locating,
-            onTap: () => _setFilter(_ChurchFilter.nearby),
+            selected: _cityFilter == null && !_verifiedOnly,
+            onTap: () => setState(() {
+              _cityFilter = null;
+              _verifiedOnly = false;
+            }),
           ),
           const SizedBox(width: 8),
           _FilterChip(
             label: 'Verified',
             icon: Icons.verified_outlined,
-            selected: _activeFilter == _ChurchFilter.verified,
-            onTap: () => _setFilter(_ChurchFilter.verified),
+            selected: _verifiedOnly,
+            onTap: () => setState(() => _verifiedOnly = !_verifiedOnly),
           ),
-          if (_myProvince != null) ...[
+          for (final city in top) ...[
             const SizedBox(width: 8),
             _FilterChip(
-              label: 'My Province',
-              icon: Icons.place_outlined,
-              selected: _activeFilter == _ChurchFilter.myProvince,
-              onTap: () => _setFilter(_ChurchFilter.myProvince),
+              label: city,
+              icon: Icons.location_city,
+              selected: _cityFilter == city,
+              onTap: () => setState(
+                  () => _cityFilter = _cityFilter == city ? null : city),
             ),
           ],
+          const SizedBox(width: 8),
+          _FilterChip(
+            label: 'More cities',
+            icon: Icons.expand_more,
+            selected: false,
+            onTap: _pickCity,
+          ),
         ],
       ),
     );
@@ -679,7 +551,6 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         final c = list[i];
         return ChurchCard(
           church: c,
-          distanceLabel: _distanceLabelFor(c),
           onTap: () => context.pushNamed(
             'church_details',
             pathParameters: {'id': c.id},
@@ -687,6 +558,80 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Searchable bottom-sheet list of every city, returns the chosen city.
+class _CityPickerSheet extends StatefulWidget {
+  const _CityPickerSheet({required this.cities});
+  final List<String> cities;
+  @override
+  State<_CityPickerSheet> createState() => _CityPickerSheetState();
+}
+
+class _CityPickerSheetState extends State<_CityPickerSheet> {
+  final _search = TextEditingController();
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _search.text.trim().toLowerCase();
+    final filtered = q.isEmpty
+        ? widget.cities
+        : widget.cities.where((c) => c.toLowerCase().contains(q)).toList();
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      maxChildSize: 0.95,
+      builder: (ctx, controller) => Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 44,
+            height: 4,
+            decoration: BoxDecoration(
+              color: ctx.palette.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _search,
+              autofocus: true,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search city',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: ctx.palette.inputFill,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(22),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: controller,
+              itemCount: filtered.length,
+              itemBuilder: (_, i) => ListTile(
+                leading: const Icon(Icons.location_city,
+                    color: AppColors.primaryBlue),
+                title: Text(filtered[i]),
+                onTap: () => Navigator.pop(context, filtered[i]),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

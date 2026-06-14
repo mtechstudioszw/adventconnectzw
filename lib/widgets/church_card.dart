@@ -86,6 +86,29 @@ class ChurchCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if ((church.conference ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.account_balance_outlined,
+                            size: 14,
+                            color: Color.fromRGBO(26, 26, 46, 0.6),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              church.conference!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     // Wrap so the members + distance chips re-flow to a
                     // second line on narrow phones / large font scaling

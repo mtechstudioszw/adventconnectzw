@@ -114,7 +114,9 @@ class _HomeScreenState extends State<HomeScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
-    // Today's devotion — loaded separately so it never blocks the feed.
+    // Today's devotion — paint the cached copy instantly (survives a slow /
+    // offline open since the card is pinned to the top), then refresh.
+    _devotion = DevotionService.cachedToday();
     DevotionService.fetchToday().then((d) {
       if (mounted && d != null) setState(() => _devotion = d);
     });
@@ -734,104 +736,134 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildHeader() {
-    return SizedBox(
-      height: 240,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          ClipPath(
-            clipper: _HeaderClipper(),
-            child: Container(
-              height: 200,
-              decoration: const BoxDecoration(
-                gradient: AppColors.appBarGradient,
-              ),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: RadialGradient(
-                            center: const Alignment(-0.6, -0.8),
-                            radius: 1.0,
-                            colors: [
-                              AppColors.white.withValues(alpha: 0.07),
-                              AppColors.white.withValues(alpha: 0.0),
-                            ],
-                          ),
-                        ),
-                      ),
+    // Slim compact bar: avatar + greeting + Sabbath chip on a single navy
+    // row. Replaces the old 240px header + floating welcome card, which
+    // repeated the user's name three times and pushed Stories/Devotion down.
+    final photoUrl = _profilePhotoUrl();
+    return ClipPath(
+      clipper: _HeaderClipper(),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.appBarGradient,
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(-0.6, -0.8),
+                      radius: 1.0,
+                      colors: [
+                        AppColors.white.withValues(alpha: 0.07),
+                        AppColors.white.withValues(alpha: 0.0),
+                      ],
                     ),
                   ),
-                  SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _greeting().toUpperCase(),
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: AppColors.white
-                                        .withValues(alpha: 0.65),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 1.6,
-                                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 12, 26),
+                child: Row(
+                  children: [
+                    // Tapping the avatar jumps to the profile screen — same
+                    // affordance the old welcome card had.
+                    GestureDetector(
+                      onTap: () => context.goNamed('profile'),
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        clipBehavior: Clip.antiAlias,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          gradient: photoUrl == null
+                              ? AppColors.primaryGradient
+                              : null,
+                          color: photoUrl == null
+                              ? null
+                              : AppColors.white.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.white.withValues(alpha: 0.35),
+                            width: 2,
+                          ),
+                        ),
+                        child: photoUrl == null
+                            ? Text(
+                                _initials(),
+                                style: AppTextStyles.titleLarge.copyWith(
+                                  color: AppColors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Hello, ${_firstName()}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.headlineLarge.copyWith(
+                              )
+                            : CachedImage(
+                                photoUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Text(
+                                  _initials(),
+                                  style: AppTextStyles.titleLarge.copyWith(
                                     color: AppColors.white,
-                                    fontSize: 24,
                                     fontWeight: FontWeight.w700,
+                                    fontSize: 16,
                                   ),
                                 ),
-                                const _SabbathChip(),
-                              ],
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _greeting().toUpperCase(),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.white.withValues(alpha: 0.65),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.4,
                             ),
                           ),
-                          _HeaderIconButton(
-                            icon: Icons.search,
-                            onTap: () => context.pushNamed('search'),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Hello, ${_firstName()}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.headlineLarge.copyWith(
+                              color: AppColors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          _NotificationBell(
-                            unread: _unreadNotifications,
-                            onTap: () async {
-                              await context.pushNamed('notification_centre');
-                              if (mounted) _bootstrap();
-                            },
-                          ),
+                          const _SabbathChip(),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                    _HeaderIconButton(
+                      icon: Icons.search,
+                      onTap: () => context.pushNamed('search'),
+                    ),
+                    const SizedBox(width: 8),
+                    _NotificationBell(
+                      unread: _unreadNotifications,
+                      onTap: () async {
+                        await context.pushNamed('notification_centre');
+                        if (mounted) _bootstrap();
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 0,
-            child: _WelcomeCard(
-              initials: _initials(),
-              fullName: _displayFullName(),
-              followedCount: _followedChurchIds.length,
-              photoUrl: _profilePhotoUrl(),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2227,142 +2259,6 @@ class _NotificationBell extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _WelcomeCard extends StatelessWidget {
-  const _WelcomeCard({
-    required this.initials,
-    required this.fullName,
-    required this.followedCount,
-    required this.photoUrl,
-  });
-
-  final String initials;
-  final String fullName;
-  final int followedCount;
-  final String? photoUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: context.palette.card,
-      borderRadius: BorderRadius.circular(20),
-      elevation: 0,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      child: InkWell(
-        // Tapping the welcome card jumps the user into their profile —
-        // user spec: "If you tap the name card in home screen it should
-        // take you to profile screen."
-        onTap: () => context.goNamed('profile'),
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            clipBehavior: Clip.antiAlias,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: photoUrl == null ? AppColors.primaryGradient : null,
-              color: photoUrl == null ? null : context.palette.cardMuted,
-              shape: BoxShape.circle,
-              border: Border.all(color: context.palette.card, width: 3),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: photoUrl == null
-                ? Text(
-                    initials,
-                    style: AppTextStyles.titleLarge.copyWith(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
-                      letterSpacing: 0.4,
-                    ),
-                  )
-                : CachedImage(
-                    photoUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Text(
-                      initials,
-                      style: AppTextStyles.titleLarge.copyWith(
-                        color: AppColors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  fullName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.titleLarge.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.church_outlined,
-                      size: 14,
-                      color: context.palette.textMuted,
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        followedCount == 0
-                            ? 'No church set yet'
-                            : '$followedCount church${followedCount == 1 ? '' : 'es'} followed',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.palette.textMuted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.chevron_right,
-            color: context.palette.textMuted,
-          ),
-        ],
-      ),
-        ),
-      ),
     );
   }
 }

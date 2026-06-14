@@ -563,16 +563,18 @@ class FeedService {
             .eq('user_id', user.id);
         return false;
       } else {
-        await _client.from('story_likes').insert({
+        // UPSERT (not insert) so re-liking never collides on the
+        // (story_id, user_id) PK — the plain insert threw a duplicate-key
+        // error when the local state was stale, which made likes appear to
+        // "forget then remember".
+        await _client.from('story_likes').upsert({
           'story_id': storyId,
           'user_id': user.id,
-        });
+        }, onConflict: 'story_id,user_id');
         return true;
       }
     } catch (_) {
-      // Re-inserting an existing like collides on the PK — treat that as
-      // "already liked" rather than an error.
-      return currentlyLiked ? false : true;
+      return currentlyLiked;
     }
   }
 

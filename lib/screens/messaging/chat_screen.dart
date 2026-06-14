@@ -12,6 +12,7 @@ import '../../models/friendship_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/marketplace_service.dart';
 import '../../services/gallery_service.dart';
 import '../../services/group_service.dart';
 import '../../services/connectivity_service.dart';
@@ -1160,10 +1161,11 @@ class _ChatScreenState extends State<ChatScreen>
       MessagingService.fetchHiddenMessageIds(widget.conversationId),
     ]);
     _floor = pre[0] as DateTime?;
-    _hiddenIds
-      ..clear()
-      ..addAll(pre[1] as Set<String>);
-    if (mounted && cached.isNotEmpty) {
+    // MERGE (don't clear) — a clear() here wiped any delete-for-me the
+    // user made while this fetch was in flight (~2s), so the messages
+    // "came back after 2 seconds". Union keeps both server + local hides.
+    _hiddenIds.addAll(pre[1] as Set<String>);
+    if (mounted) {
       setState(() => _applyServerMessages(_serverMessages));
     }
     try {
@@ -4270,12 +4272,27 @@ class _ProductBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Tappable product card.
+            // Tappable product card. If the product was deleted or hidden
+            // (non-approved storefront), do nothing but a brief note.
             GestureDetector(
               onTap: id.isEmpty
                   ? null
-                  : () => context.pushNamed('product_details',
-                      pathParameters: {'id': id}),
+                  : () async {
+                      final product =
+                          await MarketplaceService.fetchProductById(id);
+                      if (!context.mounted) return;
+                      if (product == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('This product is no longer available.'),
+                          ),
+                        );
+                        return;
+                      }
+                      context.pushNamed('product_details',
+                          pathParameters: {'id': id}, extra: product);
+                    },
               child: Container(
                 decoration: BoxDecoration(
                   color: context.palette.card,
@@ -4384,16 +4401,25 @@ class _StoryReplyBubble extends StatelessWidget {
           children: [
             GestureDetector(
               onTap: () async {
-                // Open the live status if it's still up (24h); otherwise
-                // fall back to the saved snapshot image.
+                // Open the live status if it's still up (24h). If it has
+                // EXPIRED/been removed, do nothing (just a brief note) —
+                // we don't reopen the stale snapshot.
                 final storyId = (meta['story_id'] ?? '').toString();
                 if (storyId.isNotEmpty) {
                   final story = await FeedService.fetchStoryById(storyId);
-                  if (story != null && context.mounted) {
+                  if (!context.mounted) return;
+                  if (story != null) {
                     StoryViewer.show(context, [story]);
-                    return;
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('This status is no longer available.'),
+                      ),
+                    );
                   }
+                  return;
                 }
+                // Legacy replies with no story_id: fall back to the image.
                 if (img.isNotEmpty && context.mounted) {
                   FullImageViewer.show(context, img);
                 }

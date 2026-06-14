@@ -671,18 +671,18 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ],
-                if (_topNews.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _AdventNewsHero(items: _topNews),
-                  ),
-                ],
                 if (_devotion != null) ...[
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: _DevotionCard(devotion: _devotion!),
+                  ),
+                ],
+                if (_topNews.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _AdventNewsHero(items: _topNews),
                   ),
                 ],
                 const SizedBox(height: 18),

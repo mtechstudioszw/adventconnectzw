@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/church_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
@@ -22,6 +23,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _bioController = TextEditingController();
+  final _usernameController = TextEditingController();
+  DateTime? _dob; // current date of birth (for the age editor)
 
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -53,11 +56,31 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     final meta = AuthService.currentUser?.userMetadata ?? const {};
     _nameController.text = (meta['full_name'] as String?) ?? '';
     _bioController.text = (meta['bio'] as String?) ?? '';
+    _usernameController.text = (meta['username'] as String?) ?? '';
     _selectedChurchId = (meta['church_id'] as String?);
     _profilePhotoUrl = (meta['profile_photo_url'] as String?);
     _coverPhotoUrl = (meta['cover_photo_url'] as String?);
     _showAge = (meta['show_age'] as bool?) ?? true;
     _loadChurches();
+    _loadDob();
+  }
+
+  /// Date of birth lives in the profiles row (not always in auth
+  /// metadata), so fetch it for the age editor.
+  Future<void> _loadDob() async {
+    try {
+      final user = AuthService.currentUser;
+      if (user == null) return;
+      final row = await Supabase.instance.client
+          .from('profiles')
+          .select('date_of_birth')
+          .eq('id', user.id)
+          .maybeSingle();
+      final raw = row?['date_of_birth']?.toString();
+      if (raw != null && raw.isNotEmpty && mounted) {
+        setState(() => _dob = DateTime.tryParse(raw));
+      }
+    } catch (_) {}
   }
 
   @override
@@ -65,6 +88,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     _entrance.dispose();
     _nameController.dispose();
     _bioController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -92,6 +116,38 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     return null;
   }
 
+  int _ageFrom(DateTime dob) {
+    final now = DateTime.now();
+    var age = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age;
+  }
+
+  String _formatDob(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  Future<void> _pickDob() async {
+    final now = DateTime.now();
+    // Can't pick a date younger than 16 — the picker is capped at 16y ago.
+    final sixteenAgo = DateTime(now.year - 16, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dob ?? sixteenAgo,
+      firstDate: DateTime(now.year - 100),
+      lastDate: sixteenAgo,
+      helpText: 'Select your date of birth',
+    );
+    if (picked != null && mounted) setState(() => _dob = picked);
+  }
+
   Future<void> _save() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
@@ -101,16 +157,29 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       setState(() => _error = 'Please choose your home church.');
       return;
     }
+    // Client-side age guard (the server enforces it too, patch_107).
+    if (_dob != null) {
+      final sixteenAgo = DateTime(
+          DateTime.now().year - 16, DateTime.now().month, DateTime.now().day);
+      if (_dob!.isAfter(sixteenAgo)) {
+        setState(() => _error = 'You must be at least 16 years old.');
+        return;
+      }
+    }
     setState(() => _saving = true);
     final previousChurchId =
         AuthService.currentUser?.userMetadata?['church_id'] as String?;
     final result = await AuthService.updateProfile(
       fullName: _nameController.text.trim(),
       bio: _bioController.text.trim(),
+      username: _usernameController.text.trim().isEmpty
+          ? null
+          : _usernameController.text.trim(),
       churchId: _selectedChurchId,
       profilePhotoUrl: _profilePhotoUrl,
       coverPhotoUrl: _coverPhotoUrl,
       showAge: _showAge,
+      dateOfBirth: _dob,
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -540,6 +609,45 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               decoration: _filledDecoration(
                 icon: Icons.person_outline,
                 hint: 'Tendai Moyo',
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _LabeledField(
+            label: 'Username',
+            child: TextFormField(
+              controller: _usernameController,
+              textInputAction: TextInputAction.next,
+              style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+              decoration: _filledDecoration(
+                icon: Icons.alternate_email,
+                hint: 'tendai_moyo',
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _LabeledField(
+            label: 'Age',
+            helper: _dob != null ? '${_ageFrom(_dob!)} years old' : null,
+            child: InkWell(
+              onTap: _pickDob,
+              borderRadius: BorderRadius.circular(14),
+              child: InputDecorator(
+                decoration: _filledDecoration(
+                  icon: Icons.cake_outlined,
+                  hint: 'Date of birth',
+                ),
+                child: Text(
+                  _dob != null
+                      ? _formatDob(_dob!)
+                      : 'Set your date of birth',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontSize: 15,
+                    color: _dob != null
+                        ? context.palette.text
+                        : context.palette.textMuted,
+                  ),
+                ),
               ),
             ),
           ),

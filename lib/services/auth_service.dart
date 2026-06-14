@@ -802,6 +802,7 @@ class AuthService {
     String? profilePhotoUrl,
     String? coverPhotoUrl,
     bool? showAge,
+    DateTime? dateOfBirth,
   }) async {
     try {
       final user = currentUser;
@@ -818,6 +819,21 @@ class AuthService {
           await _client.from('profiles').update({
             'church_id': churchId.isEmpty ? null : int.tryParse(churchId),
           }).eq('id', user.id);
+        } on PostgrestException catch (e) {
+          return AuthResult.failure(e.message);
+        }
+      }
+
+      // Age (date_of_birth) is gated by the >=16 + 3-month-cooldown trigger
+      // (patch_107). Do it FIRST in its own statement so the exact error
+      // ("must be at least 16" / "once every 3 months") surfaces cleanly.
+      if (dateOfBirth != null) {
+        final iso =
+            '${dateOfBirth.year.toString().padLeft(4, '0')}-${dateOfBirth.month.toString().padLeft(2, '0')}-${dateOfBirth.day.toString().padLeft(2, '0')}';
+        try {
+          await _client
+              .from('profiles')
+              .update({'date_of_birth': iso}).eq('id', user.id);
         } on PostgrestException catch (e) {
           return AuthResult.failure(e.message);
         }

@@ -187,7 +187,7 @@ class _PostJobScreenState extends State<PostJobScreen>
           content: Text(
             _isEdit
                 ? 'Job updated.'
-                : (_postType == 'hiring' ? 'Job posted.' : 'Looking-for posted.'),
+                : 'Submitted for review — it\'ll appear once an admin approves it.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

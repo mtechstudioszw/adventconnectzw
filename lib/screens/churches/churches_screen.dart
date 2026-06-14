@@ -642,13 +642,11 @@ class _FilterChip extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
-    this.busy = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
-  final bool busy;
   final VoidCallback onTap;
 
   @override
@@ -659,7 +657,7 @@ class _FilterChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: busy ? null : onTap,
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
@@ -673,16 +671,7 @@ class _FilterChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              busy
-                  ? SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.8,
-                        color: fg,
-                      ),
-                    )
-                  : Icon(icon, size: 15, color: fg),
+              Icon(icon, size: 15, color: fg),
               const SizedBox(width: 6),
               Text(
                 label,

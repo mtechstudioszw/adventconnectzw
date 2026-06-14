@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/advent_news_model.dart';
+import '../../models/devotion_model.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../models/friendship_model.dart';
@@ -21,6 +22,7 @@ import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/directory_service.dart';
 import '../../services/gallery_service.dart';
+import '../../services/devotion_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/job_service.dart';
@@ -68,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<Church> _churches = [];
   List<MemberDirectoryEntry> _suggestedMembers = [];
   List<AdventNews> _topNews = const [];
+  Devotion? _devotion;
   List<Prayer> _prayers = const [];
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
@@ -111,6 +114,10 @@ class _HomeScreenState extends State<HomeScreen>
     _slide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    // Today's devotion — loaded separately so it never blocks the feed.
+    DevotionService.fetchToday().then((d) {
+      if (mounted && d != null) setState(() => _devotion = d);
+    });
     _msgActivitySub = MessagingService.streamInboxActivity().listen(
       (_) {
         _unreadRefreshDebounce?.cancel();
@@ -669,6 +676,13 @@ class _HomeScreenState extends State<HomeScreen>
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: _AdventNewsHero(items: _topNews),
+                  ),
+                ],
+                if (_devotion != null) ...[
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _DevotionCard(devotion: _devotion!),
                   ),
                 ],
                 const SizedBox(height: 18),
@@ -3189,6 +3203,90 @@ class _DiscoverySlot {
 /// out to /news for the full list. Pinned at the very top of the
 /// home feed so members see "what's trending in the Adventist
 /// community in Zimbabwe" before scrolling through user posts.
+/// Home card: today's devotion — a KJV verse + an Ellen G. White quote.
+class _DevotionCard extends StatelessWidget {
+  const _DevotionCard({required this.devotion});
+  final Devotion devotion;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: AppColors.appBarGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.darkNavy.withValues(alpha: 0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_stories_outlined,
+                  color: AppColors.goldAccent, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                "TODAY'S DEVOTION",
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.goldAccent,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '"${devotion.bibleText}"',
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: AppColors.white,
+              height: 1.5,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            devotion.bibleRef,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: AppColors.white.withValues(alpha: 0.85),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Divider(
+              color: AppColors.white.withValues(alpha: 0.18),
+              height: 1,
+            ),
+          ),
+          Text(
+            devotion.egwQuote,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.white.withValues(alpha: 0.92),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '— Ellen G. White, ${devotion.egwSource}',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.white.withValues(alpha: 0.7),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AdventNewsHero extends StatelessWidget {
   const _AdventNewsHero({required this.items});
 

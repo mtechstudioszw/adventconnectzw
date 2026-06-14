@@ -417,7 +417,7 @@ class FeedService {
             if (mediaUrl != null && mediaUrl.isNotEmpty) 'media_url': mediaUrl,
             if (textContent != null && textContent.trim().isNotEmpty)
               'text_content': textContent.trim(),
-            if (backgroundColor != null) 'background_color': backgroundColor,
+            'background_color': ?backgroundColor,
             if (caption != null && caption.trim().isNotEmpty)
               'caption': caption.trim(),
           })

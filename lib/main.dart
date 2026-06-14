@@ -197,16 +197,54 @@ class _AdventConnectAppState extends State<AdventConnectApp>
   DateTime? _backgroundedAt;
   bool _biometricPromptInFlight = false;
 
+  // Reactive ban guard. The cold-start check in Splash only fires once, so a
+  // user banned WHILE the app is open saw nothing until they killed + relaunched
+  // (the tester report: "the block screen doesn't appear when banned"). We poll
+  // the account's ban flag on a short interval + immediately on resume and slam
+  // the lockout screen the moment it flips. Fails open, so a network blip never
+  // locks out a good user.
+  static const _banPollInterval = Duration(seconds: 30);
+  Timer? _banPollTimer;
+  bool _banCheckInFlight = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _startBanGuard();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _banPollTimer?.cancel();
     super.dispose();
+  }
+
+  void _startBanGuard() {
+    _banPollTimer?.cancel();
+    _banPollTimer =
+        Timer.periodic(_banPollInterval, (_) => unawaited(_checkBanNow()));
+    // First sweep shortly after launch, once the session has had a moment to
+    // restore on a slow network.
+    Future.delayed(const Duration(seconds: 4), () => unawaited(_checkBanNow()));
+  }
+
+  Future<void> _checkBanNow() async {
+    if (_banCheckInFlight) return;
+    if (!AuthService.isSignedIn) return;
+    // Already locked out — nothing to do.
+    final loc = appRouter.routerDelegate.currentConfiguration.uri.path;
+    if (loc == '/account-banned' || loc == '/splash') return;
+    _banCheckInFlight = true;
+    try {
+      if (await AuthService.isCurrentUserBanned()) {
+        final now = appRouter.routerDelegate.currentConfiguration.uri.path;
+        if (now != '/account-banned') appRouter.goNamed('account_banned');
+      }
+    } finally {
+      _banCheckInFlight = false;
+    }
   }
 
   @override
@@ -220,11 +258,15 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       // their last-seen kept advancing while the app was actually closed).
       if (state == AppLifecycleState.paused) {
         unawaited(PresenceService.stop(clearRoster: false));
+        _banPollTimer?.cancel();
       }
       return;
     }
     if (state == AppLifecycleState.resumed) {
       _maybeRequireBiometric();
+      // Re-arm the ban guard + check immediately — the admin may have banned
+      // this account while the app was backgrounded.
+      _startBanGuard();
       // Returning to the app — flip any messages that arrived while we
       // were away to delivered, so senders' ticks update even if we don't
       // open Chats (patch_062).

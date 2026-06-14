@@ -1381,6 +1381,7 @@ class _EventRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return _Row(
       icon: Icons.event,
+      imageUrl: event.coverPhotoUrl,
       title: event.title,
       subtitle:
           '${event.eventDate.day}/${event.eventDate.month}  ·  ${event.eventTime}${event.location != null ? "  ·  ${event.location}" : ""}',
@@ -1398,6 +1399,7 @@ class _ProductRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return _Row(
       icon: Icons.shopping_bag_outlined,
+      imageUrl: product.firstImage,
       title: product.title,
       subtitle: '${product.formatPrice()}  ·  ${product.sellerName}',
       onTap: onTap,
@@ -1430,6 +1432,7 @@ class _Row extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     this.trailing,
+    this.imageUrl,
   });
 
   final IconData icon;
@@ -1437,6 +1440,9 @@ class _Row extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
   final Widget? trailing;
+  // When set, the leading shows this image (product photo / event flyer)
+  // instead of the generic icon.
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -1449,15 +1455,37 @@ class _Row extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           child: Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                  shape: BoxShape.circle,
+              if ((imageUrl ?? '').isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl!,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    placeholder: (_, _) => Container(
+                      width: 44,
+                      height: 44,
+                      color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                    ),
+                    errorWidget: (_, _, _) => Container(
+                      width: 44,
+                      height: 44,
+                      color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                      child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: AppColors.primaryBlue, size: 20),
                 ),
-                child: Icon(icon, color: AppColors.primaryBlue, size: 20),
-              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

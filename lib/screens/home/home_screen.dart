@@ -671,6 +671,34 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ],
+                // What's on your mind + Stories + Devotion always sit at
+                // the top, right under the header. Everything else (news,
+                // product pick, the feed) follows.
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _ComposerEntry(
+                    photoUrl: _viewerPhotoUrl(),
+                    name: _displayFullName(),
+                    onTap: _openPostComposer,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildSectionHeader(
+                  'Stories',
+                  'Advent News',
+                  onAction: () => context.pushNamed('news'),
+                ),
+                const SizedBox(height: 10),
+                StoriesRail(
+                  stories: _stories,
+                  viewerId: AuthService.currentUser?.id ?? '',
+                  viewerName: _displayFullName(),
+                  viewerPhotoUrl: _viewerPhotoUrl(),
+                  onAddStory: _openStoryComposer,
+                  onAuthorTapped: (_, list) => _openStoryViewer(list),
+                  viewedStoryIds: _viewedStoryIds,
+                ),
                 if (_devotion != null) ...[
                   const SizedBox(height: 16),
                   Padding(
@@ -699,34 +727,6 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                 ],
-                const SizedBox(height: 18),
-                _buildSectionHeader(
-                  'Stories',
-                  // Tiny "See all" → /news so a user who wants to dive
-                  // into the full editorial feed has a one-tap path
-                  // even when no story is pinned in the rail.
-                  'Advent News',
-                  onAction: () => context.pushNamed('news'),
-                ),
-                const SizedBox(height: 10),
-                StoriesRail(
-                  stories: _stories,
-                  viewerId: AuthService.currentUser?.id ?? '',
-                  viewerName: _displayFullName(),
-                  viewerPhotoUrl: _viewerPhotoUrl(),
-                  onAddStory: _openStoryComposer,
-                  onAuthorTapped: (_, list) => _openStoryViewer(list),
-                  viewedStoryIds: _viewedStoryIds,
-                ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _ComposerEntry(
-                    photoUrl: _viewerPhotoUrl(),
-                    name: _displayFullName(),
-                    onTap: _openPostComposer,
-                  ),
-                ),
                 const SizedBox(height: 6),
                 // _buildFeedList() is now a Facebook-style mixed feed:
                 // posts intercalated with discovery cards (suggested

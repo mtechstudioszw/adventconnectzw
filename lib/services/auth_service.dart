@@ -447,9 +447,15 @@ class AuthService {
       if (s.contains('ApiException: 10') ||
           s.contains('sign_in_failed') ||
           s.toUpperCase().contains('DEVELOPER_ERROR')) {
+        // TEMP DIAGNOSTIC (remove once Google sign-in works): surface the
+        // raw code so we can tell a SHA mismatch (ApiException: 10) apart
+        // from a consent-screen block. Revert to the friendly message after.
+        final code = s.contains('ApiException: 10')
+            ? 'ApiException: 10 (DEVELOPER_ERROR — SHA/OAuth client mismatch)'
+            : s;
         return AuthResult.failure(
-          "Google sign-in isn't available on this build yet — "
-          'please sign up or sign in with your email instead.',
+          'Google sign-in failed.\n\n[diagnostic: $code]\n\n'
+          'You can sign up or sign in with your email instead.',
         );
       }
       // Run through the friendly mapper so offline / DNS / handshake

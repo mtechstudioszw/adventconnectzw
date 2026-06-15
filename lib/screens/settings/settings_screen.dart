@@ -257,7 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.18),
+                    color: AppColors.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -273,7 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 'Reach the Advent Connect ZW team for support, '
                 'feedback, or partnership.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  color: AppColors.textMuted,
                 ),
               ),
               const SizedBox(height: 16),
@@ -703,7 +703,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       child: Text(
                         'Made with care • MyTech Studios Zw',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.45),
+                          color: AppColors.textMuted,
                           fontSize: 11,
                           letterSpacing: 1.2,
                         ),
@@ -806,7 +806,7 @@ class _SupportChannel extends StatelessWidget {
             color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: const Color.fromRGBO(26, 26, 46, 0.05),
+              color: AppColors.divider,
             ),
           ),
           child: Row(
@@ -836,7 +836,7 @@ class _SupportChannel extends StatelessWidget {
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.65),
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ],
@@ -903,7 +903,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -939,7 +939,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                       Text(
                         'Send any amount to the number below.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.65),
+                          color: AppColors.textMuted,
                         ),
                       ),
                     ],
@@ -957,7 +957,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                 color: context.palette.cardMuted,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: const Color.fromRGBO(26, 26, 46, 0.06),
+                  color: AppColors.divider,
                 ),
               ),
               child: Column(
@@ -966,7 +966,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                   Text(
                     'ECOCASH NUMBER',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.55),
+                      color: AppColors.textMuted,
                       fontSize: 10.5,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.4,
@@ -1025,7 +1025,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
                   Text(
                     'Account name: Tanatswa Michael Mikuwa',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.70),
+                      color: AppColors.textMuted,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1071,7 +1071,7 @@ class _EcoCashDonationSheet extends StatelessWidget {
               '4. Enter the amount you want to donate\n'
               '5. Confirm with your PIN',
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.70),
+                color: AppColors.textMuted,
                 height: 1.55,
                 fontSize: 12.5,
               ),
@@ -1181,7 +1181,7 @@ class _Section extends StatelessWidget {
           child: Text(
             title.toUpperCase(),
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: AppColors.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.6,
@@ -1254,7 +1254,7 @@ class _NavRow extends StatelessWidget {
                   child: Text(
                     trailing!,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.55),
+                      color: AppColors.textMuted,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1346,7 +1346,7 @@ class _InfoRow extends StatelessWidget {
           Text(
             value,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: AppColors.textMuted,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1361,11 +1361,11 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Divider(
         height: 1,
-        color: Color.fromRGBO(26, 26, 46, 0.06),
+        color: AppColors.divider,
       ),
     );
   }
@@ -1445,7 +1445,7 @@ class _ProvinceSheet extends StatelessWidget {
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color.fromRGBO(26, 26, 46, 0.15),
+                      color: AppColors.divider,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1466,7 +1466,7 @@ class _ProvinceSheet extends StatelessWidget {
                       Text(
                         'Used to compute Friday sundown.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.6),
+                          color: AppColors.textMuted,
                         ),
                       ),
                     ],
@@ -1498,7 +1498,7 @@ class _ProvinceSheet extends StatelessWidget {
                                       : Icons.radio_button_unchecked,
                                   color: opt == selected
                                       ? AppColors.primaryBlue
-                                      : const Color.fromRGBO(26, 26, 46, 0.4),
+                                      : AppColors.textMuted,
                                   size: 22,
                                 ),
                                 const SizedBox(width: 14),
@@ -1572,7 +1572,7 @@ class _ThemeSheet extends StatelessWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.15),
+                    color: AppColors.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1589,7 +1589,7 @@ class _ThemeSheet extends StatelessWidget {
                 'Dark mode is still rolling out screen-by-screen — a few '
                 'pages may still appear light for now.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: AppColors.textMuted,
                   height: 1.4,
                 ),
               ),
@@ -1613,7 +1613,7 @@ class _ThemeSheet extends StatelessWidget {
                                 : Icons.radio_button_unchecked,
                             color: mode == selected
                                 ? AppColors.primaryBlue
-                                : const Color.fromRGBO(26, 26, 46, 0.4),
+                                : AppColors.textMuted,
                             size: 22,
                           ),
                           const SizedBox(width: 14),
@@ -1684,7 +1684,7 @@ class _LanguageSheet extends StatelessWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.15),
+                    color: AppColors.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1714,7 +1714,7 @@ class _LanguageSheet extends StatelessWidget {
                                 : Icons.radio_button_unchecked,
                             color: opt == selected
                                 ? AppColors.primaryBlue
-                                : const Color.fromRGBO(26, 26, 46, 0.4),
+                                : AppColors.textMuted,
                             size: 22,
                           ),
                           const SizedBox(width: 14),

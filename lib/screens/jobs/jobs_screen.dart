@@ -251,9 +251,9 @@ class _JobsScreenState extends State<JobsScreen>
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(
+                  icon:  Icon(
                     Icons.close,
-                    color: Color.fromRGBO(26, 26, 46, 0.5),
+                    color: AppColors.textMuted,
                   ),
                   onPressed: () {
                     _searchController.clear();
@@ -340,7 +340,7 @@ class _JobsScreenState extends State<JobsScreen>
                   'No jobs cached yet.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: AppColors.textMuted,
                   ),
                 ),
               ),
@@ -357,17 +357,17 @@ class _JobsScreenState extends State<JobsScreen>
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
                 children: [
-                  const Icon(
+                   Icon(
                     Icons.cloud_off_outlined,
                     size: 56,
-                    color: Color.fromRGBO(26, 26, 46, 0.4),
+                    color: AppColors.textMuted,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     _error!,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
@@ -413,7 +413,7 @@ class _JobsScreenState extends State<JobsScreen>
                     'Be the first to post an opportunity for the community.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: AppColors.textMuted,
                       height: 1.5,
                     ),
                   ),
@@ -517,7 +517,7 @@ class _ShopJobsSegment extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.palette.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+          border: Border.all(color: AppColors.divider),
         ),
         child: Row(
           children: [
@@ -590,7 +590,7 @@ class _SegmentButton extends StatelessWidget {
                   size: 16,
                   color: selected
                       ? AppColors.white
-                      : const Color.fromRGBO(26, 26, 46, 0.6),
+                      : AppColors.textMuted,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -598,7 +598,7 @@ class _SegmentButton extends StatelessWidget {
                   style: AppTextStyles.labelMedium.copyWith(
                     color: selected
                         ? AppColors.white
-                        : const Color.fromRGBO(26, 26, 46, 0.7),
+                        : AppColors.textMuted,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
@@ -641,7 +641,7 @@ class _CategoryChip extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.08),
+                  : AppColors.divider,
             ),
             boxShadow: selected
                 ? [

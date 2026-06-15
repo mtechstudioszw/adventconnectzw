@@ -114,7 +114,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       child: Text(
                         'RECENT ANNOUNCEMENTS',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.55),
+                          color: AppColors.textMuted,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.4,
@@ -177,7 +177,7 @@ class _QuickActionsCard extends StatelessWidget {
           Text(
             'QUICK ACTIONS',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: AppColors.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -258,15 +258,15 @@ class _Row extends StatelessWidget {
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.6),
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(
+               Icon(
                 Icons.chevron_right,
-                color: Color.fromRGBO(26, 26, 46, 0.4),
+                color: AppColors.textMuted,
               ),
             ],
           ),
@@ -280,9 +280,9 @@ class _Divider extends StatelessWidget {
   const _Divider();
   @override
   Widget build(BuildContext context) {
-    return const Divider(
+    return  Divider(
       height: 1,
-      color: Color.fromRGBO(26, 26, 46, 0.06),
+      color: AppColors.divider,
     );
   }
 }
@@ -341,7 +341,7 @@ class _AnnouncementSummary extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.7),
+              color: AppColors.textMuted,
               height: 1.5,
             ),
           ),
@@ -419,7 +419,7 @@ class _ComposerSheetState extends State<_ComposerSheet> {
                       width: 44,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: const Color.fromRGBO(26, 26, 46, 0.12),
+                        color: AppColors.divider,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -535,11 +535,11 @@ class _ComposerSheetState extends State<_ComposerSheet> {
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide:  BorderSide(color: AppColors.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide:  BorderSide(color: AppColors.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -584,7 +584,7 @@ class _CategoryChip extends StatelessWidget {
           border: Border.all(
             color: active
                 ? AppColors.primaryBlue
-                : const Color.fromRGBO(26, 26, 46, 0.08),
+                : AppColors.divider,
           ),
         ),
         child: Text(

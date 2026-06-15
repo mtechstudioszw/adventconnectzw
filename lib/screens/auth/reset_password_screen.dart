@@ -153,7 +153,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
               Text(
                 'NEW PASSWORD',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  color: AppColors.textMuted,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.2,
@@ -180,7 +180,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
               Text(
                 'CONFIRM PASSWORD',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.65),
+                  color: AppColors.textMuted,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.2,
@@ -257,7 +257,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
               'You can use your new password the next time you sign in.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodyMedium.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                color: AppColors.textMuted,
                 height: 1.5,
               ),
             ),
@@ -288,7 +288,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
       suffixIcon: IconButton(
         icon: Icon(
           obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-          color: const Color.fromRGBO(26, 26, 46, 0.5),
+          color: AppColors.textMuted,
           size: 20,
         ),
         onPressed: onToggle,
@@ -298,11 +298,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide:  BorderSide(color: AppColors.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide:  BorderSide(color: AppColors.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),

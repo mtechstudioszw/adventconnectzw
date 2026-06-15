@@ -133,7 +133,7 @@ class AboutScreen extends StatelessWidget {
                     child: Text(
                       '$_studioName  •  Made with ❤️ in Zimbabwe',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.5),
+                        color: AppColors.textMuted,
                         fontSize: 11,
                         letterSpacing: 1.0,
                       ),
@@ -270,7 +270,7 @@ class AboutScreen extends StatelessWidget {
                 Text(
                   _appTagline,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.65),
+                    color: AppColors.textMuted,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -313,7 +313,7 @@ class AboutScreen extends StatelessWidget {
           child: Text(
             title.toUpperCase(),
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.55),
+              color: AppColors.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.6,
@@ -603,7 +603,7 @@ class _InfoTile extends StatelessWidget {
           Text(
             value,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: AppColors.textMuted,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -675,9 +675,9 @@ class _TapTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
+               Icon(
                 Icons.chevron_right,
-                color: Color.fromRGBO(26, 26, 46, 0.4),
+                color: AppColors.textMuted,
               ),
             ],
           ),
@@ -719,9 +719,9 @@ class _NavTile extends StatelessWidget {
                   ),
                 ),
               ),
-              const Icon(
+               Icon(
                 Icons.chevron_right,
-                color: Color.fromRGBO(26, 26, 46, 0.4),
+                color: AppColors.textMuted,
               ),
             ],
           ),
@@ -742,7 +742,7 @@ class _ParagraphTile extends StatelessWidget {
       child: Text(
         text,
         style: AppTextStyles.bodyMedium.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.75),
+          color: AppColors.textMuted,
           height: 1.55,
         ),
       ),
@@ -755,11 +755,11 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Divider(
         height: 1,
-        color: Color.fromRGBO(26, 26, 46, 0.06),
+        color: AppColors.divider,
       ),
     );
   }

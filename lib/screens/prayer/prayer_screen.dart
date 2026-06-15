@@ -444,7 +444,7 @@ class _CategoryChip extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.1),
+                  : AppColors.divider,
             ),
           ),
           alignment: Alignment.center,

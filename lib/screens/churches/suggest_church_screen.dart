@@ -124,16 +124,16 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                           DropdownButtonFormField<String>(
                             initialValue: _province,
                             isExpanded: true,
-                            icon: const Icon(
+                            icon:  Icon(
                               Icons.expand_more,
-                              color: Color.fromRGBO(26, 26, 46, 0.5),
+                              color: AppColors.textMuted,
                             ),
                             style: AppTextStyles.bodyLarge
                                 .copyWith(fontSize: 15),
                             hint: Text(
                               'Choose a province',
                               style: AppTextStyles.bodyLarge.copyWith(
-                                color: const Color.fromRGBO(26, 26, 46, 0.5),
+                                color: AppColors.textMuted,
                                 fontSize: 15,
                               ),
                             ),
@@ -261,11 +261,11 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide:  BorderSide(color: AppColors.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide:  BorderSide(color: AppColors.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -293,7 +293,7 @@ class _Label extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: AppTextStyles.labelSmall.copyWith(
-        color: const Color.fromRGBO(26, 26, 46, 0.65),
+        color: AppColors.textMuted,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,

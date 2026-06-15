@@ -100,7 +100,7 @@ class _SuggestEditScreenState extends State<SuggestEditScreen> {
                           Text(
                             'WHICH FIELD?',
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.65),
+                              color: AppColors.textMuted,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.2,
@@ -128,7 +128,7 @@ class _SuggestEditScreenState extends State<SuggestEditScreen> {
                             Text(
                               'CURRENT VALUE',
                               style: AppTextStyles.labelSmall.copyWith(
-                                color: const Color.fromRGBO(26, 26, 46, 0.55),
+                                color: AppColors.textMuted,
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1.4,
@@ -153,7 +153,7 @@ class _SuggestEditScreenState extends State<SuggestEditScreen> {
                             Text(
                               'NEW VALUE',
                               style: AppTextStyles.labelSmall.copyWith(
-                                color: const Color.fromRGBO(26, 26, 46, 0.65),
+                                color: AppColors.textMuted,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1.2,
@@ -223,11 +223,11 @@ class _SuggestEditScreenState extends State<SuggestEditScreen> {
           const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide:  BorderSide(color: AppColors.divider),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+        borderSide:  BorderSide(color: AppColors.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -350,7 +350,7 @@ class _FieldRow extends StatelessWidget {
                 field.icon,
                 color: active
                     ? AppColors.primaryBlue
-                    : const Color.fromRGBO(26, 26, 46, 0.55),
+                    : AppColors.textMuted,
                 size: 18,
               ),
               const SizedBox(width: 12),
@@ -376,7 +376,7 @@ class _FieldRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.6),
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ),
@@ -387,7 +387,7 @@ class _FieldRow extends StatelessWidget {
                 active ? Icons.radio_button_checked : Icons.radio_button_off,
                 color: active
                     ? AppColors.primaryBlue
-                    : const Color.fromRGBO(26, 26, 46, 0.35),
+                    : AppColors.textMuted,
                 size: 20,
               ),
             ],

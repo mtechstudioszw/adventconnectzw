@@ -99,7 +99,7 @@ class _RateSellerSheetState extends State<RateSellerSheet> {
                   width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(26, 26, 46, 0.12),
+                    color: AppColors.divider,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -117,7 +117,7 @@ class _RateSellerSheetState extends State<RateSellerSheet> {
               Text(
                 'Honest reviews help other buyers and reward good sellers.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: AppColors.textMuted,
                 ),
               ),
               const SizedBox(height: 22),
@@ -136,7 +136,7 @@ class _RateSellerSheetState extends State<RateSellerSheet> {
                   hintText:
                       'Optional: what stood out? Communication, quality, delivery…',
                   hintStyle: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.5),
+                    color: AppColors.textMuted,
                   ),
                   filled: true,
                   fillColor: context.palette.inputFill,
@@ -209,7 +209,7 @@ class _StarPicker extends StatelessWidget {
               filled ? Icons.star_rounded : Icons.star_outline_rounded,
               color: filled
                   ? AppColors.goldAccent
-                  : const Color.fromRGBO(26, 26, 46, 0.4),
+                  : AppColors.textMuted,
               size: 44,
             ),
           ),

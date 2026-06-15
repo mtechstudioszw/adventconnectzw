@@ -32,6 +32,9 @@ class AppTextStyles {
     AppColors.scaffold = dark ? const Color(0xFF0B1124) : AppColors.lightGrey;
     AppColors.text = dark ? _darkBody : _lightBody;
     AppColors.textMuted = dark ? _darkMuted : _lightMuted;
+    AppColors.divider = dark
+        ? const Color.fromRGBO(232, 236, 245, 0.12)
+        : const Color.fromRGBO(26, 26, 46, 0.1);
   }
 
   static TextStyle get displayLarge => GoogleFonts.poppins(

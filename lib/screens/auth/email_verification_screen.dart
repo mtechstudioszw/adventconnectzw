@@ -328,7 +328,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     'We sent a 6-digit verification code to your email address. If you don\'t see it, check your spam folder.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.65),
+                      color: AppColors.textMuted,
                       fontSize: 14,
                       height: 1.5,
                     ),
@@ -397,7 +397,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                           : (_resending ? 'Sending…' : 'Resend email'),
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: (_cooldown > 0 || _resending)
-                            ? const Color.fromRGBO(26, 26, 46, 0.45)
+                            ? AppColors.textMuted
                             : AppColors.primaryBlue,
                         fontWeight: FontWeight.w700,
                       ),
@@ -410,7 +410,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     child: Text(
                       'Change email',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.55),
+                        color: AppColors.textMuted,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -448,7 +448,7 @@ class _TopBar extends StatelessWidget {
                 color: context.palette.card,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: const Color.fromRGBO(26, 26, 46, 0.08),
+                  color: AppColors.divider,
                 ),
               ),
               // TODO(dark-mode): swap to context.palette.text in dark mode
@@ -561,7 +561,7 @@ class _OtpField extends StatelessWidget {
         color: context.palette.card,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: const Color.fromRGBO(26, 26, 46, 0.08),
+          color: AppColors.divider,
         ),
         boxShadow: [
           BoxShadow(
@@ -597,7 +597,7 @@ class _OtpField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: '••••••',
           hintStyle: AppTextStyles.displayMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.18),
+            color: AppColors.divider,
             letterSpacing: 12,
             fontSize: 28,
             fontWeight: FontWeight.w800,

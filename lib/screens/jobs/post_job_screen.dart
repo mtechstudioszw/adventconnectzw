@@ -600,7 +600,7 @@ class _PostTypeButton extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.06),
+                  : AppColors.divider,
             ),
           ),
           child: Row(
@@ -611,7 +611,7 @@ class _PostTypeButton extends StatelessWidget {
                 size: 18,
                 color: selected
                     ? AppColors.white
-                    : const Color.fromRGBO(26, 26, 46, 0.7),
+                    : AppColors.textMuted,
               ),
               const SizedBox(width: 8),
               Text(
@@ -619,7 +619,7 @@ class _PostTypeButton extends StatelessWidget {
                 style: AppTextStyles.labelMedium.copyWith(
                   color: selected
                       ? AppColors.white
-                      : const Color.fromRGBO(26, 26, 46, 0.75),
+                      : AppColors.textMuted,
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
@@ -680,7 +680,7 @@ class _ToggleRow extends StatelessWidget {
               Text(
                 subtitle,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.6),
+                  color: AppColors.textMuted,
                 ),
               ),
             ],
@@ -717,16 +717,16 @@ class _Dropdown<T> extends StatelessWidget {
     return DropdownButtonFormField<T>(
       initialValue: value,
       isExpanded: true,
-      icon: const Icon(
+      icon:  Icon(
         Icons.expand_more,
-        color: Color.fromRGBO(26, 26, 46, 0.5),
+        color: AppColors.textMuted,
       ),
       style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
       decoration: postFormFilledDecoration(icon: icon, hint: hint),
       hint: Text(
         hint,
         style: AppTextStyles.bodyLarge.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.5),
+          color: AppColors.textMuted,
           fontSize: 15,
         ),
       ),

@@ -55,7 +55,7 @@ class OfflineScreen extends StatelessWidget {
                   'Check your data or Wi-Fi connection. Cached churches, events and prayers are still available.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.65),
+                    color: AppColors.textMuted,
                     height: 1.55,
                   ),
                 ),

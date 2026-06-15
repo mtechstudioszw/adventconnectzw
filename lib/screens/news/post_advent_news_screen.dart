@@ -478,7 +478,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
           Text(
             label.toUpperCase(),
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: AppColors.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
@@ -489,7 +489,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
             Text(
               helper,
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.55),
+                color: AppColors.textMuted,
                 fontSize: 12,
               ),
             ),
@@ -521,7 +521,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
           Text(
             'CATEGORY',
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: AppColors.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
@@ -655,7 +655,7 @@ class _CategoryChip extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.08),
+                  : AppColors.divider,
             ),
           ),
           child: Text(

@@ -34,7 +34,7 @@ class LastUpdatedStrip extends StatelessWidget {
           Icon(
             isOnline ? Icons.update : Icons.cloud_off_rounded,
             size: 14,
-            color: const Color.fromRGBO(26, 26, 46, 0.5),
+            color: AppColors.textMuted,
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -45,7 +45,7 @@ class LastUpdatedStrip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.labelSmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.55),
+                color: AppColors.textMuted,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
               ),

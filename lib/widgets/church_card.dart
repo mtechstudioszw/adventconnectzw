@@ -68,10 +68,10 @@ class ChurchCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(
+                         Icon(
                           Icons.location_on_outlined,
                           size: 14,
-                          color: Color.fromRGBO(26, 26, 46, 0.6),
+                          color: AppColors.textMuted,
                         ),
                         const SizedBox(width: 4),
                         Flexible(
@@ -80,7 +80,7 @@ class ChurchCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.6),
+                              color: AppColors.textMuted,
                             ),
                           ),
                         ),
@@ -90,10 +90,10 @@ class ChurchCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(
+                           Icon(
                             Icons.account_balance_outlined,
                             size: 14,
-                            color: Color.fromRGBO(26, 26, 46, 0.6),
+                            color: AppColors.textMuted,
                           ),
                           const SizedBox(width: 4),
                           Flexible(
@@ -102,7 +102,7 @@ class ChurchCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                                color: AppColors.textMuted,
                               ),
                             ),
                           ),
@@ -174,9 +174,9 @@ class ChurchCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
+               Icon(
                 Icons.chevron_right,
-                color: Color.fromRGBO(26, 26, 46, 0.3),
+                color: AppColors.textMuted,
               ),
             ],
           ),
@@ -215,9 +215,9 @@ class _CoverImage extends StatelessWidget {
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) => Container(
         color: context.palette.cardMuted,
-        child: const Icon(
+        child:  Icon(
           Icons.broken_image_outlined,
-          color: Color.fromRGBO(26, 26, 46, 0.3),
+          color: AppColors.textMuted,
         ),
       ),
       loadingBuilder: (context, child, progress) {

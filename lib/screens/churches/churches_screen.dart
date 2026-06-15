@@ -470,17 +470,17 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                  const Icon(
+                   Icon(
                     Icons.cloud_off_outlined,
                     size: 56,
-                    color: Color.fromRGBO(26, 26, 46, 0.4),
+                    color: AppColors.textMuted,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     _error!,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.6),
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
@@ -501,16 +501,16 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                  const Icon(
+                   Icon(
                     Icons.church_outlined,
                     size: 56,
-                    color: Color.fromRGBO(26, 26, 46, 0.3),
+                    color: AppColors.textMuted,
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'No churches found',
                     style: AppTextStyles.titleMedium.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.7),
+                      color: AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -518,7 +518,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
                     'Try a different search or city.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.5),
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
@@ -665,7 +665,7 @@ class _FilterChip extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.1),
+                  : AppColors.divider,
             ),
           ),
           child: Row(

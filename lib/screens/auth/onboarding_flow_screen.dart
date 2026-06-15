@@ -1348,7 +1348,7 @@ class _ChipTile extends StatelessWidget {
                 size: 18,
                 color: selected
                     ? AppColors.primaryBlue
-                    : const Color.fromRGBO(26, 26, 46, 0.55),
+                    : AppColors.textMuted,
               ),
               const SizedBox(width: 8),
               Text(
@@ -1397,7 +1397,7 @@ class _NotifSwitch extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color.fromRGBO(26, 26, 46, 0.08),
+                color: AppColors.divider,
               ),
             ),
             child: Row(
@@ -1518,7 +1518,7 @@ class _PermissionCard extends StatelessWidget {
         border: Border.all(
           color: granted
               ? AppColors.successGreen.withValues(alpha: 0.4)
-              : const Color.fromRGBO(26, 26, 46, 0.08),
+              : AppColors.divider,
         ),
         boxShadow: [
           BoxShadow(
@@ -1564,7 +1564,7 @@ class _PermissionCard extends StatelessWidget {
                 Text(
                   description,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
+                    color: AppColors.textMuted,
                     height: 1.4,
                   ),
                 ),
@@ -1727,7 +1727,7 @@ class _SuccessPageState extends State<_SuccessPage>
                       'Welcome to the community. Let\'s get you home.',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.65),
+                        color: AppColors.textMuted,
                         height: 1.5,
                         fontSize: 14.5,
                       ),
@@ -1796,7 +1796,7 @@ class _StepHeader extends StatelessWidget {
         Text(
           subtitle,
           style: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.65),
+            color: AppColors.textMuted,
             fontSize: 14,
             height: 1.45,
           ),
@@ -1815,7 +1815,7 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: AppTextStyles.labelSmall.copyWith(
-        color: const Color.fromRGBO(26, 26, 46, 0.55),
+        color: AppColors.textMuted,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.4,
@@ -1886,7 +1886,7 @@ class _GlowFieldState extends State<_GlowField> {
         decoration: InputDecoration(
           hintText: widget.hint,
           hintStyle: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.5),
+            color: AppColors.textMuted,
           ),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 18, right: 12),
@@ -1894,7 +1894,7 @@ class _GlowFieldState extends State<_GlowField> {
               widget.icon,
               color: _focused
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.5),
+                  : AppColors.textMuted,
               size: 20,
             ),
           ),
@@ -1906,14 +1906,14 @@ class _GlowFieldState extends State<_GlowField> {
               const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
-            borderSide: const BorderSide(
-              color: Color.fromRGBO(26, 26, 46, 0.10),
+            borderSide:  BorderSide(
+              color: AppColors.divider,
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
-            borderSide: const BorderSide(
-              color: Color.fromRGBO(26, 26, 46, 0.10),
+            borderSide:  BorderSide(
+              color: AppColors.divider,
             ),
           ),
           focusedBorder: OutlineInputBorder(

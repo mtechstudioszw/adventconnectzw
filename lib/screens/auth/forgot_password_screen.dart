@@ -135,7 +135,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                 Text(
                   'EMAIL ADDRESS',
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.65),
+                    color: AppColors.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.2,
@@ -169,14 +169,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: Color.fromRGBO(26, 26, 46, 0.06),
+                      borderSide:  BorderSide(
+                        color: AppColors.divider,
                       ),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
-                        color: Color.fromRGBO(26, 26, 46, 0.06),
+                      borderSide:  BorderSide(
+                        color: AppColors.divider,
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
@@ -203,7 +203,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                 Text(
                   'We\'ll only use this to verify it\'s you.',
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.55),
+                    color: AppColors.textMuted,
                   ),
                 ),
               ],
@@ -279,7 +279,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             'We sent a reset link to',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: AppColors.textMuted,
             ),
           ),
           const SizedBox(height: 4),
@@ -296,7 +296,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             'Tap the link in that email to choose a new password. The link expires in 1 hour.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: AppColors.textMuted,
               height: 1.5,
             ),
           ),

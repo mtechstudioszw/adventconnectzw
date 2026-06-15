@@ -89,10 +89,10 @@ class ProductCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(
+                           Icon(
                             Icons.storefront_outlined,
                             size: 12,
-                            color: Color.fromRGBO(26, 26, 46, 0.55),
+                            color: AppColors.textMuted,
                           ),
                           const SizedBox(width: 4),
                           Flexible(
@@ -101,7 +101,7 @@ class ProductCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: const Color.fromRGBO(26, 26, 46, 0.6),
+                                color: AppColors.textMuted,
                                 fontSize: 11.5,
                               ),
                             ),

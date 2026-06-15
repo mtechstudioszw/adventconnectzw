@@ -88,7 +88,7 @@ class PrayerCard extends StatelessWidget {
                           Text(
                             formatTimeAgo(prayer.createdAt),
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.55),
+                              color: AppColors.textMuted,
                               fontSize: 12,
                             ),
                           ),
@@ -133,10 +133,10 @@ class PrayerCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                         Icon(
                           Icons.chat_bubble_outline,
                           size: 14,
-                          color: Color.fromRGBO(26, 26, 46, 0.55),
+                          color: AppColors.textMuted,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -144,7 +144,7 @@ class PrayerCard extends StatelessWidget {
                           style: AppTextStyles.labelSmall.copyWith(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: const Color.fromRGBO(26, 26, 46, 0.7),
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ],
@@ -266,9 +266,9 @@ class _OwnerMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: const Icon(
+      icon:  Icon(
         Icons.more_horiz,
-        color: Color.fromRGBO(26, 26, 46, 0.55),
+        color: AppColors.textMuted,
       ),
       onSelected: (value) {
         if (value == 'edit') onEdit?.call();

@@ -167,7 +167,7 @@ class _SellerApprovalsScreenState extends State<SellerApprovalsScreen> {
         Text(
           '${_pending.length} pending ${_pending.length == 1 ? 'application' : 'applications'}',
           style: AppTextStyles.bodySmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.6),
+            color: AppColors.textMuted,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -466,7 +466,7 @@ class _PendingCard extends StatelessWidget {
                     child: Text(
                       seller.description!,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.85),
+                        color: AppColors.textMuted,
                         height: 1.5,
                       ),
                     ),
@@ -702,13 +702,13 @@ class _MetaRow extends StatelessWidget {
       child: Row(
         children: [
           Icon(icon,
-              size: 14, color: const Color.fromRGBO(26, 26, 46, 0.55)),
+              size: 14, color: AppColors.textMuted),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               text,
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.7),
+                color: AppColors.textMuted,
               ),
             ),
           ),
@@ -761,7 +761,7 @@ class _EmptyCard extends StatelessWidget {
             'New storefronts will show up here for you to approve.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: AppColors.textMuted,
               height: 1.5,
             ),
           ),
@@ -785,17 +785,17 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(
+           Icon(
             Icons.cloud_off_outlined,
             size: 48,
-            color: Color.fromRGBO(26, 26, 46, 0.4),
+            color: AppColors.textMuted,
           ),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: AppColors.textMuted,
             ),
           ),
         ],

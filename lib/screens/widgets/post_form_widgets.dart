@@ -317,11 +317,11 @@ InputDecoration postFormFilledDecoration({
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+      borderSide:  BorderSide(color: AppColors.divider),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
+      borderSide:  BorderSide(color: AppColors.divider),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),

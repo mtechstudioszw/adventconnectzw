@@ -49,7 +49,7 @@ class ReportSubmittedScreen extends StatelessWidget {
                   'Thank you for keeping the community safe. Our team reviews every report and takes action where needed.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.65),
+                    color: AppColors.textMuted,
                     height: 1.55,
                   ),
                 ),

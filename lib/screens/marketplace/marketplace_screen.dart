@@ -523,7 +523,7 @@ Future<void> _showSellerChooser(BuildContext context) {
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color.fromRGBO(26, 26, 46, 0.18),
+                  color: AppColors.divider,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

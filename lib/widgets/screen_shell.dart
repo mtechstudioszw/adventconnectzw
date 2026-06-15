@@ -335,7 +335,7 @@ class InfoBanner extends StatelessWidget {
             child: Text(
               message,
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.85),
+                color: AppColors.textMuted,
                 height: 1.5,
               ),
             ),
@@ -388,7 +388,7 @@ class EmptyStateCard extends StatelessWidget {
             message,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.6),
+              color: AppColors.textMuted,
               height: 1.5,
             ),
           ),

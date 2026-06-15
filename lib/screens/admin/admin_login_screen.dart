@@ -165,7 +165,7 @@ class _SectionLabel extends StatelessWidget {
         Text(
           label,
           style: AppTextStyles.labelSmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            color: AppColors.textMuted,
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.4,
@@ -245,7 +245,7 @@ class _RoleCard extends StatelessWidget {
                       style: AppTextStyles.bodySmall.copyWith(
                         color: approved
                             ? AppColors.successGreen
-                            : const Color.fromRGBO(26, 26, 46, 0.6),
+                            : AppColors.textMuted,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -253,9 +253,9 @@ class _RoleCard extends StatelessWidget {
                 ),
               ),
               if (approved)
-                const Icon(
+                 Icon(
                   Icons.chevron_right,
-                  color: Color.fromRGBO(26, 26, 46, 0.4),
+                  color: AppColors.textMuted,
                 ),
             ],
           ),

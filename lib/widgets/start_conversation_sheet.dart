@@ -138,7 +138,7 @@ class _StartConversationSheetState extends State<_StartConversationSheet> {
               width: 44,
               height: 4,
               decoration: BoxDecoration(
-                color: const Color.fromRGBO(26, 26, 46, 0.18),
+                color: AppColors.divider,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -156,7 +156,7 @@ class _StartConversationSheetState extends State<_StartConversationSheet> {
             'We\'ll open Advent Chat with $firstName. If you aren\'t '
             'friends yet, they\'ll see it in their Requests inbox.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
+              color: AppColors.textMuted,
               height: 1.4,
             ),
           ),

@@ -238,7 +238,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: Text(
                 'Skip',
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  color: AppColors.textMuted,
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                   letterSpacing: 0.4,
@@ -267,7 +267,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               decoration: BoxDecoration(
                 color: active
                     ? AppColors.primaryBlue
-                    : const Color.fromRGBO(26, 26, 46, 0.10),
+                    : AppColors.divider,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -400,7 +400,7 @@ class _SlideViewState extends State<_SlideView>
                       widget.slide.description,
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.62),
+                        color: AppColors.textMuted,
                         fontSize: 14.5,
                         height: 1.55,
                       ),

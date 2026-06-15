@@ -107,7 +107,7 @@ class _LegalLayoutState extends State<LegalLayout>
                       child: Text(
                         '© ${DateTime.now().year} Advent Connect ZW',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: const Color.fromRGBO(26, 26, 46, 0.45),
+                          color: AppColors.textMuted,
                           fontSize: 11,
                           letterSpacing: 1.0,
                         ),
@@ -254,7 +254,7 @@ class _LegalLayoutState extends State<LegalLayout>
                 Text(
                   widget.draftNotice!,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.78),
+                    color: AppColors.textMuted,
                     height: 1.45,
                     fontSize: 12.5,
                   ),
@@ -284,7 +284,7 @@ class _LegalLayoutState extends State<LegalLayout>
       child: Text(
         widget.intro,
         style: AppTextStyles.bodyMedium.copyWith(
-          color: const Color.fromRGBO(26, 26, 46, 0.85),
+          color: AppColors.textMuted,
           fontSize: 14.5,
           height: 1.6,
         ),
@@ -316,9 +316,9 @@ class _LegalLayoutState extends State<LegalLayout>
             ),
             if (i != widget.sections.length - 1) ...[
               const SizedBox(height: 18),
-              const Divider(
+               Divider(
                 height: 1,
-                color: Color.fromRGBO(26, 26, 46, 0.06),
+                color: AppColors.divider,
               ),
               const SizedBox(height: 18),
             ],
@@ -375,7 +375,7 @@ class _SectionBlock extends StatelessWidget {
         Text(
           section.body,
           style: AppTextStyles.bodyMedium.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.82),
+            color: AppColors.textMuted,
             fontSize: 14,
             height: 1.65,
           ),
@@ -401,7 +401,7 @@ class _SectionBlock extends StatelessWidget {
                     child: Text(
                       b,
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.82),
+                        color: AppColors.textMuted,
                         fontSize: 14,
                         height: 1.55,
                       ),

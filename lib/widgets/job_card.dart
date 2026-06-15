@@ -60,7 +60,7 @@ class JobCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.labelMedium.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.7),
+                              color: AppColors.textMuted,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -104,16 +104,16 @@ class JobCard extends StatelessWidget {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        const Icon(
+                         Icon(
                           Icons.schedule,
                           size: 12,
-                          color: Color.fromRGBO(26, 26, 46, 0.5),
+                          color: AppColors.textMuted,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           _timeAgo(job.createdAt),
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color.fromRGBO(26, 26, 46, 0.55),
+                            color: AppColors.textMuted,
                             fontSize: 11.5,
                           ),
                         ),
@@ -190,7 +190,7 @@ class _CompanyLogo extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.palette.cardMuted,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color.fromRGBO(26, 26, 46, 0.06)),
+        border: Border.all(color: AppColors.divider),
       ),
       child: hasLogo
           ? CachedImage(
@@ -234,12 +234,12 @@ class _Chip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: const Color.fromRGBO(26, 26, 46, 0.6)),
+          Icon(icon, size: 11, color: AppColors.textMuted),
           const SizedBox(width: 4),
           Text(
             label,
             style: AppTextStyles.labelSmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.7),
+              color: AppColors.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),

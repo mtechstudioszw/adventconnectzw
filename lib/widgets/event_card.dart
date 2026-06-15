@@ -96,7 +96,7 @@ class EventCard extends StatelessWidget {
                     const SizedBox(height: 12),
                     Container(
                       height: 1,
-                      color: const Color.fromRGBO(26, 26, 46, 0.06),
+                      color: AppColors.divider,
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -121,7 +121,7 @@ class EventCard extends StatelessWidget {
                               : ' going',
                           style: AppTextStyles.bodySmall.copyWith(
                             color:
-                                const Color.fromRGBO(26, 26, 46, 0.6),
+                                AppColors.textMuted,
                             fontSize: 13,
                           ),
                         ),
@@ -204,10 +204,10 @@ class _CoverHero extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Container(
                 color: context.palette.cardMuted,
-                child: const Center(
+                child: Center(
                   child: Icon(
                     Icons.broken_image_outlined,
-                    color: Color.fromRGBO(26, 26, 46, 0.3),
+                    color: AppColors.textMuted,
                     size: 36,
                   ),
                 ),
@@ -364,7 +364,7 @@ class _InfoRow extends StatelessWidget {
         Icon(
           icon,
           size: 14,
-          color: const Color.fromRGBO(26, 26, 46, 0.55),
+          color: AppColors.textMuted,
         ),
         const SizedBox(width: 6),
         Expanded(
@@ -373,7 +373,7 @@ class _InfoRow extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.bodySmall.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.7),
+              color: AppColors.textMuted,
               fontSize: 13,
               height: 1.35,
             ),

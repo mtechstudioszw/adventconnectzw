@@ -322,7 +322,7 @@ class _PermissionRow extends StatelessWidget {
                     Text(
                       description,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.65),
+                        color: AppColors.textMuted,
                         fontSize: 12.5,
                         height: 1.4,
                       ),
@@ -369,11 +369,11 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Divider(
         height: 1,
-        color: Color.fromRGBO(26, 26, 46, 0.06),
+        color: AppColors.divider,
       ),
     );
   }

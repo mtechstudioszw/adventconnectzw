@@ -35,7 +35,7 @@ class OfflineInlineNotice extends StatelessWidget {
           color: context.palette.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color.fromRGBO(26, 26, 46, 0.10),
+            color: AppColors.divider,
           ),
           boxShadow: [
             BoxShadow(
@@ -80,7 +80,7 @@ class OfflineInlineNotice extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: const Color.fromRGBO(26, 26, 46, 0.65),
+                      color: AppColors.textMuted,
                       fontSize: 12,
                       height: 1.4,
                     ),

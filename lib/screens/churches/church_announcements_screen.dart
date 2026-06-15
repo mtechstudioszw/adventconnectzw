@@ -232,7 +232,7 @@ class _AnnouncementCard extends StatelessWidget {
               Text(
                 _relative(item.createdAt),
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: const Color.fromRGBO(26, 26, 46, 0.55),
+                  color: AppColors.textMuted,
                 ),
               ),
             ],
@@ -248,7 +248,7 @@ class _AnnouncementCard extends StatelessWidget {
           Text(
             item.body,
             style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.85),
+              color: AppColors.textMuted,
               height: 1.55,
             ),
           ),

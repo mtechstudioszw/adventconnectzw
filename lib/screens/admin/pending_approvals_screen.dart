@@ -205,7 +205,7 @@ class _SectionLabel extends StatelessWidget {
         Text(
           label,
           style: AppTextStyles.labelSmall.copyWith(
-            color: const Color.fromRGBO(26, 26, 46, 0.55),
+            color: AppColors.textMuted,
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.4,
@@ -285,7 +285,7 @@ class _ApprovalCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: const Color.fromRGBO(26, 26, 46, 0.65),
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ],
@@ -300,7 +300,7 @@ class _ApprovalCard extends StatelessWidget {
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodySmall.copyWith(
-                color: const Color.fromRGBO(26, 26, 46, 0.75),
+                color: AppColors.textMuted,
                 height: 1.55,
               ),
             ),

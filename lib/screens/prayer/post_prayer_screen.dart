@@ -258,7 +258,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
                         border: Border.all(
                           color: c == _category
                               ? AppColors.primaryBlue
-                              : const Color.fromRGBO(26, 26, 46, 0.08),
+                              : AppColors.divider,
                         ),
                       ),
                       child: Text(
@@ -407,7 +407,7 @@ class _VisibilityOption extends StatelessWidget {
             border: Border.all(
               color: selected
                   ? AppColors.primaryBlue
-                  : const Color.fromRGBO(26, 26, 46, 0.06),
+                  : AppColors.divider,
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -455,7 +455,7 @@ class _VisibilityOption extends StatelessWidget {
                     : Icons.radio_button_unchecked,
                 color: selected
                     ? AppColors.primaryBlue
-                    : const Color.fromRGBO(26, 26, 46, 0.30),
+                    : AppColors.textMuted,
                 size: 22,
               ),
             ],

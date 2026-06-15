@@ -28,6 +28,8 @@ class AppColors {
   // text flips to light in dark mode. Light values == the originals.
   static Color text = textDark;
   static Color textMuted = const Color.fromRGBO(26, 26, 46, 0.6);
+  // Adaptive hairline/divider colour (was hard-coded Color.fromRGBO(26,26,46,~0.1)).
+  static Color divider = const Color.fromRGBO(26, 26, 46, 0.1);
 
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF1565C0), Color(0xFF1976D2)],

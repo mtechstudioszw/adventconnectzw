@@ -1664,11 +1664,13 @@ class _SuccessPageState extends State<_SuccessPage>
     return AnimatedBuilder(
       animation: Listenable.merge([_bounce, _exit]),
       builder: (context, _) {
-        final exitT = Curves.easeInCubic.transform(_exit.value);
-        // Disc grows from its settled size out to ~11x so it floods the
-        // screen with the brand gradient before we hand off to Home.
-        final discScale = _scale.value.clamp(0.0, 1.0) * (1 + exitT * 10);
-        final contentOpacity = (1 - exitT * 1.4).clamp(0.0, 1.0);
+        final exitT = Curves.easeInExpo.transform(_exit.value);
+        // Tap -> the disc accelerates outward and swells well past the
+        // screen edges, flooding it with the brand gradient (a snappy
+        // "dive into the app" reveal) while the text + button fade and
+        // lift away beneath it.
+        final discScale = _scale.value.clamp(0.0, 1.0) * (1 + exitT * 16);
+        final contentOpacity = (1 - exitT * 2.2).clamp(0.0, 1.0);
         return Padding(
           padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
           child: Column(

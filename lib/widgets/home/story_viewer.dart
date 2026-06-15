@@ -6,6 +6,7 @@ import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import 'story_text_style.dart';
 import '../cached_image.dart';
 
 /// Full-screen story viewer modelled on Instagram / Facebook. Each
@@ -334,11 +335,10 @@ class _StoryViewerState extends State<StoryViewer>
                       child: Text(
                         story.textContent ?? '',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: storyFontStyle(
+                          story.textFont,
                           color: AppColors.white,
                           fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          height: 1.3,
                         ),
                       ),
                     )

@@ -14,6 +14,7 @@ class Story {
     this.kind = 'photo',
     this.textContent,
     this.backgroundColor,
+    this.textFont,
   });
 
   final String id;
@@ -29,6 +30,7 @@ class Story {
   final String kind;
   final String? textContent;
   final String? backgroundColor;
+  final String? textFont;
 
   bool get isText => kind == 'text';
 
@@ -54,6 +56,7 @@ class Story {
         'kind': kind,
         'text_content': textContent,
         'background_color': backgroundColor,
+        'text_font': textFont,
         'created_at': createdAt.toIso8601String(),
         'expires_at': expiresAt.toIso8601String(),
       };
@@ -81,6 +84,7 @@ class Story {
       kind: (json['kind'] as String?) ?? 'photo',
       textContent: json['text_content'] as String?,
       backgroundColor: json['background_color'] as String?,
+      textFont: json['text_font'] as String?,
       createdAt: createdAt,
       expiresAt: expiresAt,
     );

@@ -402,6 +402,7 @@ class FeedService {
     String kind = 'photo',
     String? textContent,
     String? backgroundColor,
+    String? textFont,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -418,6 +419,7 @@ class FeedService {
             if (textContent != null && textContent.trim().isNotEmpty)
               'text_content': textContent.trim(),
             'background_color': ?backgroundColor,
+            if (textFont != null && textFont.isNotEmpty) 'text_font': textFont,
             if (caption != null && caption.trim().isNotEmpty)
               'caption': caption.trim(),
           })

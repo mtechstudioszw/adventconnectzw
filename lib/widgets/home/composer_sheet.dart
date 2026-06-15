@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
+import 'story_text_style.dart';
 
 /// Opens the "write a post" bottom sheet. Resolves to the freshly
 /// created Post or null if the user cancelled.
@@ -355,6 +356,7 @@ class _StoryComposerState extends State<_StoryComposer> {
   // tapping the photo button switches to an image story.
   bool _textMode = true;
   int _bgIndex = 0;
+  int _fontIndex = 0;
   static const List<int> _bgColors = [
     0xFF1565C0, // brand blue
     0xFF0D1B3E, // navy
@@ -412,6 +414,7 @@ class _StoryComposerState extends State<_StoryComposer> {
               textContent: _statusText.text.trim(),
               backgroundColor:
                   '#${_bgColors[_bgIndex].toRadixString(16).substring(2)}',
+              textFont: kStoryFontKeys[_fontIndex],
             )
           : await FeedService.createStory(
               mediaUrl: _mediaUrl!,
@@ -439,11 +442,19 @@ class _StoryComposerState extends State<_StoryComposer> {
     // Use the safe screen height minus the keyboard so the sheet
     // doesn't overlap the caption field while typing.
     final media = MediaQuery.of(context);
-    final maxSheetHeight = media.size.height - media.padding.top - 24;
+    // Text status fills the WHOLE screen (WhatsApp-style) so the chosen
+    // colour covers everything — no home screen showing through above the
+    // sheet (the "white space" the tester saw). Photo mode stays a sheet.
+    final maxSheetHeight = _textMode
+        ? media.size.height - media.viewInsets.bottom
+        : media.size.height - media.padding.top - 24;
     return Padding(
       padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxSheetHeight),
+        constraints: BoxConstraints(
+          maxHeight: maxSheetHeight,
+          minHeight: _textMode ? maxSheetHeight : 0,
+        ),
         child: Container(
           decoration: BoxDecoration(
             // In text-status mode the WHOLE sheet is the chosen colour
@@ -452,10 +463,12 @@ class _StoryComposerState extends State<_StoryComposer> {
             color: _textMode
                 ? Color(_bgColors[_bgIndex])
                 : context.palette.sheet,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: _textMode
+                ? BorderRadius.zero
+                : const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SafeArea(
-            top: false,
+            top: _textMode,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -518,44 +531,78 @@ class _StoryComposerState extends State<_StoryComposer> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (_textMode) ...[
-                          // ---- TEXT STATUS editor ----
-                          // Height GROWS with the text (minLines/maxLines)
-                          // instead of a tall fixed 4:5 box. The old box put
-                          // the centred text ~225px down — behind the keyboard
-                          // — so the user typed but never saw their text
-                          // (tester: "type something but no text shows").
-                          Container(
-                            constraints: const BoxConstraints(minHeight: 170),
-                            decoration: BoxDecoration(
-                              color: Color(_bgColors[_bgIndex]),
-                              borderRadius: BorderRadius.circular(14),
+                          // ---- TEXT STATUS editor (full-screen, WhatsApp-style)
+                          // The sheet itself is already the chosen colour, so
+                          // the field is seamless (no inner card / white box).
+                          // White text, picked font, centred.
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 220),
+                            child: Center(
+                              child: TextField(
+                                controller: _statusText,
+                                autofocus: true,
+                                textAlign: TextAlign.center,
+                                minLines: 1,
+                                maxLines: null,
+                                // WhatsApp text-status parity (700 chars).
+                                maxLength: 700,
+                                keyboardType: TextInputType.multiline,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                style: storyFontStyle(
+                                  kStoryFontKeys[_fontIndex],
+                                  color: AppColors.white,
+                                  fontSize: 30,
+                                ),
+                                cursorColor: AppColors.white,
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  counterText: '',
+                                  border: InputBorder.none,
+                                  hintText: 'Type a status…',
+                                  hintStyle: TextStyle(
+                                      color: Colors.white70, fontSize: 24),
+                                ),
+                                onChanged: (_) => setState(() {}),
+                              ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 24),
-                            child: TextField(
-                              controller: _statusText,
-                              autofocus: true,
-                              textAlign: TextAlign.center,
-                              minLines: 3,
-                              maxLines: null,
-                              maxLength: 280,
-                              keyboardType: TextInputType.multiline,
-                              textCapitalization: TextCapitalization.sentences,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
+                          ),
+                          const SizedBox(height: 16),
+                          // Font picker.
+                          SizedBox(
+                            height: 36,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: kStoryFontKeys.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (_, i) => GestureDetector(
+                                onTap: () => setState(() => _fontIndex = i),
+                                child: Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.white.withValues(
+                                        alpha: _fontIndex == i ? 0.25 : 0.10),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: _fontIndex == i
+                                          ? AppColors.white
+                                          : Colors.transparent,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    kStoryFontLabels[i],
+                                    style: storyFontStyle(
+                                      kStoryFontKeys[i],
+                                      color: AppColors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
                               ),
-                              cursorColor: Colors.white,
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                counterText: '',
-                                border: InputBorder.none,
-                                hintText: 'Type a status…',
-                                hintStyle: TextStyle(
-                                    color: Colors.white70, fontSize: 20),
-                              ),
-                              onChanged: (_) => setState(() {}),
                             ),
                           ),
                           const SizedBox(height: 12),

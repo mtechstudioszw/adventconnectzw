@@ -301,6 +301,14 @@ class _AdventConnectAppState extends State<AdventConnectApp>
   }
 
   @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    // If we're following the system theme, rebuild so AppTextStyles /
+    // AppColors re-resolve when the user flips their device dark mode.
+    if (ThemeService.current == ThemeMode.system && mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Theme follows the user's saved choice (Settings → Appearance).
     // ThemeService.init() ran before runApp so the first frame is already

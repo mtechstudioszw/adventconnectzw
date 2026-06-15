@@ -83,6 +83,34 @@ import '../screens/settings/settings_screen.dart';
 import '../screens/splash/biometric_lock_screen.dart';
 import '../screens/splash/splash_screen.dart';
 
+/// A calm fade-through + gentle scale-up page transition. Used for the auth
+/// screen so finishing the onboarding tour glides into sign-up instead of a
+/// hard cut.
+CustomTransitionPage<void> _fadeScalePage(
+  GoRouterState state,
+  Widget child,
+) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 520),
+    reverseTransitionDuration: const Duration(milliseconds: 320),
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
   debugLogDiagnostics: false,
@@ -110,19 +138,19 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/signup',
       name: 'signup',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final birthDate =
             state.extra is DateTime ? state.extra as DateTime : null;
-        return AuthScreen(birthDate: birthDate);
+        return _fadeScalePage(state, AuthScreen(birthDate: birthDate));
       },
     ),
     GoRoute(
       path: '/login',
       name: 'login',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final birthDate =
             state.extra is DateTime ? state.extra as DateTime : null;
-        return AuthScreen(birthDate: birthDate);
+        return _fadeScalePage(state, AuthScreen(birthDate: birthDate));
       },
     ),
     GoRoute(

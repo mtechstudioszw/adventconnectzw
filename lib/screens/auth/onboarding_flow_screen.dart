@@ -1623,6 +1623,10 @@ class _SuccessPageState extends State<_SuccessPage>
     with TickerProviderStateMixin {
   late final AnimationController _bounce;
   late final Animation<double> _scale;
+  // Tap "Enter App" -> the success disc swells to fill the screen (a
+  // "diving into the app" reveal) while the text fades, then we navigate.
+  late final AnimationController _exit;
+  bool _leaving = false;
 
   @override
   void initState() {
@@ -1634,28 +1638,46 @@ class _SuccessPageState extends State<_SuccessPage>
     _scale = Tween<double>(begin: 0.4, end: 1.0).animate(
       CurvedAnimation(parent: _bounce, curve: Curves.elasticOut),
     );
+    _exit = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 560),
+    );
   }
 
   @override
   void dispose() {
     _bounce.dispose();
+    _exit.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleEnter() async {
+    if (_leaving) return;
+    setState(() => _leaving = true);
+    HapticFeedback.mediumImpact();
+    await _exit.forward();
+    widget.onEnter();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Spacer(),
-          Center(
-            child: AnimatedBuilder(
-              animation: _scale,
-              builder: (context, _) {
-                return Transform.scale(
-                  scale: _scale.value.clamp(0.0, 1.0),
+    return AnimatedBuilder(
+      animation: Listenable.merge([_bounce, _exit]),
+      builder: (context, _) {
+        final exitT = Curves.easeInCubic.transform(_exit.value);
+        // Disc grows from its settled size out to ~11x so it floods the
+        // screen with the brand gradient before we hand off to Home.
+        final discScale = _scale.value.clamp(0.0, 1.0) * (1 + exitT * 10);
+        final contentOpacity = (1 - exitT * 1.4).clamp(0.0, 1.0);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Spacer(),
+              Center(
+                child: Transform.scale(
+                  scale: discScale,
                   child: Container(
                     width: 140,
                     height: 140,
@@ -1664,54 +1686,67 @@ class _SuccessPageState extends State<_SuccessPage>
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primaryBlue
-                              .withValues(alpha: 0.40),
+                          color: AppColors.primaryBlue.withValues(alpha: 0.40),
                           blurRadius: 32,
                           offset: const Offset(0, 16),
                         ),
                       ],
                     ),
                     // TODO(dark-mode): const Icon — sits on primaryGradient success disc.
-                    child: const Icon(
-                      Icons.check_rounded,
-                      color: AppColors.white,
-                      size: 72,
+                    child: Opacity(
+                      opacity: (1 - exitT * 2).clamp(0.0, 1.0),
+                      child: const Icon(
+                        Icons.check_rounded,
+                        color: AppColors.white,
+                        size: 72,
+                      ),
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+              const SizedBox(height: 36),
+              Opacity(
+                opacity: contentOpacity,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Your account is ready',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.displayLarge.copyWith(
+                        color: AppColors.darkNavy,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        height: 1.18,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Welcome to the community. Let\'s get you home.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: const Color.fromRGBO(26, 26, 46, 0.65),
+                        height: 1.5,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Opacity(
+                opacity: contentOpacity,
+                child: _PrimaryButton(
+                  label: 'Enter App',
+                  busy: false,
+                  onTap: _leaving ? null : _handleEnter,
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
           ),
-          const SizedBox(height: 36),
-          Text(
-            'Your account is ready',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.displayLarge.copyWith(
-              color: AppColors.darkNavy,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              height: 1.18,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Welcome to the community. Let\'s get you home.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.65),
-              height: 1.5,
-              fontSize: 14.5,
-            ),
-          ),
-          const Spacer(),
-          _PrimaryButton(
-            label: 'Enter App',
-            busy: false,
-            onTap: widget.onEnter,
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
+        );
+      },
     );
   }
 }

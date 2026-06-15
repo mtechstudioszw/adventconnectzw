@@ -41,6 +41,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           'with directions, services, and pastors at your fingertips.',
     ),
     _Slide(
+      tag: 'DEVOTIONS',
+      icon: Icons.auto_stories_rounded,
+      headline: 'A fresh word\nevery morning.',
+      description:
+          'Wake up to a daily Bible verse paired with an Ellen G. White '
+          'reflection — gently delivered to start your day with Christ.',
+    ),
+    _Slide(
       tag: 'EVENTS',
       icon: Icons.event_available_rounded,
       headline: 'Never miss\na gathering.',
@@ -71,6 +79,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       description:
           'Lift up requests, intercede for one another, and witness how '
           'God moves through community.',
+    ),
+    _Slide(
+      tag: 'STORIES',
+      icon: Icons.amp_stories_rounded,
+      headline: 'Share your\nmoment.',
+      description:
+          'Post photo and text status updates your community sees for 24 '
+          'hours — testimonies, verses, and everyday blessings.',
     ),
     _Slide(
       tag: 'CONNECT',

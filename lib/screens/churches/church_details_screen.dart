@@ -35,6 +35,9 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   // can't unfollow it, and you can't follow OTHER churches — you change your
   // home church (3-month cooldown) from your profile instead.
   String? _homeChurchId;
+  // The signed-in user's APPROVED admin role for this church (if any) →
+  // shows the "Manage this church" button instead of the claim link.
+  ChurchAdminRole? _myRole;
 
   bool get _isHomeChurch =>
       _homeChurchId != null &&
@@ -57,12 +60,22 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         ChurchService.fetchChurchById(widget.churchId),
         ChurchService.isFollowing(widget.churchId),
         ChurchService.hasApprovedAdmin(widget.churchId),
+        ChurchService.fetchMyAdminRoles(),
       ]);
       if (!mounted) return;
+      final roles = results[3] as List<ChurchAdminRole>;
+      ChurchAdminRole? mine;
+      for (final r in roles) {
+        if (r.churchId == widget.churchId && r.isApproved) {
+          mine = r;
+          break;
+        }
+      }
       setState(() {
         _church = (results[0] as Church?) ?? _church;
         _isFollowing = results[1] as bool;
         _hasAdmin = results[2] as bool;
+        _myRole = mine;
         _loading = false;
       });
     } catch (_) {
@@ -481,6 +494,29 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
 
   Widget _buildClaimLink() {
     final church = _church;
+    // Approved admin → open the dashboard instead of the claim link.
+    if (_myRole != null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: () =>
+                context.pushNamed('admin_dashboard', extra: _myRole),
+            icon: const Icon(Icons.dashboard_customize_outlined),
+            label: Text('Manage this church',
+                style: AppTextStyles.buttonText),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
       child: TextButton.icon(

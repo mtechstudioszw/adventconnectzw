@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -30,12 +31,23 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   bool _followBusy = false;
   bool _hasAdmin = true; // optimistic — gate only flips when we confirm
   String? _error;
+  // The signed-in user's mandatory home church (profiles.church_id). You
+  // can't unfollow it, and you can't follow OTHER churches — you change your
+  // home church (3-month cooldown) from your profile instead.
+  String? _homeChurchId;
+
+  bool get _isHomeChurch =>
+      _homeChurchId != null &&
+      _homeChurchId!.isNotEmpty &&
+      _homeChurchId == widget.churchId;
 
   @override
   void initState() {
     super.initState();
     _church = widget.initialChurch;
     _loading = widget.initialChurch == null;
+    _homeChurchId =
+        AuthService.currentUser?.userMetadata?['church_id']?.toString();
     _bootstrap();
   }
 
@@ -62,9 +74,35 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     }
   }
 
+  void _churchToast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg,
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+      ),
+    );
+  }
+
   Future<void> _toggleFollow() async {
     final church = _church;
     if (church == null) return;
+
+    // You can't unfollow your HOME church — you change it (every 3 months)
+    // from your profile, not by unfollowing here.
+    if (_isFollowing && _isHomeChurch) {
+      _churchToast(
+          'This is your home church. Change it from your profile — '
+          'you can switch once every 3 months.');
+      return;
+    }
+    // You can only be part of your home church — no following other churches.
+    if (!_isFollowing && !_isHomeChurch) {
+      _churchToast(
+          'You can only follow your home church. Set this as your home '
+          'church from your profile (Edit profile → Home church).');
+      return;
+    }
 
     setState(() => _followBusy = true);
     try {
@@ -328,7 +366,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                       )
                     : const Icon(Icons.check, color: AppColors.primaryBlue),
                 label: Text(
-                  'Following',
+                  _isHomeChurch ? 'Home church' : 'Following',
                   style: AppTextStyles.titleMedium.copyWith(
                     color: AppColors.primaryBlue,
                   ),

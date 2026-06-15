@@ -696,8 +696,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: AppColors.white,
-        onPressed: _openNewChatSheet,
-        child: const Icon(Icons.edit_square),
+        // Status tab: the + adds a photo/text STATUS (story composer).
+        // Chats / Groups: the + starts a new chat as before.
+        onPressed: _tab == _ConversationsTab.status
+            ? _openStoryComposer
+            : _openNewChatSheet,
+        child: Icon(_tab == _ConversationsTab.status
+            ? Icons.add_a_photo_outlined
+            : Icons.edit_square),
       ),
       body: Column(
         children: [

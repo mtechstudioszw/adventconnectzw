@@ -18,6 +18,7 @@ import 'services/messaging_service.dart';
 import 'services/presence_service.dart';
 import 'services/push_service.dart';
 import 'services/theme_service.dart';
+import 'theme/app_text_styles.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/voice_mini_bar.dart';
@@ -308,6 +309,15 @@ class _AdventConnectAppState extends State<AdventConnectApp>
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeService.notifier,
       builder: (context, mode, _) {
+        // Resolve the active brightness and point AppTextStyles at it BEFORE
+        // MaterialApp builds its routes, so the hundreds of direct
+        // `AppTextStyles.*` usages render light text in dark mode.
+        final brightness = mode == ThemeMode.dark
+            ? Brightness.dark
+            : mode == ThemeMode.light
+                ? Brightness.light
+                : PlatformDispatcher.instance.platformBrightness;
+        AppTextStyles.applyBrightness(brightness);
         return MaterialApp.router(
           title: 'Advent Connect ZW',
           debugShowCheckedModeBanner: false,

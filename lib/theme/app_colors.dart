@@ -12,6 +12,17 @@ class AppColors {
   static const Color red = Color(0xFFD32F2F);
   static const Color successGreen = Color(0xFF2E7D32);
 
+  // ---- Brightness-aware surfaces (NOT const) ----------------------------
+  // For bespoke `Container`/`Material`/`BoxDecoration` fills that previously
+  // hard-coded `white`/`lightGrey`. Updated by [AppTextStyles.applyBrightness]
+  // (called from main.dart before each MaterialApp build), so context-less
+  // helper methods can adapt to dark mode without threading a BuildContext.
+  // Light values are byte-identical to the originals — light mode unchanged.
+  // (Screens that already have a BuildContext should prefer `context.palette`.)
+  static Color surface = white; // cards, sheets, dialogs
+  static Color surfaceMuted = lightGrey; // nested / muted fills
+  static Color scaffold = lightGrey; // screen canvas
+
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF1565C0), Color(0xFF1976D2)],
     begin: Alignment.topLeft,

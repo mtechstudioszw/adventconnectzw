@@ -225,7 +225,7 @@ class AboutScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -322,7 +322,7 @@ class AboutScreen extends StatelessWidget {
         ),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(

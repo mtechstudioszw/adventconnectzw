@@ -122,7 +122,7 @@ class _PermissionsScreenState extends State<PermissionsScreen>
     }
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(

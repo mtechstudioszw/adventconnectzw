@@ -519,38 +519,43 @@ class _StoryComposerState extends State<_StoryComposer> {
                       children: [
                         if (_textMode) ...[
                           // ---- TEXT STATUS editor ----
-                          AspectRatio(
-                            aspectRatio: 4 / 5,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Color(_bgColors[_bgIndex]),
-                                borderRadius: BorderRadius.circular(14),
+                          // Height GROWS with the text (minLines/maxLines)
+                          // instead of a tall fixed 4:5 box. The old box put
+                          // the centred text ~225px down — behind the keyboard
+                          // — so the user typed but never saw their text
+                          // (tester: "type something but no text shows").
+                          Container(
+                            constraints: const BoxConstraints(minHeight: 170),
+                            decoration: BoxDecoration(
+                              color: Color(_bgColors[_bgIndex]),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 24),
+                            child: TextField(
+                              controller: _statusText,
+                              autofocus: true,
+                              textAlign: TextAlign.center,
+                              minLines: 3,
+                              maxLines: null,
+                              maxLength: 280,
+                              keyboardType: TextInputType.multiline,
+                              textCapitalization: TextCapitalization.sentences,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
                               ),
-                              alignment: Alignment.center,
-                              padding: const EdgeInsets.all(20),
-                              child: TextField(
-                                controller: _statusText,
-                                autofocus: true,
-                                textAlign: TextAlign.center,
-                                maxLines: 8,
-                                maxLength: 280,
-                                textCapitalization:
-                                    TextCapitalization.sentences,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                cursorColor: Colors.white,
-                                decoration: const InputDecoration(
-                                  counterText: '',
-                                  border: InputBorder.none,
-                                  hintText: 'Type a status…',
-                                  hintStyle: TextStyle(
-                                      color: Colors.white70, fontSize: 20),
-                                ),
-                                onChanged: (_) => setState(() {}),
+                              cursorColor: Colors.white,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                counterText: '',
+                                border: InputBorder.none,
+                                hintText: 'Type a status…',
+                                hintStyle: TextStyle(
+                                    color: Colors.white70, fontSize: 20),
                               ),
+                              onChanged: (_) => setState(() {}),
                             ),
                           ),
                           const SizedBox(height: 12),

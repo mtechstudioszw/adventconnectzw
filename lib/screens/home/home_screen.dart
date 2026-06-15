@@ -2347,7 +2347,7 @@ class _HomeEventCard extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.white,
+                            color: AppColors.surface,
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
                               BoxShadow(

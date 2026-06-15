@@ -702,7 +702,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                         height: 56,
                         clipBehavior: Clip.antiAlias,
                         decoration: BoxDecoration(
-                          color: AppColors.white,
+                          color: AppColors.surface,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: AppColors.white.withValues(alpha: 0.2),

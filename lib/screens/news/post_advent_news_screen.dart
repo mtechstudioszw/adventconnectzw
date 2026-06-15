@@ -349,7 +349,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
 
   Widget _buildCoverPicker() {
     return Material(
-      color: AppColors.white,
+      color: AppColors.surface,
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -462,7 +462,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -505,7 +505,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(

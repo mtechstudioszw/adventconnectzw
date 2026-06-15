@@ -311,7 +311,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.white,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(

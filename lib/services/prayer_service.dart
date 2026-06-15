@@ -81,7 +81,8 @@ class PrayerService {
   static Future<List<PrayingUser>> fetchPrayingUsers(String prayerId) async {
     final response = await _client
         .from(_responsesTable)
-        .select('user_id, created_at, profiles:user_id(full_name)')
+        .select(
+            'user_id, created_at, profiles:user_id(full_name, profile_photo_url)')
         .eq('prayer_id', prayerId)
         .eq('response_type', 'praying')
         .order('created_at', ascending: false)
@@ -90,9 +91,11 @@ class PrayerService {
       final map = row as Map<String, dynamic>;
       final profile = map['profiles'] as Map<String, dynamic>?;
       final name = (profile?['full_name'] as String?)?.trim();
+      final photo = (profile?['profile_photo_url'] as String?)?.trim();
       return PrayingUser(
         userId: map['user_id']?.toString() ?? '',
         userName: name?.isNotEmpty == true ? name! : 'A friend',
+        photoUrl: photo?.isNotEmpty == true ? photo : null,
       );
     }).toList();
   }
@@ -295,8 +298,14 @@ class PrayerService {
     final author = row['author'] as Map<String, dynamic>?;
     final name = (author?['full_name'] as String?)?.trim();
     final photo = (author?['profile_photo_url'] as String?)?.trim();
+    // Compute ownership BEFORE masking the author_id — the owner must be able
+    // to delete/edit their own prayer even when it was posted anonymously
+    // (the anonymous mask hides the author from OTHERS, not from themselves).
+    final myId = _client.auth.currentUser?.id;
+    final isMine = myId != null && row['author_id']?.toString() == myId;
     final masked = <String, dynamic>{
       ...row,
+      'is_mine': isMine,
       if (isAnonymous) 'author_id': null,
       'author_name':
           isAnonymous ? 'Anonymous' : (name?.isNotEmpty == true ? name : 'A friend'),
@@ -327,7 +336,12 @@ class PrayerService {
 }
 
 class PrayingUser {
-  const PrayingUser({required this.userId, required this.userName});
+  const PrayingUser({
+    required this.userId,
+    required this.userName,
+    this.photoUrl,
+  });
   final String userId;
   final String userName;
+  final String? photoUrl;
 }

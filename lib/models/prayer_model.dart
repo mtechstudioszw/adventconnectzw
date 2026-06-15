@@ -34,6 +34,8 @@ class Prayer {
     this.authorPhotoUrl,
     this.commentCount = 0,
     this.category = PrayerCategory.other,
+    this.isMine = false,
+    this.isAnonymous = false,
   });
 
   final String id;
@@ -45,6 +47,14 @@ class Prayer {
   final int commentCount;
   final DateTime createdAt;
   final PrayerCategory category;
+
+  /// True when the signed-in user posted this prayer — computed server-side
+  /// BEFORE the anonymous mask, so the owner can still delete/edit a prayer
+  /// they posted anonymously (the mask only hides them from others).
+  final bool isMine;
+
+  /// True when this prayer was posted anonymously (author hidden from others).
+  final bool isAnonymous;
 
   factory Prayer.fromJson(Map<String, dynamic> json) {
     return Prayer(
@@ -58,6 +68,8 @@ class Prayer {
       category: PrayerCategory.fromCode(json['category'] as String?),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      isMine: json['is_mine'] == true,
+      isAnonymous: (json['visibility'] as String?) == 'anonymous',
     );
   }
 
@@ -72,6 +84,8 @@ class Prayer {
       commentCount: commentCount ?? this.commentCount,
       category: category,
       createdAt: createdAt,
+      isMine: isMine,
+      isAnonymous: isAnonymous,
     );
   }
 

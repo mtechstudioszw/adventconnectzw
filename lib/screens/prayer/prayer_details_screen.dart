@@ -544,6 +544,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                       ),
                       child: PrayerAvatar(
                         name: visible[i].userName,
+                        photoUrl: visible[i].photoUrl,
                         size: 40,
                       ),
                     ),

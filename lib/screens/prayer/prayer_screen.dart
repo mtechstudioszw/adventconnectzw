@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/prayer_model.dart';
-import '../../services/auth_service.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -186,6 +185,77 @@ class _PrayerScreenState extends State<PrayerScreen>
     }
   }
 
+  Future<void> _editPrayer(Prayer prayer) async {
+    final controller = TextEditingController(text: prayer.content);
+    final newContent = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Edit prayer', style: AppTextStyles.headlineSmall),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 6,
+          maxLength: 1000,
+          textCapitalization: TextCapitalization.sentences,
+          style: AppTextStyles.bodyMedium,
+          decoration: const InputDecoration(
+            hintText: 'Update your prayer request…',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style: AppTextStyles.labelMedium
+                    .copyWith(color: context.palette.text)),
+          ),
+          FilledButton(
+            onPressed: () {
+              final t = controller.text.trim();
+              if (t.isNotEmpty) Navigator.pop(ctx, t);
+            },
+            child: Text('Save', style: AppTextStyles.labelLarge),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (newContent == null || newContent.trim() == prayer.content.trim()) {
+      return;
+    }
+    try {
+      await PrayerService.updatePrayer(
+        prayerId: prayer.id,
+        content: newContent,
+        visibility: prayer.isAnonymous ? 'anonymous' : 'public',
+        category: prayer.category.code,
+      );
+      if (!mounted) return;
+      _bootstrap(); // reload so the edited content shows
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text('Prayer updated.',
+              style:
+                  AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text('Could not update. Try again.',
+              style:
+                  AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MainScaffold(
@@ -318,8 +388,9 @@ class _PrayerScreenState extends State<PrayerScreen>
         // Anonymous prayers come back with an empty authorId — there's
         // nothing to navigate to and the row should stay inert.
         final canViewAuthor = p.authorId.isNotEmpty;
-        final isMine = canViewAuthor &&
-            AuthService.currentUser?.id == p.authorId;
+        // Ownership is computed server-side BEFORE the anonymous mask, so the
+        // poster can still manage a prayer they posted anonymously.
+        final isMine = p.isMine;
         return PrayerCard(
           prayer: p,
           isPraying: _prayedIds.contains(p.id),
@@ -339,6 +410,7 @@ class _PrayerScreenState extends State<PrayerScreen>
                     pathParameters: {'userId': p.authorId},
                   )
               : null,
+          onEdit: isMine ? () => _editPrayer(p) : null,
           onDelete: isMine ? () => _confirmDelete(p) : null,
         );
       },

@@ -14,6 +14,7 @@ class PrayerCard extends StatelessWidget {
     required this.onTogglePray,
     required this.onTap,
     this.onAuthorTap,
+    this.onEdit,
     this.onDelete,
   });
 
@@ -26,6 +27,9 @@ class PrayerCard extends StatelessWidget {
   /// Tap on the author's avatar or name. Null for anonymous prayers
   /// (the prayer screen passes null when `prayer.authorId` is empty).
   final VoidCallback? onAuthorTap;
+
+  /// Owner-only edit action. Null for non-owners.
+  final VoidCallback? onEdit;
 
   /// Owner-only delete action. Null for non-owners — the overflow
   /// menu only renders when this is non-null.
@@ -92,8 +96,8 @@ class PrayerCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (onDelete != null)
-                    _OwnerMenu(onDelete: onDelete!),
+                  if (onDelete != null || onEdit != null)
+                    _OwnerMenu(onEdit: onEdit, onDelete: onDelete),
                 ],
               ),
               const SizedBox(height: 12),
@@ -254,9 +258,10 @@ class _AuthorTapTarget extends StatelessWidget {
 }
 
 class _OwnerMenu extends StatelessWidget {
-  const _OwnerMenu({required this.onDelete});
+  const _OwnerMenu({this.onEdit, this.onDelete});
 
-  final VoidCallback onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -266,22 +271,42 @@ class _OwnerMenu extends StatelessWidget {
         color: Color.fromRGBO(26, 26, 46, 0.55),
       ),
       onSelected: (value) {
-        if (value == 'delete') onDelete();
+        if (value == 'edit') onEdit?.call();
+        if (value == 'delete') onDelete?.call();
       },
       itemBuilder: (ctx) => [
-        PopupMenuItem<String>(
-          value: 'delete',
-          child: Row(
-            children: [
-              const Icon(Icons.delete_outline, color: AppColors.red, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Delete',
-                style: AppTextStyles.labelMedium.copyWith(color: AppColors.red),
-              ),
-            ],
+        if (onEdit != null)
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: Row(
+              children: [
+                const Icon(Icons.edit_outlined,
+                    color: AppColors.primaryBlue, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'Edit',
+                  style: AppTextStyles.labelMedium
+                      .copyWith(color: AppColors.textDark),
+                ),
+              ],
+            ),
           ),
-        ),
+        if (onDelete != null)
+          PopupMenuItem<String>(
+            value: 'delete',
+            child: Row(
+              children: [
+                const Icon(Icons.delete_outline,
+                    color: AppColors.red, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'Delete',
+                  style:
+                      AppTextStyles.labelMedium.copyWith(color: AppColors.red),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

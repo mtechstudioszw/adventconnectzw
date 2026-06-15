@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -1197,6 +1198,12 @@ class _HomeScreenState extends State<HomeScreen>
     final viewerId = AuthService.currentUser?.id;
     final cachedAt = CacheService.cachedAt('home_feed');
     final discoveryCards = _buildDiscoveryCards();
+    // Shuffle with a per-account seed so the discovery cards (incl. the
+    // marketplace pick) land in a stable-but-varied order per user instead
+    // of the marketplace pick always being last (tester: "mix it up").
+    if (discoveryCards.length > 1) {
+      discoveryCards.shuffle(Random((viewerId ?? 'x').hashCode));
+    }
 
     // Facebook-style mixed feed: real posts intercalated with discovery
     // cards (suggested people / events / churches / prayer prompt /

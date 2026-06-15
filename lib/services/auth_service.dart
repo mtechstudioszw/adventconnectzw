@@ -851,13 +851,14 @@ class AuthService {
       // Age (date_of_birth) is gated by the >=16 + 3-month-cooldown trigger
       // (patch_107). Do it FIRST in its own statement so the exact error
       // ("must be at least 16" / "once every 3 months") surfaces cleanly.
+      String? dobIso;
       if (dateOfBirth != null) {
-        final iso =
+        dobIso =
             '${dateOfBirth.year.toString().padLeft(4, '0')}-${dateOfBirth.month.toString().padLeft(2, '0')}-${dateOfBirth.day.toString().padLeft(2, '0')}';
         try {
           await _client
               .from('profiles')
-              .update({'date_of_birth': iso}).eq('id', user.id);
+              .update({'date_of_birth': dobIso}).eq('id', user.id);
         } on PostgrestException catch (e) {
           return AuthResult.failure(e.message);
         }
@@ -880,6 +881,11 @@ class AuthService {
         next['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
       if (showAge != null) next['show_age'] = showAge;
+      // Mirror DOB into auth metadata too — the profile screen + the
+      // "Complete your profile" card read date_of_birth from userMetadata,
+      // so without this the card kept asking for an age the user had already
+      // saved to the profiles table (tester bug: "complete profile is lying").
+      if (dobIso != null) next['date_of_birth'] = dobIso;
       final response = await _client.auth.updateUser(
         UserAttributes(data: next),
       );

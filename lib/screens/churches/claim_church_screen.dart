@@ -7,6 +7,7 @@ import '../../services/account_service.dart';
 import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -140,16 +141,16 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
   @override
   Widget build(BuildContext context) {
     if (_checkingAccount) {
-      return const Scaffold(
-        backgroundColor: AppColors.lightGrey,
-        body: Center(
+      return Scaffold(
+        backgroundColor: context.palette.scaffoldBg,
+        body: const Center(
           child: CircularProgressIndicator(color: AppColors.primaryBlue),
         ),
       );
     }
     if (_account != null && !_account!.isBusiness) {
       return Scaffold(
-        backgroundColor: AppColors.lightGrey,
+        backgroundColor: context.palette.scaffoldBg,
         body: SingleChildScrollView(
           child: Column(
             children: [

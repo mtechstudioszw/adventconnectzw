@@ -301,30 +301,33 @@ class _AdventConnectAppState extends State<AdventConnectApp>
 
   @override
   Widget build(BuildContext context) {
-    // v1 launch: force light mode at the MaterialApp level. The
-    // ThemeService toggle is still in place under the hood so the
-    // v1.1 dark-mode update is a one-line revert here + un-hiding
-    // the Settings row, but for now we hard-pin light so users can't
-    // land on the ~45 unmigrated screens that still hard-code white
-    // surfaces.
-    return MaterialApp.router(
-      title: 'Advent Connect ZW',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.light,
-      routerConfig: appRouter,
-      builder: (context, child) => Stack(
-        children: [
-          OfflineBanner(child: child ?? const SizedBox.shrink()),
-          // Global voice-note bar — shows at the top whenever a note plays
-          // outside its own chat (WhatsApp parity).
-          const Align(
-            alignment: Alignment.topCenter,
-            child: VoiceMiniBar(),
+    // Theme follows the user's saved choice (Settings → Appearance).
+    // ThemeService.init() ran before runApp so the first frame is already
+    // correct; the ValueListenableBuilder repaints the whole app the instant
+    // the toggle changes, with AppPalette lerping the surfaces.
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService.notifier,
+      builder: (context, mode, _) {
+        return MaterialApp.router(
+          title: 'Advent Connect ZW',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: mode,
+          routerConfig: appRouter,
+          builder: (context, child) => Stack(
+            children: [
+              OfflineBanner(child: child ?? const SizedBox.shrink()),
+              // Global voice-note bar — shows at the top whenever a note plays
+              // outside its own chat (WhatsApp parity).
+              const Align(
+                alignment: Alignment.topCenter,
+                child: VoiceMiniBar(),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

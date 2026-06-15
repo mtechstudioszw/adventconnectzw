@@ -117,7 +117,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         child: _buildBody(),
       ),

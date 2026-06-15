@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Settings → Permissions. Shows the current grant status for each
@@ -94,7 +95,7 @@ class _PermissionsScreenState extends State<PermissionsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(

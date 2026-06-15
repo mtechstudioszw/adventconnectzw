@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Shown when connectivity is lost. The app's hive cache (Stage 20) is
@@ -12,7 +13,7 @@ class OfflineScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         child: Center(
           child: Padding(

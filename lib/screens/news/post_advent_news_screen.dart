@@ -6,6 +6,7 @@ import '../../models/advent_news_model.dart';
 import '../../services/advent_news_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 
@@ -142,7 +143,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           children: [

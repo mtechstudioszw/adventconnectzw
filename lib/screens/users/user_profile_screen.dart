@@ -270,16 +270,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: AppColors.lightGrey,
-        body: Center(
+      return Scaffold(
+        backgroundColor: context.palette.scaffoldBg,
+        body: const Center(
           child: CircularProgressIndicator(color: AppColors.primaryBlue),
         ),
       );
     }
     if (_error != null || _profile == null) {
       return Scaffold(
-        backgroundColor: AppColors.lightGrey,
+        backgroundColor: context.palette.scaffoldBg,
         appBar: AppBar(
           backgroundColor: AppColors.darkNavy,
           foregroundColor: AppColors.white,
@@ -293,7 +293,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: context.palette.scaffoldBg,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

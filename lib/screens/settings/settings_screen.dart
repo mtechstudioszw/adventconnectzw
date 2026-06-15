@@ -546,13 +546,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                           label: 'Permissions',
                           onTap: () => context.pushNamed('permissions'),
                         ),
-                        // Appearance / dark-mode toggle hidden for v1
-                        // launch — dark-mode migration is only ~50%
-                        // through the screen catalogue, so exposing the
-                        // toggle right now would let users land on
-                        // half-migrated screens (raw whites against the
-                        // dark canvas). Will re-enable in v1.1 once
-                        // every screen reads from context.palette.
+                        const _Divider(),
+                        _NavRow(
+                          icon: Icons.brightness_6_outlined,
+                          label: 'Appearance',
+                          trailing: _themeLabel(_themeMode),
+                          onTap: _pickTheme,
+                        ),
                         const _Divider(),
                         _NavRow(
                           icon: Icons.language,

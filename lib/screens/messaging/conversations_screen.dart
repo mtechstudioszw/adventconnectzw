@@ -148,12 +148,21 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
     _bootstrap();
     _startActivityWatcher();
+    // Local inbox changes (delete-for-me preview floor) emit no realtime
+    // event, so listen for them explicitly and rebuild — otherwise a message
+    // you deleted-for-me still showed in the list until a new message arrived.
+    MessagingService.inboxLocalRevision.addListener(_onLocalInboxChange);
+  }
+
+  void _onLocalInboxChange() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _refreshDebounce?.cancel();
     _activitySub?.cancel();
+    MessagingService.inboxLocalRevision.removeListener(_onLocalInboxChange);
     _entrance.dispose();
     _pageController.dispose();
     super.dispose();

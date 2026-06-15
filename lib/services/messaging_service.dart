@@ -746,10 +746,17 @@ class MessagingService {
   static String _previewFloorKey(String conversationId) =>
       'preview_floor:$conversationId';
 
+  /// Bumped on a LOCAL inbox change (e.g. delete-for-me sets a preview floor)
+  /// that produces no realtime event. The conversations list listens to this
+  /// and rebuilds, so the suppressed preview updates the moment you return —
+  /// without waiting for a new message.
+  static final ValueNotifier<int> inboxLocalRevision = ValueNotifier<int>(0);
+
   static Future<void> setInboxPreviewFloor(
       String conversationId, DateTime ts) async {
     await CacheService.writePref(
         _previewFloorKey(conversationId), ts.toIso8601String());
+    inboxLocalRevision.value++;
   }
 
   static DateTime? inboxPreviewFloor(String conversationId) {

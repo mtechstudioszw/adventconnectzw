@@ -678,6 +678,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildAboutTab() {
     return Column(
       children: [
+        _buildCompletenessCard(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _buildBioCard(),
@@ -1071,6 +1072,144 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Profile-completeness checklist. Each entry maps a friendly label to
+  /// whether that field is filled in the user's metadata.
+  List<MapEntry<String, bool>> _completenessItems() {
+    final meta = AuthService.currentUser?.userMetadata ?? const {};
+    String s(String k) => (meta[k] as String?)?.trim() ?? '';
+    final church = meta['church_id'];
+    return [
+      MapEntry('Add a profile photo', s('profile_photo_url').isNotEmpty),
+      MapEntry('Set your home church',
+          church != null && church.toString().isNotEmpty),
+      MapEntry('Write a short bio', s('bio').isNotEmpty),
+      MapEntry('Add your date of birth', _birthDate() != null),
+      MapEntry('Add your full name', s('full_name').isNotEmpty),
+    ];
+  }
+
+  /// A "Complete your profile" card with an animated progress bar + the
+  /// remaining steps. Hides itself once the profile is 100% complete so a
+  /// finished profile never sees clutter.
+  Widget _buildCompletenessCard() {
+    final items = _completenessItems();
+    final done = items.where((i) => i.value).length;
+    final total = items.length;
+    if (done >= total) return const SizedBox.shrink();
+    final pct = done / total;
+    final missing = items.where((i) => !i.value).toList();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Material(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () => context.pushNamed('edit_profile'),
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: context.palette.card,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'COMPLETE YOUR PROFILE',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: context.palette.textMuted,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${(pct * 100).round()}%',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: pct),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutCubic,
+                    builder: (_, v, _) => LinearProgressIndicator(
+                      value: v,
+                      minHeight: 8,
+                      backgroundColor: context.palette.cardMuted,
+                      valueColor: const AlwaysStoppedAnimation(
+                        AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ...missing.take(3).map(
+                      (i) => Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.radio_button_unchecked,
+                              size: 16,
+                              color: AppColors.primaryBlue,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                i.key,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: context.palette.text,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              size: 18,
+                              color: context.palette.textMuted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                if (missing.length > 3)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '+ ${missing.length - 3} more',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.textMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

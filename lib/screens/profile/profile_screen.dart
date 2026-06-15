@@ -939,10 +939,27 @@ class _ProfileScreenState extends State<ProfileScreen>
             right: 0,
             bottom: 0,
             child: Center(
-              child: Container(
-                width: 120,
-                height: 120,
-                clipBehavior: Clip.antiAlias,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Completeness ring — only while the profile is incomplete.
+                  if (_profileCompletion() < 1.0)
+                    SizedBox(
+                      width: 134,
+                      height: 134,
+                      child: CircularProgressIndicator(
+                        value: _profileCompletion(),
+                        strokeWidth: 4,
+                        backgroundColor:
+                            AppColors.white.withValues(alpha: 0.35),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                            AppColors.goldAccent),
+                      ),
+                    ),
+                  Container(
+                    width: 120,
+                    height: 120,
+                    clipBehavior: Clip.antiAlias,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   gradient: photoUrl == null
@@ -983,6 +1000,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                         ),
                       ),
+              ),
+                ],
               ),
             ),
           ),
@@ -1090,6 +1109,15 @@ class _ProfileScreenState extends State<ProfileScreen>
       MapEntry('Add your date of birth', _birthDate() != null),
       MapEntry('Add your full name', s('full_name').isNotEmpty),
     ];
+  }
+
+  /// Fraction (0..1) of the profile-completeness items that are done. Drives
+  /// the ring around the avatar so an incomplete profile is obvious at a
+  /// glance, without scrolling to the card.
+  double _profileCompletion() {
+    final items = _completenessItems();
+    if (items.isEmpty) return 1.0;
+    return items.where((i) => i.value).length / items.length;
   }
 
   /// A "Complete your profile" card with an animated progress bar + the

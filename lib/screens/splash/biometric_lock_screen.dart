@@ -31,18 +31,32 @@ class BiometricLockScreen extends StatefulWidget {
   State<BiometricLockScreen> createState() => _BiometricLockScreenState();
 }
 
-class _BiometricLockScreenState extends State<BiometricLockScreen> {
+class _BiometricLockScreenState extends State<BiometricLockScreen>
+    with SingleTickerProviderStateMixin {
   bool _prompting = false;
+  late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
+    // Continuous "sonar" pulse behind the fingerprint badge so the lock
+    // screen feels alive while it waits for the biometric prompt.
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
     if (widget.autoPrompt) {
       // Defer one frame so the lock screen paints before the system
       // dialog appears — otherwise the user sees a white flash behind
       // the prompt the first time around.
       WidgetsBinding.instance.addPostFrameCallback((_) => _tryUnlock());
     }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
   }
 
   Future<void> _tryUnlock() async {
@@ -116,25 +130,65 @@ class _BiometricLockScreenState extends State<BiometricLockScreen> {
           child: Column(
             children: [
               const Spacer(),
-              Container(
-                width: 112,
-                height: 112,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.goldAccent, width: 2.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.30),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
+              AnimatedBuilder(
+                animation: _pulse,
+                builder: (context, child) {
+                  final t = _pulse.value; // 0 → 1, repeating
+                  // Two staggered rings expand outward + fade — a calm
+                  // "scanning" sonar pulse.
+                  Widget ring(double phase) {
+                    final p = (t + phase) % 1.0;
+                    return Opacity(
+                      opacity: (1 - p) * 0.30,
+                      child: Container(
+                        width: 112 + p * 96,
+                        height: 112 + p * 96,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.7),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  // Gentle breathing of the core badge (triangle wave 1→1.05).
+                  final breathe = 1 + 0.05 * (0.5 - (t - 0.5).abs()) * 2;
+                  return SizedBox(
+                    width: 216,
+                    height: 216,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        ring(0.0),
+                        ring(0.5),
+                        Transform.scale(scale: breathe, child: child),
+                      ],
                     ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.fingerprint,
-                  color: AppColors.white,
-                  size: 56,
+                  );
+                },
+                child: Container(
+                  width: 112,
+                  height: 112,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.goldAccent, width: 2.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.fingerprint,
+                    color: AppColors.white,
+                    size: 56,
+                  ),
                 ),
               ),
               const SizedBox(height: 28),

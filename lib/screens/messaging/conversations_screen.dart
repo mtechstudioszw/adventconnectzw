@@ -344,10 +344,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       c.isChurchGroup || (_convStates[c.id]?.pinned ?? false);
   bool _isMuted(Conversation c) => _convStates[c.id]?.muted ?? false;
   // The chat was cleared and the (shared) last message predates the
-  // clear — hide the stale preview for this user only.
+  // clear — hide the stale preview for this user only. Also covers
+  // "delete for me" of the last message: the shared last_message can't
+  // reflect a per-user hide, so we keep a local preview floor and suppress
+  // the stale preview until a newer message arrives.
   bool _isPreviewCleared(Conversation c) {
     final cl = _convStates[c.id]?.clearedAt;
-    return cl != null && !c.lastMessageAt.isAfter(cl);
+    if (cl != null && !c.lastMessageAt.isAfter(cl)) return true;
+    final floor = MessagingService.inboxPreviewFloor(c.id);
+    return floor != null && !c.lastMessageAt.isAfter(floor);
   }
 
   /// Pinned conversations float to the top, preserving their existing

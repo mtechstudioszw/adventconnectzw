@@ -174,6 +174,10 @@ function mapTypeToCategory(type: string): string | null {
   if (t.includes("event")) return "events";
   if (t.includes("prayer")) return "prayers";
   if (t.includes("message") || t === "chat") return "messages";
+  // News + daily devotion share the "news" toggle (the Settings screen's
+  // content toggle). Without this the News switch was decorative — news
+  // pushes always sent regardless of the user's choice.
+  if (t.includes("news") || t.includes("devotion")) return "news";
   if (
     t.includes("market") ||
     t.includes("product") ||

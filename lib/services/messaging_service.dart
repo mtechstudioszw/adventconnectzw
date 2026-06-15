@@ -735,6 +735,28 @@ class MessagingService {
         _hiddenCacheKey(conversationId), jsonEncode(merged.toList()));
   }
 
+  // ---- Per-user inbox preview floor --------------------------------------
+  // conversations.last_message is a SHARED, denormalised column, but
+  // delete-for-me is per-user. When a user hides their conversation's last
+  // message for themselves, the inbox kept showing it (tester: "delete a
+  // message for me, it still appears outside the chat"). We persist the
+  // timestamp of the hidden last message locally; the inbox suppresses the
+  // stale preview for THIS user until a newer message arrives (last_message_at
+  // moves past the floor). Persistent (no TTL) so it survives restarts.
+  static String _previewFloorKey(String conversationId) =>
+      'preview_floor:$conversationId';
+
+  static Future<void> setInboxPreviewFloor(
+      String conversationId, DateTime ts) async {
+    await CacheService.writePref(
+        _previewFloorKey(conversationId), ts.toIso8601String());
+  }
+
+  static DateTime? inboxPreviewFloor(String conversationId) {
+    final raw = CacheService.readPref(_previewFloorKey(conversationId));
+    return raw == null ? null : DateTime.tryParse(raw);
+  }
+
   /// Clear the chat for the current user only (WhatsApp parity). Persists
   /// cleared_at (server) and empties the local message cache so the
   /// messages don't reappear from cache on the next (offline) open.

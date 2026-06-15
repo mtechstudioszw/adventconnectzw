@@ -196,10 +196,28 @@ class _ChatScreenState extends State<ChatScreen>
     // Persist locally FIRST so a reopen filters them before the server
     // round-trip (no 1-second flashback), even if the network hide is slow.
     unawaited(MessagingService.addHiddenIdsCached(widget.conversationId, ids));
+    _persistPreviewFloor(ids);
     try {
       await MessagingService.hideMessages(ids);
     } catch (_) {}
     if (mounted) _toast('Deleted for you.');
+  }
+
+  /// After a delete-for-me, if we hid the conversation's last message, record
+  /// a local preview floor so the inbox stops showing it for THIS user — the
+  /// shared `last_message` column can't express a per-user hide.
+  void _persistPreviewFloor(Iterable<String> hiddenIds) {
+    DateTime? newest;
+    for (final m in _serverMessages) {
+      if (hiddenIds.contains(m.id) &&
+          (newest == null || m.createdAt.isAfter(newest))) {
+        newest = m.createdAt;
+      }
+    }
+    if (newest != null) {
+      unawaited(
+          MessagingService.setInboxPreviewFloor(widget.conversationId, newest));
+    }
   }
 
   Future<void> _forwardSelected() async {
@@ -513,6 +531,7 @@ class _ChatScreenState extends State<ChatScreen>
         });
         unawaited(
             MessagingService.addHiddenIdsCached(widget.conversationId, [m.id]));
+        _persistPreviewFloor([m.id]);
         try {
           await MessagingService.hideMessages([m.id]);
         } catch (_) {}

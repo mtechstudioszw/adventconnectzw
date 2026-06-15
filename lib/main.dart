@@ -324,6 +324,11 @@ class _AdventConnectAppState extends State<AdventConnectApp>
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: mode,
+          // Smooth crossfade when the user flips Light/Dark instead of an
+          // abrupt 1-frame snap (the "glitch"). MaterialApp's built-in
+          // AnimatedTheme lerps every themed colour over this window.
+          themeAnimationDuration: const Duration(milliseconds: 400),
+          themeAnimationCurve: Curves.easeInOut,
           routerConfig: appRouter,
           builder: (context, child) => Stack(
             children: [

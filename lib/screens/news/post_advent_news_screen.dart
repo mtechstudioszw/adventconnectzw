@@ -661,7 +661,7 @@ class _CategoryChip extends StatelessWidget {
           child: Text(
             label,
             style: AppTextStyles.labelMedium.copyWith(
-              color: selected ? AppColors.white : AppColors.textDark,
+              color: selected ? AppColors.white : AppColors.text,
               fontWeight: FontWeight.w700,
               fontSize: 12.5,
             ),

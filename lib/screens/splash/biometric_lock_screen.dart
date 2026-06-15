@@ -103,7 +103,7 @@ class _BiometricLockScreenState extends State<BiometricLockScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.labelMedium
-                  .copyWith(color: AppColors.textDark),
+                  .copyWith(color: AppColors.text),
             ),
           ),
           FilledButton(

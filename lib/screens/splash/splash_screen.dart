@@ -266,13 +266,11 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Splash is intentionally white in BOTH light and dark mode — it's
-    // the brand identity panel that owns the cold-start hand-off, and
-    // the logo/wordmark/gold accents were tuned against white. Leaving
-    // it light keeps the brand consistent and matches the native splash
-    // image used by Flutter's launch screen.
+    // Splash background follows the theme so dark-mode users don't get a
+    // white flash on cold start (the wordmark/atmosphere read fine on the
+    // deep-navy canvas too).
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.scaffold,
       body: AnimatedBuilder(
         animation: Listenable.merge([_exit, _blossom]),
         builder: (context, child) {
@@ -288,7 +286,7 @@ class _SplashScreenState extends State<SplashScreen>
           );
         },
         child: DecoratedBox(
-        decoration: const BoxDecoration(color: AppColors.white),
+        decoration: BoxDecoration(color: AppColors.scaffold),
         child: Stack(
           children: [
             _buildAtmosphereOverlay(),
@@ -327,7 +325,7 @@ class _SplashScreenState extends State<SplashScreen>
                           Text(
                             'MYTECH STUDIOS ZW',
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.textDark.withValues(alpha: 0.35),
+                              color: AppColors.text.withValues(alpha: 0.35),
                               fontSize: 10,
                               fontWeight: FontWeight.w500,
                               letterSpacing: 2.0,

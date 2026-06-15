@@ -106,7 +106,7 @@ class PrayerCard extends StatelessWidget {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.textDark,
+                  color: AppColors.text,
                   fontSize: 14.5,
                   height: 1.5,
                 ),
@@ -286,7 +286,7 @@ class _OwnerMenu extends StatelessWidget {
                 Text(
                   'Edit',
                   style: AppTextStyles.labelMedium
-                      .copyWith(color: AppColors.textDark),
+                      .copyWith(color: AppColors.text),
                 ),
               ],
             ),

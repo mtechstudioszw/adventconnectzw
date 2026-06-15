@@ -651,7 +651,7 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? AppColors.white : AppColors.textDark;
+    final fg = selected ? AppColors.white : AppColors.text;
     return Material(
       color: selected ? AppColors.primaryBlue : context.palette.card,
       borderRadius: BorderRadius.circular(20),

@@ -146,7 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             child: Text(
               'Cancel',
               style: AppTextStyles.labelMedium.copyWith(
-                color: AppColors.textDark,
+                color: AppColors.text,
               ),
             ),
           ),
@@ -1219,7 +1219,7 @@ class _NavRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = destructive ? AppColors.red : AppColors.textDark;
+    final color = destructive ? AppColors.red : AppColors.text;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1284,7 +1284,7 @@ class _ToggleRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.textDark, size: 20),
+          Icon(icon, color: AppColors.text, size: 20),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
@@ -1324,7 +1324,7 @@ class _InfoRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.textDark, size: 20),
+          Icon(icon, color: AppColors.text, size: 20),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
@@ -1611,7 +1611,7 @@ class _ThemeSheet extends StatelessWidget {
                           const SizedBox(width: 14),
                           Icon(
                             icon,
-                            color: AppColors.textDark,
+                            color: AppColors.text,
                             size: 20,
                           ),
                           const SizedBox(width: 10),
@@ -1819,7 +1819,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
           icon: Icon(
             obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             size: 20,
-            color: AppColors.textDark.withValues(alpha: 0.55),
+            color: AppColors.text.withValues(alpha: 0.55),
           ),
           onPressed: onToggle,
           tooltip: obscure ? 'Show password' : 'Hide password',
@@ -1896,7 +1896,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
           child: Text(
             'Cancel',
             style: AppTextStyles.labelMedium
-                .copyWith(color: AppColors.textDark),
+                .copyWith(color: AppColors.text),
           ),
         ),
         FilledButton(

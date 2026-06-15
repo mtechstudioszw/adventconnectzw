@@ -363,7 +363,7 @@ class _FieldRow extends StatelessWidget {
                       style: AppTextStyles.titleSmall.copyWith(
                         color: active
                             ? AppColors.primaryBlue
-                            : AppColors.textDark,
+                            : AppColors.text,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

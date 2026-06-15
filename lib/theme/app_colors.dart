@@ -22,6 +22,12 @@ class AppColors {
   static Color surface = white; // cards, sheets, dialogs
   static Color surfaceMuted = lightGrey; // nested / muted fills
   static Color scaffold = lightGrey; // screen canvas
+  // Adaptive text/icon colours for callsites that hard-code `textDark`
+  // directly (or via `.copyWith(color: AppColors.textDark)`), which bypass
+  // the theme. Use `AppColors.text` / `AppColors.textMuted` instead so the
+  // text flips to light in dark mode. Light values == the originals.
+  static Color text = textDark;
+  static Color textMuted = const Color.fromRGBO(26, 26, 46, 0.6);
 
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF1565C0), Color(0xFF1976D2)],

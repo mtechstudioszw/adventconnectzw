@@ -590,7 +590,7 @@ class _CategoryChip extends StatelessWidget {
         child: Text(
           label[0].toUpperCase() + label.substring(1),
           style: AppTextStyles.labelMedium.copyWith(
-            color: active ? AppColors.white : AppColors.textDark,
+            color: active ? AppColors.white : AppColors.text,
             fontWeight: FontWeight.w700,
             fontSize: 12.5,
           ),

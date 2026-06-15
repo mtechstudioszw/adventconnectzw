@@ -434,7 +434,7 @@ class _RoleChip extends StatelessWidget {
                   style: AppTextStyles.titleSmall.copyWith(
                     fontWeight: FontWeight.w700,
                     color:
-                        active ? AppColors.primaryBlue : AppColors.textDark,
+                        active ? AppColors.primaryBlue : AppColors.text,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -614,7 +614,7 @@ class _ClaimBusinessGate extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: AppTextStyles.headlineMedium.copyWith(
-              color: AppColors.textDark,
+              color: AppColors.text,
               fontWeight: FontWeight.w700,
               fontSize: 20,
             ),

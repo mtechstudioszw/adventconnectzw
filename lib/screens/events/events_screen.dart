@@ -197,7 +197,7 @@ class _EventsScreenState extends State<EventsScreen>
             colorScheme: const ColorScheme.light(
               primary: AppColors.primaryBlue,
               onPrimary: AppColors.white,
-              onSurface: AppColors.textDark,
+              onSurface: AppColors.text,
             ),
           ),
           child: child!,

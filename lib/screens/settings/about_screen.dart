@@ -589,7 +589,7 @@ class _InfoTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.textDark, size: 20),
+          Icon(icon, color: AppColors.text, size: 20),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
@@ -708,7 +708,7 @@ class _NavTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           child: Row(
             children: [
-              Icon(icon, color: AppColors.textDark, size: 20),
+              Icon(icon, color: AppColors.text, size: 20),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(

@@ -673,7 +673,7 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
           child: Text(
             'Cancel',
             style:
-                AppTextStyles.labelMedium.copyWith(color: AppColors.textDark),
+                AppTextStyles.labelMedium.copyWith(color: AppColors.text),
           ),
         ),
         FilledButton(

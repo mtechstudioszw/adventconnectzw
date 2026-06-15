@@ -518,7 +518,7 @@ class _AuthScreenState extends State<AuthScreen>
             primary: AppColors.primaryBlue,
             onPrimary: AppColors.white,
             surface: AppColors.white,
-            onSurface: AppColors.textDark,
+            onSurface: AppColors.text,
           ),
         ),
         child: child!,
@@ -564,7 +564,7 @@ class _AuthScreenState extends State<AuthScreen>
           colorScheme: const ColorScheme.light(
             primary: AppColors.primaryBlue,
             onPrimary: AppColors.white,
-            onSurface: AppColors.textDark,
+            onSurface: AppColors.text,
           ),
         ),
         child: child!,

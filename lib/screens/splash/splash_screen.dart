@@ -196,7 +196,15 @@ class _SplashScreenState extends State<SplashScreen>
         AuthService.isSignedIn || await SecureLocalStorage().hasAccessToken();
     if (!mounted) return;
     // Banned accounts hit a full lockout screen (backend already blocks
-    // their actions via user_is_active()).
+    // their actions via user_is_active()). Check the PERSISTED flag first so
+    // a banned account is locked INSTANTLY + offline on every cold start —
+    // even before the live session restores — and can't escape by killing
+    // the app. The lockout screen re-checks the server and releases on unban.
+    if (signedIn && await AuthService.isBannedLocally()) {
+      if (!mounted) return;
+      context.goNamed('account_banned');
+      return;
+    }
     if (signedIn && AuthService.isSignedIn) {
       if (await AuthService.isCurrentUserBanned()) {
         if (!mounted) return;

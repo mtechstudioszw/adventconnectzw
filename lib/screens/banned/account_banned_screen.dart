@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -8,11 +12,49 @@ import '../../theme/app_text_styles.dart';
 /// has been banned (profiles.is_banned). The backend already rejects all
 /// actions via user_is_active(); this gives an honest explanation + a way
 /// to reach support instead of cryptic errors.
-class AccountBannedScreen extends StatelessWidget {
+///
+/// The ONLY way out is an admin unban: the screen re-checks the server on a
+/// short interval and, the moment the account is no longer banned, clears the
+/// local flag (done inside [AuthService.isCurrentUserBanned]) and returns the
+/// user to the app. There is no back button, no dismiss, no offline escape.
+class AccountBannedScreen extends StatefulWidget {
   const AccountBannedScreen({super.key});
 
+  @override
+  State<AccountBannedScreen> createState() => _AccountBannedScreenState();
+}
+
+class _AccountBannedScreenState extends State<AccountBannedScreen> {
   static const _whatsApp = '263778092494';
   static const _email = 'tanatswamichaelmikuwa@gmail.com';
+
+  Timer? _poll;
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-check immediately (admin may have unbanned while the app was
+    // closed and the local flag is stale), then keep checking.
+    _checkUnbanned();
+    _poll = Timer.periodic(
+        const Duration(seconds: 15), (_) => _checkUnbanned());
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkUnbanned() async {
+    final stillBanned = await AuthService.isCurrentUserBanned();
+    if (!stillBanned && mounted) {
+      _poll?.cancel();
+      // Re-enter through splash so the normal gates (biometric / profile /
+      // home) run cleanly now that the ban is lifted.
+      context.goNamed('splash');
+    }
+  }
 
   Future<void> _contactWhatsApp() async {
     final uri = Uri.parse(

@@ -800,8 +800,20 @@ class AuthService {
     await SecureStorageService.clearAll();
   }
 
+  static const _bannedKey = 'account_banned';
+
+  /// The locally-persisted ban flag, read synchronously-ish at cold start so
+  /// a banned account hits the lockout screen BEFORE any network round-trip
+  /// (and even fully offline). Not in [SecureStorageService] preserved keys,
+  /// so sign-out wipes it.
+  static Future<bool> isBannedLocally() async =>
+      (await SecureStorageService.read(_bannedKey)) == '1';
+
   /// True when the signed-in account is banned (profiles.is_banned).
-  /// Fails open (false) so a network blip never locks out a good user.
+  /// Persists the result locally so a banned account is locked out instantly
+  /// on the next cold start (even offline). On a network blip we trust the
+  /// LAST KNOWN state rather than failing open — a banned user must not be
+  /// able to slip in by killing the app or pulling the plug.
   static Future<bool> isCurrentUserBanned() async {
     final user = currentUser;
     if (user == null) return false;
@@ -812,9 +824,15 @@ class AuthService {
           .eq('id', user.id)
           .maybeSingle()
           .timeout(const Duration(seconds: 3));
-      return row?['is_banned'] == true;
+      final banned = row?['is_banned'] == true;
+      if (banned) {
+        await SecureStorageService.write(_bannedKey, '1');
+      } else {
+        await SecureStorageService.delete(_bannedKey);
+      }
+      return banned;
     } catch (_) {
-      return false;
+      return isBannedLocally();
     }
   }
 

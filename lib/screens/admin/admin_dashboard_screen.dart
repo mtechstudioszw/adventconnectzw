@@ -69,7 +69,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: AppColors.scaffold,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openComposer,
         backgroundColor: AppColors.primaryBlue,

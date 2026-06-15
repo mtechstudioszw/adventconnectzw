@@ -106,7 +106,7 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
   Widget build(BuildContext context) {
     final total = _events.length + _edits.length;
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: AppColors.scaffold,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,

@@ -66,7 +66,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     final approved = _roles.where((r) => r.isApproved).toList();
     final pending = _roles.where((r) => !r.isApproved).toList();
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
+      backgroundColor: AppColors.scaffold,
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _check,

@@ -655,6 +655,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                           const _Divider(),
                           _NavRow(
+                            icon: Icons.church_outlined,
+                            label: 'Church admin requests',
+                            onTap: () => context.pushNamed(
+                              'admin_church_approvals',
+                            ),
+                          ),
+                          const _Divider(),
+                          _NavRow(
                             icon: Icons.newspaper_outlined,
                             label: 'News approvals',
                             onTap: () => context.pushNamed(

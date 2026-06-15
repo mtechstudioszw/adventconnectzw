@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
+import '../screens/admin/church_admin_approvals_screen.dart';
 import '../screens/admin/seller_approvals_screen.dart';
 import '../screens/admin/news_approvals_screen.dart';
 import '../screens/auth/auth_screen.dart';
@@ -13,7 +14,7 @@ import '../screens/auth/reset_password_screen.dart';
 import '../screens/update/update_required_screen.dart';
 import '../screens/banned/account_banned_screen.dart';
 import '../screens/churches/church_announcements_screen.dart';
-import '../screens/churches/claim_church_coming_soon_screen.dart';
+import '../screens/churches/claim_church_screen.dart';
 import '../screens/churches/suggest_church_screen.dart';
 import '../screens/churches/suggest_edit_screen.dart';
 import '../screens/home/post_notice_screen.dart';
@@ -251,11 +252,9 @@ final GoRouter appRouter = GoRouter(
               name: 'claim_church',
               builder: (context, state) {
                 final church = state.extra as Church;
-                // The live admin dashboard claim flow is paused while
-                // the full Church Admin Dashboard is being built — the
-                // route now serves a coming-soon + sponsorship pitch
-                // so churches that want it sooner can fund the build.
-                return ClaimChurchComingSoonScreen(church: church);
+                // Real claim flow: showcase the admin powers, then a short
+                // contact form. Super-admin verifies on WhatsApp + approves.
+                return ClaimChurchScreen(church: church);
               },
             ),
           ],
@@ -575,6 +574,12 @@ final GoRouter appRouter = GoRouter(
           path: 'sellers',
           name: 'admin_seller_approvals',
           builder: (context, state) => const SellerApprovalsScreen(),
+        ),
+        GoRoute(
+          // Super-admin church-admin claim approvals (patch_112).
+          path: 'church-admins',
+          name: 'admin_church_approvals',
+          builder: (context, state) => const ChurchAdminApprovalsScreen(),
         ),
         GoRoute(
           // Super-admin Advent News approvals queue (patch_047).

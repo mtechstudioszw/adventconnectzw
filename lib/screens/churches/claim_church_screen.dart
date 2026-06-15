@@ -3,16 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/church_model.dart';
-import '../../services/account_service.dart';
 import '../../services/church_service.dart';
-import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 
-/// Apply to become a church's admin. Inserts into `church_admins` with
-/// status='pending'. Reviewer verifies by WhatsApp.
+/// Apply to manage a church. Two steps:
+///   1. A showcase of what a church admin can do (the "power" pitch).
+///   2. A short contact form (name + WhatsApp + optional email + role + note).
+/// Inserts a `church_admins` row (status='pending'); the super admin talks
+/// to the applicant on WhatsApp and approves from the dashboard. No document
+/// upload — verification is the off-app conversation.
 class ClaimChurchScreen extends StatefulWidget {
   const ClaimChurchScreen({super.key, required this.church});
 
@@ -23,112 +25,69 @@ class ClaimChurchScreen extends StatefulWidget {
 }
 
 class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
+  int _step = 0; // 0 = showcase, 1 = form
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _addressController = TextEditingController();
-
-  String _role = 'standard';
-  String? _letterUrl;
-  bool _uploading = false;
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
+  final _note = TextEditingController();
+  String _role = 'Elder';
   bool _saving = false;
   String? _error;
 
-  AccountState? _account;
-  bool _checkingAccount = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _addressController.text = widget.church.address ?? '';
-    _checkAccount();
-  }
-
-  Future<void> _checkAccount() async {
-    try {
-      final state = await AccountService.fetchMyAccount();
-      if (!mounted) return;
-      setState(() {
-        _account = state;
-        _checkingAccount = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _checkingAccount = false);
-    }
-  }
+  static const _roles = [
+    'Pastor',
+    'Elder',
+    'Church Clerk',
+    'Communications',
+    'Deacon / Deaconess',
+    'Other leader',
+  ];
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
+    _name.dispose();
+    _phone.dispose();
+    _email.dispose();
+    _note.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickLetter() async {
-    setState(() {
-      _uploading = true;
-      _error = null;
-    });
-    try {
-      final url = await StorageService.pickAndUploadEventFlyer();
-      if (!mounted) return;
-      if (url != null) setState(() => _letterUrl = url);
-    } catch (_) {
-      if (mounted) {
-        setState(() => _error = 'Could not upload letter. Try again.');
-      }
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
   }
 
   Future<void> _submit() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
-    if (_letterUrl == null) {
-      setState(() => _error = 'Upload your appointment letter or proof.');
-      return;
-    }
     setState(() => _saving = true);
     try {
       await ChurchService.applyForChurchAdmin(
         churchId: widget.church.id,
         role: _role,
-        appointmentLetterUrl: _letterUrl,
-        applicantName: _nameController.text,
-        applicantPhone: _phoneController.text,
+        applicantName: _name.text,
+        applicantPhone: _phone.text,
+        applicantEmail: _email.text.trim().isEmpty ? null : _email.text,
+        note: _note.text.trim().isEmpty ? null : _note.text,
       );
-      // Also push the physical address through the church_edit_suggestions
-      // queue so an admin can apply it to the church row. We do this on
-      // every claim — addresses are the single most useful field for
-      // distance sorting and directions, so we want it captured at
-      // claim time even if the church already has one in the DB.
-      final newAddress = _addressController.text.trim();
-      if (newAddress.isNotEmpty &&
-          newAddress != (widget.church.address ?? '').trim()) {
-        try {
-          await ChurchService.suggestEdit(
-            churchId: widget.church.id,
-            fieldName: 'address',
-            currentValue: widget.church.address ?? '',
-            suggestedValue: newAddress,
-          );
-        } catch (_) {
-          // Best-effort — don't block the claim if this fails.
-        }
-      }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.successGreen,
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: ctx.palette.sheet,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Application sent 🙏', style: AppTextStyles.headlineSmall),
           content: Text(
-            'Application sent — we\'ll verify via WhatsApp.',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            'Thanks! We\'ll reach out on WhatsApp to verify you, then approve '
+            'your access to manage ${widget.church.name}.',
+            style: AppTextStyles.bodyMedium.copyWith(height: 1.5),
           ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Got it', style: AppTextStyles.labelLarge),
+            ),
+          ],
         ),
       );
+      if (!mounted) return;
       if (context.canPop()) context.pop();
     } catch (e) {
       if (!mounted) return;
@@ -140,531 +99,293 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_checkingAccount) {
-      return Scaffold(
-        backgroundColor: context.palette.scaffoldBg,
-        body: const Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
-      );
-    }
-    if (_account != null && !_account!.isBusiness) {
-      return Scaffold(
-        backgroundColor: context.palette.scaffoldBg,
-        body: SingleChildScrollView(
-          child: Column(
-            children: [
-              ScreenHero(
-                title: 'Claim this church',
-                tagline: widget.church.name,
-                subtitle: 'Business account required.',
-                fallbackRoute: 'churches',
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                child: _ClaimBusinessGate(account: _account!),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
-      backgroundColor: AppColors.lightGrey,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            ScreenHero(
-              title: 'Claim this church',
-              tagline: widget.church.name,
-              subtitle:
-                  'For pastors and church admins. We verify each application by WhatsApp.',
-              fallbackRoute: 'churches',
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    InfoBanner(
-                      icon: Icons.lock_outline,
-                      message:
-                          'Once approved you\'ll be able to post announcements, events and church information.',
-                    ),
-                    const SizedBox(height: 16),
-                    ScreenCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _Label(text: 'Your full name'),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _nameController,
-                            textCapitalization: TextCapitalization.words,
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Name is required';
-                              }
-                              return null;
-                            },
-                            style: AppTextStyles.bodyLarge
-                                .copyWith(fontSize: 15),
-                            decoration: _decoration(
-                              hint: 'Tendai Moyo',
-                              icon: Icons.person_outline,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          _Label(text: 'Phone (WhatsApp)'),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _phoneController,
-                            keyboardType: TextInputType.phone,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(
-                                RegExp(r'[0-9+\s\-]'),
-                              ),
-                            ],
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Phone is required';
-                              }
-                              if (v.replaceAll(RegExp(r'\D'), '').length <
-                                  9) {
-                                return 'Enter a valid number';
-                              }
-                              return null;
-                            },
-                            style: AppTextStyles.bodyLarge
-                                .copyWith(fontSize: 15),
-                            decoration: _decoration(
-                              hint: '+263 77 123 4567',
-                              icon: Icons.phone_outlined,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          _Label(text: 'Physical address of the church'),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _addressController,
-                            textCapitalization: TextCapitalization.words,
-                            minLines: 1,
-                            maxLines: 2,
-                            validator: (v) {
-                              if (v == null || v.trim().length < 6) {
-                                return 'Enter a real street address';
-                              }
-                              return null;
-                            },
-                            style: AppTextStyles.bodyLarge
-                                .copyWith(fontSize: 15),
-                            decoration: _decoration(
-                              hint: 'e.g. 5 Samora Machel Ave, Harare',
-                              icon: Icons.place_outlined,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Used to show the church on the map and sort by distance for nearby members.',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.6),
-                              height: 1.45,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          _Label(text: 'Your role'),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              _RoleChip(
-                                label: 'Primary admin',
-                                description: 'Full control. One per church.',
-                                active: _role == 'primary',
-                                onTap: () => setState(() => _role = 'primary'),
-                              ),
-                              const SizedBox(width: 10),
-                              _RoleChip(
-                                label: 'Standard admin',
-                                description: 'Post content only.',
-                                active: _role == 'standard',
-                                onTap: () =>
-                                    setState(() => _role = 'standard'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ScreenCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _Label(text: 'Appointment letter / proof'),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Photo of your church appointment letter or a confirmation note from your pastor.',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: const Color.fromRGBO(26, 26, 46, 0.6),
-                              height: 1.5,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          _LetterPicker(
-                            url: _letterUrl,
-                            uploading: _uploading,
-                            onTap: _pickLetter,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      ErrorBanner(message: _error!),
-                    ],
-                    const SizedBox(height: 24),
-                    PrimaryGradientButton(
-                      label: _saving ? 'Submitting...' : 'Submit application',
-                      busy: _saving,
-                      onTap: _saving ? null : _submit,
-                    ),
-                  ],
+      backgroundColor: context.palette.scaffoldBg,
+      body: _step == 0 ? _buildShowcase(context) : _buildForm(context),
+    );
+  }
+
+  // ---- Step 1: showcase the power of being a church admin ----------------
+  Widget _buildShowcase(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ScreenHero(
+            title: 'Manage your church',
+            tagline: widget.church.name,
+            subtitle: 'Become a verified admin for this church.',
+            fallbackRoute: 'churches',
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'What you can do as a church admin',
+                  style: AppTextStyles.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: context.palette.text,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                const _Capability(
+                  icon: Icons.campaign_rounded,
+                  title: 'Post announcements',
+                  body:
+                      'Share notices that reach every member — in the church '
+                      'feed AND your church channel in Advent Chat.',
+                ),
+                const _Capability(
+                  icon: Icons.photo_camera_back_rounded,
+                  title: 'Brand your church page',
+                  body:
+                      'Upload a cover photo + logo and keep your service '
+                      'times, location and about up to date.',
+                ),
+                const _Capability(
+                  icon: Icons.event_available_rounded,
+                  title: 'Post events',
+                  body: 'Add services, programmes and special events to the '
+                      'events feed.',
+                ),
+                const _Capability(
+                  icon: Icons.groups_rounded,
+                  title: 'See your members',
+                  body: 'Know who follows your church and grows with you.',
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_user_outlined,
+                          color: AppColors.primaryBlue, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Admins are verified manually. After you apply we '
+                          'reach out on WhatsApp before approving.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: context.palette.textMuted,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => setState(() => _step = 1),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text('Apply to manage this church',
+                        style: AppTextStyles.buttonText),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  InputDecoration _decoration({
-    required String hint,
-    required IconData icon,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Padding(
-        padding: const EdgeInsets.only(left: 14, right: 10),
-        child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+  // ---- Step 2: the contact form ------------------------------------------
+  Widget _buildForm(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ScreenHero(
+            title: 'Apply to manage',
+            tagline: widget.church.name,
+            subtitle: 'We\'ll verify you on WhatsApp before approving.',
+            fallbackRoute: 'churches',
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Label('Your name'),
+                  TextFormField(
+                    controller: _name,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(hintText: 'Full name'),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Enter your name'
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                  _Label('WhatsApp number'),
+                  TextFormField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+                    ],
+                    decoration:
+                        const InputDecoration(hintText: 'e.g. +263 77 123 4567'),
+                    validator: (v) => (v == null || v.trim().length < 7)
+                        ? 'Enter a reachable WhatsApp number'
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                  _Label('Email (optional)'),
+                  TextFormField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration:
+                        const InputDecoration(hintText: 'you@example.com'),
+                  ),
+                  const SizedBox(height: 16),
+                  _Label('Your role at the church'),
+                  DropdownButtonFormField<String>(
+                    initialValue: _role,
+                    items: _roles
+                        .map((r) =>
+                            DropdownMenuItem(value: r, child: Text(r)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _role = v ?? _role),
+                  ),
+                  const SizedBox(height: 16),
+                  _Label('Anything else? (optional)'),
+                  TextFormField(
+                    controller: _note,
+                    minLines: 2,
+                    maxLines: 4,
+                    maxLength: 300,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText:
+                          'Tell us a bit about your role / how to reach you',
+                    ),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_error!,
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.red)),
+                  ],
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _saving ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2.4, color: AppColors.white),
+                            )
+                          : Text('Send application',
+                              style: AppTextStyles.buttonText),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: _saving ? null : () => setState(() => _step = 0),
+                    child: Text('Back',
+                        style: AppTextStyles.labelMedium
+                            .copyWith(color: context.palette.textMuted)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
-      prefixIconConstraints:
-          const BoxConstraints(minWidth: 44, minHeight: 44),
-      filled: true,
-      fillColor: AppColors.lightGrey,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color.fromRGBO(26, 26, 46, 0.06)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide:
-            const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+    );
+  }
+}
+
+class _Capability extends StatelessWidget {
+  const _Capability(
+      {required this.icon, required this.title, required this.body});
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColors.primaryBlue, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: context.palette.text,
+                    )),
+                const SizedBox(height: 2),
+                Text(body,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.textMuted,
+                      height: 1.4,
+                    )),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _Label extends StatelessWidget {
-  const _Label({required this.text});
+  const _Label(this.text);
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text.toUpperCase(),
-      style: AppTextStyles.labelSmall.copyWith(
-        color: const Color.fromRGBO(26, 26, 46, 0.65),
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-}
-
-class _RoleChip extends StatelessWidget {
-  const _RoleChip({
-    required this.label,
-    required this.description,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final String description;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: active
-                  ? AppColors.primaryBlue.withValues(alpha: 0.08)
-                  : AppColors.lightGrey,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: active ? AppColors.primaryBlue : Colors.transparent,
-                width: 1.4,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: AppTextStyles.titleSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color:
-                        active ? AppColors.primaryBlue : AppColors.text,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: const Color.fromRGBO(26, 26, 46, 0.6),
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 2),
+      child: Text(
+        text,
+        style: AppTextStyles.labelMedium.copyWith(
+          fontWeight: FontWeight.w700,
+          color: context.palette.text,
         ),
-      ),
-    );
-  }
-}
-
-class _LetterPicker extends StatelessWidget {
-  const _LetterPicker({
-    required this.url,
-    required this.uploading,
-    required this.onTap,
-  });
-
-  final String? url;
-  final bool uploading;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final has = url != null && url!.isNotEmpty;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: uploading ? null : onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: has
-                ? AppColors.successGreen.withValues(alpha: 0.08)
-                : AppColors.lightGrey,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: has
-                  ? AppColors.successGreen
-                  : AppColors.primaryBlue.withValues(alpha: 0.3),
-              width: has ? 1.5 : 1.2,
-              style: has ? BorderStyle.solid : BorderStyle.solid,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: has
-                      ? AppColors.successGreen.withValues(alpha: 0.18)
-                      : AppColors.primaryBlue.withValues(alpha: 0.10),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  has ? Icons.check : Icons.upload_outlined,
-                  color:
-                      has ? AppColors.successGreen : AppColors.primaryBlue,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  uploading
-                      ? 'Uploading…'
-                      : has
-                          ? 'Letter uploaded. Tap to replace.'
-                          : 'Upload your appointment letter',
-                  style: AppTextStyles.titleSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color:
-                        has ? AppColors.successGreen : AppColors.primaryBlue,
-                  ),
-                ),
-              ),
-              if (uploading)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primaryBlue,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ClaimBusinessGate extends StatelessWidget {
-  const _ClaimBusinessGate({required this.account});
-
-  final AccountState account;
-
-  @override
-  Widget build(BuildContext context) {
-    final pending = account.hasPendingApplication;
-    final rejected = account.hasRejectedApplication;
-
-    final (String title, String body, String cta) =
-        pending
-            ? (
-                'Your business application is in review',
-                'Once your business account is approved, you\'ll be able '
-                    'to claim this church listing.',
-                'OK',
-              )
-            : rejected
-                ? (
-                    'Your last application was declined',
-                    account.latestApplication?.reviewerNote?.trim().isNotEmpty == true
-                        ? account.latestApplication!.reviewerNote!.trim()
-                        : 'Please review your details and reapply.',
-                    'Re-apply',
-                  )
-                : (
-                    'Business account required',
-                    'Claiming a church listing is only available to '
-                        'business accounts. Apply for one from your profile '
-                        'to get started.',
-                    'Apply for Business',
-                  );
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color.fromRGBO(26, 26, 46, 0.06),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color.fromRGBO(13, 27, 62, 0.06),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.darkNavy, Color(0xFF1A2F5A)],
-              ),
-            ),
-            child: const Icon(
-              Icons.business_center,
-              color: AppColors.goldAccent,
-              size: 30,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.headlineMedium.copyWith(
-              color: AppColors.text,
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: const Color.fromRGBO(26, 26, 46, 0.70),
-              fontSize: 14,
-              height: 1.55,
-            ),
-          ),
-          const SizedBox(height: 22),
-          Container(
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  // ClaimChurchScreen is currently routed to the
-                  // ClaimChurchComingSoonScreen — this branch is dead
-                  // until the full church-admin module ships. The old
-                  // apply_business jump went away with patch_031; we
-                  // just pop here so any leftover entry point still
-                  // does something sensible.
-                  context.pop();
-                },
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: Text(
-                      cta,
-                      style: AppTextStyles.buttonText.copyWith(
-                        color: AppColors.white,
-                        fontSize: 15,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

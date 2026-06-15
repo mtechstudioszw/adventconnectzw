@@ -193,12 +193,16 @@ class ChurchService {
 
   /// Apply to become a church admin. Status defaults to pending — admin
   /// reviews via the web dashboard and verifies via WhatsApp.
+  /// Apply to manage a church. Contact-based verification (no document):
+  /// the applicant leaves a WhatsApp number + optional email + a short note,
+  /// the super admin talks to them off-app, then approves from the dashboard.
   static Future<void> applyForChurchAdmin({
     required String churchId,
     required String role,
-    String? appointmentLetterUrl,
-    String? applicantName,
-    String? applicantPhone,
+    required String applicantName,
+    required String applicantPhone,
+    String? applicantEmail,
+    String? note,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -208,12 +212,32 @@ class ChurchService {
       'church_id': churchId,
       'user_id': user.id,
       'role': role,
-      'appointment_letter_url': ?appointmentLetterUrl,
-      'applicant_name': ?applicantName?.trim(),
-      'applicant_phone': ?applicantPhone?.trim(),
+      'applicant_name': applicantName.trim(),
+      'applicant_phone': applicantPhone.trim(),
+      'applicant_email': ?applicantEmail?.trim(),
+      'applicant_note': ?note?.trim(),
       'status': 'pending',
     }, onConflict: 'church_id,user_id');
     AnalyticsService.churchClaimed(int.tryParse(churchId) ?? 0);
+  }
+
+  // ---- Super-admin: church-admin claim queue (patch_112) ----------------
+  static Future<List<PendingChurchAdmin>> listPendingChurchAdmins() async {
+    final res = await _client.rpc('admin_list_pending_church_admins');
+    if (res is! List) return const [];
+    return res
+        .map((row) =>
+            PendingChurchAdmin.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<void> approveChurchAdmin(int id) async {
+    await _client.rpc('admin_approve_church_admin', params: {'p_id': id});
+  }
+
+  static Future<void> rejectChurchAdmin(int id, {String? reason}) async {
+    await _client.rpc('admin_reject_church_admin',
+        params: {'p_id': id, 'p_reason': reason});
   }
 
   /// Fetch a church's announcements feed. Filters out expired rows.
@@ -332,6 +356,50 @@ class ChurchAdminRole {
       role: (json['role'] ?? 'standard') as String,
       status: (json['status'] ?? 'pending') as String,
       city: churchMap?['city'] as String?,
+    );
+  }
+}
+
+/// A pending church-admin claim shown in the super-admin approval queue
+/// (admin_list_pending_church_admins, patch_112).
+class PendingChurchAdmin {
+  const PendingChurchAdmin({
+    required this.id,
+    required this.churchId,
+    required this.churchName,
+    required this.role,
+    required this.applicantName,
+    required this.applicantPhone,
+    this.churchCity,
+    this.applicantEmail,
+    this.note,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String churchId;
+  final String churchName;
+  final String? churchCity;
+  final String role;
+  final String applicantName;
+  final String applicantPhone;
+  final String? applicantEmail;
+  final String? note;
+  final DateTime createdAt;
+
+  factory PendingChurchAdmin.fromJson(Map<String, dynamic> json) {
+    return PendingChurchAdmin(
+      id: (json['id'] as num).toInt(),
+      churchId: (json['church_id'] ?? '').toString(),
+      churchName: (json['church_name'] as String?) ?? 'Church',
+      churchCity: json['church_city'] as String?,
+      role: (json['role'] ?? 'standard') as String,
+      applicantName: (json['applicant_name'] as String?) ?? 'Applicant',
+      applicantPhone: (json['applicant_phone'] as String?) ?? '',
+      applicantEmail: json['applicant_email'] as String?,
+      note: json['note'] as String?,
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.now(),
     );
   }
 }

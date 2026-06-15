@@ -575,7 +575,7 @@ class _ClaimBusinessGate extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: const Color.fromRGBO(26, 26, 46, 0.06),

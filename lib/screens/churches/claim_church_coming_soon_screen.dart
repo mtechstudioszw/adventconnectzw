@@ -459,7 +459,7 @@ class ClaimChurchComingSoonScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Material(
-            color: AppColors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(14),
             child: InkWell(
               borderRadius: BorderRadius.circular(14),

@@ -634,16 +634,35 @@ class _StoryComposerState extends State<_StoryComposer> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          TextButton.icon(
-                            onPressed: _uploading ? null : _pickImage,
-                            icon: const Icon(Icons.image_outlined,
-                                color: AppColors.primaryBlue, size: 20),
-                            label: Text('Use a photo instead',
-                                style: AppTextStyles.buttonText.copyWith(
-                                  color: AppColors.primaryBlue,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13.5,
-                                )),
+                          // White-on-translucent chip so the "use a photo"
+                          // option is visible on EVERY background colour (it
+                          // used brand blue, which vanished on the blue/navy
+                          // backgrounds — users thought the option was gone).
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: _uploading ? null : _pickImage,
+                              style: TextButton.styleFrom(
+                                backgroundColor:
+                                    AppColors.white.withValues(alpha: 0.18),
+                                foregroundColor: AppColors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 18, vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  side: BorderSide(
+                                      color: AppColors.white
+                                          .withValues(alpha: 0.4)),
+                                ),
+                              ),
+                              icon: const Icon(Icons.image_outlined,
+                                  color: AppColors.white, size: 20),
+                              label: Text('Use a photo instead',
+                                  style: AppTextStyles.buttonText.copyWith(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13.5,
+                                  )),
+                            ),
                           ),
                         ] else ...[
                           // ---- PHOTO STATUS ----

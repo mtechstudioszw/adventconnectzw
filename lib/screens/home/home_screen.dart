@@ -79,9 +79,6 @@ class _HomeScreenState extends State<HomeScreen>
   List<Post> _posts = [];
   List<Story> _stories = [];
   Set<String> _viewedStoryIds = const {};
-  // Authors whose story the viewer has opened this session — greys their
-  // post-card story ring.
-  final Set<String> _viewedStoryAuthors = {};
   List<Product> _products = const [];
   List<Job> _jobs = const [];
   // userId -> friendship row (if any) so the suggestion cards know
@@ -440,6 +437,22 @@ class _HomeScreenState extends State<HomeScreen>
   bool _authorHasStory(String authorId) =>
       _stories.any((s) => s.authorId == authorId);
 
+  /// The viewed set to paint rings with: this screen's loaded set unioned
+  /// with the app-wide persisted cache, so rings stay correct before the
+  /// load finishes and reflect stories watched from any other surface.
+  Set<String> get _allViewedIds =>
+      _viewedStoryIds.union(FeedService.viewedStoryIdsCached());
+
+  /// True when EVERY active story by [authorId] has been watched — drives
+  /// the post-card avatar ring. Derived from the persisted cache so it no
+  /// longer forgets across app restarts.
+  bool _authorStoryViewed(String authorId) {
+    final stories = _storiesForAuthor(authorId);
+    if (stories.isEmpty) return false;
+    final viewed = _allViewedIds;
+    return stories.every((s) => viewed.contains(s.id));
+  }
+
   /// Quick profile preview (avatar tap on a post).
   void _previewAuthor(Post post) {
     final me = AuthService.currentUser?.id;
@@ -493,8 +506,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
     if (!mounted) return;
     if (choice == 'story') {
-      setState(() => _viewedStoryAuthors.add(post.authorId));
       // _storiesForAuthor is newest-first; play oldest-first.
+      // _openStoryViewer greys the ring optimistically (via the shared
+      // viewed cache) for both the rail AND this post-card avatar.
       await _openStoryViewer(stories.reversed.toList());
     } else if (choice == 'profile') {
       _openAuthorProfile(post);
@@ -700,7 +714,7 @@ class _HomeScreenState extends State<HomeScreen>
                   viewerPhotoUrl: _viewerPhotoUrl(),
                   onAddStory: _openStoryComposer,
                   onAuthorTapped: (_, list) => _openStoryViewer(list),
-                  viewedStoryIds: _viewedStoryIds,
+                  viewedStoryIds: _allViewedIds,
                 ),
                 if (_devotion != null) ...[
                   const SizedBox(height: 16),
@@ -1236,7 +1250,7 @@ class _HomeScreenState extends State<HomeScreen>
         onAuthorTapped: () => _openAuthorProfile(post),
         onAuthorAvatarTapped: () => _previewAuthor(post),
         hasStory: _authorHasStory(post.authorId),
-        storyViewed: _viewedStoryAuthors.contains(post.authorId),
+        storyViewed: _authorStoryViewed(post.authorId),
         onStoryRingTapped: () => _onAuthorStoryRing(post),
         onSaveImage: () => _savePostImage(post),
       ));

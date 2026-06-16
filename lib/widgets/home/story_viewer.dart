@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/cache_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
@@ -150,23 +151,37 @@ class _StoryViewerState extends State<StoryViewer>
     setState(() => _likeCounts[storyId] = list.length);
   }
 
+  // Locally-cached like state, so re-opening a story shows the heart in
+  // the right state INSTANTLY instead of flashing empty until the server
+  // round-trip lands ("forgets then remembers").
+  static String _likeKey(String id) => 'pref:story_liked:$id';
+
+  /// The like state to paint right now: in-memory if known, else the last
+  /// cached value, else unliked.
+  bool _likedNow(String id) =>
+      _liked[id] ?? (CacheService.readPref(_likeKey(id)) == '1');
+
   Future<void> _loadLikedState(String storyId) async {
     final liked = await FeedService.isStoryLiked(storyId);
     if (!mounted) return;
     setState(() => _liked[storyId] = liked);
+    CacheService.writePref(_likeKey(storyId), liked ? '1' : '0');
   }
 
   /// Toggle the viewer's like with an optimistic flip, reconciling with
-  /// the state the service actually persisted.
+  /// the state the service actually persisted. The cache is updated on
+  /// both the optimistic flip and the reconciled result.
   Future<void> _toggleLike(Story story) async {
-    final current = _liked[story.id] ?? false;
+    final current = _likedNow(story.id);
     setState(() => _liked[story.id] = !current);
+    CacheService.writePref(_likeKey(story.id), !current ? '1' : '0');
     final applied = await FeedService.toggleStoryLike(
       story.id,
       currentlyLiked: current,
     );
     if (!mounted) return;
     setState(() => _liked[story.id] = applied);
+    CacheService.writePref(_likeKey(story.id), applied ? '1' : '0');
   }
 
   Future<void> _openLikersSheet(Story story) async {
@@ -455,10 +470,10 @@ class _StoryViewerState extends State<StoryViewer>
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          (_liked[story.id] ?? false)
+                          _likedNow(story.id)
                               ? Icons.favorite
                               : Icons.favorite_border,
-                          color: (_liked[story.id] ?? false)
+                          color: _likedNow(story.id)
                               ? AppColors.red
                               : AppColors.white,
                           size: 26,

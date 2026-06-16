@@ -314,10 +314,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     setState(() => _stories = [story, ..._stories]);
   }
 
-  Future<void> _openStoryViewer(List<Story> reel) {
+  Future<void> _openStoryViewer(List<Story> reel) async {
     // The rail now hands us a play-order (oldest-first) reel, including
     // auto-advance across unviewed authors — show it as-is.
-    return StoryViewer.show(context, reel);
+    await StoryViewer.show(context, reel);
+    // The viewer marked these watched in the shared cache; rebuild so the
+    // rail re-reads it and greys the ring immediately.
+    if (mounted) setState(() {});
   }
 
   String? _viewerPhotoUrl() {
@@ -1056,7 +1059,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           viewerPhotoUrl: _viewerPhotoUrl(),
           onAddStory: _openStoryComposer,
           onAuthorTapped: (_, list) => _openStoryViewer(list),
-          viewedStoryIds: _viewedStoryIds,
+          viewedStoryIds:
+              _viewedStoryIds.union(FeedService.viewedStoryIdsCached()),
         ),
         if (_stories.isEmpty)
           Padding(

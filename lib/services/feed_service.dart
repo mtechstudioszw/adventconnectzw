@@ -6,6 +6,7 @@ import '../models/friendship_model.dart';
 import '../models/post_comment_model.dart';
 import '../models/post_model.dart';
 import '../models/story_model.dart';
+import 'cache_service.dart';
 import 'messaging_service.dart';
 import 'post_limit_error.dart';
 
@@ -460,21 +461,62 @@ class FeedService {
     await _client.from(_storiesTable).delete().eq('id', storyId);
   }
 
+  // --- Shared viewed-story cache ---------------------------------------
+  // Every "story ring" surface (home rail, chat inbox, contact sheet, and
+  // the post-card avatar) reads from the SAME persisted set, so a story
+  // watched from ANY entry point greys its ring everywhere immediately and
+  // the state survives navigation + app restarts. This is what stops the
+  // ring "forgetting then remembering" that you'd already watched a story.
+  // Keyed per-user so accounts don't bleed into each other.
+  static Set<String>? _viewedCache;
+  static String? _viewedCacheKey;
+
+  static String get _viewedKey => 'pref:viewed_story_ids:${_viewerId ?? 'anon'}';
+
+  static Set<String> _loadViewedCache() {
+    final key = _viewedKey;
+    if (_viewedCache != null && _viewedCacheKey == key) return _viewedCache!;
+    _viewedCacheKey = key;
+    final raw = CacheService.readPref(key);
+    _viewedCache = (raw == null || raw.isEmpty)
+        ? <String>{}
+        : raw.split(',').where((s) => s.isNotEmpty).toSet();
+    return _viewedCache!;
+  }
+
+  static Future<void> _persistViewedCache() async {
+    final list = (_viewedCache ?? <String>{}).toList();
+    // Bound the list (stories expire in 24h anyway) so it can't grow forever.
+    final capped =
+        list.length > 800 ? list.sublist(list.length - 800) : list;
+    await CacheService.writePref(_viewedKey, capped.join(','));
+  }
+
+  /// Synchronous, app-wide set of story ids the viewer has watched, seeded
+  /// from the persistent cache. Surfaces union this into their fetched set
+  /// so freshly-watched stories grey instantly everywhere.
+  static Set<String> viewedStoryIdsCached() => <String>{..._loadViewedCache()};
+
   /// Story ids the current user has already viewed — used to grey out
-  /// viewed status rings and order unviewed first.
+  /// viewed status rings and order unviewed first. Merges the server rows
+  /// with the local cache so optimistic (just-watched) views are never lost
+  /// to replication lag, and falls back to the cache entirely when offline.
   static Future<Set<String>> fetchMyViewedStoryIds() async {
     final user = _client.auth.currentUser;
     if (user == null) return <String>{};
+    final cache = _loadViewedCache();
     try {
       final rows = await _client
           .from('story_views')
           .select('story_id')
           .eq('viewer_id', user.id);
-      return (rows as List)
-          .map((r) => (r as Map)['story_id'].toString())
-          .toSet();
+      cache.addAll(
+        (rows as List).map((r) => (r as Map)['story_id'].toString()),
+      );
+      unawaited(_persistViewedCache());
+      return <String>{...cache};
     } catch (_) {
-      return <String>{};
+      return <String>{...cache};
     }
   }
 
@@ -485,6 +527,10 @@ class FeedService {
   static Future<void> markStoryViewed(String storyId) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
+    // Update the shared cache FIRST so every ring greys instantly, even
+    // before (or without) the server round-trip.
+    _loadViewedCache().add(storyId);
+    unawaited(_persistViewedCache());
     try {
       await _client.from('story_views').insert({
         'story_id': storyId,

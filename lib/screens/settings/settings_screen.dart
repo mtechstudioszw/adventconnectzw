@@ -1140,9 +1140,9 @@ class _DonationCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Donate via PayNow — EcoCash, OneMoney, ZIPIT '
-                      'or card. Every contribution keeps the app '
-                      'free for the Adventist community.',
+                      'Send a voluntary gift via EcoCash. Every '
+                      'contribution keeps the app free for the '
+                      'Adventist community.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.white.withValues(alpha: 0.85),
                         fontSize: 12.5,
@@ -1154,9 +1154,9 @@ class _DonationCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               const Icon(
-                Icons.open_in_new,
+                Icons.chevron_right,
                 color: AppColors.white,
-                size: 18,
+                size: 20,
               ),
             ],
           ),

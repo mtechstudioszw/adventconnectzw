@@ -764,6 +764,26 @@ class MessagingService {
     return raw == null ? null : DateTime.tryParse(raw);
   }
 
+  // ---- Group "you left / were removed" cache -----------------------------
+  // The composer lock used to flip on only AFTER an async member fetch (~2s),
+  // so a left/removed group briefly showed an editable text box. We persist
+  // the locked state locally so re-opening the chat locks the composer on the
+  // FIRST frame.
+  static String _notMemberKey(String conversationId) =>
+      'group_blocked:$conversationId';
+
+  static bool isGroupBlockedCached(String conversationId) =>
+      CacheService.readPref(_notMemberKey(conversationId)) == '1';
+
+  static Future<void> setGroupBlockedCached(
+      String conversationId, bool blocked) async {
+    if (blocked) {
+      await CacheService.writePref(_notMemberKey(conversationId), '1');
+    } else {
+      await CacheService.deletePref(_notMemberKey(conversationId));
+    }
+  }
+
   /// Clear the chat for the current user only (WhatsApp parity). Persists
   /// cleared_at (server) and empties the local message cache so the
   /// messages don't reappear from cache on the next (offline) open.

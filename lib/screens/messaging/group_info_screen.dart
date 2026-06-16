@@ -330,6 +330,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     if (ok != true) return;
     try {
       await GroupService.leaveGroup(widget.conversationId);
+      // Lock the composer instantly if the chat is re-opened.
+      unawaited(
+          MessagingService.setGroupBlockedCached(widget.conversationId, true));
       if (!mounted) return;
       context.goNamed('messages');
     } catch (_) {
@@ -556,11 +559,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
                 // ---- NORMAL USER-CREATED GROUP ------------------------
                 else ...[
-                  _ActionTile(
-                    icon: Icons.link,
-                    label: 'Invite to group via link',
-                    onTap: _shareInvite,
-                  ),
+                  // Only members can invite — hidden once you leave the group.
+                  if (_amMember)
+                    _ActionTile(
+                      icon: Icons.link,
+                      label: 'Invite to group via link',
+                      onTap: _shareInvite,
+                    ),
                   if (_amAdmin) ...[
                     _ActionTile(
                       icon: Icons.person_add_alt_1,

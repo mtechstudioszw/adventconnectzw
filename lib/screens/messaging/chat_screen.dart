@@ -674,6 +674,9 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void initState() {
     super.initState();
+    // Seed the "you left / were removed" lock from cache so the composer is
+    // blocked on the FIRST frame (the async member fetch confirms/clears it).
+    _notAMember = MessagingService.isGroupBlockedCached(widget.conversationId);
     _entrance = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -998,15 +1001,20 @@ class _ChatScreenState extends State<ChatScreen>
       final members = await GroupService.fetchMembers(widget.conversationId);
       if (!mounted) return;
       final myId = AuthService.currentUser?.id;
+      // No longer a member (left or removed) — lock the composer.
+      final notMember = members.isNotEmpty &&
+          myId != null &&
+          !members.any((m) => m.userId == myId);
+      // Persist so re-opening locks the composer on the first frame (no 2s
+      // window where the text box is still editable).
+      unawaited(MessagingService.setGroupBlockedCached(
+          widget.conversationId, notMember));
       setState(() {
         _groupMembers = members;
         _memberById
           ..clear()
           ..addEntries(members.map((m) => MapEntry(m.userId, m)));
-        // No longer a member (left or removed) — lock the composer.
-        _notAMember = members.isNotEmpty &&
-            myId != null &&
-            !members.any((m) => m.userId == myId);
+        _notAMember = notMember;
       });
     } catch (_) {
       // Non-fatal — bubbles fall back to the stored sender_name.

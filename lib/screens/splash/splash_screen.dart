@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/app_bootstrap.dart';
@@ -205,13 +207,14 @@ class _SplashScreenState extends State<SplashScreen>
       context.goNamed('account_banned');
       return;
     }
+    // Refresh the server ban state in the BACKGROUND — don't block the
+    // biometric prompt / home on a 3s network round-trip. The persisted flag
+    // above already locks known-banned accounts instantly, and main.dart's
+    // ban guard re-checks the server within seconds of launch + navigates to
+    // the lockout screen if it flips. (This was the main "biometric login is
+    // slow" cause: a slow network stalled the splash here before the prompt.)
     if (signedIn && AuthService.isSignedIn) {
-      if (await AuthService.isCurrentUserBanned()) {
-        if (!mounted) return;
-        context.goNamed('account_banned');
-        return;
-      }
-      if (!mounted) return;
+      unawaited(AuthService.isCurrentUserBanned());
     }
     if (signedIn) {
       // WhatsApp-style biometric gate. If the user opted in, we hand

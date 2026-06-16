@@ -53,6 +53,15 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
     super.dispose();
   }
 
+  /// Combine the applicant's church position with their free-text note so
+  /// the super-admin sees both in the approval queue (the position can't go
+  /// in the DB `role` column — that's reserved for the admin tier).
+  String _composedNote() {
+    final extra = _note.text.trim();
+    final position = 'Position: $_role';
+    return extra.isEmpty ? position : '$position\n$extra';
+  }
+
   Future<void> _submit() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
@@ -60,11 +69,14 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
     try {
       await ChurchService.applyForChurchAdmin(
         churchId: widget.church.id,
-        role: _role,
+        // DB admin tier — the constraint only allows 'primary'/'standard'.
+        // A claimant is requesting to be the church's primary admin; their
+        // church position (Elder/Pastor/…) is captured in the note instead.
+        role: 'primary',
         applicantName: _name.text,
         applicantPhone: _phone.text,
         applicantEmail: _email.text.trim().isEmpty ? null : _email.text,
-        note: _note.text.trim().isEmpty ? null : _note.text,
+        note: _composedNote(),
       );
       if (!mounted) return;
       await showDialog<void>(

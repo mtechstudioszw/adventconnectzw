@@ -643,7 +643,9 @@ class _CategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primaryBlue : AppColors.lightGrey,
+      // Adaptive unselected fill so the (adaptive) label text stays readable
+      // in dark mode — lightGrey here left light text on a light chip.
+      color: selected ? AppColors.primaryBlue : AppColors.surfaceMuted,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),

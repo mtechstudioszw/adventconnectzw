@@ -4,6 +4,24 @@ import 'app_colors.dart';
 import 'app_palette.dart';
 import 'app_text_styles.dart';
 
+/// Builder for `showDatePicker` / `showTimePicker` / `showDateRangePicker`
+/// that keeps the brand-blue accent but follows the ACTIVE brightness — so
+/// pickers render dark in dark mode instead of a glaring white calendar.
+/// Several screens previously forced `ColorScheme.light(...)` here, which
+/// left a white picker (and sometimes invisible text) on a dark app.
+Widget brandPickerBuilder(BuildContext context, Widget? child) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  final scheme = (dark ? const ColorScheme.dark() : const ColorScheme.light())
+      .copyWith(
+    primary: AppColors.primaryBlue,
+    onPrimary: AppColors.white,
+  );
+  return Theme(
+    data: Theme.of(context).copyWith(colorScheme: scheme),
+    child: child ?? const SizedBox.shrink(),
+  );
+}
+
 class AppTheme {
   AppTheme._();
 

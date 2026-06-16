@@ -6,6 +6,7 @@ import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_theme.dart';
 import '../widgets/post_form_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -133,12 +134,7 @@ class _PostEventScreenState extends State<PostEventScreen>
       initialDate: initial ?? first,
       firstDate: first,
       lastDate: now.add(const Duration(days: 365 * 3)),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primaryBlue),
-        ),
-        child: child!,
-      ),
+      builder: brandPickerBuilder,
     );
   }
 
@@ -146,12 +142,7 @@ class _PostEventScreenState extends State<PostEventScreen>
     return showTimePicker(
       context: context,
       initialTime: initial ?? const TimeOfDay(hour: 18, minute: 0),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primaryBlue),
-        ),
-        child: child!,
-      ),
+      builder: brandPickerBuilder,
     );
   }
 
@@ -774,11 +765,17 @@ class _Dropdown<T> extends StatelessWidget {
     return DropdownButtonFormField<T>(
       initialValue: value,
       isExpanded: true,
+      // The popup menu surface — without this it defaults to a light canvas
+      // in dark mode, leaving the province options on a white sheet.
+      dropdownColor: context.palette.card,
       icon: Icon(
         Icons.expand_more,
         color: context.palette.textMuted,
       ),
-      style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+      style: AppTextStyles.bodyLarge.copyWith(
+        fontSize: 15,
+        color: context.palette.text,
+      ),
       decoration: postFormFilledDecoration(icon: icon, hint: hint),
       hint: Text(
         hint,

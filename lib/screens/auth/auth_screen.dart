@@ -11,6 +11,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_theme.dart';
 
 /// External landing URLs for the legal pages (live Netlify site).
 const _termsUrl =
@@ -512,17 +513,7 @@ class _AuthScreenState extends State<AuthScreen>
       helpText: 'Your date of birth',
       cancelText: 'Cancel',
       confirmText: 'Continue',
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: AppColors.primaryBlue,
-            onPrimary: AppColors.white,
-            surface: AppColors.white,
-            onSurface: AppColors.text,
-          ),
-        ),
-        child: child!,
-      ),
+      builder: brandPickerBuilder,
     );
   }
 
@@ -559,16 +550,7 @@ class _AuthScreenState extends State<AuthScreen>
       firstDate: DateTime(1920),
       lastDate: now,
       helpText: 'Date of birth',
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primaryBlue,
-            onPrimary: AppColors.white,
-            onSurface: AppColors.textDark,
-          ),
-        ),
-        child: child!,
-      ),
+      builder: brandPickerBuilder,
     );
     if (picked == null || !mounted) return;
     setState(() {

@@ -438,7 +438,11 @@ class _SplashScreenState extends State<SplashScreen>
             child: Text(
               'Advent Connect ZW',
               style: AppTextStyles.displayMedium.copyWith(
-                color: AppColors.darkNavy,
+                // Navy on the light canvas; white on the dark-navy canvas —
+                // hard-coded darkNavy was invisible navy-on-navy in dark mode.
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.white
+                    : AppColors.darkNavy,
                 fontSize: 32,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.2,

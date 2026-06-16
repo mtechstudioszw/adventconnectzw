@@ -11,6 +11,17 @@ class ShimmerLoaders {
 
   static const _base = Color(0xFFE6EBF1);
   static const _highlight = Color(0xFFF7F9FC);
+  // Dark-mode shimmer tones — without these the light greys above flash as
+  // bright white boxes against the dark scaffold while lists load.
+  static const _baseDark = Color(0xFF1A2240);
+  static const _highlightDark = Color(0xFF273156);
+
+  static Color baseColor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? _baseDark : _base;
+  static Color highlightColor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? _highlightDark
+          : _highlight;
 
   /// A vertically stacked list of generic cards — used by Churches,
   /// Events, Jobs, Prayer feeds.
@@ -43,8 +54,8 @@ class _CardSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
-      baseColor: ShimmerLoaders._base,
-      highlightColor: ShimmerLoaders._highlight,
+      baseColor: ShimmerLoaders.baseColor(context),
+      highlightColor: ShimmerLoaders.highlightColor(context),
       child: Container(
         height: 96,
         decoration: BoxDecoration(
@@ -60,8 +71,8 @@ class _ProductSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
-      baseColor: ShimmerLoaders._base,
-      highlightColor: ShimmerLoaders._highlight,
+      baseColor: ShimmerLoaders.baseColor(context),
+      highlightColor: ShimmerLoaders.highlightColor(context),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: Container(color: context.palette.card),

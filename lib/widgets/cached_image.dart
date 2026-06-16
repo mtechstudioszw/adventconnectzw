@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// Drop-in replacement for `Image.network(...)`. Disk-caches the image
 /// via cached_network_image so post photos, avatars, product shots
@@ -67,7 +68,8 @@ class CachedImage extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            Container(width: width, height: height, color: AppColors.lightGrey),
+            Container(
+                width: width, height: height, color: context.palette.cardMuted),
             if (!small)
               Align(
                 alignment: Alignment.bottomCenter,
@@ -91,7 +93,7 @@ class CachedImage extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      color: AppColors.lightGrey,
+      color: AppColors.surfaceMuted,
       alignment: Alignment.center,
       child: const Icon(
         Icons.broken_image_outlined,

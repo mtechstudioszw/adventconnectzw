@@ -10,6 +10,7 @@ import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/event_card.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
@@ -191,18 +192,7 @@ class _EventsScreenState extends State<EventsScreen>
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
       initialDateRange: _dateRange,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.primaryBlue,
-              onPrimary: AppColors.white,
-              onSurface: AppColors.textDark,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      builder: brandPickerBuilder,
     );
     if (picked != null) {
       setState(() => _dateRange = picked);

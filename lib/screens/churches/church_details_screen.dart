@@ -847,7 +847,9 @@ class _LocationActionButton extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         gradient: filled ? AppColors.primaryGradient : null,
-        color: filled ? null : AppColors.white,
+        // Adaptive surface for the outlined "Open in Maps" variant — white
+        // here was a glaring white button on the dark card in dark mode.
+        color: filled ? null : context.palette.card,
         borderRadius: BorderRadius.circular(12),
         border: filled
             ? null

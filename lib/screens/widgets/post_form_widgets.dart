@@ -313,7 +313,9 @@ InputDecoration postFormFilledDecoration({
     ),
     prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 44),
     filled: true,
-    fillColor: AppColors.lightGrey,
+    // Adaptive: light grey in light mode (unchanged), a dark muted fill in
+    // dark mode so the post-event / post-news fields aren't glaring white.
+    fillColor: AppColors.surfaceMuted,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),

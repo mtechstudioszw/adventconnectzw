@@ -360,8 +360,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   bool _isPreviewCleared(Conversation c) {
     final cl = _convStates[c.id]?.clearedAt;
     if (cl != null && !c.lastMessageAt.isAfter(cl)) return true;
+    // Delete-for-me preview floor. Use a 2s tolerance: the conversation's
+    // last_message_at (from the conversations row) and the hidden message's
+    // created_at (from the messages row) are set by a trigger to the same
+    // instant, but parsing/clock skew can leave last_message_at a few ms
+    // AFTER the floor — which left the deleted message still showing.
     final floor = MessagingService.inboxPreviewFloor(c.id);
-    return floor != null && !c.lastMessageAt.isAfter(floor);
+    return floor != null &&
+        c.lastMessageAt.isBefore(floor.add(const Duration(seconds: 2)));
   }
 
   /// Pinned conversations float to the top, preserving their existing

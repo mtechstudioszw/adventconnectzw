@@ -1655,7 +1655,8 @@ class _SuccessPageState extends State<_SuccessPage>
     if (_leaving) return;
     setState(() => _leaving = true);
     HapticFeedback.mediumImpact();
-    await _exit.forward();
+    // Navigate straight into the app — the long "dive-in" zoom felt broken,
+    // so we hand off immediately (no exit animation).
     widget.onEnter();
   }
 

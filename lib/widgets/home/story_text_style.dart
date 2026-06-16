@@ -14,23 +14,28 @@ TextStyle storyFontStyle(
   required double fontSize,
   FontWeight fontWeight = FontWeight.w700,
 }) {
-  final base = TextStyle(
-    color: color,
-    fontSize: fontSize,
-    fontWeight: fontWeight,
-    height: 1.25,
-  );
+  // Get the font family first, then FORCE colour/size/weight on top with
+  // copyWith. Passing colour via `textStyle:` into GoogleFonts could get
+  // dropped when the resulting style was later merged into a TextField's
+  // theme style — which left the status text taking the theme's default
+  // colour (dark in light mode → invisible on the colour background). Forcing
+  // the colour last guarantees white text in BOTH light and dark.
+  final TextStyle f;
   switch (fontKey) {
     case 'archivo':
-      return GoogleFonts.archivoBlack(
-          textStyle: base.copyWith(fontWeight: FontWeight.w900));
+      f = GoogleFonts.archivoBlack();
     case 'pacifico':
-      return GoogleFonts.pacifico(
-          textStyle: base.copyWith(fontWeight: FontWeight.w400));
+      f = GoogleFonts.pacifico();
     case 'slab':
-      return GoogleFonts.robotoSlab(textStyle: base);
+      f = GoogleFonts.robotoSlab();
     case 'poppins':
     default:
-      return GoogleFonts.poppins(textStyle: base);
+      f = GoogleFonts.poppins();
   }
+  return f.copyWith(
+    color: color,
+    fontSize: fontSize,
+    fontWeight: fontKey == 'pacifico' ? FontWeight.w400 : fontWeight,
+    height: 1.25,
+  );
 }

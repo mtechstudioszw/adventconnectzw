@@ -32,12 +32,19 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   @override
   void initState() {
     super.initState();
+    // Paint the last-known inbox instantly; only show a spinner when
+    // there's nothing cached yet.
+    final cached = NotificationService.cached();
+    if (cached.isNotEmpty) {
+      _items = cached;
+      _loading = false;
+    }
     _load();
   }
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      _loading = _items.isEmpty;
       _error = null;
     });
     try {

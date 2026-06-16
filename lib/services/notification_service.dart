@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'cache_service.dart';
 
 /// Wraps Table 23 (notifications). DB triggers fill the table — the
 /// app only reads, marks as read, and clears. See
@@ -8,6 +12,7 @@ class NotificationService {
 
   static final SupabaseClient _client = Supabase.instance.client;
   static const _table = 'notifications';
+  static const _cacheKey = 'notifications';
 
   static Future<List<AppNotification>> fetchAll({int limit = 100}) async {
     final user = _client.auth.currentUser;
@@ -18,10 +23,27 @@ class NotificationService {
         .eq('user_id', user.id)
         .order('created_at', ascending: false)
         .limit(limit);
+    // Cache the raw rows so the inbox paints instantly next launch
+    // (and stays readable offline). Best-effort — never blocks the fetch.
+    CacheService.writeString(_cacheKey, jsonEncode(response)).ignore();
     return (response as List)
         .map((row) =>
             AppNotification.fromJson(row as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Last-known notifications from the local cache, for an instant paint
+  /// before the network fetch returns. Empty when nothing is cached.
+  static List<AppNotification> cached() {
+    final raw = CacheService.readStringStale(_cacheKey);
+    if (raw == null) return const [];
+    try {
+      return (jsonDecode(raw) as List)
+          .map((row) => AppNotification.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Lightweight count used by the bell-icon badge on home.

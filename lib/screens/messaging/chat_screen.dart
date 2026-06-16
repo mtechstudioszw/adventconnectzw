@@ -208,15 +208,23 @@ class _ChatScreenState extends State<ChatScreen>
   /// shared `last_message` column can't express a per-user hide.
   void _persistPreviewFloor(Iterable<String> hiddenIds) {
     DateTime? newest;
+    String? newestText;
     for (final m in _serverMessages) {
       if (hiddenIds.contains(m.id) &&
           (newest == null || m.createdAt.isAfter(newest))) {
         newest = m.createdAt;
+        newestText = m.content;
       }
     }
     if (newest != null) {
-      unawaited(
-          MessagingService.setInboxPreviewFloor(widget.conversationId, newest));
+      unawaited(MessagingService.setInboxPreviewFloor(
+        widget.conversationId,
+        newest,
+        // The shared last_message column still holds this text; matching on
+        // it lets the inbox suppress the stale preview without relying on a
+        // fragile timestamp comparison.
+        hiddenText: newestText,
+      ));
     }
   }
 

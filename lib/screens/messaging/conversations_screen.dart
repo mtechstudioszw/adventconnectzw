@@ -369,8 +369,20 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     // instant, but parsing/clock skew can leave last_message_at a few ms
     // AFTER the floor — which left the deleted message still showing.
     final floor = MessagingService.inboxPreviewFloor(c.id);
-    return floor != null &&
-        c.lastMessageAt.isBefore(floor.add(const Duration(seconds: 2)));
+    if (floor == null) return false;
+    // Primary, timestamp-free signal: the shared last_message text is exactly
+    // the message we hid for ourselves. Robust against clock/parsing skew.
+    final hiddenText = MessagingService.inboxPreviewHiddenText(c.id);
+    if (hiddenText != null &&
+        hiddenText.isNotEmpty &&
+        hiddenText == c.lastMessage.trim()) {
+      return true;
+    }
+    // Fallback for media/system previews (no matchable text): compare instants
+    // in UTC so a local-vs-UTC parse can't leave the deleted message showing.
+    return c.lastMessageAt
+        .toUtc()
+        .isBefore(floor.toUtc().add(const Duration(seconds: 2)));
   }
 
   /// Pinned conversations float to the top, preserving their existing

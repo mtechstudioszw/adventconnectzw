@@ -745,6 +745,15 @@ class MessagingService {
   // moves past the floor). Persistent (no TTL) so it survives restarts.
   static String _previewFloorKey(String conversationId) =>
       'preview_floor:$conversationId';
+  // The TEXT of the hidden last message. The shared `last_message` column
+  // still holds it (the hide is per-user), so matching on the exact text is
+  // a timestamp-free way to know the inbox preview is the one we hid — robust
+  // against clock/parsing skew that made the timestamp-only floor unreliable.
+  static String _previewTextKey(String conversationId) =>
+      'preview_hidden_text:$conversationId';
+
+  static String? inboxPreviewHiddenText(String conversationId) =>
+      CacheService.readPref(_previewTextKey(conversationId));
 
   /// Bumped on a LOCAL inbox change (e.g. delete-for-me sets a preview floor)
   /// that produces no realtime event. The conversations list listens to this
@@ -753,9 +762,16 @@ class MessagingService {
   static final ValueNotifier<int> inboxLocalRevision = ValueNotifier<int>(0);
 
   static Future<void> setInboxPreviewFloor(
-      String conversationId, DateTime ts) async {
+      String conversationId, DateTime ts,
+      {String? hiddenText}) async {
+    // Store the floor in UTC so the inbox can compare instants regardless of
+    // how each side parsed its timestamp.
     await CacheService.writePref(
-        _previewFloorKey(conversationId), ts.toIso8601String());
+        _previewFloorKey(conversationId), ts.toUtc().toIso8601String());
+    final t = hiddenText?.trim() ?? '';
+    if (t.isNotEmpty) {
+      await CacheService.writePref(_previewTextKey(conversationId), t);
+    }
     inboxLocalRevision.value++;
   }
 

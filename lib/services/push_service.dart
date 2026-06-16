@@ -18,6 +18,45 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   // only exists so background data-only messages don't get dropped.
 }
 
+/// Action id for the inline "Reply" button on chat-message notifications.
+const String kReplyActionId = 'reply';
+
+/// Top-level handler for taps/inline-replies delivered to a background
+/// isolate (app killed). Inline replies submitted while the app is alive
+/// go to [PushService._onLocalTap] in the main isolate instead; this is a
+/// best-effort fallback for the rare case the app was torn down between
+/// showing the heads-up and the user submitting the reply. Supabase may
+/// not be initialised in this isolate, so the send is wrapped in a guard
+/// and simply no-ops if it can't reach the backend.
+@pragma('vm:entry-point')
+void onPushBackgroundResponse(NotificationResponse response) {
+  if (response.actionId != kReplyActionId) return;
+  final text = response.input?.trim() ?? '';
+  final payload = response.payload ?? '';
+  if (text.isEmpty || payload.isEmpty) return;
+  // Pull the conversation id out of the encoded payload.
+  String convId = '';
+  for (final pair in payload.split('&')) {
+    final i = pair.indexOf('=');
+    if (i <= 0) continue;
+    if (Uri.decodeComponent(pair.substring(0, i)) == 'reference_id') {
+      convId = Uri.decodeComponent(pair.substring(i + 1));
+      break;
+    }
+  }
+  if (convId.isEmpty) return;
+  () async {
+    try {
+      await MessagingService.sendMessage(
+        conversationId: convId,
+        content: text,
+      );
+    } catch (_) {
+      // Backend unreachable from this isolate — best effort only.
+    }
+  }();
+}
+
 /// Wires Firebase Cloud Messaging into the app. The Supabase Edge
 /// Function `notify-fcm` is what actually triggers a push when a row
 /// lands in `public.notifications`; this class handles the device side
@@ -77,6 +116,7 @@ class PushService {
         ),
       ),
       onDidReceiveNotificationResponse: _onLocalTap,
+      onDidReceiveBackgroundNotificationResponse: onPushBackgroundResponse,
     );
 
     final androidImpl = _local.resolvePlatformSpecificImplementation<
@@ -168,6 +208,12 @@ class PushService {
     if (notif == null) return; // data-only payload — no UI to show
     final title = notif.title ?? 'Advent Connect ZW';
     final body = notif.body ?? '';
+    // Chat messages get an inline "Reply" action so the user can answer
+    // straight from the heads-up banner. showsUserInterface brings the app
+    // to the foreground on submit so the send runs in the main isolate
+    // where Supabase is live (see _onLocalTap).
+    final isConversation =
+        referenceType == 'conversation' && referenceId.isNotEmpty;
     // Encode the original message into the payload string so the local
     // tap handler can rebuild RemoteMessage.data on tap.
     await _local.show(
@@ -182,6 +228,19 @@ class PushService {
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
+          actions: isConversation
+              ? <AndroidNotificationAction>[
+                  const AndroidNotificationAction(
+                    kReplyActionId,
+                    'Reply',
+                    inputs: <AndroidNotificationActionInput>[
+                      AndroidNotificationActionInput(label: 'Message'),
+                    ],
+                    showsUserInterface: true,
+                    cancelNotification: true,
+                  ),
+                ]
+              : null,
         ),
         iOS: const DarwinNotificationDetails(),
       ),
@@ -190,6 +249,27 @@ class PushService {
   }
 
   static void _onLocalTap(NotificationResponse response) {
+    // Inline "Reply" action on a chat notification — send the typed text
+    // straight to the conversation instead of routing into the chat.
+    if (response.actionId == kReplyActionId) {
+      final text = response.input?.trim() ?? '';
+      final data = _deserializePayload(response.payload);
+      final convId = '${data['reference_id'] ?? ''}';
+      if (text.isNotEmpty && convId.isNotEmpty) {
+        () async {
+          try {
+            await MessagingService.sendMessage(
+              conversationId: convId,
+              content: text,
+            );
+            await MessagingService.markConversationRead(convId);
+          } catch (_) {
+            // Best-effort — a failed reply just isn't sent.
+          }
+        }();
+      }
+      return;
+    }
     final data = _deserializePayload(response.payload);
     // Synthesize a minimal RemoteMessage so route listeners get the
     // same shape whether the tap came from foreground or background.

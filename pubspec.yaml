@@ -102,6 +102,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/
+    # Bundled Google Fonts (Poppins + story fonts). google_fonts loads these
+    # local files instead of fetching at runtime, so text never paints blank
+    # while a font downloads (critical on slow networks) and the app works
+    # fully offline. Keep filenames as <Family>-<Variant>.ttf — google_fonts
+    # matches by that suffix.
+    - assets/fonts/
 
 flutter_launcher_icons:
   android: "ic_launcher"

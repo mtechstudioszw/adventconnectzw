@@ -1586,8 +1586,8 @@ class _ThemeSheet extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Dark mode is still rolling out screen-by-screen — a few '
-                'pages may still appear light for now.',
+                'Choose how Advent Connect looks. Match system follows your '
+                'phone\'s light or dark setting.',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.textMuted,
                   height: 1.4,

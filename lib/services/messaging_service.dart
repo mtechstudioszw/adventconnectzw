@@ -912,9 +912,53 @@ class MessagingService {
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
         .order('created_at')
-        .map((rows) => rows
-            .map((row) => Message.fromJson(row))
-            .toList());
+        .map((rows) {
+          final messages =
+              rows.map((row) => Message.fromJson(row)).toList();
+          // Keep the cached delivered/read ticks fresh as receipts arrive over
+          // realtime, so a cold reopen paints the correct ✓/✓✓ instead of
+          // flickering single→double once the next fetch lands ("the ticks
+          // forget then remember"). We only patch ticks of rows already in
+          // the cache — the clear/join floor still governs cache membership.
+          unawaited(_updateCachedTicks(conversationId, messages));
+          return messages;
+        });
+  }
+
+  /// Merge fresh delivered/read state into the cached message rows without
+  /// changing which messages are cached (the floor-filtered set from
+  /// [fetchMessages] stays intact). Cheap no-op when nothing changed.
+  static Future<void> _updateCachedTicks(
+      String conversationId, List<Message> live) async {
+    final raw = CacheService.readStringStale(_chatCacheKey(conversationId));
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final rows = (jsonDecode(raw) as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+      final byId = {for (final m in live) m.id: m};
+      var changed = false;
+      for (final row in rows) {
+        final m = byId[row['id'].toString()];
+        if (m == null) continue;
+        final delivered = m.deliveredAt?.toIso8601String();
+        final readAt = m.readAt?.toIso8601String();
+        if (row['delivered_at'] != delivered ||
+            row['read_at'] != readAt ||
+            row['read'] != m.read) {
+          row['delivered_at'] = delivered;
+          row['read_at'] = readAt;
+          row['read'] = m.read;
+          changed = true;
+        }
+      }
+      if (changed) {
+        await CacheService.writeString(
+            _chatCacheKey(conversationId), jsonEncode(rows));
+      }
+    } catch (_) {
+      // Cache tick refresh is best-effort.
+    }
   }
 
   // ---------- offline cache ----------

@@ -18,6 +18,7 @@ import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
+import 'chat_search_delegate.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key, this.initialTab});
@@ -490,6 +491,38 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
   }
 
+  /// WhatsApp-style scoped search: friends / messages / groups / archived /
+  /// status, plus an Explore scope for people who aren't your friends yet.
+  void _openChatSearch() {
+    showSearch<void>(
+      context: context,
+      delegate: ChatSearchDelegate(
+        chats: _chats,
+        groups: _groups,
+        archived: _archived,
+        stories: _stories,
+        onOpenConversation: _openChat,
+        onOpenStatus: _openStoryViewer,
+        onStartChatWithUser: _startChatWith,
+      ),
+    );
+  }
+
+  /// Start (or reopen) a 1:1 chat with a member found via search/explore.
+  Future<void> _startChatWith(String userId, String name) async {
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: userId,
+        otherUserName: name,
+      );
+      if (!mounted) return;
+      await _openChat(convo);
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not start the chat. Try again.');
+    }
+  }
+
   /// BUG 4 FIX — Open a conversation with an optimistic badge clear.
   /// We zero out the unread count before navigating so the badge
   /// disappears instantly instead of persisting until the async
@@ -822,7 +855,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               const Spacer(),
               _CircleIconButton(
                 icon: Icons.search,
-                onTap: () => context.pushNamed('search'),
+                onTap: _openChatSearch,
               ),
               const SizedBox(width: 6),
               PopupMenuButton<String>(

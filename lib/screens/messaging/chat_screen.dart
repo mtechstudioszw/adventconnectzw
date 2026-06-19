@@ -1715,10 +1715,16 @@ class _ChatScreenState extends State<ChatScreen>
       // Any other Postgrest error → existing rollback + retry path.
       setState(() => _pending.removeWhere((m) => m.id == tempId));
       _inputController.text = text;
+      // The friend-gate 3-message cap (patch_118) raises a check_violation
+      // (23514) with a user-facing message — show that verbatim so the
+      // sender understands why, instead of a generic failure line.
+      final friendly = e.code == '23514'
+          ? e.message
+          : 'Could not send message. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Could not send message. Please try again.',
+            friendly,
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

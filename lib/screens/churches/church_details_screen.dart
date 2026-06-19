@@ -201,6 +201,13 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                   });
                   _bootstrap();
                 },
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 28, vertical: 12),
+                ),
                 child: const Text('Retry'),
               ),
             ],

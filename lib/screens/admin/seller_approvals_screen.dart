@@ -670,10 +670,11 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, null),
+          style: TextButton.styleFrom(foregroundColor: AppColors.primaryBlue),
           child: Text(
             'Cancel',
-            style:
-                AppTextStyles.labelMedium.copyWith(color: AppColors.text),
+            style: AppTextStyles.labelMedium
+                .copyWith(color: AppColors.primaryBlue),
           ),
         ),
         FilledButton(

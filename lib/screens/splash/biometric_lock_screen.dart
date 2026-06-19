@@ -108,7 +108,11 @@ class _BiometricLockScreenState extends State<BiometricLockScreen>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
             child: Text('Sign out', style: AppTextStyles.labelLarge),
           ),
         ],

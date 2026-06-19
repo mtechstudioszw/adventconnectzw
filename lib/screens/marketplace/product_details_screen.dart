@@ -233,6 +233,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                   });
                   _bootstrap();
                 },
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 28, vertical: 12),
+                ),
                 child: const Text('Retry'),
               ),
             ],

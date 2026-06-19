@@ -32,6 +32,9 @@ class ConversationsScreen extends StatefulWidget {
 
 enum _ConversationsTab { chats, groups, status }
 
+/// WhatsApp-style quick filter chips on the Chats tab.
+enum _ChatFilter { all, unread, groups }
+
 class _ConversationsScreenState extends State<ConversationsScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _entrance;
@@ -46,6 +49,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   bool _loading = true;
   String? _error;
   _ConversationsTab _tab = _ConversationsTab.chats;
+  _ChatFilter _chatFilter = _ChatFilter.all;
   /// Requests aren't a tab anymore — they open from a banner on the Chats
   /// tab into an inline requests view. This flag drives that view.
   bool _showRequests = false;
@@ -1012,9 +1016,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   // ----- Chats tab: requests banner + 1:1 conversation list -----------
   Widget _buildChatsTab() {
-    final list = _chats;
+    final all = _chats;
     final requestCount = _requests.length + _friendRequests.length;
-    if (list.isEmpty && requestCount == 0 && _archived.isEmpty) {
+    if (all.isEmpty && requestCount == 0 && _archived.isEmpty) {
       return _buildEmptyState(
         title: 'No conversations yet',
         body:
@@ -1022,7 +1026,18 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             'member directory or church page.',
       );
     }
+    // Apply the WhatsApp-style filter chip.
+    final List<Conversation> list;
+    switch (_chatFilter) {
+      case _ChatFilter.unread:
+        list = all.where((c) => c.unreadCount > 0).toList();
+      case _ChatFilter.groups:
+        list = _groups;
+      case _ChatFilter.all:
+        list = all;
+    }
     final headers = <Widget>[
+      _buildChatFilterChips(unreadCount: all.where((c) => c.unreadCount > 0).length),
       if (requestCount > 0)
         _RequestsBanner(
           count: requestCount,
@@ -1038,10 +1053,94 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               style: AppTextStyles.labelMedium
                   .copyWith(color: context.palette.textMuted)),
         ),
+      // Filter found nothing (but the inbox isn't empty) — let the user know
+      // instead of a blank screen under the chips.
+      if (list.isEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
+          child: Center(
+            child: Text(
+              _chatFilter == _ChatFilter.unread
+                  ? 'No unread chats — you\'re all caught up.'
+                  : 'No groups here yet.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium
+                  .copyWith(color: context.palette.textMuted),
+            ),
+          ),
+        ),
     ];
     return _conversationListView(
       list,
-      banner: headers.isEmpty ? null : Column(children: headers),
+      banner: Column(children: headers),
+    );
+  }
+
+  /// WhatsApp-style quick filter chips (All · Unread · Groups) above the
+  /// chat list. Unread carries a count badge.
+  Widget _buildChatFilterChips({required int unreadCount}) {
+    Widget chip(String label, _ChatFilter f, {int badge = 0}) {
+      final selected = _chatFilter == f;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Material(
+          color: selected ? AppColors.primaryBlue : context.palette.chipBg,
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => setState(() => _chatFilter = f),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: selected ? AppColors.white : context.palette.text,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  if (badge > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppColors.white.withValues(alpha: 0.25)
+                            : AppColors.primaryBlue,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$badge',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+      child: Row(
+        children: [
+          chip('All', _ChatFilter.all),
+          chip('Unread', _ChatFilter.unread, badge: unreadCount),
+          chip('Groups', _ChatFilter.groups),
+        ],
+      ),
     );
   }
 

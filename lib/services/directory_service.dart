@@ -39,6 +39,28 @@ class DirectoryService {
         .toList();
   }
 
+  /// The signed-in user's accepted friends as directory entries (via the
+  /// SECURITY DEFINER `my_friends` RPC, so friends show with their real
+  /// name/photo even when their profile isn't publicly discoverable).
+  /// Powers the friends-only "New chat" and group member pickers.
+  static Future<List<MemberDirectoryEntry>> fetchFriends() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const [];
+    final rows = await _client.rpc('my_friends');
+    return (rows as List).map((r) {
+      final m = r as Map<String, dynamic>;
+      final id = (m['friend_id'] ?? '').toString();
+      return MemberDirectoryEntry(
+        id: id,
+        userId: id,
+        isVisible: true,
+        fullName: m['full_name'] as String?,
+        profilePhotoUrl: m['profile_photo_url'] as String?,
+        churchName: m['church_name'] as String?,
+      );
+    }).toList();
+  }
+
   /// Suggested members for the home-screen "People to meet" row.
   /// Surfaces opted-in directory entries first, then tops the row up
   /// with raw discoverable profiles so the section is never empty when

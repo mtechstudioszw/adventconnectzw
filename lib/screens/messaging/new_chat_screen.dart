@@ -24,14 +24,18 @@ class NewChatScreen extends StatefulWidget {
 class _NewChatScreenState extends State<NewChatScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
+  // Your accepted friends — loaded once, filtered locally in Friends mode.
+  List<MemberDirectoryEntry> _friends = const [];
   List<MemberDirectoryEntry> _results = const [];
   bool _loading = true;
   bool _opening = false;
+  // false = your friends only (default). true = explore everyone on Advent.
+  bool _explore = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSuggested();
+    _loadFriends();
   }
 
   @override
@@ -41,10 +45,37 @@ class _NewChatScreenState extends State<NewChatScreen> {
     super.dispose();
   }
 
-  Future<void> _loadSuggested() async {
+  Future<void> _loadFriends() async {
+    try {
+      final list = await DirectoryService.fetchFriends();
+      if (!mounted) return;
+      setState(() {
+        _friends = list;
+        if (!_explore) _results = list;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Switch between "My friends" and "Find people" (global explore).
+  void _setExplore(bool explore) {
+    if (_explore == explore) return;
+    _debounce?.cancel();
+    _searchController.clear();
+    setState(() {
+      _explore = explore;
+      _loading = explore; // friends are already in hand; explore needs a fetch
+      _results = explore ? const [] : _friends;
+    });
+    if (explore) _loadExploreSuggestions();
+  }
+
+  Future<void> _loadExploreSuggestions() async {
     try {
       final list = await DirectoryService.fetchSuggestedMembers(limit: 40);
-      if (!mounted) return;
+      if (!mounted || !_explore) return;
       setState(() {
         _results = list;
         _loading = false;
@@ -55,17 +86,30 @@ class _NewChatScreenState extends State<NewChatScreen> {
   }
 
   void _onSearch(String q) {
+    final query = q.trim();
+    // Friends mode filters the already-loaded friend list instantly.
+    if (!_explore) {
+      setState(() {
+        _results = query.isEmpty
+            ? _friends
+            : _friends
+                .where((m) =>
+                    (m.fullName ?? '').toLowerCase().contains(query.toLowerCase()))
+                .toList();
+      });
+      return;
+    }
+    // Explore mode searches everyone on Advent (debounced network call).
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () async {
-      final query = q.trim();
       if (query.isEmpty) {
-        _loadSuggested();
+        _loadExploreSuggestions();
         return;
       }
       setState(() => _loading = true);
       try {
         final list = await DirectoryService.searchProfilesByName(query);
-        if (!mounted) return;
+        if (!mounted || !_explore) return;
         setState(() {
           _results = list;
           _loading = false;
@@ -118,12 +162,20 @@ class _NewChatScreenState extends State<NewChatScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: _ModeToggle(
+                explore: _explore,
+                onChanged: _setExplore,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
               child: TextField(
                 controller: _searchController,
                 onChanged: _onSearch,
                 decoration: InputDecoration(
-                  hintText: 'Search people',
+                  hintText:
+                      _explore ? 'Search everyone on Advent' : 'Search friends',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   fillColor: context.palette.inputFill,
@@ -147,7 +199,13 @@ class _NewChatScreenState extends State<NewChatScreen> {
                           child: Padding(
                             padding: const EdgeInsets.all(28),
                             child: Text(
-                              'No people found. Try a different name.',
+                              _explore
+                                  ? 'No people found. Try a different name.'
+                                  : _searchController.text.trim().isEmpty
+                                      ? 'No friends yet. Tap “Find people” to '
+                                          'discover members on Advent.'
+                                      : 'No friends match that name. Tap '
+                                          '“Find people” to search everyone.',
                               textAlign: TextAlign.center,
                               style: AppTextStyles.bodyMedium.copyWith(
                                 color: context.palette.textMuted,
@@ -186,6 +244,70 @@ class _NewChatScreenState extends State<NewChatScreen> {
                         ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Segmented "My friends" / "Find people" switch at the top of New chat.
+class _ModeToggle extends StatelessWidget {
+  const _ModeToggle({required this.explore, required this.onChanged});
+  final bool explore;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: context.palette.inputFill,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          _seg(context, label: 'My friends', icon: Icons.people_alt_rounded,
+              selected: !explore, onTap: () => onChanged(false)),
+          _seg(context, label: 'Find people', icon: Icons.public_rounded,
+              selected: explore, onTap: () => onChanged(true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg(BuildContext context,
+      {required String label,
+      required IconData icon,
+      required bool selected,
+      required VoidCallback onTap}) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primaryBlue : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 16,
+                  color: selected ? AppColors.white : context.palette.textMuted),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: selected ? AppColors.white : context.palette.textMuted,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

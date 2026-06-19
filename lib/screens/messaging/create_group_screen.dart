@@ -35,6 +35,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   bool _uploadingPhoto = false;
   bool _creating = false;
 
+  // Groups are friends-only: the picker lists the user's accepted friends
+  // (the server rejects non-friends in add_group_members, patch_118).
+  List<MemberDirectoryEntry> _friends = const [];
   List<MemberDirectoryEntry> _results = const [];
   bool _loadingPeople = true;
   final Map<String, MemberDirectoryEntry> _selected = {};
@@ -56,9 +59,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   Future<void> _loadSuggested() async {
     try {
-      final list = await DirectoryService.fetchSuggestedMembers(limit: 40);
+      final list = await DirectoryService.fetchFriends();
       if (!mounted) return;
       setState(() {
+        _friends = list;
         _results = list;
         _loadingPeople = false;
         // Pre-select the contact this group was started with.
@@ -77,25 +81,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     }
   }
 
+  // Friends-only group: filter the loaded friend list locally by name.
   void _onSearch(String q) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () async {
-      final query = q.trim();
-      if (query.isEmpty) {
-        _loadSuggested();
-        return;
-      }
-      setState(() => _loadingPeople = true);
-      try {
-        final list = await DirectoryService.searchProfilesByName(query);
-        if (!mounted) return;
-        setState(() {
-          _results = list;
-          _loadingPeople = false;
-        });
-      } catch (_) {
-        if (mounted) setState(() => _loadingPeople = false);
-      }
+    final query = q.trim().toLowerCase();
+    setState(() {
+      _results = query.isEmpty
+          ? _friends
+          : _friends
+              .where((m) =>
+                  (m.fullName ?? '').toLowerCase().contains(query))
+              .toList();
     });
   }
 

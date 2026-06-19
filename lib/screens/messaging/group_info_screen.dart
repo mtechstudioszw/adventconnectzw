@@ -753,6 +753,9 @@ class _AddMembersSheet extends StatefulWidget {
 class _AddMembersSheetState extends State<_AddMembersSheet> {
   final _searchController = TextEditingController();
   Timer? _debounce;
+  // Friends-only: groups can only include your accepted friends (the
+  // server rejects non-friends in add_group_members, patch_118).
+  List<MemberDirectoryEntry> _friends = const [];
   List<MemberDirectoryEntry> _results = const [];
   bool _loading = true;
   final Set<String> _selected = {};
@@ -772,11 +775,13 @@ class _AddMembersSheetState extends State<_AddMembersSheet> {
 
   Future<void> _loadSuggested() async {
     try {
-      final list = await DirectoryService.fetchSuggestedMembers(limit: 40);
+      final list = await DirectoryService.fetchFriends();
       if (!mounted) return;
+      final filtered =
+          list.where((m) => !widget.excludeIds.contains(m.userId)).toList();
       setState(() {
-        _results =
-            list.where((m) => !widget.excludeIds.contains(m.userId)).toList();
+        _friends = filtered;
+        _results = filtered;
         _loading = false;
       });
     } catch (_) {
@@ -784,27 +789,15 @@ class _AddMembersSheetState extends State<_AddMembersSheet> {
     }
   }
 
+  // Friends-only group: filter the loaded friend list locally by name.
   void _search(String q) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () async {
-      final query = q.trim();
-      if (query.isEmpty) {
-        _loadSuggested();
-        return;
-      }
-      setState(() => _loading = true);
-      try {
-        final list = await DirectoryService.searchProfilesByName(query);
-        if (!mounted) return;
-        setState(() {
-          _results = list
-              .where((m) => !widget.excludeIds.contains(m.userId))
+    final query = q.trim().toLowerCase();
+    setState(() {
+      _results = query.isEmpty
+          ? _friends
+          : _friends
+              .where((m) => (m.fullName ?? '').toLowerCase().contains(query))
               .toList();
-          _loading = false;
-        });
-      } catch (_) {
-        if (mounted) setState(() => _loading = false);
-      }
     });
   }
 

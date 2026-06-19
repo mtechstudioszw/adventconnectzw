@@ -94,6 +94,11 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(ctx),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
               child: Text('Got it', style: AppTextStyles.labelLarge),
             ),
           ],

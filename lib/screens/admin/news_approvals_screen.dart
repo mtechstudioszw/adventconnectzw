@@ -109,9 +109,11 @@ class _NewsApprovalsScreenState extends State<NewsApprovalsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
+            style: TextButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue),
             child: Text('Cancel',
                 style: AppTextStyles.labelMedium
-                    .copyWith(color: ctx.palette.text)),
+                    .copyWith(color: AppColors.primaryBlue)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.red),

@@ -216,6 +216,8 @@ class _ProfileScreenState extends State<ProfileScreen>
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
             child: Text('Sign out', style: AppTextStyles.labelLarge),
           ),

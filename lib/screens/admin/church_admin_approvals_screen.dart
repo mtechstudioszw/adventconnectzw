@@ -114,6 +114,8 @@ class _ChurchAdminApprovalsScreenState
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
+              style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primaryBlue),
               child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, c.text.trim()),

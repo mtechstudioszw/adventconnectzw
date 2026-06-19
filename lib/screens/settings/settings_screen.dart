@@ -13,6 +13,15 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/invite_friends_card.dart';
 
+/// Short build identifier shown in Settings → App version. CI passes the
+/// commit with `--dart-define=GIT_SHA=<sha>`; local builds show "local".
+/// Gives a one-glance way to confirm the running build is the latest.
+final String kBuildLabel = () {
+  const sha = String.fromEnvironment('GIT_SHA', defaultValue: '');
+  if (sha.isEmpty) return 'local';
+  return sha.length <= 7 ? sha : sha.substring(0, 7);
+}();
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -682,10 +691,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                           onTap: () => context.pushNamed('about'),
                         ),
                         const _Divider(),
-                        const _InfoRow(
+                        _InfoRow(
                           icon: Icons.tag,
                           label: 'App version',
-                          value: 'v1.0.0',
+                          // The CI build stamps the commit SHA via
+                          // --dart-define=GIT_SHA. Shows "local" for local
+                          // builds. Lets you confirm at a glance that the
+                          // build you're running is the latest one (no more
+                          // chasing already-fixed bugs in a stale build).
+                          value: 'v1.0.0 · $kBuildLabel',
                         ),
                         const _Divider(),
                         _NavRow(

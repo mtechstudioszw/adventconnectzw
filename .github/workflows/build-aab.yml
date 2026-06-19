@@ -112,9 +112,19 @@ jobs:
         # `flutter build appbundle --release` produces
         # build/app/outputs/bundle/release/app-release.aab — the
         # AAB format Play Store requires for all new uploads since
-        # Aug 2021. AAB is smaller than APK on-device and lets
-        # Play Store generate per-device APKs at install time.
-        run: flutter build appbundle --release
+        # Aug 2021.
+        #
+        # --build-number overrides pubspec's versionCode with a value that
+        # ALWAYS increases (1000 + the CI run number), so Play Store can
+        # never reject an upload for "versionCode already used" — no more
+        # manual `+N` bumps in pubspec. --dart-define stamps the commit SHA
+        # into the binary (Settings → App version) for freshness checks.
+        run: |
+          BUILD_NUMBER=$((1000 + ${{ github.run_number }}))
+          echo "Using versionCode (build number): $BUILD_NUMBER"
+          flutter build appbundle --release \
+            --build-number="$BUILD_NUMBER" \
+            --dart-define=GIT_SHA=${{ github.sha }}
 
       - name: Rename AAB for release
         run: |
@@ -129,19 +139,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-aab
-          name: Latest Play Store build
+          name: Latest Play Store build (build #${{ github.run_number }})
           body: |
             Signed release AAB built from commit ${{ github.sha }}.
+            versionCode = 1000 + run number (auto-incrementing).
 
             **Upload to Play Console:**
             Download `advent-connect-release.aab` below, then go to
             Play Console → your app → Production (or Internal /
             Closed testing) → Create new release → upload this AAB.
 
-            Each build increments the versionCode automatically via
-            pubspec.yaml (`version: x.y.z+N`). Bump the `+N` before
-            running this workflow if Play Console rejects the upload
-            for using a versionCode already used by a previous release.
+            The versionCode auto-increments every CI run, so Play Console
+            will never reject this for a duplicate versionCode — no manual
+            pubspec bump needed.
           files: release/advent-connect-release.aab
           prerelease: true
           make_latest: false

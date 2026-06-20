@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -13,9 +14,31 @@ import 'notification_service.dart';
 /// because Flutter spawns it in a separate isolate.
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
-  // The system tray already shows the notification when `notification`
-  // is present in the payload — no action needed here. This handler
-  // only exists so background data-only messages don't get dropped.
+  // When notify-fcm sends a chat push DATA-ONLY (no `notification` block),
+  // the system won't render it — so we render it here in the background
+  // isolate WITH the inline Reply action + the sender's photo. Pushes that
+  // still carry a `notification` block are rendered by the system as before;
+  // we skip those to avoid a duplicate banner (backward-compatible if the
+  // Edge Function hasn't been redeployed yet).
+  if (message.notification != null) return;
+  final refType = '${message.data['reference_type'] ?? ''}';
+  if (refType != 'conversation') return;
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
+      ),
+    );
+    await _renderIncomingChat(message, plugin);
+  } catch (_) {
+    // Best-effort — never crash the background isolate.
+  }
 }
 
 /// Action id for the inline "Reply" button on chat-message notifications.
@@ -55,6 +78,89 @@ void onPushBackgroundResponse(NotificationResponse response) {
       // Backend unreachable from this isolate — best effort only.
     }
   }();
+}
+
+/// FCM channel id shared by the class and the background isolate.
+const String _kPushChannelId = 'advent_connect_zw_default';
+
+/// Encode RemoteMessage.data into the `k=v&k=v` payload string the tap
+/// handlers decode. Top-level so the background isolate can use it too.
+String _encodePushPayload(Map<String, dynamic> data) => data.entries
+    .map((e) =>
+        '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent('${e.value}')}')
+    .join('&');
+
+/// Best-effort download of the sender's / group's photo for the circular
+/// large icon. Returns null on any failure so the notification still shows.
+Future<AndroidBitmap<Object>?> _largeIconFromUrl(String? url) async {
+  if (url == null || url.trim().isEmpty) return null;
+  try {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 5);
+    final req = await client.getUrl(Uri.parse(url));
+    final resp = await req.close().timeout(const Duration(seconds: 6));
+    if (resp.statusCode != 200) {
+      client.close();
+      return null;
+    }
+    final bytes = await consolidateHttpClientResponseBytes(resp);
+    client.close();
+    return ByteArrayAndroidBitmap(bytes);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Render an incoming chat push (foreground or background isolate) with the
+/// inline Reply action and the sender's photo as the large icon. Handles
+/// both notification-carrying and data-only payloads.
+Future<void> _renderIncomingChat(
+  RemoteMessage message,
+  FlutterLocalNotificationsPlugin plugin,
+) async {
+  final data = message.data;
+  final notif = message.notification;
+  final refType = '${data['reference_type'] ?? ''}';
+  final refId = '${data['reference_id'] ?? ''}';
+  final isConversation = refType == 'conversation' && refId.isNotEmpty;
+  final title = notif?.title ?? '${data['title'] ?? 'Advent Connect ZW'}';
+  final body = notif?.body ?? '${data['body'] ?? ''}';
+  final largeIcon = isConversation
+      ? await _largeIconFromUrl('${data['sender_photo'] ?? ''}')
+      : null;
+  final id =
+      refId.isNotEmpty ? refId.hashCode : (notif?.hashCode ?? title.hashCode);
+  await plugin.show(
+    id,
+    title,
+    body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        _kPushChannelId,
+        'General notifications',
+        channelDescription: 'In-app activity, messages, RSVPs and approvals.',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        largeIcon: largeIcon,
+        actions: isConversation
+            ? <AndroidNotificationAction>[
+                const AndroidNotificationAction(
+                  kReplyActionId,
+                  'Reply',
+                  inputs: <AndroidNotificationActionInput>[
+                    AndroidNotificationActionInput(label: 'Message'),
+                  ],
+                  showsUserInterface: true,
+                  cancelNotification: true,
+                ),
+              ]
+            : null,
+      ),
+      iOS: const DarwinNotificationDetails(),
+    ),
+    payload: _encodePushPayload(data),
+  );
 }
 
 /// Wires Firebase Cloud Messaging into the app. The Supabase Edge
@@ -204,48 +310,15 @@ class PushService {
       unawaited(MessagingService.markConversationDelivered(referenceId));
     }
 
-    final notif = message.notification;
-    if (notif == null) return; // data-only payload — no UI to show
-    final title = notif.title ?? 'Advent Connect ZW';
-    final body = notif.body ?? '';
-    // Chat messages get an inline "Reply" action so the user can answer
-    // straight from the heads-up banner. showsUserInterface brings the app
-    // to the foreground on submit so the send runs in the main isolate
-    // where Supabase is live (see _onLocalTap).
+    // Render the heads-up banner. Chat pushes get the inline Reply action +
+    // the sender's photo via [_renderIncomingChat]. For data-only payloads
+    // (notif == null) the banner is built from `data` — that's how chat
+    // pushes arrive once notify-fcm sends them data-only. Non-chat data-only
+    // payloads carry nothing to show, so skip those.
     final isConversation =
         referenceType == 'conversation' && referenceId.isNotEmpty;
-    // Encode the original message into the payload string so the local
-    // tap handler can rebuild RemoteMessage.data on tap.
-    await _local.show(
-      notif.hashCode,
-      title,
-      body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-          actions: isConversation
-              ? <AndroidNotificationAction>[
-                  const AndroidNotificationAction(
-                    kReplyActionId,
-                    'Reply',
-                    inputs: <AndroidNotificationActionInput>[
-                      AndroidNotificationActionInput(label: 'Message'),
-                    ],
-                    showsUserInterface: true,
-                    cancelNotification: true,
-                  ),
-                ]
-              : null,
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-      payload: _serializePayload(message.data),
-    );
+    if (message.notification == null && !isConversation) return;
+    await _renderIncomingChat(message, _local);
   }
 
   static void _onLocalTap(NotificationResponse response) {
@@ -275,12 +348,6 @@ class PushService {
     // same shape whether the tap came from foreground or background.
     final synthetic = RemoteMessage(data: data);
     _tapController.add(synthetic);
-  }
-
-  static String _serializePayload(Map<String, dynamic> data) {
-    return data.entries
-        .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent('${e.value}')}')
-        .join('&');
   }
 
   static Map<String, dynamic> _deserializePayload(String? payload) {

@@ -10,11 +10,7 @@ class TermsScreen extends StatelessWidget {
       kicker: 'LEGAL',
       title: 'Terms of Service',
       subtitle: 'The agreement that keeps our community safe and respectful.',
-      lastUpdated: '6 May 2026',
-      draftNotice:
-          'This text is a working draft. A qualified lawyer must review '
-          'and sign off on the final wording before Advent Connect ZW is '
-          'published to the public.',
+      lastUpdated: '20 June 2026',
       intro:
           'Welcome to Advent Connect ZW. By creating an account or using our app you agree to these terms. Please take a moment to read them — they explain your rights, our responsibilities and the rules that keep this community a safe place for everyone.',
       sections: const [
@@ -80,6 +76,11 @@ class TermsScreen extends StatelessWidget {
           title: 'Limitation of Liability',
           body:
               'Advent Connect ZW is provided "as is". We work hard to keep the app reliable but cannot guarantee uninterrupted service. To the fullest extent allowed by law, we are not liable for losses arising from your use of the app or interactions with other members.',
+        ),
+        LegalSection(
+          title: 'Governing Law',
+          body:
+              'These Terms are governed by the laws of Zimbabwe. Any dispute arising from your use of Advent Connect ZW falls under the exclusive jurisdiction of the courts of Zimbabwe. If any provision of these Terms is found to be unenforceable, the remaining provisions continue in full effect.',
         ),
         LegalSection(
           title: 'Changes to Terms',

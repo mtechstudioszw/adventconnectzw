@@ -10,11 +10,7 @@ class PrivacyScreen extends StatelessWidget {
       kicker: 'LEGAL',
       title: 'Privacy Policy',
       subtitle: 'What we collect, why we collect it, and how we look after it.',
-      lastUpdated: '6 May 2026',
-      draftNotice:
-          'This text is a working draft. A qualified data-protection / '
-          'privacy lawyer must review it (Zimbabwe Data Protection Act '
-          'compliance + any app-store requirements) before publication.',
+      lastUpdated: '20 June 2026',
       intro:
           'Your privacy matters to us. This policy explains the personal information Advent Connect ZW collects when you use the app, how we use it, and the choices you have. We aim to keep this clear and honest — if anything is unclear please reach out and we\'ll explain.',
       sections: const [
@@ -28,6 +24,7 @@ class PrivacyScreen extends StatelessWidget {
             'Content you create: prayers, listings, messages, RSVPs.',
             'Usage data: which screens you visit and how the app is performing.',
             'Device data: operating system and app version, used for diagnostics.',
+            'A push-notification token, so we can deliver the alerts you opt into.',
           ],
         ),
         LegalSection(
@@ -76,6 +73,11 @@ class PrivacyScreen extends StatelessWidget {
           title: 'Zimbabwe Data Protection Act Compliance',
           body:
               'We process personal information in accordance with the Cyber and Data Protection Act [Chapter 12:07] of Zimbabwe. You have the right to access, correct or object to the processing of your personal information, and to lodge a complaint with the relevant data protection authority.',
+        ),
+        LegalSection(
+          title: 'Data Retention',
+          body:
+              'We keep your personal information only for as long as your account is active or as long as we need it to run the app. When you delete your account, your profile and posts are removed promptly. A small amount of data may be retained briefly where the law, security or fraud-prevention requires it, and is then deleted. Messages you have already sent to other members may remain visible to those recipients.',
         ),
         LegalSection(
           title: 'Changes to this Policy',

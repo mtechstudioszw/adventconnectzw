@@ -188,6 +188,10 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _deleteSelected() async {
     final ids = _selectedMsgIds.toList();
     if (ids.isEmpty) return;
+    // Capture the actual messages BEFORE _applyServerMessages filters them
+    // out of _serverMessages — the preview floor needs their text/time.
+    final hiddenMsgs =
+        _serverMessages.where((m) => ids.contains(m.id)).toList();
     setState(() {
       _hiddenIds.addAll(ids);
       _applyServerMessages(_serverMessages);
@@ -196,7 +200,7 @@ class _ChatScreenState extends State<ChatScreen>
     // Persist locally FIRST so a reopen filters them before the server
     // round-trip (no 1-second flashback), even if the network hide is slow.
     unawaited(MessagingService.addHiddenIdsCached(widget.conversationId, ids));
-    _persistPreviewFloor(ids);
+    _persistPreviewFloor(hiddenMsgs);
     try {
       await MessagingService.hideMessages(ids);
     } catch (_) {}
@@ -206,12 +210,16 @@ class _ChatScreenState extends State<ChatScreen>
   /// After a delete-for-me, if we hid the conversation's last message, record
   /// a local preview floor so the inbox stops showing it for THIS user — the
   /// shared `last_message` column can't express a per-user hide.
-  void _persistPreviewFloor(Iterable<String> hiddenIds) {
+  /// Record the inbox preview floor from the messages being hidden. Takes
+  /// the Message objects directly (NOT ids) because by the time this runs
+  /// the rows have already been filtered out of [_serverMessages] by
+  /// [_applyServerMessages] — looking them up there found nothing, so the
+  /// floor was never written and the inbox kept showing the deleted text.
+  void _persistPreviewFloor(Iterable<Message> hidden) {
     DateTime? newest;
     String? newestText;
-    for (final m in _serverMessages) {
-      if (hiddenIds.contains(m.id) &&
-          (newest == null || m.createdAt.isAfter(newest))) {
+    for (final m in hidden) {
+      if (newest == null || m.createdAt.isAfter(newest)) {
         newest = m.createdAt;
         newestText = m.content;
       }
@@ -531,7 +539,10 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         );
       case 'delete_me':
-        // Delete for me — hide locally + persist (patch_087).
+        // Delete for me — hide locally + persist (patch_087). Record the
+        // preview floor from the message object itself (it's about to be
+        // filtered out of _serverMessages, so a later lookup would miss it).
+        _persistPreviewFloor([m]);
         setState(() {
           _hiddenIds.add(m.id);
           _applyServerMessages(_serverMessages);
@@ -539,7 +550,6 @@ class _ChatScreenState extends State<ChatScreen>
         });
         unawaited(
             MessagingService.addHiddenIdsCached(widget.conversationId, [m.id]));
-        _persistPreviewFloor([m.id]);
         try {
           await MessagingService.hideMessages([m.id]);
         } catch (_) {}

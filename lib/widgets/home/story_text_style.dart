@@ -37,5 +37,12 @@ TextStyle storyFontStyle(
     fontSize: fontSize,
     fontWeight: fontKey == 'pacifico' ? FontWeight.w400 : fontWeight,
     height: 1.25,
+    // CRITICAL: GoogleFonts loads the font asynchronously (true even for
+    // bundled assets) and sets its OWN fallback to the same not-yet-loaded
+    // family — so while it loads there are no glyphs at all and the text
+    // renders INVISIBLE (the "blank while typing, fine after posting" bug).
+    // Force a guaranteed system fallback so the text is always visible
+    // immediately and just upgrades to the chosen font once it's ready.
+    fontFamilyFallback: const ['Roboto', 'sans-serif'],
   );
 }

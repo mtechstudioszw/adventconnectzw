@@ -17,12 +17,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-// Until the Play Store + iOS App Store listings ship, the "Get the
-// app" fallback points at the GitHub Releases page where each push
-// to main publishes a debug APK (.github/workflows/build-apk.yml).
-// Replace with the Play Store / web app URL once those exist.
+// Live Google Play listing — the "Get the app" fallback for visitors
+// who tap a shared link without the app installed. (iOS App Store URL
+// can be added here once that listing is live.)
 const DOWNLOAD_URL =
-  "https://adventconnectzw.netlify.app/download.html";
+  "https://play.google.com/store/apps/details?id=io.supabase.adventconnectzw.advent_connect_zw";
 
 function esc(s: string): string {
   return (s ?? "")

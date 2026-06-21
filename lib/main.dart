@@ -14,6 +14,7 @@ import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
 import 'services/cache_service.dart';
 import 'services/connectivity_service.dart';
+import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
 import 'services/presence_service.dart';
 import 'services/push_service.dart';
@@ -82,6 +83,12 @@ Future<void> _initBackgroundServices() async {
 
   // Outbox flusher needs Hive from Phase 1 above. Fire and forget.
   unawaited(MessagingService.startOutboxFlusher());
+
+  // Inbound deep links (shared event / product / job / seller links from
+  // the *-share Edge Functions). Routes via the same appRouter the push
+  // handler below uses. Fire and forget — it handles the cold-start link
+  // internally once the splash has routed.
+  unawaited(DeepLinkService.initialize());
 
   // Mirror sign-in / sign-out into presence + analytics. Wired up here
   // (not inline in main) so it doesn't add to first-frame latency.

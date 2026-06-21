@@ -63,6 +63,23 @@
                 <data android:scheme="io.supabase.adventconnect"
                       android:host="login-callback"/>
             </intent-filter>
+            <!-- Shared-content deep links. The *-share Supabase Edge
+                 Functions render a web page that bounces to one of these
+                 io.supabase.adventconnect:// URLs (and falls back to the
+                 Play Store if nothing handles them). DeepLinkService
+                 catches the incoming Uri and routes to the matching
+                 details screen. Custom scheme => autoVerify not needed;
+                 one host per shareable type keeps them distinct from the
+                 login-callback above. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="io.supabase.adventconnect" android:host="event"/>
+                <data android:scheme="io.supabase.adventconnect" android:host="product"/>
+                <data android:scheme="io.supabase.adventconnect" android:host="job"/>
+                <data android:scheme="io.supabase.adventconnect" android:host="seller"/>
+            </intent-filter>
         </activity>
         <!-- image_cropper (UCrop) — registers the native crop activity
              so picking + cropping a profile / cover photo doesn't crash

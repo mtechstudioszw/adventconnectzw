@@ -2,7 +2,7 @@ name: advent_connect_zw
 description: "Advent Connect ZW — Christian community platform for Zimbabwe"
 publish_to: 'none'
 
-version: 1.0.4+5
+version: 1.0.5+6
 
 environment:
   sdk: ^3.11.3
@@ -82,6 +82,15 @@ dependencies:
   # at the event-share Supabase Edge Function which serves Open Graph
   # tags so WhatsApp / Facebook render a rich thumbnail preview.
   share_plus: ^10.1.4
+
+  # Inbound deep links — catches the io.supabase.adventconnect:// links
+  # emitted by the *-share Edge Functions so a shared event / product /
+  # job / seller opens straight to that screen in-app. The Edge Function
+  # web page falls back to the Play Store when the app isn't installed.
+  # Already present transitively (supabase_flutter uses it for the
+  # auth callback); pinned here as a direct dep so DeepLinkService can
+  # import it. See lib/services/deep_link_service.dart.
+  app_links: ^7.0.0
 
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale

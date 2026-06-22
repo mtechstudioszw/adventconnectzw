@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/story_model.dart';
+import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/feed_service.dart';
@@ -48,6 +49,12 @@ class _StoryViewerState extends State<StoryViewer>
   int _index = 0;
   bool _paused = false;
 
+  // Between-stories ad: count segments since the last ad attempt. The
+  // InterstitialAdManager's own 2-minute cap is the real throttle; this
+  // just avoids checking on every single segment.
+  int _segmentsSinceAd = 0;
+  static const int _adEverySegments = 4;
+
   // Cached viewer counts for the author's own stories, keyed by story
   // id. Populated on first display + after the "Viewed by" sheet opens.
   final Map<String, int> _viewerCounts = <String, int>{};
@@ -73,6 +80,8 @@ class _StoryViewerState extends State<StoryViewer>
       });
     _progress.forward();
     _onStoryShown();
+    // Warm an interstitial for the between-stories ad slot.
+    InterstitialAdManager.loadAd();
     // Pause the timer while the reply field is focused so the story
     // doesn't advance mid-typing; resume when focus leaves.
     _replyFocus.addListener(() {
@@ -216,6 +225,25 @@ class _StoryViewerState extends State<StoryViewer>
       ..reset()
       ..forward();
     _onStoryShown();
+    _segmentsSinceAd++;
+    _maybeShowStoryAd();
+  }
+
+  /// Occasionally drop a full-screen ad between stories (founder's
+  /// request). The manager enforces a 2-minute cap, so a quick flick
+  /// through a few stories won't trigger one. We pause the progress
+  /// timer behind the ad and restart the current segment once it's
+  /// dismissed so no story is skipped under the ad.
+  Future<void> _maybeShowStoryAd() async {
+    if (_segmentsSinceAd < _adEverySegments) return;
+    _segmentsSinceAd = 0;
+    _progress.stop();
+    await InterstitialAdManager.maybeShow();
+    if (!mounted) return;
+    // Whether or not an ad showed, resume playback of the current story.
+    _progress
+      ..reset()
+      ..forward();
   }
 
   void _back() {

@@ -2,7 +2,7 @@ name: advent_connect_zw
 description: "Advent Connect ZW — Christian community platform for Zimbabwe"
 publish_to: 'none'
 
-version: 1.0.5+6
+version: 1.0.6+7
 
 environment:
   sdk: ^3.11.3
@@ -91,6 +91,20 @@ dependencies:
   # auth callback); pinned here as a direct dep so DeepLinkService can
   # import it. See lib/services/deep_link_service.dart.
   app_links: ^7.0.0
+
+  # Native Play Store in-app review dialog. We call requestReview() from
+  # RatingPromptService after the user has used the app for a while;
+  # Google itself decides whether to actually show the sheet (it's quota-
+  # limited and silently no-ops for users who already reviewed), which is
+  # exactly the "only ask people who haven't rated" behaviour we want.
+  # Pinned exact per project policy (no caret ranges on new deps).
+  in_app_review: 2.0.12
+
+  # AdMob — banner + native + App-Open + interstitial (stories) ads to
+  # monetise the free app. All placement/frequency logic lives in
+  # lib/services/ads/. Deliberately NO ads in Advent Chat, auth/onboarding,
+  # or prayer screens. Pinned exact (min Dart 3.10; we're on 3.11).
+  google_mobile_ads: 9.0.0
 
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale

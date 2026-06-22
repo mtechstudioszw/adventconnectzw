@@ -10,6 +10,7 @@ async function fetchCounts() {
     sevenDay,
     businessApplications,
     pendingApplications,
+    pendingChurchClaims,
     posts,
     stories,
     bannedUsers,
@@ -29,6 +30,10 @@ async function fetchCounts() {
       .from("business_applications")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
+    supabase
+      .from("church_admins")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
     supabase.from("posts").select("id", { count: "exact", head: true }),
     supabase
       .from("stories")
@@ -45,6 +50,7 @@ async function fetchCounts() {
     newUsers7d: sevenDay.count ?? 0,
     totalApplications: businessApplications.count ?? 0,
     pendingApplications: pendingApplications.count ?? 0,
+    pendingChurchClaims: pendingChurchClaims.count ?? 0,
     totalPosts: posts.count ?? 0,
     activeStories: stories.count ?? 0,
     bannedUsers: bannedUsers.count ?? 0,
@@ -78,6 +84,13 @@ export default async function DashboardPage() {
           href="/applications"
         />
         <StatCard
+          label="Pending church claims"
+          value={counts.pendingChurchClaims}
+          sublabel="People claiming a church"
+          tone={counts.pendingChurchClaims > 0 ? "warn" : "neutral"}
+          href="/church-claims"
+        />
+        <StatCard
           label="Posts"
           value={counts.totalPosts}
           sublabel="Permanent feed posts"
@@ -105,6 +118,14 @@ export default async function DashboardPage() {
               href="/applications?status=pending"
             >
               Review pending business applications →
+            </Link>
+          </li>
+          <li>
+            <Link
+              className="text-primary font-semibold hover:underline"
+              href="/church-claims?status=pending"
+            >
+              Review pending church claims →
             </Link>
           </li>
           <li>

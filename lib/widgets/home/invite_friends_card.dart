@@ -15,14 +15,16 @@ class InviteFriendsCard extends StatelessWidget {
   /// edge padding so the card doesn't double-indent.
   final double horizontalMargin;
 
-  // Single canonical landing page — every share button across the app
-  // points here so the user lands on a branded site with download links
-  // and feature overview.
+  // Point the generic app invite straight at the live Play Store
+  // listing: people without the app install it there, and people who
+  // already have it see Google's "Open" button on the listing. (Content
+  // shares — events/products/etc. — use the *-share Edge Functions that
+  // deep-link into the app first, then fall back here.)
   static const _inviteMessage =
       'Join me on Advent Connect ZW — the Adventist community app '
       'for Zimbabwe. Connect with members, find churches, share '
       'updates, and chat with friends. Download it here: '
-      'https://adventconnectzw.netlify.app/';
+      'https://play.google.com/store/apps/details?id=io.supabase.adventconnectzw.advent_connect_zw';
 
   @override
   Widget build(BuildContext context) {

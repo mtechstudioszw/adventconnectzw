@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 
@@ -233,8 +234,10 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
   Future<void> _share() async {
     final item = _item;
     if (item == null) return;
-    // All share buttons land on the same canonical Netlify site.
-    const appUrl = 'https://adventconnectzw.netlify.app/';
+    // Send recipients to the live Play Store listing (installers get the
+    // app; people who already have it see "Open" on the listing).
+    const appUrl =
+        'https://play.google.com/store/apps/details?id=io.supabase.adventconnectzw.advent_connect_zw';
     final body =
         '${item.title}\n\n${item.summary}\n\nRead more on Advent Connect ZW: $appUrl';
     try {
@@ -278,6 +281,10 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
     }
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
+      bottomNavigationBar: const SafeArea(
+        top: false,
+        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
+      ),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _buildHero(item, context)),

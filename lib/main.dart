@@ -13,6 +13,8 @@ import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
 import 'services/cache_service.dart';
+import 'services/ads/ads_service.dart';
+import 'services/ads/app_open_ad_manager.dart';
 import 'services/connectivity_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
@@ -83,6 +85,11 @@ Future<void> _initBackgroundServices() async {
 
   // Outbox flusher needs Hive from Phase 1 above. Fire and forget.
   unawaited(MessagingService.startOutboxFlusher());
+
+  // AdMob: gather EU consent + initialise the SDK off the critical path
+  // so the first frame isn't blocked. Ad widgets check AdsService.isReady.
+  // Once ready, warm an App-Open ad for the next resume.
+  unawaited(AdsService.init().then((_) => AppOpenAdManager.loadAd()));
 
   // Inbound deep links (shared event / product / job / seller links from
   // the *-share Edge Functions). Routes via the same appRouter the push
@@ -281,7 +288,42 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       unawaited(MessagingService.markAllIncomingDelivered());
       // Rejoin presence (online again + heartbeat resumes).
       if (AuthService.isSignedIn) unawaited(PresenceService.start());
+      // App-Open ad on return-to-foreground (capped once / 3h), but never
+      // over a sensitive flow — Advent Chat, prayer, auth/onboarding,
+      // splash/lock, banned/update, admin.
+      _maybeShowAppOpenAd();
     }
+  }
+
+  // Routes where a full-screen App-Open ad must NOT appear.
+  static const _appOpenBlockedPrefixes = <String>[
+    '/messages', // Advent Chat (inbox + conversations)
+    '/prayer',
+    '/splash',
+    '/biometric-lock',
+    '/onboarding',
+    '/login',
+    '/signup',
+    '/email-verification',
+    '/profile-setup',
+    '/forgot-password',
+    '/reset-password',
+    '/account-banned',
+    '/update-required',
+    '/admin',
+  ];
+
+  void _maybeShowAppOpenAd() {
+    if (!AuthService.isSignedIn) return;
+    final loc = appRouter.routerDelegate.currentConfiguration.uri.path;
+    final blocked =
+        _appOpenBlockedPrefixes.any((prefix) => loc.startsWith(prefix));
+    if (blocked) {
+      // Still keep one warm for when they land somewhere it's allowed.
+      AppOpenAdManager.loadAd();
+      return;
+    }
+    unawaited(AppOpenAdManager.showIfReady());
   }
 
   Future<void> _maybeRequireBiometric() async {

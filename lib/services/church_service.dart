@@ -221,6 +221,67 @@ class ChurchService {
     AnalyticsService.churchClaimed(int.tryParse(churchId) ?? 0);
   }
 
+  /// Read the caller's claim eligibility for [churchId] via the
+  /// `get_church_claim_state` RPC (patch_121). RLS hides other users'
+  /// pending rows, so this SECURITY DEFINER reader is the only way the
+  /// claim screen can tell "already claimed" / "under review by someone
+  /// else" / "you already have a claim" apart. Returns null on error so
+  /// callers can fall back to showing the form.
+  static Future<ChurchClaimState?> fetchClaimState(String churchId) async {
+    final id = int.tryParse(churchId);
+    if (id == null) return null;
+    try {
+      final res = await _client
+          .rpc('get_church_claim_state', params: {'p_church_id': id});
+      // RPC returns a single-row table → a list with one map.
+      final row = res is List && res.isNotEmpty ? res.first : res;
+      if (row is Map<String, dynamic>) return ChurchClaimState.fromJson(row);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Update the editable fields of a church. Server-side RLS
+  /// (`churches_update_admin`, patch_121) only lets an APPROVED admin of
+  /// this church write, and a column guard keeps trust/rollup columns
+  /// (verified, follower_count, status…) read-only.
+  static Future<void> updateChurch({
+    required String churchId,
+    String? description,
+    String? address,
+    String? suburb,
+    String? city,
+    String? pastorName,
+    String? phone,
+    String? email,
+    int? foundedYear,
+    double? latitude,
+    double? longitude,
+    String? coverPhotoUrl,
+    String? profilePhotoUrl,
+  }) async {
+    final id = int.tryParse(churchId);
+    if (id == null) throw ArgumentError('Invalid church id: $churchId');
+    final patch = <String, dynamic>{
+      'description': description?.trim(),
+      'address': address?.trim(),
+      'suburb': suburb?.trim(),
+      'city': city?.trim(),
+      'pastor_name': pastorName?.trim(),
+      'phone': phone?.trim(),
+      'email': email?.trim(),
+      'founded_year': foundedYear,
+      'latitude': latitude,
+      'longitude': longitude,
+    };
+    // Only overwrite a photo column when a new URL was supplied — passing
+    // null would blow away the existing image.
+    if (coverPhotoUrl != null) patch['cover_photo_url'] = coverPhotoUrl;
+    if (profilePhotoUrl != null) patch['profile_photo_url'] = profilePhotoUrl;
+    await _client.from(_table).update(patch).eq('id', id);
+  }
+
   // ---- Super-admin: church-admin claim queue (patch_112) ----------------
   static Future<List<PendingChurchAdmin>> listPendingChurchAdmins() async {
     final res = await _client.rpc('admin_list_pending_church_admins');
@@ -356,6 +417,50 @@ class ChurchAdminRole {
       role: (json['role'] ?? 'standard') as String,
       status: (json['status'] ?? 'pending') as String,
       city: churchMap?['city'] as String?,
+    );
+  }
+}
+
+/// Caller-specific claim eligibility for a single church
+/// (get_church_claim_state RPC, patch_121). Drives which message the
+/// claim screen shows.
+class ChurchClaimState {
+  const ChurchClaimState({
+    required this.churchHasApprovedAdmin,
+    required this.churchHasPendingOther,
+    required this.myStatusForChurch,
+    required this.myOtherPendingCount,
+    required this.myOtherApprovedCount,
+  });
+
+  /// This church already has an approved admin.
+  final bool churchHasApprovedAdmin;
+
+  /// Someone ELSE has a pending claim on this church.
+  final bool churchHasPendingOther;
+
+  /// The caller's own latest status for THIS church: null / 'pending' /
+  /// 'approved' / 'rejected'.
+  final String? myStatusForChurch;
+
+  /// The caller's pending claims on OTHER churches.
+  final int myOtherPendingCount;
+
+  /// The caller's approved roles on OTHER churches.
+  final int myOtherApprovedCount;
+
+  bool get myClaimPending => myStatusForChurch == 'pending';
+  bool get myClaimApproved => myStatusForChurch == 'approved';
+
+  factory ChurchClaimState.fromJson(Map<String, dynamic> json) {
+    int readInt(dynamic v) =>
+        v is int ? v : (v is num ? v.toInt() : int.tryParse('$v') ?? 0);
+    return ChurchClaimState(
+      churchHasApprovedAdmin: json['church_has_approved_admin'] == true,
+      churchHasPendingOther: json['church_has_pending_other'] == true,
+      myStatusForChurch: json['my_status_for_church'] as String?,
+      myOtherPendingCount: readInt(json['my_other_pending_count']),
+      myOtherApprovedCount: readInt(json['my_other_approved_count']),
     );
   }
 }

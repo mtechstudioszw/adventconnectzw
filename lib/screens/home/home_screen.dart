@@ -31,11 +31,13 @@ import '../../services/marketplace_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/prayer_service.dart';
+import '../../services/rating_prompt_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ads/native_ad_card.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_sheet.dart';
@@ -137,6 +139,11 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) setState(() {});
     });
     _bootstrap();
+    // Once home has settled, gently ask long-term users to rate the app.
+    // Gated + best-effort; Google's native sheet handles "already rated".
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) RatingPromptService.maybeRequestReview();
+    });
   }
 
   @override
@@ -1235,6 +1242,7 @@ class _HomeScreenState extends State<HomeScreen>
       ));
     }
     var cardIdx = 0;
+    var adsInserted = 0;
     for (var i = 0; i < _posts.length; i++) {
       final post = _posts[i];
       children.add(PostCard(
@@ -1258,6 +1266,13 @@ class _HomeScreenState extends State<HomeScreen>
           cardIdx < discoveryCards.length) {
         children.add(discoveryCards[cardIdx++]);
       }
+      // Sponsored native ad after every _adEveryNPosts posts, capped at
+      // _maxFeedAds per render so we don't fire dozens of ad requests on
+      // a long scroll. The card self-hides until/unless an ad loads.
+      if ((i + 1) % _adEveryNPosts == 0 && adsInserted < _maxFeedAds) {
+        children.add(const NativeAdCard());
+        adsInserted++;
+      }
     }
     while (cardIdx < discoveryCards.length) {
       children.add(discoveryCards[cardIdx++]);
@@ -1270,6 +1285,12 @@ class _HomeScreenState extends State<HomeScreen>
   // continuous. 3 lands close to what Instagram does for sponsored
   // breakers.
   static const _discoveryEveryNPosts = 3;
+
+  // Sponsored native-ad cadence in the home feed. First ad after ~6 posts,
+  // then every 6, capped per render so a long scroll doesn't spawn dozens
+  // of ad requests.
+  static const _adEveryNPosts = 6;
+  static const _maxFeedAds = 4;
 
   /// Maps an onboarding-interest label (the user-facing strings from
   /// _PersonalizationPage._interestOptions) to the discovery slot

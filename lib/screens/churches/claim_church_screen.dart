@@ -35,6 +35,12 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
   bool _saving = false;
   String? _error;
 
+  // Eligibility gate (patch_121). While true we show a spinner; if the
+  // user/church isn't eligible to claim, [_block] holds the reason and
+  // the form is never shown.
+  bool _checking = true;
+  _ClaimBlock? _block;
+
   static const _roles = [
     'Pastor',
     'Elder',
@@ -43,6 +49,78 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
     'Deacon / Deaconess',
     'Other leader',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkEligibility();
+  }
+
+  /// Decide whether this user can claim this church. Mirrors the server
+  /// guard (church_admins_enforce_single_claim) so the user sees a clear
+  /// message instead of a raw DB error on submit.
+  Future<void> _checkEligibility() async {
+    final state = await ChurchService.fetchClaimState(widget.church.id);
+    if (!mounted) return;
+    _ClaimBlock? block;
+    if (state == null) {
+      // Couldn't read state — fail open and let the form + server guard
+      // handle it rather than blocking a legitimate claim.
+      block = null;
+    } else if (state.myClaimApproved) {
+      block = const _ClaimBlock(
+        icon: Icons.verified_rounded,
+        title: 'You already manage this church',
+        message:
+            'Your admin access for this church is approved. Open it from the '
+            'church page to post announcements and manage details.',
+      );
+    } else if (state.myClaimPending) {
+      block = const _ClaimBlock(
+        icon: Icons.hourglass_top_rounded,
+        title: 'We\'re still reviewing your application',
+        message:
+            'Thanks for applying to manage this church. We\'re verifying your '
+            'request and will let you know as soon as it\'s approved.',
+      );
+    } else if (state.churchHasApprovedAdmin) {
+      block = const _ClaimBlock(
+        icon: Icons.lock_outline_rounded,
+        title: 'This church is already claimed',
+        message:
+            'Someone is already verified to manage this church, so it can\'t '
+            'be claimed again.',
+      );
+    } else if (state.churchHasPendingOther) {
+      block = const _ClaimBlock(
+        icon: Icons.hourglass_top_rounded,
+        title: 'A claim is already under review',
+        message:
+            'Someone has already applied to manage this church and we\'re '
+            'reviewing it. If they\'re not approved, you can try again.',
+      );
+    } else if (state.myOtherPendingCount > 0) {
+      block = const _ClaimBlock(
+        icon: Icons.hourglass_top_rounded,
+        title: 'You already have an application under review',
+        message:
+            'You can manage only one church. We\'re still reviewing your other '
+            'application and will let you know once it\'s decided.',
+      );
+    } else if (state.myOtherApprovedCount > 0) {
+      block = const _ClaimBlock(
+        icon: Icons.info_outline_rounded,
+        title: 'You can only manage one church',
+        message:
+            'You\'re already the admin of another church. Each member can '
+            'manage a single church.',
+      );
+    }
+    setState(() {
+      _block = block;
+      _checking = false;
+    });
+  }
 
   @override
   void dispose() {
@@ -108,17 +186,129 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
       if (context.canPop()) context.pop();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _error = _friendlyError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Translate the server guard's coded exceptions (patch_121) into the
+  /// same plain-language messages the eligibility gate uses. These only
+  /// surface on a race (two people claiming at once); the normal path is
+  /// blocked before the form even shows.
+  String _friendlyError(Object e) {
+    final raw = e.toString();
+    if (raw.contains('CHURCH_ALREADY_CLAIMED')) {
+      return 'This church has just been claimed by someone else.';
+    }
+    if (raw.contains('CHURCH_CLAIM_UNDER_REVIEW')) {
+      return 'Someone else just applied for this church. If they\'re not '
+          'approved, you can try again.';
+    }
+    if (raw.contains('USER_ALREADY_HAS_CLAIM')) {
+      return 'You can only manage one church, and you already have a claim.';
+    }
+    return raw.replaceFirst('Exception: ', '');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: _step == 0 ? _buildShowcase(context) : _buildForm(context),
+      body: _checking
+          ? _buildChecking(context)
+          : _block != null
+              ? _buildBlocked(context, _block!)
+              : _step == 0
+                  ? _buildShowcase(context)
+                  : _buildForm(context),
+    );
+  }
+
+  Widget _buildChecking(BuildContext context) {
+    return Column(
+      children: [
+        ScreenHero(
+          title: 'Manage your church',
+          tagline: widget.church.name,
+          subtitle: 'Checking availability…',
+          fallbackRoute: 'churches',
+        ),
+        const Expanded(
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.primaryBlue),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBlocked(BuildContext context, _ClaimBlock block) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ScreenHero(
+            title: 'Manage your church',
+            tagline: widget.church.name,
+            subtitle: 'Become a verified admin for this church.',
+            fallbackRoute: 'churches',
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
+            child: Column(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(block.icon,
+                      color: AppColors.primaryBlue, size: 34),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  block.title,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: context.palette.text,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  block.message,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.palette.textMuted,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 26),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => context.canPop()
+                        ? context.pop()
+                        : context.goNamed('churches'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Text('Back to church',
+                        style: AppTextStyles.buttonText),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -338,6 +528,20 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
       ),
     );
   }
+}
+
+/// Reason the claim form is blocked (already claimed / under review /
+/// one-church limit). Rendered by [_ClaimChurchScreenState._buildBlocked].
+class _ClaimBlock {
+  const _ClaimBlock({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
 }
 
 class _Capability extends StatelessWidget {

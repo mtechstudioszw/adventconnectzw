@@ -49,6 +49,12 @@ class SecureStorageService {
     'biometric_enabled',
     'age_verified',
     'birth_date',
+    // Rating-prompt cadence is per-device, not per-login — keep it so
+    // signing out doesn't reset the "ask after a week" timer.
+    'rate_prompt_first_launch_v1',
+    'rate_prompt_opens_v1',
+    'rate_prompt_last_shown_v1',
+    'rate_prompt_requests_v1',
   };
 
   static Future<void> clearAll() async {

@@ -5,8 +5,10 @@ class Church {
     required this.city,
     required this.membersCount,
     this.coverPhotoUrl,
+    this.profilePhotoUrl,
     this.description,
     this.address,
+    this.suburb,
     this.pastorName,
     this.foundedYear,
     this.contactPhone,
@@ -24,8 +26,15 @@ class Church {
   final String city;
   final int membersCount;
   final String? coverPhotoUrl;
+  /// Square church logo / avatar (`churches.profile_photo_url`). Shown as
+  /// the round avatar on the church profile; distinct from the wide
+  /// [coverPhotoUrl] banner.
+  final String? profilePhotoUrl;
   final String? description;
   final String? address;
+  /// Suburb / neighbourhood (`churches.suburb`). Editable by the church
+  /// admin; folded into the address line on the profile.
+  final String? suburb;
   final String? pastorName;
   final int? foundedYear;
   final String? contactPhone;
@@ -56,15 +65,22 @@ class Church {
       // +1 in _toggleFollow never persists across reloads.
       membersCount: _readInt(json['follower_count'] ?? json['members_count']),
       coverPhotoUrl: json['cover_photo_url'] as String?,
+      profilePhotoUrl: json['profile_photo_url'] as String?,
       description: json['description'] as String?,
       address: json['address'] as String?,
+      suburb: json['suburb'] as String?,
       pastorName: json['pastor_name'] as String?,
       foundedYear: json['founded_year'] is int
           ? json['founded_year'] as int
           : int.tryParse('${json['founded_year']}'),
-      contactPhone: json['contact_phone'] as String?,
-      contactEmail: json['contact_email'] as String?,
-      isVerified: json['is_verified'] == true,
+      // Live columns are `phone` / `email`; older code/caches used
+      // `contact_phone` / `contact_email`. Read whichever is present so
+      // the details + edit screens actually show the contact info.
+      contactPhone: (json['phone'] ?? json['contact_phone']) as String?,
+      contactEmail: (json['email'] ?? json['contact_email']) as String?,
+      // Live column is `verified`; keep `is_verified` as a fallback for
+      // older cached rows.
+      isVerified: json['verified'] == true || json['is_verified'] == true,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
@@ -87,13 +103,15 @@ class Church {
         // round-trip stays consistent with what fromJson reads.
         'follower_count': membersCount,
         'cover_photo_url': coverPhotoUrl,
+        'profile_photo_url': profilePhotoUrl,
         'description': description,
         'address': address,
+        'suburb': suburb,
         'pastor_name': pastorName,
         'founded_year': foundedYear,
-        'contact_phone': contactPhone,
-        'contact_email': contactEmail,
-        'is_verified': isVerified,
+        'phone': contactPhone,
+        'email': contactEmail,
+        'verified': isVerified,
         'created_at': createdAt?.toIso8601String(),
         'latitude': latitude,
         'longitude': longitude,
@@ -104,23 +122,37 @@ class Church {
   Church copyWith({
     int? membersCount,
     bool? isVerified,
+    String? coverPhotoUrl,
+    String? profilePhotoUrl,
+    String? description,
+    String? address,
+    String? suburb,
+    String? city,
+    String? pastorName,
+    int? foundedYear,
+    String? contactPhone,
+    String? contactEmail,
+    double? latitude,
+    double? longitude,
   }) {
     return Church(
       id: id,
       name: name,
-      city: city,
+      city: city ?? this.city,
       membersCount: membersCount ?? this.membersCount,
-      coverPhotoUrl: coverPhotoUrl,
-      description: description,
-      address: address,
-      pastorName: pastorName,
-      foundedYear: foundedYear,
-      contactPhone: contactPhone,
-      contactEmail: contactEmail,
+      coverPhotoUrl: coverPhotoUrl ?? this.coverPhotoUrl,
+      profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
+      description: description ?? this.description,
+      address: address ?? this.address,
+      suburb: suburb ?? this.suburb,
+      pastorName: pastorName ?? this.pastorName,
+      foundedYear: foundedYear ?? this.foundedYear,
+      contactPhone: contactPhone ?? this.contactPhone,
+      contactEmail: contactEmail ?? this.contactEmail,
       isVerified: isVerified ?? this.isVerified,
       createdAt: createdAt,
-      latitude: latitude,
-      longitude: longitude,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       province: province,
       conference: conference,
     );

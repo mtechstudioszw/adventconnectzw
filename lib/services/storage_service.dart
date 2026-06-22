@@ -56,6 +56,37 @@ class StorageService {
         ),
       );
 
+  /// Church logo / avatar. Square 1:1 like a profile photo, output
+  /// 640×640. Lands in the public `church_photos` bucket under the
+  /// admin's uid folder (storage RLS keys writes on the uid prefix).
+  static Future<String?> pickAndUploadChurchLogo() => _pickAndUpload(
+        bucket: 'church_photos',
+        maxWidth: 1600,
+        imageQuality: 85,
+        crop: const _CropSpec(
+          ratioX: 1,
+          ratioY: 1,
+          outputWidth: 640,
+          outputQuality: 78,
+          title: 'Crop church logo',
+        ),
+      );
+
+  /// Church cover banner. 16:9 locked, output 1280×720. Same
+  /// `church_photos` bucket as the logo.
+  static Future<String?> pickAndUploadChurchCover() => _pickAndUpload(
+        bucket: 'church_photos',
+        maxWidth: 2000,
+        imageQuality: 85,
+        crop: const _CropSpec(
+          ratioX: 16,
+          ratioY: 9,
+          outputWidth: 1280,
+          outputQuality: 80,
+          title: 'Crop church cover',
+        ),
+      );
+
   /// Product-photo bucket. Up to 1600 wide, ~600KB target.
   static Future<String?> pickAndUploadProductPhoto() => _pickAndUpload(
         bucket: 'product_photos',

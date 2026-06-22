@@ -15,6 +15,7 @@ import '../screens/update/update_required_screen.dart';
 import '../screens/banned/account_banned_screen.dart';
 import '../screens/churches/church_announcements_screen.dart';
 import '../screens/churches/claim_church_screen.dart';
+import '../screens/churches/edit_church_screen.dart';
 import '../screens/churches/suggest_church_screen.dart';
 import '../screens/churches/suggest_edit_screen.dart';
 import '../screens/home/post_notice_screen.dart';
@@ -562,6 +563,15 @@ final GoRouter appRouter = GoRouter(
               builder: (context, state) {
                 final role = state.extra as ChurchAdminRole;
                 return PendingApprovalsScreen(role: role);
+              },
+            ),
+            GoRoute(
+              // Church-admin "Manage church info" editor (patch_121).
+              path: 'edit-church',
+              name: 'edit_church',
+              builder: (context, state) {
+                final role = state.extra as ChurchAdminRole;
+                return EditChurchScreen(role: role);
               },
             ),
           ],

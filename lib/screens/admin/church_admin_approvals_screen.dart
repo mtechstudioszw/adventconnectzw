@@ -202,6 +202,41 @@ class _ChurchAdminApprovalsScreenState
   }
 }
 
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.primaryBlue),
+        const SizedBox(width: 8),
+        Text('$label: ',
+            style: AppTextStyles.bodySmall
+                .copyWith(color: context.palette.textMuted)),
+        Expanded(
+          child: SelectableText(
+            value,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.text,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ClaimCard extends StatelessWidget {
   const _ClaimCard({
     required this.item,
@@ -238,6 +273,23 @@ class _ClaimCard extends StatelessWidget {
             Text(item.note!,
                 style: AppTextStyles.bodySmall
                     .copyWith(color: context.palette.text, height: 1.4)),
+          ],
+          const SizedBox(height: 12),
+          // Applicant contact, spelled out so the founder can verify
+          // exactly who applied before approving.
+          _ContactRow(
+            icon: Icons.phone_outlined,
+            label: 'Phone',
+            value: item.applicantPhone.isEmpty ? '—' : item.applicantPhone,
+          ),
+          if (item.applicantEmail != null &&
+              item.applicantEmail!.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _ContactRow(
+              icon: Icons.email_outlined,
+              label: 'Email',
+              value: item.applicantEmail!,
+            ),
           ],
           const SizedBox(height: 12),
           Row(

@@ -10,6 +10,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../services/messaging_service.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
 
 class JobDetailsScreen extends StatefulWidget {
@@ -584,6 +585,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       body: _buildBody(),
+      bottomNavigationBar: const SafeArea(
+        top: false,
+        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
+      ),
     );
   }
 

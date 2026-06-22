@@ -38,6 +38,9 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   // The signed-in user's APPROVED admin role for this church (if any) →
   // shows the "Manage this church" button instead of the claim link.
   ChurchAdminRole? _myRole;
+  // True when the user has a PENDING claim for this church → show an
+  // "under review" note instead of the claim link.
+  bool _myPendingForThis = false;
 
   bool get _isHomeChurch =>
       _homeChurchId != null &&
@@ -65,10 +68,13 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
       if (!mounted) return;
       final roles = results[3] as List<ChurchAdminRole>;
       ChurchAdminRole? mine;
+      bool pending = false;
       for (final r in roles) {
-        if (r.churchId == widget.churchId && r.isApproved) {
+        if (r.churchId != widget.churchId) continue;
+        if (r.isApproved) {
           mine = r;
-          break;
+        } else if (r.status == 'pending') {
+          pending = true;
         }
       }
       setState(() {
@@ -76,6 +82,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         _isFollowing = results[1] as bool;
         _hasAdmin = results[2] as bool;
         _myRole = mine;
+        _myPendingForThis = pending;
         _loading = false;
       });
     } catch (_) {
@@ -288,6 +295,36 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     );
   }
 
+  /// Round church logo/avatar (churches.profile_photo_url) shown next to
+  /// the name. Renders nothing when no logo is set so unbranded churches
+  /// keep the original full-width title.
+  Widget _buildAvatar(Church church) {
+    final url = church.profilePhotoUrl;
+    if (url == null || url.isEmpty) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: () => FullImageViewer.show(context, url),
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: context.palette.cardMuted,
+          border: Border.all(color: context.palette.divider, width: 1.5),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: CachedImage(
+          url,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Icon(
+            Icons.church,
+            color: context.palette.textMuted,
+            size: 26,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader(Church church) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
@@ -297,6 +334,10 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildAvatar(church),
+              if (church.profilePhotoUrl != null &&
+                  church.profilePhotoUrl!.isNotEmpty)
+                const SizedBox(width: 14),
               Expanded(
                 child: Text(church.name, style: AppTextStyles.displayMedium),
               ),
@@ -520,6 +561,40 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
+          ),
+        ),
+      );
+    }
+    // Pending claim by this user → reassure instead of inviting another
+    // claim. Mirrors the claim screen's "we're still reviewing" message.
+    if (_myPendingForThis) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.25),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.hourglass_top_rounded,
+                  color: AppColors.primaryBlue, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Your application to manage this church is under review. '
+                  'We\'ll let you know once it\'s approved.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.text,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );

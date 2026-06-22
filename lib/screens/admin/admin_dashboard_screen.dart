@@ -107,6 +107,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         extra: widget.role,
                       ),
                       onPostEvent: () => context.pushNamed('post_event'),
+                      onManageInfo: () => context.pushNamed(
+                        'edit_church',
+                        extra: widget.role,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Padding(
@@ -162,11 +166,13 @@ class _QuickActionsCard extends StatelessWidget {
     required this.onPost,
     required this.onApprovals,
     required this.onPostEvent,
+    required this.onManageInfo,
   });
 
   final VoidCallback onPost;
   final VoidCallback onApprovals;
   final VoidCallback onPostEvent;
+  final VoidCallback onManageInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -196,6 +202,13 @@ class _QuickActionsCard extends StatelessWidget {
             title: 'Post an event',
             subtitle: 'Add to the events feed.',
             onTap: onPostEvent,
+          ),
+          const _Divider(),
+          _Row(
+            icon: Icons.edit_note_outlined,
+            title: 'Manage church info',
+            subtitle: 'Edit photos, about, location and contact.',
+            onTap: onManageInfo,
           ),
           const _Divider(),
           _Row(

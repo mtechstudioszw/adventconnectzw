@@ -197,7 +197,7 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _pending.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 12),
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
         itemBuilder: (context, i) => _EventCard(
           event: _pending[i],
           busy: _busyIds.contains(_pending[i].id),

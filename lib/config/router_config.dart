@@ -7,6 +7,7 @@ import '../screens/admin/pending_approvals_screen.dart';
 import '../screens/admin/church_admin_approvals_screen.dart';
 import '../screens/admin/seller_approvals_screen.dart';
 import '../screens/admin/news_approvals_screen.dart';
+import '../screens/admin/event_approvals_screen.dart';
 import '../screens/auth/auth_screen.dart';
 import '../screens/auth/email_verification_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -616,6 +617,11 @@ final GoRouter appRouter = GoRouter(
           name: 'admin_news_approvals',
           builder: (context, state) => const NewsApprovalsScreen(),
         ),
+        GoRoute(
+          path: 'event-approvals',
+          name: 'admin_event_approvals',
+          builder: (context, state) => const EventApprovalsScreen(),
+        ),  
         GoRoute(
           // Super-admin Library content manager (patch_133): curate hymns +
           // upload music / EGW PDFs.

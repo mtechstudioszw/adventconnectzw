@@ -93,6 +93,7 @@ class _CachedImageState extends State<CachedImage> {
       height: widget.height,
       fadeInDuration: const Duration(milliseconds: 180),
       fadeOutDuration: Duration.zero,
+      useOldImageOnUrlChange: true,
       errorWidget: (ctx, _, error) {
         final builder = widget.errorBuilder;
         if (builder != null) {

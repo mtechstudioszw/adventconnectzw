@@ -538,22 +538,36 @@ class _StoryViewerState extends State<StoryViewer>
                     child: Row(
                       children: [
                         Expanded(
-                          child: TextField(
-                            controller: _replyController,
-                            focusNode: _replyFocus,
-                            style: const TextStyle(color: AppColors.white),
-                            cursorColor: AppColors.white,
-                            minLines: 1,
-                            maxLines: 3,
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: (_) => _sendReply(story),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              hintText: 'Reply to status…',
-                              hintStyle: TextStyle(
-                                  color:
-                                      AppColors.white.withValues(alpha: 0.7)),
+                          child: Theme(
+                            data: Theme.of(context).copyWith(
+                              inputDecorationTheme:
+                                  const InputDecorationTheme(
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                              ),
+                            ),
+                            child: TextField(
+                              controller: _replyController,
+                              focusNode: _replyFocus,
+                              style: const TextStyle(color: AppColors.white),
+                              cursorColor: AppColors.white,
+                              minLines: 1,
+                              maxLines: 3,
+                              textInputAction: TextInputAction.send,
+                              onSubmitted: (_) => _sendReply(story),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                filled: false,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                hintText: 'Reply to status…',
+                                hintStyle: TextStyle(
+                                    color:
+                                        AppColors.white.withValues(alpha: 0.7)),
+                              ),
                             ),
                           ),
                         ),

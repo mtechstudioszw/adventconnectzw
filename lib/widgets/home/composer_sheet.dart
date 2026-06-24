@@ -437,6 +437,14 @@ class _StoryComposerState extends State<_StoryComposer> {
     }
   }
 
+Color _storyTextColor(int bgArgb) {
+    final r = (bgArgb >> 16) & 0xFF;
+    final g = (bgArgb >> 8) & 0xFF;
+    final b = bgArgb & 0xFF;
+    final luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.5 ? Colors.black87 : AppColors.white;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Use the safe screen height minus the keyboard so the sheet
@@ -535,36 +543,53 @@ class _StoryComposerState extends State<_StoryComposer> {
                           // The sheet itself is already the chosen colour, so
                           // the field is seamless (no inner card / white box).
                           // White text, picked font, centred.
-                          ConstrainedBox(
+                        ConstrainedBox(
                             constraints: const BoxConstraints(minHeight: 220),
                             child: Center(
-                              child: TextField(
-                                controller: _statusText,
-                                autofocus: true,
-                                textAlign: TextAlign.center,
-                                minLines: 1,
-                                maxLines: null,
-                                // WhatsApp text-status parity (700 chars).
-                                maxLength: 700,
-                                keyboardType: TextInputType.multiline,
-                                textCapitalization:
-                                    TextCapitalization.sentences,
-                                style: storyFontStyle(
-                                  kStoryFontKeys[_fontIndex],
-                                  color: AppColors.white,
-                                  fontSize: 30,
-                                ),
-                                cursorColor: AppColors.white,
-                                decoration: const InputDecoration(
-                                  isDense: true,
-                                  counterText: '',
-                                  border: InputBorder.none,
-                                  hintText: 'Type a status…',
-                                  hintStyle: TextStyle(
-                                      color: Colors.white70, fontSize: 24),
-                                ),
-                                onChanged: (_) => setState(() {}),
-                              ),
+                              child: Builder(builder: (context) {
+                                final textCol = _storyTextColor(_bgColors[_bgIndex]);
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    inputDecorationTheme:
+                                        const InputDecorationTheme(
+                                      filled: false,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                    ),
+                                  ),
+                                  child: TextField(
+                                    controller: _statusText,
+                                    autofocus: true,
+                                    textAlign: TextAlign.center,
+                                    minLines: 1,
+                                    maxLines: null,
+                                    maxLength: 700,
+                                    keyboardType: TextInputType.multiline,
+                                    textCapitalization:
+                                        TextCapitalization.sentences,
+                                    style: storyFontStyle(
+                                      kStoryFontKeys[_fontIndex],
+                                      color: textCol,
+                                      fontSize: 30,
+                                    ),
+                                    cursorColor: textCol,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      filled: false,
+                                      counterText: '',
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      hintText: 'Type a status…',
+                                      hintStyle: TextStyle(
+                                          color: textCol.withValues(alpha: 0.55),
+                                          fontSize: 24),
+                                    ),
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                );
+                              }),
                             ),
                           ),
                           const SizedBox(height: 16),

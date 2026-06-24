@@ -261,6 +261,27 @@ class EventService {
         .eq('event_id', int.tryParse(eventId) ?? eventId);
   }
 
+  static Future<List<Event>> adminFetchPendingEvents() async {
+    final response = await _client.rpc('admin_list_pending_events');
+    return (response as List)
+        .map((row) => Event.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<void> adminApproveEvent(String eventId) async {
+    await _client.rpc(
+      'admin_approve_event',
+      params: {'p_id': int.parse(eventId)},
+    );
+  }
+
+  static Future<void> adminRejectEvent(String eventId) async {
+    await _client.rpc(
+      'admin_reject_event',
+      params: {'p_id': int.parse(eventId)},
+    );
+  }
+
   static String _formatDate(DateTime d) {
     return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }

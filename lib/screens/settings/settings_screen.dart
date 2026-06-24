@@ -671,6 +671,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                           const _Divider(),
                           _NavRow(
+                            icon: Icons.event_outlined,
+                            label: 'Event approvals',
+                            onTap: () => context.pushNamed(
+                              'admin_event_approvals',
+                            ),
+                          ),
+                          const _Divider(),
+                          _NavRow(
                             icon: Icons.library_books_outlined,
                             label: 'Manage Library',
                             onTap: () => context.pushNamed(

@@ -13,6 +13,12 @@
     <!-- Android 13+ runtime notification prompt — without this declared,
          FCM pushes silently never arrive on devices ≥ API 33. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- just_audio_background: foreground media-playback service so Library
+         music keeps playing when the app is backgrounded and shows a media
+         notification with play/pause/next controls. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <!-- image_picker (camera path) + profile/cover photo capture flows.
          Without this declared, Permission.camera.request() returns
          "granted" immediately on Android without ever showing the
@@ -107,6 +113,24 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-9393348961586729~4087273606" />
+        <!-- just_audio_background: the media-session service + media-button
+             receiver that power background playback and the lock-screen /
+             notification controls for the Library Music player. -->
+        <service
+            android:name="com.ryanheise.audioservice.AudioService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService"/>
+            </intent-filter>
+        </service>
+        <receiver
+            android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

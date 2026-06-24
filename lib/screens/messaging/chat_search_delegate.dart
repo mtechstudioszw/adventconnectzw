@@ -4,6 +4,7 @@ import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
 import '../../models/story_model.dart';
 import '../../services/directory_service.dart';
+import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -25,6 +26,7 @@ class ChatSearchDelegate extends SearchDelegate<void> {
     required this.onOpenConversation,
     required this.onOpenStatus,
     required this.onStartChatWithUser,
+    required this.onOpenMessage,
   }) : super(searchFieldLabel: 'Search Advent Chat');
 
   final List<Conversation> chats; // 1:1 conversations
@@ -34,6 +36,9 @@ class ChatSearchDelegate extends SearchDelegate<void> {
   final void Function(Conversation) onOpenConversation;
   final void Function(List<Story> reel) onOpenStatus;
   final void Function(String userId, String name) onStartChatWithUser;
+  // Open a conversation AND scroll to a specific message (message-content
+  // search result). Resolves the conversation by id from the known lists.
+  final void Function(String conversationId, String messageId) onOpenMessage;
 
   ChatSearchScope _scope = ChatSearchScope.messages;
   Future<List<MemberDirectoryEntry>>? _friendsFuture;
@@ -82,28 +87,32 @@ class ChatSearchDelegate extends SearchDelegate<void> {
   Widget buildSuggestions(BuildContext context) => _content(context);
 
   Widget _content(BuildContext context) {
-    return Container(
-      color: context.palette.scaffoldBg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _scopeChips(context),
-          Expanded(child: _scopedResults(context)),
-        ],
-      ),
+    // StatefulBuilder so tapping a scope chip ALWAYS rebuilds the results —
+    // the previous showSuggestions()-only approach didn't reliably refresh,
+    // so every chip except the default (Messages) looked broken.
+    return StatefulBuilder(
+      builder: (context, setLocal) {
+        return Container(
+          color: context.palette.scaffoldBg,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _scopeChips(context, setLocal),
+              Expanded(child: _scopedResults(context)),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _scopeChips(BuildContext context) {
+  Widget _scopeChips(BuildContext context, void Function(VoidCallback) setLocal) {
     Widget chip(String label, ChatSearchScope s) {
       final sel = _scope == s;
       return Padding(
         padding: const EdgeInsets.only(right: 8),
         child: GestureDetector(
-          onTap: () {
-            _scope = s;
-            showSuggestions(context);
-          },
+          onTap: () => setLocal(() => _scope = s),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
@@ -153,7 +162,7 @@ class ChatSearchDelegate extends SearchDelegate<void> {
       case ChatSearchScope.status:
         return _statusList(context, q);
       case ChatSearchScope.messages:
-        return _conversationList(context, _filterConvos(chats, q));
+        return _messageSearchList(context, query.trim());
       case ChatSearchScope.groups:
         return _conversationList(context, _filterConvos(groups, q));
       case ChatSearchScope.archived:
@@ -168,6 +177,64 @@ class ChatSearchDelegate extends SearchDelegate<void> {
             c.otherUserName.toLowerCase().contains(q) ||
             c.lastMessage.toLowerCase().contains(q))
         .toList();
+  }
+
+  /// Full-text search across the user's actual message history. Tapping a
+  /// hit opens the conversation AND scrolls to that exact message.
+  Widget _messageSearchList(BuildContext context, String q) {
+    if (q.length < 2) {
+      return _empty(context, 'Type at least 2 letters to search messages.');
+    }
+    return FutureBuilder<List<MessageSearchHit>>(
+      // Keyed by query so each new query re-runs the search.
+      key: ValueKey('msgsearch:$q'),
+      future: MessagingService.searchMessages(q),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(
+              child: CircularProgressIndicator(color: AppColors.primaryBlue));
+        }
+        final hits = snap.data ?? const <MessageSearchHit>[];
+        if (hits.isEmpty) return _empty(context, 'No messages match.');
+        return ListView.builder(
+          itemCount: hits.length,
+          itemBuilder: (_, i) {
+            final h = hits[i];
+            final convo = _convoById(h.conversationId);
+            final title = convo?.otherUserName ?? 'Conversation';
+            return ListTile(
+              leading: _Avatar(
+                  name: title, photoUrl: convo?.otherUserPhotoUrl),
+              title: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodyMedium
+                    .copyWith(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                h.content,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: context.palette.textMuted),
+              ),
+              onTap: () {
+                close(context, null);
+                onOpenMessage(h.conversationId, h.messageId);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Conversation? _convoById(String id) {
+    for (final c in [...chats, ...groups, ...archived]) {
+      if (c.id == id) return c;
+    }
+    return null;
   }
 
   Widget _conversationList(BuildContext context, List<Conversation> list) {

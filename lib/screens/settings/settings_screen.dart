@@ -669,6 +669,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                               'admin_news_approvals',
                             ),
                           ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.library_books_outlined,
+                            label: 'Manage Library',
+                            onTap: () => context.pushNamed(
+                              'admin_library',
+                            ),
+                          ),
                         ],
                       ),
                     ],

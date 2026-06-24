@@ -1,3 +1,10 @@
+import 'app_version.dart';
+
+/// Public Play Store listing for the app. Appended to shared content (Bible
+/// verses, etc.) so whoever receives it can install Advent Connect ZW.
+String get appDownloadUrl =>
+    'https://play.google.com/store/apps/details?id=$kAndroidPackageId';
+
 /// Base URL that serves the Open Graph share / landing pages for shared
 /// products, events, jobs and sellers.
 ///

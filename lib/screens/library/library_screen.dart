@@ -5,7 +5,6 @@ import '../../services/library_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
 import 'bible_tab.dart';
 import 'hymnal_tab.dart';
@@ -51,10 +50,10 @@ class _LibraryScreenState extends State<LibraryScreen>
     final palette = context.palette;
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
-      // Banner sits at the bottom of the catalog tabs. The pushed verse
-      // reader / PDF viewer / full player are separate screens, so reading +
-      // listening stay ad-free.
-      bottomNavigationBar: const AdBanner(),
+      // No ads anywhere in the Library. It's devotional content — Bible,
+      // hymns, EGW writings and worship music — so it stays ad-free like the
+      // prayer screens (the tester reported the bottom banner was covering the
+      // catalog). Revenue stays on the home feed, stories and detail pages.
       appBar: AppBar(
         title: Text('Library',
             style: AppTextStyles.appBarTitle.copyWith(fontSize: 19)),

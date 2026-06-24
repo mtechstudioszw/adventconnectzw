@@ -42,6 +42,12 @@ TextStyle storyFontStyle(
     inherit: false,
     color: color,
     fontSize: fontSize,
+    // When inherit:false, a TextStyle used by a TextField MUST also supply a
+    // textBaseline (Flutter asserts this in EditableText). Without it, opening
+    // the text-status composer crashed: "inherit false style must supply
+    // fontSize and textBaseline". alphabetic is the correct baseline for Latin
+    // script and matches Flutter's own default.
+    textBaseline: TextBaseline.alphabetic,
     fontWeight: fontKey == 'pacifico' ? FontWeight.w400 : fontWeight,
     height: 1.25,
     // CRITICAL: GoogleFonts loads the font asynchronously (true even for

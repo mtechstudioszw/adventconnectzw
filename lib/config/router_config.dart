@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
+import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
 import '../screens/admin/church_admin_approvals_screen.dart';
@@ -614,6 +615,13 @@ final GoRouter appRouter = GoRouter(
           path: 'news-approvals',
           name: 'admin_news_approvals',
           builder: (context, state) => const NewsApprovalsScreen(),
+        ),
+        GoRoute(
+          // Super-admin Library content manager (patch_133): curate hymns +
+          // upload music / EGW PDFs.
+          path: 'library',
+          name: 'admin_library',
+          builder: (context, state) => const AdminLibraryScreen(),
         ),
       ],
     ),

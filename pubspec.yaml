@@ -44,6 +44,10 @@ dependencies:
   permission_handler: ^11.3.1
   path_provider: ^2.1.4
 
+  # Admin-only: pick Hymnal/EGW PDFs + Music audio files from the device to
+  # upload into the Library. REQUIRES `flutter pub get` before building.
+  file_picker: ^8.1.2
+
   # TODO: Re-add a chat screenshot-prevention package (Android FLAG_SECURE).
   # flutter_windowmanager is abandoned (uses v1 Android embedding) and
   # flutter_windowmanager_plus 1.0.1 forces an old AGP 7.3.0 download that

@@ -16,6 +16,10 @@ class HymnService {
   static const _cacheKey = 'hymns_all_v1';
   static List<Hymn>? _mem;
 
+  /// Drop the in-memory cache so the next [all]/[search] re-fetches. Called
+  /// after an admin adds/edits/removes a hymn so the change shows immediately.
+  static void invalidate() => _mem = null;
+
   /// All published hymns, ordered by number. Memory-cached after first load.
   static Future<List<Hymn>> all() async {
     final mem = _mem;

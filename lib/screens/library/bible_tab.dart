@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../config/share_config.dart';
 import '../../services/bible_prefs_service.dart';
 import '../../services/bible_service.dart';
 import '../../theme/app_colors.dart';
@@ -587,7 +590,11 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
             }),
             _action(ctx, Icons.share_outlined, 'Share', () {
               Navigator.pop(ctx);
-              Share.share('$text\n\n— $ref (KJV)\nShared from Advent Connect ZW');
+              Share.share(
+                '$text\n\n— $ref (KJV)\n\n'
+                'Shared from Advent Connect ZW\n'
+                'Get the app: $appDownloadUrl',
+              );
             }),
             const SizedBox(height: 8),
           ],
@@ -739,14 +746,31 @@ class BibleSearchScreen extends StatefulWidget {
 
 class _BibleSearchScreenState extends State<BibleSearchScreen> {
   final _controller = TextEditingController();
+  Timer? _debounce;
   List<BibleSearchHit> _hits = const [];
   bool _searching = false;
   bool _ran = false;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Live search as the user types (debounced so we don't scan the whole
+  /// KJV on every keystroke). Clearing the box resets to the prompt state.
+  void _onChanged(String q) {
+    _debounce?.cancel();
+    if (q.trim().length < 2) {
+      setState(() {
+        _hits = const [];
+        _ran = false;
+        _searching = false;
+      });
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 300), () => _run(q));
   }
 
   Future<void> _run(String q) async {
@@ -767,68 +791,104 @@ class _BibleSearchScreenState extends State<BibleSearchScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
+        title: Text('Search the Bible',
+            style: AppTextStyles.appBarTitle.copyWith(fontSize: 18)),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
         ),
-        title: TextField(
-          controller: _controller,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          onSubmitted: _run,
-          style: const TextStyle(color: AppColors.white, fontSize: 16),
-          cursorColor: AppColors.white,
-          decoration: InputDecoration(
-            hintText: 'Search the Bible…',
-            hintStyle:
-                TextStyle(color: AppColors.white.withValues(alpha: 0.6)),
-            border: InputBorder.none,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _run(_controller.text),
-          ),
-        ],
       ),
       body: SafeArea(
         top: false,
-        child: _searching
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue))
-            : !_ran
-                ? Center(
-                    child: Text('Type a word or phrase to search.',
-                        style: AppTextStyles.bodyMedium
-                            .copyWith(color: palette.textMuted)),
-                  )
-                : _hits.isEmpty
-                    ? Center(
-                        child: Text('No matches found.',
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: palette.textMuted)),
-                      )
-                    : Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text('${_hits.length} result(s)',
-                                  style: AppTextStyles.labelMedium
-                                      .copyWith(color: palette.textMuted)),
-                            ),
-                          ),
-                          Expanded(
-                            child: ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              itemCount: _hits.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, i) {
-                                final h = _hits[i];
-                                return Material(
+        child: Column(
+          children: [
+            // Search box lives in the BODY (not the app bar) on an adaptive
+            // surface, so the typed text uses palette.text — always visible in
+            // BOTH light and dark mode (the app-bar field rendered the text
+            // dark-on-dark in light mode: the "black spaces" the tester saw).
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: TextField(
+                controller: _controller,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                onChanged: _onChanged,
+                onSubmitted: _run,
+                style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
+                cursorColor: AppColors.primaryBlue,
+                decoration: InputDecoration(
+                  hintText: 'Search a word or phrase…',
+                  hintStyle: TextStyle(color: palette.textMuted),
+                  prefixIcon: Icon(Icons.search, color: palette.textMuted),
+                  suffixIcon: _controller.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: Icon(Icons.close, color: palette.textMuted),
+                          onPressed: () {
+                            _controller.clear();
+                            _onChanged('');
+                          },
+                        ),
+                  filled: true,
+                  fillColor: palette.inputFill,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: palette.divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: palette.divider),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.primaryBlue),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(child: _results(context, palette)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _results(BuildContext context, AppPalette palette) {
+    if (_searching) {
+      return const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryBlue));
+    }
+    if (!_ran) {
+      return Center(
+        child: Text('Type a word or phrase to search.',
+            style: AppTextStyles.bodyMedium.copyWith(color: palette.textMuted)),
+      );
+    }
+    if (_hits.isEmpty) {
+      return Center(
+        child: Text('No matches found.',
+            style: AppTextStyles.bodyMedium.copyWith(color: palette.textMuted)),
+      );
+    }
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('${_hits.length} result(s)',
+                style: AppTextStyles.labelMedium
+                    .copyWith(color: palette.textMuted)),
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            itemCount: _hits.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, i) {
+              final h = _hits[i];
+              return Material(
                                   color: palette.card,
                                   borderRadius: BorderRadius.circular(12),
                                   child: InkWell(
@@ -873,9 +933,7 @@ class _BibleSearchScreenState extends State<BibleSearchScreen> {
                             ),
                           ),
                         ],
-                      ),
-      ),
-    );
+                      );
   }
 }
 

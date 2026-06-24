@@ -2,7 +2,7 @@ name: advent_connect_zw
 description: "Advent Connect ZW — Christian community platform for Zimbabwe"
 publish_to: 'none'
 
-version: 1.0.6+7
+version: 1.1.0+8
 
 environment:
   sdk: ^3.11.3

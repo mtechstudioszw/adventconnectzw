@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/seller_model.dart';
 import '../../models/product_model.dart';
+import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
@@ -191,6 +194,8 @@ class _AddProductScreenState extends State<AddProductScreen>
           ),
         );
       }
+      // Task complete → show a frequency-capped interstitial (best-effort).
+      unawaited(InterstitialAdManager.maybeShow());
       context.pop(true);
     } catch (_) {
       if (mounted) {

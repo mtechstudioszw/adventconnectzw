@@ -259,6 +259,8 @@ class _PrayerScreenState extends State<PrayerScreen>
   @override
   Widget build(BuildContext context) {
     return MainScaffold(
+      // Prayer stays ad-free (faith-sensitive) — per the app's ad rules.
+      showAd: false,
       title: 'Prayer',
       // Prayer is reached from inside Profile (My prayers), so we highlight
       // the Profile tab. Per master reference Part 7, Prayer is not a

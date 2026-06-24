@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/advent_news_model.dart';
+import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/advent_news_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
@@ -130,6 +133,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
       // AdventNews object here threw a type-cast error on return (the
       // "error that flashes" + the screen jank / stuck back button).
       result; // referenced so the edit/update result isn't flagged unused
+      unawaited(InterstitialAdManager.maybeShow());
       context.pop(true);
     } catch (e) {
       if (!mounted) return;

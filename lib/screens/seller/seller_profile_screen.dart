@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/share_config.dart';
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
 import '../../services/auth_service.dart';
@@ -13,6 +14,7 @@ import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/rate_seller_sheet.dart';
@@ -182,8 +184,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         : 'this seller';
     // seller-share Edge Function keys on auth_user_id and emits the
     // store's cover/logo as og:image for a rich preview.
-    final shareUrl =
-        'https://eqbyvasteolqyktbqbem.functions.supabase.co/seller-share?id=${seller.authUserId}';
+    final shareUrl = sellerShareUrl(seller.authUserId);
     final text = 'Check out $name on Advent Connect ZW marketplace:\n$shareUrl';
     try {
       await Share.share(text, subject: name);
@@ -315,6 +316,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,
         child: _buildBody(),
+      ),
+      bottomNavigationBar: const SafeArea(
+        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
       ),
     );
   }

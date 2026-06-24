@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../config/share_config.dart';
 import '../../models/event_model.dart';
 import '../../services/event_service.dart';
 import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 
@@ -159,6 +161,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       body: _buildBody(),
+      bottomNavigationBar: const SafeArea(
+        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
+      ),
     );
   }
 
@@ -669,8 +674,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     // page) so WhatsApp/Facebook render a rich preview with the event
     // flyer as og:image. The function deep-links back into the app and
     // falls back to a download CTA.
-    final shareUrl =
-        'https://eqbyvasteolqyktbqbem.functions.supabase.co/event-share?id=${event.id}';
+    final shareUrl = eventShareUrl(event.id);
     final text = '${event.title}\n\n'
         'Join me at this event on Advent Connect ZW:\n$shareUrl';
     await Share.share(text, subject: event.title);

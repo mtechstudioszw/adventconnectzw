@@ -12,6 +12,7 @@ import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../../widgets/product_card.dart';
@@ -138,7 +139,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      bottomNavigationBar: const MainBottomNav(currentIndex: 3),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          AdBanner(),
+          MainBottomNav(currentIndex: 3),
+        ],
+      ),
       floatingActionButton: const PostFab(
         routeName: 'add_product',
         tooltip: 'List a product',

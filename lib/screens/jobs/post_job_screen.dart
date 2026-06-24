@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/job_model.dart';
+import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -192,6 +195,7 @@ class _PostJobScreenState extends State<PostJobScreen>
           ),
         ),
       );
+      unawaited(InterstitialAdManager.maybeShow());
       context.pop(true);
     } catch (_) {
       if (mounted) {

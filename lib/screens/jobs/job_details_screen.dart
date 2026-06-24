@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../config/share_config.dart';
 import '../../models/job_model.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
@@ -522,8 +523,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   Future<void> _shareJob() async {
     final job = _job;
     if (job == null) return;
-    final shareUrl =
-        'https://eqbyvasteolqyktbqbem.functions.supabase.co/job-share?id=${job.id}';
+    final shareUrl = jobShareUrl(job.id);
     final text = '${job.title}\n\n'
         'Job opportunity on Advent Connect ZW:\n$shareUrl';
     try {

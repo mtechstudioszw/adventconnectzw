@@ -167,6 +167,13 @@ class _SplashScreenState extends State<SplashScreen>
     // on that. After ~2.5s we proceed (the local session is already
     // restored, so routing is correct) and the refresh finishes in the
     // background while home paints from cache.
+    // Kick the force-update check off the moment Supabase is ready so its
+    // (fast, indexed) app_config query OVERLAPS the cache open + min-loader
+    // window instead of adding ~1s to the splash tail. Fails open.
+    final updateFuture = AppBootstrap.awaitSupabaseReady()
+        .then((_) => ForceUpdateService.check())
+        .catchError((_) => UpdateCheck.none);
+
     await Future.wait([
       Future.delayed(_minLoaderDuration),
       AppBootstrap.awaitSupabaseReady()
@@ -178,9 +185,17 @@ class _SplashScreenState extends State<SplashScreen>
     ]);
     if (!mounted) return;
 
-    // Force-update gate (patch_091): if this build is below the remote
-    // minimum, block here before anything else.
-    if (await ForceUpdateService.updateRequired()) {
+    // Force-update gate (patch_091): below the hard floor — or past the
+    // grace window for a newer build — block here before anything else.
+    // A `recommended` result is stashed on ForceUpdateService.last so the
+    // home screen can surface a dismissible "update available" nudge. The
+    // check started above; cap the tail wait at 400ms so a dead network
+    // (Supabase never became ready) can't stall the splash — fail open.
+    final update = await updateFuture.timeout(
+      const Duration(milliseconds: 400),
+      onTimeout: () => UpdateCheck.none,
+    );
+    if (update.level == UpdateLevel.required) {
       if (!mounted) return;
       context.goNamed('update_required');
       return;

@@ -37,10 +37,14 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.conversationId,
     this.initialConversation,
+    this.highlightMessageId,
   });
 
   final String conversationId;
   final Conversation? initialConversation;
+  // When set (from message search), the chat scrolls to + flashes this
+  // message id once its thread has loaded.
+  final String? highlightMessageId;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -234,6 +238,50 @@ class _ChatScreenState extends State<ChatScreen>
         hiddenText: newestText,
       ));
     }
+  }
+
+  /// Viewer-aware text for a group system event (patch_123). Structured
+  /// add/remove events carry actor + target identity in [Message.meta], so
+  /// each viewer sees the right phrasing — WhatsApp parity:
+  ///   * actor   → "You removed Bob"   / "You added Bob"
+  ///   * removed → "Michael removed you"
+  ///   * others  → "Michael removed Bob"
+  /// Legacy rows (no meta) fall back to the old per-suffix localisation.
+  String _systemEventText(Message m, String myId) {
+    final meta = m.meta;
+    if (meta != null) {
+      final event = meta['event']?.toString();
+      final actorId = meta['actor_id']?.toString();
+      String nameOr(Object? v, String fallback) {
+        final s = v?.toString().trim() ?? '';
+        return s.isEmpty ? fallback : s;
+      }
+
+      if (event == 'removed') {
+        final targetId = meta['target_id']?.toString();
+        final actorName = nameOr(meta['actor_name'], 'An admin');
+        final targetName = nameOr(meta['target_name'], 'a member');
+        if (myId == actorId) return 'You removed $targetName';
+        if (myId == targetId) return '$actorName removed you';
+        return '$actorName removed $targetName';
+      }
+      if (event == 'added') {
+        final actorName = nameOr(meta['actor_name'], 'An admin');
+        final names = nameOr(meta['target_names'], 'a member');
+        if (myId == actorId) return 'You added $names';
+        return '$actorName added $names';
+      }
+    }
+
+    // Legacy / non-meta system events: localise only the actor's own line.
+    final sysMine = m.senderId == myId;
+    if (!sysMine) return m.content;
+    if (m.content.contains('joined via link')) return 'You joined via link';
+    if (m.content.endsWith(' was removed')) return 'You were removed';
+    if (m.content.endsWith(' left')) return 'You left';
+    if (m.content.endsWith(' joined')) return 'You joined';
+    if (m.content.contains('created the group')) return 'You created the group';
+    return m.content;
   }
 
   Future<void> _forwardSelected() async {
@@ -1233,7 +1281,15 @@ class _ChatScreenState extends State<ChatScreen>
         _applyServerMessages(list);
         _loading = false;
       });
-      _scrollToBottom(animate: false);
+      // Opened from message search → jump to + flash that exact message once
+      // the thread is loaded (instead of landing at the bottom).
+      if (widget.highlightMessageId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _scrollToMessage(widget.highlightMessageId!);
+        });
+      } else {
+        _scrollToBottom(animate: false);
+      }
       _loadReactionsAndStars();
       // Mark anything they sent us as read. Awaited (not fire-and-
       // forget) so when the user pops back to the inbox the badge
@@ -2785,23 +2841,8 @@ class _ChatScreenState extends State<ChatScreen>
             final prevSys = i > 0 ? _messages[i - 1] : null;
             final showSep = prevSys == null ||
                 !_sameLocalDay(prevSys.createdAt, m.createdAt);
-            // A system event is authored by the actor (sender_id). For the
-            // actor themselves, show "You left/joined" instead of their own
-            // name — WhatsApp parity (others still see "Michael left").
-            final sysMine = m.senderId == (AuthService.currentUser?.id ?? '');
-            final sysText = sysMine
-                ? (m.content.contains('joined via link')
-                    ? 'You joined via link'
-                    : m.content.endsWith(' was removed')
-                        ? 'You were removed'
-                        : m.content.endsWith(' left')
-                            ? 'You left'
-                            : m.content.endsWith(' joined')
-                                ? 'You joined'
-                                : m.content.contains('created the group')
-                                    ? 'You created the group'
-                                    : m.content)
-                : m.content;
+            final sysText =
+                _systemEventText(m, AuthService.currentUser?.id ?? '');
             return Column(
               children: [
                 if (showSep) _DateSeparator(label: _dayLabel(m.createdAt)),

@@ -33,10 +33,14 @@ class DirectoryService {
 
     final response =
         await query.order('created_at', ascending: false).limit(200);
+    // Show the directory A→Z (per request). The name is joined from
+    // profiles, which can't be ordered at the DB level here, so sort the
+    // fetched page client-side.
     return (response as List)
         .map((row) =>
             MemberDirectoryEntry.fromJson(row as Map<String, dynamic>))
-        .toList();
+        .toList()
+      ..sort(_byNameCi);
   }
 
   /// The signed-in user's accepted friends as directory entries (via the
@@ -103,8 +107,11 @@ class DirectoryService {
       if (user != null) {
         profilesQuery = profilesQuery.neq('id', user.id);
       }
+      // Alphabetical, not newest-first — the suggestion row reads like a
+      // mini directory, so users expect A→Z (per request) rather than
+      // "whoever signed up most recently".
       final profilesResponse = await profilesQuery
-          .order('created_at', ascending: false)
+          .order('full_name', ascending: true)
           .limit(limit * 3);
       final profileEntries = (profilesResponse as List)
           .map((row) => row as Map<String, dynamic>)
@@ -123,10 +130,23 @@ class DirectoryService {
               ))
           .toList();
 
-      return [...dirEntries, ...profileEntries];
+      // Final list shown alphabetically (case-insensitive). The directory
+      // query can't be ordered by the joined profiles.full_name at the DB
+      // level, so we sort the merged result here to guarantee A→Z.
+      return [...dirEntries, ...profileEntries]..sort(_byNameCi);
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Case-insensitive A→Z comparator on full name; blank names sort last.
+  static int _byNameCi(MemberDirectoryEntry a, MemberDirectoryEntry b) {
+    final an = (a.fullName ?? '').trim().toLowerCase();
+    final bn = (b.fullName ?? '').trim().toLowerCase();
+    if (an.isEmpty && bn.isEmpty) return 0;
+    if (an.isEmpty) return 1;
+    if (bn.isEmpty) return -1;
+    return an.compareTo(bn);
   }
 
   /// Free-text search over discoverable profiles directly (not the
@@ -187,7 +207,7 @@ class DirectoryService {
         filtered = filtered.neq('id', user.id);
       }
       final response =
-          await filtered.order('created_at', ascending: false).limit(limit);
+          await filtered.order('full_name', ascending: true).limit(limit);
       return (response as List)
           .map((row) => row as Map<String, dynamic>)
           .map((row) => MemberDirectoryEntry(

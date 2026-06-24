@@ -191,6 +191,51 @@ class MessagingService {
     }
   }
 
+  /// Full-text search across the caller's message history (patch_130). Each
+  /// hit carries the message id + conversation id so the UI can deep-link to
+  /// the exact message. Returns newest-first. Best-effort: empty on error.
+  static Future<List<MessageSearchHit>> searchMessages(String query) async {
+    final q = query.trim();
+    if (q.length < 2) return const [];
+    try {
+      final rows = await _client
+          .rpc('search_my_messages', params: {'p_query': q, 'p_limit': 50});
+      return (rows as List).map((r) {
+        final m = Map<String, dynamic>.from(r as Map);
+        return MessageSearchHit(
+          messageId: m['message_id'].toString(),
+          conversationId: m['conversation_id'].toString(),
+          content: (m['content'] ?? '').toString(),
+          createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ??
+              DateTime.now(),
+          senderId: m['sender_id']?.toString(),
+        );
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Latest NON-hidden message per conversation for the current user
+  /// (patch_127 `my_inbox_previews`), keyed by conversation id. Used to
+  /// correct the inbox preview after a "delete for me" so the deleted
+  /// message stops showing and the previous one surfaces (WhatsApp parity).
+  /// Best-effort: returns empty on any error so the inbox falls back to the
+  /// shared `last_message` column.
+  static Future<Map<String, Map<String, dynamic>>> fetchInboxPreviews() async {
+    try {
+      final rows = await _client.rpc('my_inbox_previews');
+      final out = <String, Map<String, dynamic>>{};
+      for (final r in (rows as List)) {
+        final m = Map<String, dynamic>.from(r as Map);
+        out[m['conversation_id'].toString()] = m;
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
   static Future<List<Conversation>> fetchConversations() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
@@ -275,6 +320,12 @@ class MessagingService {
       ..addAll(counts[1])
       ..addAll(counts[2]);
     final lastStatus = await fetchLastOutgoingStatus();
+    // Authoritative per-user previews (patch_127): the latest NON-hidden
+    // message per conversation, so a delete-for-me'd last message stops
+    // showing in the inbox and the previous message surfaces (WhatsApp
+    // parity). Best-effort — on any error this is empty and we fall back to
+    // the shared last_message column.
+    final previews = await fetchInboxPreviews();
     // Splice the unread count into each raw row BEFORE caching so a
     // cache-restore preserves badges accurately — caching the raw
     // server response (without counts) was the source of the
@@ -284,6 +335,16 @@ class MessagingService {
           final raw = Map<String, dynamic>.from(r as Map);
           final id = raw['id'].toString();
           raw['unread_count'] = unreadById[id] ?? 0;
+          // Overlay the per-user preview when we have one (covered convo +
+          // at least one visible message). Church groups / all-hidden convos
+          // aren't returned, so they keep the shared column. Overlaying into
+          // the raw row means the cached inbox is corrected too.
+          final pv = previews[id];
+          if (pv != null) {
+            raw['last_message'] = pv['content'] ?? '';
+            raw['last_message_at'] = pv['created_at'] ?? raw['last_message_at'];
+            raw['last_sender_id'] = pv['sender_id'];
+          }
           return raw;
         })
         .toList();

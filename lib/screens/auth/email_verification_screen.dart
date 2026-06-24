@@ -207,6 +207,34 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       _error = null;
     });
     try {
+      // Server-side throttle (patch_125): 3 resends per hour per email, then
+      // a 1-hour lockout. Persists across app restart/reinstall (the old
+      // in-memory cap reset every launch). Fail-open on a network error so a
+      // flaky connection never blocks a legitimate user.
+      try {
+        final verdict = await Supabase.instance.client.rpc(
+          'register_otp_resend',
+          params: {'p_email': widget.email},
+        );
+        if (verdict is Map && verdict['allowed'] == false) {
+          final retry =
+              (verdict['retry_after_seconds'] as num?)?.toInt() ?? 3600;
+          final mins = (retry / 60).ceil();
+          if (!mounted) return;
+          setState(() {
+            _resending = false;
+            _cooldown = retry;
+            _error =
+                'Too many code requests. Please try again in about $mins '
+                'minute${mins == 1 ? '' : 's'}, or use Change email to try a '
+                'different address.';
+          });
+          _startCooldown();
+          return;
+        }
+      } catch (_) {
+        // Throttle RPC unreachable — proceed (fail-open).
+      }
       await Supabase.instance.client.auth.resend(
         type: OtpType.signup,
         email: widget.email,

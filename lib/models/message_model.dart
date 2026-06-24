@@ -213,6 +213,23 @@ class Conversation {
   }
 }
 
+/// One hit from full-text message search (patch_130 `search_my_messages`).
+class MessageSearchHit {
+  const MessageSearchHit({
+    required this.messageId,
+    required this.conversationId,
+    required this.content,
+    required this.createdAt,
+    this.senderId,
+  });
+
+  final String messageId;
+  final String conversationId;
+  final String content;
+  final DateTime createdAt;
+  final String? senderId;
+}
+
 class Message {
   const Message({
     required this.id,

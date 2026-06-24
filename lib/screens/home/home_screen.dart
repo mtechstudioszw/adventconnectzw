@@ -4,12 +4,15 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../config/app_version.dart';
 import '../../models/advent_news_model.dart';
 import '../../models/devotion_model.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
 import '../../models/friendship_model.dart';
 import '../../models/job_model.dart';
+import '../../models/library_item_model.dart';
 import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
 import '../../models/post_model.dart';
@@ -26,7 +29,9 @@ import '../../services/gallery_service.dart';
 import '../../services/devotion_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/force_update_service.dart';
 import '../../services/job_service.dart';
+import '../../services/library_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/notification_service.dart';
@@ -139,11 +144,86 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) setState(() {});
     });
     _bootstrap();
+    // A newer build is out but we're still inside the grace window — nudge
+    // once per session (the splash already hard-blocks once grace expires).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeShowUpdateNudge();
+    });
     // Once home has settled, gently ask long-term users to rate the app.
     // Gated + best-effort; Google's native sheet handles "already rated".
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) RatingPromptService.maybeRequestReview();
     });
+  }
+
+  /// Dismissible "update available" prompt shown when ForceUpdateService
+  /// flagged a newer build that's still inside its grace window. Shown at
+  /// most once per app session; after the grace days elapse the splash
+  /// gate hard-blocks instead.
+  Future<void> _maybeShowUpdateNudge() async {
+    if (ForceUpdateService.softPromptShownThisSession) return;
+    final update = ForceUpdateService.last;
+    if (update.level != UpdateLevel.recommended) return;
+    ForceUpdateService.softPromptShownThisSession = true;
+    if (!mounted) return;
+    final days = update.daysLeft;
+    final window = days <= 1 ? '1 day' : '$days days';
+    final palette = context.palette;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.card,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.system_update,
+                color: AppColors.primaryBlue, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Update available',
+                  style: AppTextStyles.titleMedium.copyWith(
+                      color: palette.text, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+        content: Text(
+          'A newer version of Advent Connect is available. You have $window '
+          'to update before it becomes required.',
+          style: AppTextStyles.bodyMedium
+              .copyWith(color: palette.textMuted, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Later',
+                style: AppTextStyles.buttonText
+                    .copyWith(color: palette.textMuted)),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _openStore();
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Update now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openStore() async {
+    final market = Uri.parse('market://details?id=$kAndroidPackageId');
+    final web = Uri.parse(
+        'https://play.google.com/store/apps/details?id=$kAndroidPackageId');
+    if (!await launchUrl(market, mode: LaunchMode.externalApplication)) {
+      await launchUrl(web, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -727,7 +807,15 @@ class _HomeScreenState extends State<HomeScreen>
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _DevotionCard(devotion: _devotion!),
+                    child: _DevotionCard(
+                      devotion: _devotion!,
+                      onOpenLibrary: () => context.pushNamed('library'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: _LibraryChips(),
                   ),
                 ],
                 if (_topNews.isNotEmpty) ...[
@@ -737,6 +825,8 @@ class _HomeScreenState extends State<HomeScreen>
                     child: _AdventNewsHero(items: _topNews),
                   ),
                 ],
+                const SizedBox(height: 16),
+                const _HomeMusicStrip(),
                 const SizedBox(height: 6),
                 // _buildFeedList() is now a Facebook-style mixed feed:
                 // posts intercalated with discovery cards (suggested
@@ -3158,13 +3248,17 @@ class _DiscoverySlot {
 /// home feed so members see "what's trending in the Adventist
 /// community in Zimbabwe" before scrolling through user posts.
 /// Home card: today's devotion — a KJV verse + an Ellen G. White quote.
+/// The whole card is tappable and opens the Library (Bible tab).
 class _DevotionCard extends StatelessWidget {
-  const _DevotionCard({required this.devotion});
+  const _DevotionCard({required this.devotion, required this.onOpenLibrary});
   final Devotion devotion;
+  final VoidCallback onOpenLibrary;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onOpenLibrary,
+      child: Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -3235,8 +3329,202 @@ class _DevotionCard extends StatelessWidget {
               fontStyle: FontStyle.italic,
             ),
           ),
+          const SizedBox(height: 16),
+          // Tap affordance → opens the Library (Bible tab).
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: AppColors.goldAccent.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.menu_book_rounded,
+                    color: AppColors.goldAccent, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Open Library · Bible · Hymnal · EGW · Music',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios,
+                    color: AppColors.white, size: 12),
+              ],
+            ),
+          ),
         ],
       ),
+      ),
+    );
+  }
+}
+
+/// Premium launcher chips under the devotion card → open the Library to a
+/// specific tab (0=Bible, 1=Hymnal, 2=EGW, 3=Music).
+class _LibraryChips extends StatelessWidget {
+  const _LibraryChips();
+
+  static const _items = <(String, IconData, int)>[
+    ('Bible', Icons.menu_book_rounded, 0),
+    ('Hymnal', Icons.queue_music_rounded, 1),
+    ('EGW', Icons.auto_stories_rounded, 2),
+    ('Music', Icons.headphones_rounded, 3),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Row(
+      children: [
+        for (var i = 0; i < _items.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => context.pushNamed('library', extra: _items[i].$3),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: palette.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: palette.divider),
+                ),
+                child: Column(
+                  children: [
+                    Icon(_items[i].$2,
+                        color: AppColors.primaryBlue, size: 22),
+                    const SizedBox(height: 6),
+                    Text(
+                      _items[i].$1,
+                      style: AppTextStyles.labelSmall.copyWith(
+                          fontWeight: FontWeight.w700, color: palette.text),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Horizontal strip of recent Library music on the home feed. Hidden when
+/// there's no music yet. Tapping opens the Library Music tab.
+class _HomeMusicStrip extends StatefulWidget {
+  const _HomeMusicStrip();
+
+  @override
+  State<_HomeMusicStrip> createState() => _HomeMusicStripState();
+}
+
+class _HomeMusicStripState extends State<_HomeMusicStrip> {
+  List<LibraryItem> _items = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    LibraryService.fetchItems('music').then((m) {
+      if (mounted) setState(() => _items = m.take(10).toList());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items.isEmpty) return const SizedBox.shrink();
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Row(
+            children: [
+              const Icon(Icons.headphones_rounded,
+                  color: AppColors.primaryBlue, size: 18),
+              const SizedBox(width: 8),
+              Text('Music',
+                  style: AppTextStyles.titleMedium
+                      .copyWith(fontWeight: FontWeight.w800)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => context.pushNamed('library', extra: 3),
+                child: Text('See all',
+                    style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 152,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _items.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final item = _items[i];
+              return GestureDetector(
+                onTap: () => context.pushNamed('library', extra: 3),
+                child: Container(
+                  width: 130,
+                  decoration: BoxDecoration(
+                    color: palette.card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: palette.divider),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16)),
+                        child: SizedBox(
+                          height: 96,
+                          width: double.infinity,
+                          child: (item.coverUrl != null &&
+                                  item.coverUrl!.isNotEmpty)
+                              ? CachedImage(item.coverUrl!, fit: BoxFit.cover)
+                              : const DecoratedBox(
+                                  decoration: BoxDecoration(
+                                      gradient: AppColors.primaryGradient),
+                                  child: Icon(Icons.music_note_rounded,
+                                      color: AppColors.white, size: 34),
+                                ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(
+                            item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.labelMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: palette.text),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

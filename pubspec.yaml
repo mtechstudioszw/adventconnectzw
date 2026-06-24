@@ -2,7 +2,7 @@ name: advent_connect_zw
 description: "Advent Connect ZW — Christian community platform for Zimbabwe"
 publish_to: 'none'
 
-version: 1.0.6+7
+version: 1.1.0+8
 
 environment:
   sdk: ^3.11.3
@@ -28,6 +28,19 @@ dependencies:
   # Voice notes in chat
   record: ^5.2.0
   audioplayers: ^6.1.0
+
+  # In-app Library MUSIC player with BACKGROUND playback + lock-screen /
+  # notification controls (play / pause / next / previous outside the app).
+  # just_audio_background wires just_audio to a media session. Pinned exact
+  # per project policy. REQUIRES `flutter pub get` + native config (Android
+  # audio service in AndroidManifest, iOS UIBackgroundModes audio).
+  just_audio: 0.9.42
+  just_audio_background: 0.0.1-beta.13
+
+  # In-app Library — render uploaded Hymnal / EGW-book PDFs natively
+  # (Android PdfRenderer / iOS PDFKit). Lightweight. Pinned exact per
+  # project policy. REQUIRES `flutter pub get` before building.
+  flutter_pdfview: 1.3.2
   permission_handler: ^11.3.1
   path_provider: ^2.1.4
 
@@ -125,6 +138,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/
+    # Offline KJV Bible (public domain) for the Library's Bible tab.
+    - assets/bible/
     # Bundled Google Fonts (Poppins + story fonts). google_fonts loads these
     # local files instead of fetching at runtime, so text never paints blank
     # while a font downloads (critical on slow networks) and the app works

@@ -42,6 +42,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   int _eventsGoing = 0;
   List<Post> _myPosts = const [];
   List<Church> _myChurches = const [];
+  // Approved church-admin roles for this user (patch_112). Non-empty → show
+  // the "Church admin dashboard" entry so it's reachable WITHOUT hunting for
+  // the approval notification.
+  List<ChurchAdminRole> _adminRoles = const [];
   int _tabIndex = 0;
 
   @override
@@ -56,12 +60,70 @@ class _ProfileScreenState extends State<ProfileScreen>
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
     _bootstrap();
+    _loadAdminRoles();
   }
 
   @override
   void dispose() {
     _entrance.dispose();
     super.dispose();
+  }
+
+  /// Best-effort load of the user's approved church-admin roles so the
+  /// dashboard entry can appear. Silent on failure (the entry just stays
+  /// hidden, exactly as for non-admins).
+  Future<void> _loadAdminRoles() async {
+    try {
+      final roles = await ChurchService.fetchMyAdminRoles();
+      if (mounted) setState(() => _adminRoles = roles);
+    } catch (_) {
+      // ignore — entry stays hidden.
+    }
+  }
+
+  /// Open the church-admin dashboard. One role → straight in. Multiple
+  /// (rare) → let the admin pick which church first.
+  Future<void> _openAdminDashboard() async {
+    if (_adminRoles.isEmpty) return;
+    if (_adminRoles.length == 1) {
+      context.pushNamed('admin_dashboard', extra: _adminRoles.first);
+      return;
+    }
+    final picked = await showModalBottomSheet<ChurchAdminRole>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 14),
+            Text('Choose a church',
+                style: AppTextStyles.titleMedium
+                    .copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            for (final role in _adminRoles)
+              ListTile(
+                leading: const Icon(Icons.church_outlined,
+                    color: AppColors.primaryBlue),
+                title: Text(role.churchName,
+                    style: AppTextStyles.bodyLarge
+                        .copyWith(fontWeight: FontWeight.w600)),
+                subtitle: Text('Admin · ${role.role}',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: ctx.palette.textMuted)),
+                onTap: () => Navigator.pop(ctx, role),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && mounted) {
+      context.pushNamed('admin_dashboard', extra: picked);
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -685,11 +747,106 @@ class _ProfileScreenState extends State<ProfileScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _buildBioCard(),
         ),
+        if (_adminRoles.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _buildChurchAdminCard(),
+        ],
         const SizedBox(height: 16),
         _buildAccountCard(),
         const SizedBox(height: 16),
         const InviteFriendsCard(),
       ],
+    );
+  }
+
+  /// Church-admin dashboard entry (patch_112). Only shown when the user has
+  /// at least one approved church-admin role, so a member who hasn't claimed
+  /// a church never sees it.
+  Widget _buildChurchAdminCard() {
+    final multi = _adminRoles.length > 1;
+    final subtitle = multi
+        ? 'You manage ${_adminRoles.length} churches — post announcements, '
+            'events and manage info.'
+        : 'Post announcements, events and manage info for '
+            '${_adminRoles.first.churchName}.';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.palette.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: context.palette.divider),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.verified_user_outlined,
+                      color: AppColors.white, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Church admin',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.palette.textMuted,
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _openAdminDashboard,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Open admin dashboard',
+                    style: AppTextStyles.buttonText.copyWith(
+                      color: AppColors.white,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

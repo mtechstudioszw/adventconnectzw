@@ -504,7 +504,26 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         onOpenConversation: _openChat,
         onOpenStatus: _openStoryViewer,
         onStartChatWithUser: _startChatWith,
+        onOpenMessage: _openChatAtMessage,
       ),
+    );
+  }
+
+  /// Open a conversation from a message-search hit and scroll to that exact
+  /// message. Resolves the conversation object so the chat header paints
+  /// instantly; the chat screen scrolls + flashes the message once loaded.
+  void _openChatAtMessage(String conversationId, String messageId) {
+    Conversation? convo;
+    for (final c in [..._chats, ..._groups, ..._archived]) {
+      if (c.id == conversationId) {
+        convo = c;
+        break;
+      }
+    }
+    context.pushNamed(
+      'chat',
+      pathParameters: {'id': conversationId},
+      extra: (convo, messageId),
     );
   }
 

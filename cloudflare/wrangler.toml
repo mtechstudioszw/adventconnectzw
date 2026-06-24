@@ -1,0 +1,15 @@
+name = "advent-share"
+main = "share-worker.js"
+compatibility_date = "2025-01-01"
+
+# SUPABASE_URL is non-secret; set it here. SUPABASE_ANON_KEY is set as a
+# secret (see README): `wrangler secret put SUPABASE_ANON_KEY`.
+[vars]
+SUPABASE_URL = "https://eqbyvasteolqyktbqbem.supabase.co"
+
+# Optional custom domain (recommended for nice share links). Configure the
+# route in the Cloudflare dashboard or uncomment + edit below once the domain
+# is added to your Cloudflare account:
+# routes = [
+#   { pattern = "share.adventconnectzw.com/*", zone_name = "adventconnectzw.com" }
+# ]

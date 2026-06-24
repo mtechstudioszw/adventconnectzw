@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/event_model.dart';
+import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/event_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
@@ -273,6 +276,7 @@ class _PostEventScreenState extends State<PostEventScreen>
           ),
         ),
       );
+      unawaited(InterstitialAdManager.maybeShow());
       context.pop(true);
     } catch (_) {
       if (mounted) {

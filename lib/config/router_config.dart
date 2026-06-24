@@ -20,6 +20,7 @@ import '../screens/churches/suggest_church_screen.dart';
 import '../screens/churches/suggest_edit_screen.dart';
 import '../screens/home/post_notice_screen.dart';
 import '../screens/home/search_screen.dart';
+import '../screens/library/library_screen.dart';
 import '../screens/profile/blocked_users_screen.dart';
 import '../screens/profile/member_directory_screen.dart';
 import '../screens/profile/my_directory_profile_screen.dart';
@@ -462,12 +463,22 @@ final GoRouter appRouter = GoRouter(
           name: 'chat',
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
-            final initial = state.extra is Conversation
-                ? state.extra as Conversation
-                : null;
+            // extra is either a Conversation (normal open) or a
+            // (Conversation?, String?) record (open + scroll to a message,
+            // from chat search).
+            final extra = state.extra;
+            Conversation? initial;
+            String? highlight;
+            if (extra is Conversation) {
+              initial = extra;
+            } else if (extra is (Conversation?, String?)) {
+              initial = extra.$1;
+              highlight = extra.$2;
+            }
             return ChatScreen(
               conversationId: id,
               initialConversation: initial,
+              highlightMessageId: highlight,
             );
           },
           routes: [
@@ -531,6 +542,13 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => UserProfileScreen(
         userId: state.pathParameters['userId'] ?? '',
       ),
+    ),
+    GoRoute(
+      path: '/library',
+      name: 'library',
+      // extra is an optional int initial tab (0=Bible,1=Hymnal,2=EGW,3=Music).
+      builder: (context, state) =>
+          LibraryScreen(initialTab: state.extra is int ? state.extra as int : 0),
     ),
     GoRoute(
       path: '/directory',

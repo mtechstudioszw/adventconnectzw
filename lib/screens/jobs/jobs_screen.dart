@@ -10,6 +10,7 @@ import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/job_card.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
@@ -140,7 +141,13 @@ class _JobsScreenState extends State<JobsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      bottomNavigationBar: const MainBottomNav(currentIndex: 3),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          AdBanner(),
+          MainBottomNav(currentIndex: 3),
+        ],
+      ),
       floatingActionButton: const PostFab(
         routeName: 'post_job',
         tooltip: 'Post a job',

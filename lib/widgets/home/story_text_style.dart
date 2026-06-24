@@ -33,6 +33,13 @@ TextStyle storyFontStyle(
       f = GoogleFonts.poppins();
   }
   return f.copyWith(
+    // inherit:false makes this style fully self-contained so the ambient
+    // DefaultTextStyle can NEVER merge into it. In dark mode the inherited
+    // text colour is already light, so a bleed went unnoticed; in LIGHT mode
+    // the inherited colour is dark, which is what turned the status text
+    // black ("black spaces" bug). Forcing inherit:false guarantees the white
+    // we set below always wins, in both themes, for composer AND viewer.
+    inherit: false,
     color: color,
     fontSize: fontSize,
     fontWeight: fontKey == 'pacifico' ? FontWeight.w400 : fontWeight,

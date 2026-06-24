@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../config/share_config.dart';
 import '../../models/product_model.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
@@ -86,8 +87,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
   Future<void> _shareProduct() async {
     final product = _product;
     if (product == null) return;
-    final shareUrl =
-        'https://eqbyvasteolqyktbqbem.functions.supabase.co/product-share?id=${product.id}';
+    final shareUrl = productShareUrl(product.id);
     final text = '${product.title}\n\n'
         'For sale on Advent Connect ZW marketplace:\n$shareUrl';
     try {

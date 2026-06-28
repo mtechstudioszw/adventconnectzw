@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../services/cache_service.dart';
 import '../../services/download_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -31,10 +32,18 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   String? _error;
   int _pages = 0;
   int _current = 0;
+  late final int _resumePage;
+
+  // Per-document last-page key, so reopening a book continues where you left
+  // off (resume reading — a basic-feeling reader was the tester's complaint).
+  String get _pageKey =>
+      'pdf_page:${sha1.convert(widget.url.codeUnits)}';
 
   @override
   void initState() {
     super.initState();
+    _resumePage =
+        int.tryParse(CacheService.readPref(_pageKey) ?? '') ?? 0;
     _prepare();
   }
 
@@ -120,10 +129,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   swipeHorizontal: false,
                   autoSpacing: true,
                   pageFling: true,
+                  // Resume where the reader left off last time.
+                  defaultPage: _resumePage,
                   onRender: (pages) =>
                       setState(() => _pages = pages ?? 0),
-                  onPageChanged: (page, _) =>
-                      setState(() => _current = page ?? 0),
+                  onPageChanged: (page, _) {
+                    setState(() => _current = page ?? 0);
+                    // Remember the page so the next open resumes here.
+                    if (page != null) {
+                      CacheService.writePref(_pageKey, page.toString());
+                    }
+                  },
                   onError: (_) => setState(() =>
                       _error = 'This PDF could not be displayed.'),
                 ),

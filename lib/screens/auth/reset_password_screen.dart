@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/support_sheet.dart';
 import 'widgets/auth_hero.dart';
 
 /// Sets a new password. Two modes:
@@ -277,22 +278,34 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
                     suffixIcon: null,
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed:
-                        (_resending || _resendIn > 0) ? null : _resendCode,
-                    child: Text(
-                        _resending
-                            ? 'Sending…'
-                            : _resendIn > 0
-                                ? 'Resend code in ${_resendIn}s'
-                                : 'Resend code',
-                        style: AppTextStyles.labelMedium.copyWith(
-                            color: _resendIn > 0
-                                ? AppColors.textMuted
-                                : AppColors.primaryBlue)),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => showSupportSheet(context,
+                          topic: 'Didn\'t get my reset code'),
+                      icon: const Icon(Icons.help_outline,
+                          size: 15, color: AppColors.textMuted),
+                      label: Text('No code? Get help',
+                          style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    TextButton(
+                      onPressed:
+                          (_resending || _resendIn > 0) ? null : _resendCode,
+                      child: Text(
+                          _resending
+                              ? 'Sending…'
+                              : _resendIn > 0
+                                  ? 'Resend in ${_resendIn}s'
+                                  : 'Resend code',
+                          style: AppTextStyles.labelMedium.copyWith(
+                              color: _resendIn > 0
+                                  ? AppColors.textMuted
+                                  : AppColors.primaryBlue)),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
               ],

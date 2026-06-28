@@ -111,9 +111,12 @@ Future<void> _initBackgroundServices() async {
   // Mirror sign-in / sign-out into presence + analytics. Wired up here
   // (not inline in main) so it doesn't add to first-frame latency.
   Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-    if (data.event == AuthChangeEvent.passwordRecovery) {
-      appRouter.goNamed('reset_password');
-    }
+    // NOTE: we deliberately do NOT navigate on AuthChangeEvent.passwordRecovery.
+    // Password reset is now an in-app 6-digit-code flow (ResetPasswordScreen in
+    // OTP mode) that verifies the code + sets the new password itself. The
+    // recovery event fires as a side effect of verifyOTP — auto-routing to the
+    // reset screen here pushed the user to a SECOND (legacy) "new password"
+    // screen that then errored because we'd already updated + signed out.
     AnalyticsService.setUserId(data.session?.user.id);
     switch (data.event) {
       case AuthChangeEvent.signedIn:

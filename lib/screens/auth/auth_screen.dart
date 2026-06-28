@@ -11,6 +11,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/support_sheet.dart';
 import '../../theme/app_theme.dart';
 
 /// External landing URLs for the legal pages (live Netlify site).
@@ -811,6 +812,21 @@ class _AuthScreenState extends State<AuthScreen>
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.primaryBlue,
                 fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        Center(
+          child: TextButton.icon(
+            onPressed: () =>
+                showSupportSheet(context, topic: 'Sign-in problem'),
+            icon: const Icon(Icons.help_outline,
+                size: 16, color: AppColors.textMuted),
+            label: Text(
+              'Having trouble? Contact support',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

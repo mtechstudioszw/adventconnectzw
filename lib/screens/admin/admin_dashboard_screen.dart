@@ -23,18 +23,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _loading = true;
   String? _error;
   List<ChurchAnnouncement> _items = const [];
-  int _memberCount = 0;
+  ChurchAdminStats _stats = const ChurchAdminStats();
 
   @override
   void initState() {
     super.initState();
     _load();
-    _loadMemberCount();
+    _loadStats();
   }
 
-  Future<void> _loadMemberCount() async {
-    final count = await ChurchService.fetchFollowerCount(widget.role.churchId);
-    if (mounted) setState(() => _memberCount = count);
+  Future<void> _loadStats() async {
+    final stats = await ChurchService.fetchAdminStats(widget.role.churchId);
+    if (mounted) setState(() => _stats = stats);
   }
 
   /// Share the app's Play Store link so the admin can invite members
@@ -112,7 +112,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 title: widget.role.churchName,
                 tagline: 'Church admin · ${widget.role.role}',
                 subtitle:
-                    'Post announcements, review pending content, manage church info.',
+                    'Post announcements, see your members, manage church info.',
                 fallbackRoute: 'admin_login',
               ),
               Padding(
@@ -120,15 +120,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _MemberStatCard(
-                      count: _memberCount,
-                      onInvite: _inviteMembers,
+                    _StatsCard(
+                      stats: _stats,
+                      onMembers: () => context.pushNamed(
+                        'church_members',
+                        extra: widget.role,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     _QuickActionsCard(
                       onPost: _openComposer,
-                      onApprovals: () => context.pushNamed(
-                        'pending_approvals',
+                      onMembers: () => context.pushNamed(
+                        'church_members',
                         extra: widget.role,
                       ),
                       onPostEvent: () => context.pushNamed('post_event'),
@@ -187,57 +190,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 }
 
-class _MemberStatCard extends StatelessWidget {
-  const _MemberStatCard({required this.count, required this.onInvite});
+class _StatsCard extends StatelessWidget {
+  const _StatsCard({required this.stats, required this.onMembers});
 
-  final int count;
-  final VoidCallback onInvite;
+  final ChurchAdminStats stats;
+  final VoidCallback onMembers;
 
   @override
   Widget build(BuildContext context) {
     return ScreenCard(
       child: Row(
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: const BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.groups_outlined,
-                color: AppColors.white, size: 24),
-          ),
-          const SizedBox(width: 14),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$count',
-                  style: AppTextStyles.headlineSmall
-                      .copyWith(fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  count == 1
-                      ? 'member following this church'
-                      : 'members following this church',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textMuted),
-                ),
-              ],
+            child: InkWell(
+              onTap: onMembers,
+              borderRadius: BorderRadius.circular(10),
+              child: _Stat(
+                icon: Icons.groups_outlined,
+                value: stats.members,
+                label: 'Members',
+              ),
             ),
           ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.successGreen,
-              foregroundColor: AppColors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+          _StatDivider(),
+          Expanded(
+            child: _Stat(
+              icon: Icons.campaign_outlined,
+              value: stats.announcements,
+              label: 'Announcements',
             ),
-            onPressed: onInvite,
-            icon: const Icon(Icons.share, size: 18),
-            label: const Text('Invite'),
+          ),
+          _StatDivider(),
+          Expanded(
+            child: _Stat(
+              icon: Icons.event_outlined,
+              value: stats.events,
+              label: 'Events',
+            ),
           ),
         ],
       ),
@@ -245,17 +234,47 @@ class _MemberStatCard extends StatelessWidget {
   }
 }
 
+class _Stat extends StatelessWidget {
+  const _Stat({required this.icon, required this.value, required this.label});
+  final IconData icon;
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: AppColors.primaryBlue, size: 22),
+        const SizedBox(height: 6),
+        Text('$value',
+            style: AppTextStyles.headlineSmall
+                .copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 2),
+        Text(label,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelSmall.copyWith(color: AppColors.textMuted)),
+      ],
+    );
+  }
+}
+
+class _StatDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) =>
+      Container(width: 1, height: 44, color: AppColors.divider);
+}
+
 class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
     required this.onPost,
-    required this.onApprovals,
+    required this.onMembers,
     required this.onPostEvent,
     required this.onManageInfo,
     required this.onInvite,
   });
 
   final VoidCallback onPost;
-  final VoidCallback onApprovals;
+  final VoidCallback onMembers;
   final VoidCallback onPostEvent;
   final VoidCallback onManageInfo;
   final VoidCallback onInvite;
@@ -298,10 +317,10 @@ class _QuickActionsCard extends StatelessWidget {
           ),
           const _Divider(),
           _Row(
-            icon: Icons.task_alt_outlined,
-            title: 'Pending approvals',
-            subtitle: 'Review content waiting on you.',
-            onTap: onApprovals,
+            icon: Icons.groups_outlined,
+            title: 'Members',
+            subtitle: 'See who follows your church, by name.',
+            onTap: onMembers,
           ),
           const _Divider(),
           _Row(

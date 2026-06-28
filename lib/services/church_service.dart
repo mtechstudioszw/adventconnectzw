@@ -357,6 +357,43 @@ class ChurchService {
     }
   }
 
+  /// Dashboard stats (members / announcements / events) for an approved admin
+  /// of the church or the super admin (patch_139).
+  static Future<ChurchAdminStats> fetchAdminStats(String churchId) async {
+    try {
+      final res = await _client.rpc(
+        'church_admin_stats',
+        params: {'p_church_id': int.tryParse(churchId) ?? churchId},
+      );
+      final list = res as List;
+      if (list.isEmpty) return const ChurchAdminStats();
+      final r = list.first as Map<String, dynamic>;
+      return ChurchAdminStats(
+        members: (r['members'] as num?)?.toInt() ?? 0,
+        announcements: (r['announcements'] as num?)?.toInt() ?? 0,
+        events: (r['events'] as num?)?.toInt() ?? 0,
+      );
+    } catch (_) {
+      return const ChurchAdminStats();
+    }
+  }
+
+  /// Members (followers) of the church, with name + photo, A→Z. Empty unless
+  /// the caller is the church's approved admin / super admin (patch_139).
+  static Future<List<ChurchMember>> fetchMembers(String churchId) async {
+    try {
+      final res = await _client.rpc(
+        'church_member_list',
+        params: {'p_church_id': int.tryParse(churchId) ?? churchId},
+      );
+      return (res as List)
+          .map((r) => ChurchMember.fromJson(r as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Approved church-admin roles for the current user. Used to gate
   /// access to the admin dashboard and to pre-fill the church picker.
   static Future<List<ChurchAdminRole>> fetchMyAdminRoles() async {
@@ -431,6 +468,48 @@ class ChurchAdminRole {
       role: (json['role'] ?? 'standard') as String,
       status: (json['status'] ?? 'pending') as String,
       city: churchMap?['city'] as String?,
+    );
+  }
+}
+
+/// Aggregate stats for the church-admin dashboard (patch_139).
+class ChurchAdminStats {
+  const ChurchAdminStats({
+    this.members = 0,
+    this.announcements = 0,
+    this.events = 0,
+  });
+
+  final int members;
+  final int announcements;
+  final int events;
+}
+
+/// A follower of the church, shown by name in the admin's members list
+/// (patch_139).
+class ChurchMember {
+  const ChurchMember({
+    required this.userId,
+    required this.fullName,
+    this.profilePhotoUrl,
+    this.joinedAt,
+  });
+
+  final String userId;
+  final String fullName;
+  final String? profilePhotoUrl;
+  final DateTime? joinedAt;
+
+  factory ChurchMember.fromJson(Map<String, dynamic> json) {
+    return ChurchMember(
+      userId: (json['user_id'] ?? '').toString(),
+      fullName: (json['full_name'] as String?)?.trim().isNotEmpty == true
+          ? json['full_name'] as String
+          : 'Member',
+      profilePhotoUrl: json['profile_photo_url'] as String?,
+      joinedAt: json['joined_at'] == null
+          ? null
+          : DateTime.tryParse(json['joined_at'].toString()),
     );
   }
 }

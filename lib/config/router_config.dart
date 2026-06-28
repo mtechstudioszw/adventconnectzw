@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
+import '../screens/admin/church_members_screen.dart';
 import '../screens/admin/user_insights_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
 import '../screens/admin/church_admin_approvals_screen.dart';
@@ -593,6 +594,15 @@ final GoRouter appRouter = GoRouter(
               builder: (context, state) {
                 final role = state.extra as ChurchAdminRole;
                 return EditChurchScreen(role: role);
+              },
+            ),
+            GoRoute(
+              // Church-admin members list (patch_139).
+              path: 'members',
+              name: 'church_members',
+              builder: (context, state) {
+                final role = state.extra as ChurchAdminRole;
+                return ChurchMembersScreen(role: role);
               },
             ),
           ],

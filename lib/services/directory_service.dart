@@ -76,29 +76,12 @@ class DirectoryService {
     try {
       final user = _client.auth.currentUser;
 
-      // 1) Opt-in directory entries (richer profile data).
-      var dirQuery = _client
-          .from(_table)
-          .select('*, profiles(full_name, profile_photo_url), churches(name)')
-          .eq('is_visible', true);
-      if (user != null) {
-        dirQuery = dirQuery.neq('user_id', user.id);
-      }
-      final dirResponse =
-          await dirQuery.order('created_at', ascending: false).limit(limit);
-      final dirEntries = (dirResponse as List)
-          .map((row) =>
-              MemberDirectoryEntry.fromJson(row as Map<String, dynamic>))
-          .toList();
-
-      if (dirEntries.length >= limit) return dirEntries;
-
-      // 2) Top up with discoverable profiles that aren't already in the
-      // directory result. Maps each profile into a MemberDirectoryEntry
-      // shape so the UI doesn't need a second model.
-      final coveredIds =
-          dirEntries.map((e) => e.userId).toSet();
-
+      // Pull a LARGER pool of discoverable members, then randomly pick
+      // `limit` of them. Suggestions are meant to help people DISCOVER new
+      // members, so showing a different random handful each time (instead of
+      // the same A→Z top-N for everyone) keeps the row fresh and gives every
+      // member a chance to be seen. RLS already restricts this to discoverable
+      // profiles.
       var profilesQuery = _client
           .from('profiles')
           .select('id, full_name, profile_photo_url, province, city, bio')
@@ -107,18 +90,12 @@ class DirectoryService {
       if (user != null) {
         profilesQuery = profilesQuery.neq('id', user.id);
       }
-      // Alphabetical, not newest-first — the suggestion row reads like a
-      // mini directory, so users expect A→Z (per request) rather than
-      // "whoever signed up most recently".
       final profilesResponse = await profilesQuery
-          .order('full_name', ascending: true)
-          .limit(limit * 3);
-      final profileEntries = (profilesResponse as List)
+          .order('created_at', ascending: false)
+          .limit(200);
+      final pool = (profilesResponse as List)
           .map((row) => row as Map<String, dynamic>)
-          .where((row) => !coveredIds.contains(row['id']?.toString()))
-          .take(limit - dirEntries.length)
           .map((row) => MemberDirectoryEntry(
-                // We don't have a directory row id, so reuse the user id.
                 id: row['id'].toString(),
                 userId: row['id'].toString(),
                 isVisible: true,
@@ -128,12 +105,11 @@ class DirectoryService {
                 city: row['city'] as String?,
                 bio: row['bio'] as String?,
               ))
+          .where((e) => (e.fullName ?? '').trim().isNotEmpty)
           .toList();
 
-      // Final list shown alphabetically (case-insensitive). The directory
-      // query can't be ordered by the joined profiles.full_name at the DB
-      // level, so we sort the merged result here to guarantee A→Z.
-      return [...dirEntries, ...profileEntries]..sort(_byNameCi);
+      pool.shuffle();
+      return pool.take(limit).toList();
     } catch (_) {
       return const [];
     }

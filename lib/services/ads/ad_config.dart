@@ -36,9 +36,9 @@ class AdConfig {
       'ca-app-pub-9393348961586729/1250191425';
   static const String _realAndroidInterstitial =
       'ca-app-pub-9393348961586729/5924923285';
-  // Rewarded — opt-in "watch an ad for a bonus" (Bible Quiz hints). PASTE your
-  // real AdMob Rewarded ad-unit ID here; until then it uses Google's test unit.
-  static const String _realAndroidRewarded = '';
+  // Rewarded — opt-in "watch an ad for a bonus" (Bible Quiz hints).
+  static const String _realAndroidRewarded =
+      'ca-app-pub-9393348961586729/3788100138';
   // iOS (only needed once you publish an iOS build)
   static const String _realIosBanner = '';
   static const String _realIosNative = '';

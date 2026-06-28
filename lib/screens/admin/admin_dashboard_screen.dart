@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../config/share_config.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -21,11 +23,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _loading = true;
   String? _error;
   List<ChurchAnnouncement> _items = const [];
+  int _memberCount = 0;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadMemberCount();
+  }
+
+  Future<void> _loadMemberCount() async {
+    final count = await ChurchService.fetchFollowerCount(widget.role.churchId);
+    if (mounted) setState(() => _memberCount = count);
+  }
+
+  /// Share the app's Play Store link so the admin can invite members
+  /// (WhatsApp, SMS, etc.). The OS share sheet lets them pick WhatsApp.
+  Future<void> _inviteMembers() async {
+    await Share.share(
+      'Join ${widget.role.churchName} on Advent Connect ZW — '
+      'church announcements, events and our community in one app.\n\n'
+      'Download it here: $appDownloadUrl',
+      subject: 'Join us on Advent Connect ZW',
+    );
   }
 
   Future<void> _load() async {
@@ -100,6 +120,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _MemberStatCard(
+                      count: _memberCount,
+                      onInvite: _inviteMembers,
+                    ),
+                    const SizedBox(height: 16),
                     _QuickActionsCard(
                       onPost: _openComposer,
                       onApprovals: () => context.pushNamed(
@@ -111,6 +136,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         'edit_church',
                         extra: widget.role,
                       ),
+                      onInvite: _inviteMembers,
                     ),
                     const SizedBox(height: 16),
                     Padding(
@@ -161,18 +187,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 }
 
+class _MemberStatCard extends StatelessWidget {
+  const _MemberStatCard({required this.count, required this.onInvite});
+
+  final int count;
+  final VoidCallback onInvite;
+
+  @override
+  Widget build(BuildContext context) {
+    return ScreenCard(
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.groups_outlined,
+                color: AppColors.white, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$count',
+                  style: AppTextStyles.headlineSmall
+                      .copyWith(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  count == 1
+                      ? 'member following this church'
+                      : 'members following this church',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.successGreen,
+              foregroundColor: AppColors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: onInvite,
+            icon: const Icon(Icons.share, size: 18),
+            label: const Text('Invite'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
     required this.onPost,
     required this.onApprovals,
     required this.onPostEvent,
     required this.onManageInfo,
+    required this.onInvite,
   });
 
   final VoidCallback onPost;
   final VoidCallback onApprovals;
   final VoidCallback onPostEvent;
   final VoidCallback onManageInfo;
+  final VoidCallback onInvite;
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +302,13 @@ class _QuickActionsCard extends StatelessWidget {
             title: 'Pending approvals',
             subtitle: 'Review content waiting on you.',
             onTap: onApprovals,
+          ),
+          const _Divider(),
+          _Row(
+            icon: Icons.person_add_alt_1_outlined,
+            title: 'Invite members',
+            subtitle: 'Share the app link on WhatsApp.',
+            onTap: onInvite,
           ),
         ],
       ),

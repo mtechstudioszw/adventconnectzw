@@ -343,6 +343,20 @@ class ChurchService {
     });
   }
 
+  /// How many members follow this church. Returns 0 unless the caller is the
+  /// super admin or an approved admin of the church (patch_135).
+  static Future<int> fetchFollowerCount(String churchId) async {
+    try {
+      final res = await _client.rpc(
+        'church_member_count',
+        params: {'p_church_id': int.tryParse(churchId) ?? churchId},
+      );
+      return (res as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   /// Approved church-admin roles for the current user. Used to gate
   /// access to the admin dashboard and to pre-fill the church picker.
   static Future<List<ChurchAdminRole>> fetchMyAdminRoles() async {

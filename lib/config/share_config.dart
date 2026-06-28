@@ -17,8 +17,8 @@ String get appDownloadUrl =>
 /// (see `cloudflare/share-worker.js`).
 ///
 /// TODO(deploy): set this to your deployed Worker route, e.g.
-///   'https://share.adventconnectzw.com'  (custom domain), or
-///   'https://advent-share.<your-account>.workers.dev'.
+///   `https://share.adventconnectzw.com`  (custom domain), or
+///   `https://advent-share.ACCOUNT.workers.dev`.
 /// Until then sharing falls back to the (thumbnail-less) plain-text page.
 const String kShareBaseUrl = 'https://advent-share.REPLACE_ME.workers.dev';
 

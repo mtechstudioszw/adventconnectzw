@@ -135,7 +135,7 @@ class _HymnsAdminTabState extends State<_HymnsAdminTab> {
       await LibraryAdminService.deleteHymn(hymn.id);
       _reload();
     } catch (e) {
-      _toast(context, 'Could not delete: $e');
+      if (mounted) _toast(context, 'Could not delete: $e');
     }
   }
 
@@ -407,7 +407,7 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
       await LibraryAdminService.deleteItem(item.id);
       _reload();
     } catch (e) {
-      _toast(context, 'Could not delete: $e');
+      if (mounted) _toast(context, 'Could not delete: $e');
     }
   }
 

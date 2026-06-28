@@ -54,10 +54,8 @@ class _AdBannerState extends State<AdBanner> {
     // product / event / church detail screens, so users kept mis-tapping it
     // and getting launched into a full-screen ad they couldn't skip. The
     // smaller banner is far less intrusive and harder to hit by accident.
-    final size = await AdSize.getAnchoredAdaptiveBannerAdSize(
-      Orientation.portrait,
-      width,
-    );
+    final size =
+        await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(width);
     if (size == null || !mounted) return;
 
     final ad = BannerAd(

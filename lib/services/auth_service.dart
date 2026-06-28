@@ -597,9 +597,6 @@ class AuthService {
     }
   }
 
-  static const _passwordResetRedirectUrl =
-      'io.supabase.adventconnect://login-callback';
-
   static const _resetLimitWindow = Duration(hours: 1);
   static const _resetLimitMax = 3;
 

@@ -104,7 +104,7 @@ class _MusicTabState extends State<MusicTab>
             await _player.setQueueAndPlay(all, i);
             if (mounted) setState(() {});
           } catch (e) {
-            if (!mounted) return;
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               backgroundColor: AppColors.red,
               content: Text('Could not play this track: $e',
@@ -174,7 +174,7 @@ class _MusicTabState extends State<MusicTab>
                     suggestedName: item.title,
                     mimeType: 'audio/mpeg',
                   );
-                  if (mounted) DownloadService.toast(context, ok);
+                  if (context.mounted) DownloadService.toast(context, ok);
                 },
               ),
             ],

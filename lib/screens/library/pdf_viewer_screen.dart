@@ -153,7 +153,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                 suggestedName: widget.title,
                 mimeType: 'application/pdf',
               );
-              if (mounted) DownloadService.toast(context, ok);
+              if (context.mounted) DownloadService.toast(context, ok);
             },
           ),
         ],

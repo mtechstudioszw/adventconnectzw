@@ -259,7 +259,7 @@ class _EventCard extends StatelessWidget {
                 height: 160,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
           if (event.coverPhotoUrl != null && event.coverPhotoUrl!.isNotEmpty)

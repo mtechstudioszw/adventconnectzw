@@ -9,6 +9,7 @@ class PublicUserProfile {
     required this.fullName,
     required this.isDiscoverable,
     required this.isVerified,
+    this.isVerifiedAdmin = false,
     required this.isBusiness,
     this.profilePhotoUrl,
     this.coverPhotoUrl,
@@ -33,8 +34,15 @@ class PublicUserProfile {
   final String? churchName;
   final bool isDiscoverable;
   final bool isVerified;
+
+  /// Cosmetic gold tick: TRUE for the super admin and approved church admins
+  /// (patch_134). Grants no powers — display only.
+  final bool isVerifiedAdmin;
   final bool isBusiness;
   final bool showAge;
+
+  /// Whether to show the gold verified tick next to this user's name.
+  bool get showsVerifiedTick => isVerified || isVerifiedAdmin;
 
   int? get age {
     if (dateOfBirth == null) return null;
@@ -68,6 +76,7 @@ class PublicUserProfile {
       churchName: churchMap?['name'] as String?,
       isDiscoverable: json['is_discoverable'] != false,
       isVerified: json['is_verified'] == true,
+      isVerifiedAdmin: json['is_verified_admin'] == true,
       isBusiness: json['is_business'] == true,
       showAge: json['show_age'] != false,
     );
@@ -87,7 +96,7 @@ class UserProfileService {
         .select(
           'id, full_name, profile_photo_url, cover_photo_url, bio, '
           'province, city, date_of_birth, created_at, '
-          'is_discoverable, is_verified, is_business, show_age, '
+          'is_discoverable, is_verified, is_verified_admin, is_business, show_age, '
           'churches(name)',
         )
         .eq('id', userId)

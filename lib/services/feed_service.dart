@@ -61,7 +61,7 @@ class FeedService {
         .from(_postsTable)
         .select(
           '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
           'post_likes(user_id), '
           'post_comments(id)',
         )
@@ -95,7 +95,7 @@ class FeedService {
         .from(_postsTable)
         .select(
           '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
           'post_likes(user_id), '
           'post_comments(id)',
         )
@@ -179,7 +179,7 @@ class FeedService {
           })
           .select(
             '*, '
-            'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+            'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
             'post_likes(user_id), '
             'post_comments(id)',
           )
@@ -201,7 +201,7 @@ class FeedService {
         .from(_postsTable)
         .select(
           '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
           'post_likes(user_id), '
           'post_comments(id)',
         )
@@ -240,7 +240,7 @@ class FeedService {
         .eq('id', postId)
         .select(
           '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url), '
+          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
           'post_likes(user_id), '
           'post_comments(id)',
         )
@@ -283,7 +283,7 @@ class FeedService {
         .from(_commentsTable)
         .select(
           '*, '
-          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url), '
+          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
           'post_comment_reactions(user_id, value)',
         )
         .eq('post_id', postId)
@@ -319,7 +319,7 @@ class FeedService {
         })
         .select(
           '*, '
-          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url), '
+          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
           'post_comment_reactions(user_id, value)',
         )
         .single();
@@ -386,7 +386,7 @@ class FeedService {
         .from(_storiesTable)
         .select(
           '*, '
-          'profiles!stories_author_id_fkey(id, full_name, profile_photo_url)',
+          'profiles!stories_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin)',
         )
         .gt('expires_at', nowIso)
         .order('created_at', ascending: false)
@@ -426,7 +426,7 @@ class FeedService {
           })
           .select(
             '*, '
-            'profiles!stories_author_id_fkey(id, full_name, profile_photo_url)',
+            'profiles!stories_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin)',
           )
           .single(),
     );
@@ -442,7 +442,7 @@ class FeedService {
           .from(_storiesTable)
           .select(
             '*, '
-            'profiles!stories_author_id_fkey(id, full_name, profile_photo_url)',
+            'profiles!stories_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin)',
           )
           .eq('id', storyId)
           .maybeSingle();

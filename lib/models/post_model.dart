@@ -9,6 +9,7 @@ class Post {
     required this.authorName,
     required this.createdAt,
     this.authorPhotoUrl,
+    this.authorIsVerified = false,
     this.body,
     this.imageUrl,
     this.visibility = PostVisibility.public,
@@ -21,6 +22,9 @@ class Post {
   final String authorId;
   final String authorName;
   final String? authorPhotoUrl;
+
+  /// Cosmetic gold tick (super admin / approved church admin, patch_134).
+  final bool authorIsVerified;
   final String? body;
   final String? imageUrl;
   final PostVisibility visibility;
@@ -39,6 +43,7 @@ class Post {
       authorId: authorId,
       authorName: authorName,
       authorPhotoUrl: authorPhotoUrl,
+      authorIsVerified: authorIsVerified,
       body: body,
       imageUrl: imageUrl,
       visibility: visibility,
@@ -93,6 +98,8 @@ class Post {
       authorId: (json['author_id'] ?? '').toString(),
       authorName: (authorMap?['full_name'] as String?) ?? 'Member',
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
+      authorIsVerified: authorMap?['is_verified'] == true ||
+          authorMap?['is_verified_admin'] == true,
       body: json['body'] as String?,
       imageUrl: json['image_url'] as String?,
       visibility: visibilityStr == 'friends_only'
@@ -116,6 +123,7 @@ class Post {
         'profiles': {
           'full_name': authorName,
           'profile_photo_url': authorPhotoUrl,
+          'is_verified_admin': authorIsVerified,
         },
         'body': body,
         'image_url': imageUrl,

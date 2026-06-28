@@ -450,7 +450,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                 ),
               ),
-              if (_profile!.isVerified) ...[
+              if (_profile!.showsVerifiedTick) ...[
                 const SizedBox(width: 6),
                 const Icon(Icons.verified,
                     color: AppColors.goldAccent, size: 20),

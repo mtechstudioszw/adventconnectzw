@@ -10,6 +10,7 @@ class Story {
     required this.createdAt,
     required this.expiresAt,
     this.authorPhotoUrl,
+    this.authorIsVerified = false,
     this.caption,
     this.kind = 'photo',
     this.textContent,
@@ -21,6 +22,9 @@ class Story {
   final String authorId;
   final String authorName;
   final String? authorPhotoUrl;
+
+  /// Cosmetic gold tick (super admin / approved church admin, patch_134).
+  final bool authorIsVerified;
   final String mediaUrl;
   final String? caption;
   final DateTime createdAt;
@@ -50,6 +54,7 @@ class Story {
         'profiles': {
           'full_name': authorName,
           'profile_photo_url': authorPhotoUrl,
+          'is_verified_admin': authorIsVerified,
         },
         'media_url': mediaUrl,
         'caption': caption,
@@ -79,6 +84,8 @@ class Story {
       authorId: (json['author_id'] ?? '').toString(),
       authorName: (authorMap?['full_name'] as String?) ?? 'Member',
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
+      authorIsVerified: authorMap?['is_verified'] == true ||
+          authorMap?['is_verified_admin'] == true,
       mediaUrl: (json['media_url'] ?? '').toString(),
       caption: json['caption'] as String?,
       kind: (json['kind'] as String?) ?? 'photo',

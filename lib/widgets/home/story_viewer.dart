@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../config/router_config.dart';
 import '../../models/story_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/auth_service.dart';
@@ -131,6 +132,14 @@ class _StoryViewerState extends State<StoryViewer>
   }
 
   bool _isMyStory(Story s) => s.authorId == AuthService.currentUser?.id;
+
+  /// Close the viewer and open the story author's public profile. Uses the
+  /// global router so navigation isn't tied to this (about-to-pop) context.
+  void _openAuthorProfile(Story story) {
+    Navigator.of(context).maybePop();
+    appRouter.pushNamed('user_profile',
+        pathParameters: {'userId': story.authorId});
+  }
 
   /// Called when a new story is brought on screen (initial + advance +
   /// back). Marks it as viewed for non-owners, refreshes the viewer
@@ -748,31 +757,48 @@ class _StoryViewerState extends State<StoryViewer>
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                story.authorName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+          // Tapping the name / time opens the author's profile (WhatsApp /
+          // Instagram parity). Suppressed for your own status.
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _isMyStory(story) ? null : () => _openAuthorProfile(story),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        story.authorName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    if (story.authorIsVerified) ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.verified,
+                          color: AppColors.goldAccent, size: 15),
+                    ],
+                  ],
                 ),
-              ),
-              Text(
-                _relativeTime(story.createdAt),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.white.withValues(alpha: 0.75),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500,
+                Text(
+                  _relativeTime(story.createdAt),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.white.withValues(alpha: 0.75),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         if (_isMyStory(story))

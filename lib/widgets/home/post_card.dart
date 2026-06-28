@@ -119,6 +119,11 @@ class PostCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (post.authorIsVerified) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.verified,
+                            size: 14, color: AppColors.goldAccent),
+                      ],
                       const SizedBox(width: 6),
                       Icon(
                         post.visibility == PostVisibility.friendsOnly

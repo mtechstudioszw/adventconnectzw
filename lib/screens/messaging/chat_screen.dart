@@ -123,6 +123,21 @@ class _ChatScreenState extends State<ChatScreen>
   // Messages the viewer "deleted for me" (patch_087) — hidden locally.
   final Set<String> _hiddenIds = <String>{};
 
+  /// Periodic safety re-fetch (see the timer in _bootstrap) so tick state
+  /// stays accurate when the realtime socket drops on a poor connection.
+  /// Skips while offline (nothing to gain) and is a cheap no-op merge when
+  /// nothing changed.
+  Future<void> _reconcileTicks() async {
+    if (!mounted || !ConnectivityService.isOnline) return;
+    try {
+      final list = await MessagingService.fetchMessages(widget.conversationId);
+      if (!mounted) return;
+      setState(() => _applyServerMessages(list));
+    } catch (_) {
+      // best-effort; the next tick retries.
+    }
+  }
+
   void _applyServerMessages(List<Message> list) {
     final floor = _floor;
     list = list
@@ -669,6 +684,7 @@ class _ChatScreenState extends State<ChatScreen>
   // Presence (other-user online / last-seen) state.
   DateTime? _otherLastSeen;
   Timer? _lastSeenRefreshTimer;
+  Timer? _tickReconcileTimer;
   void Function()? _presenceListener;
 
   // Block state — surfaced in the overflow menu (Block / Unblock).
@@ -1219,6 +1235,7 @@ class _ChatScreenState extends State<ChatScreen>
     _typingThrottle?.cancel();
     _recordingTimer?.cancel();
     _lastSeenRefreshTimer?.cancel();
+    _tickReconcileTimer?.cancel();
     // Stop continuous-play hand-off, but DON'T stop playback — a note in
     // progress keeps playing after the user leaves the chat.
     VoicePlayerService.instance.detachResolver(_voiceQueueResolver);
@@ -1345,6 +1362,17 @@ class _ChatScreenState extends State<ChatScreen>
           }
         }
       });
+      // Self-healing tick reconcile: on a flaky network the realtime socket
+      // can silently drop, so the sender's ticks (sent → delivered → read)
+      // stop updating. Every 8s while the chat is open + online, re-fetch the
+      // messages and re-apply — cheap (the merge is a no-op when nothing
+      // changed) but it keeps the ticks honest even if a realtime UPDATE was
+      // missed.
+      _tickReconcileTimer?.cancel();
+      _tickReconcileTimer = Timer.periodic(
+        const Duration(seconds: 8),
+        (_) => _reconcileTicks(),
+      );
       _typingChannel = MessagingService.subscribeTyping(
         conversationId: widget.conversationId,
         onTyping: (_) {

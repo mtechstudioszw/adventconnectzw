@@ -82,7 +82,9 @@ class MusicPlayerService {
         ConcatenatingAudioSource(
           children: items
               .map(
-                (item) => AudioSource.uri(
+                // LockCachingAudioSource streams the track AND saves it to
+                // disk, so a track played once replays OFFLINE later (#7).
+                (item) => LockCachingAudioSource(
                   Uri.parse(item.fileUrl),
                   tag: tagged
                       ? MediaItem(

@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/church_model.dart';
 import 'analytics_service.dart';
+import 'cache_service.dart';
+import 'connectivity_service.dart';
 
 class ChurchService {
   ChurchService._();
@@ -396,16 +400,40 @@ class ChurchService {
 
   /// Approved church-admin roles for the current user. Used to gate
   /// access to the admin dashboard and to pre-fill the church picker.
+  ///
+  /// Cached locally (per user) so an approved admin can still reach their
+  /// dashboard offline — RLS-gated content inside still needs a connection,
+  /// but the entry point + role survive a dropped network.
   static Future<List<ChurchAdminRole>> fetchMyAdminRoles() async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];
-    final response = await _client
-        .from('church_admins')
-        .select('*, churches(name, city)')
-        .eq('user_id', user.id);
-    return (response as List)
-        .map((row) => ChurchAdminRole.fromJson(row as Map<String, dynamic>))
-        .toList();
+    final cacheKey = 'church_admin_roles:${user.id}';
+    if (!ConnectivityService.isOnline) {
+      return _readRolesCache(cacheKey);
+    }
+    try {
+      final response = await _client
+          .from('church_admins')
+          .select('*, churches(name, city)')
+          .eq('user_id', user.id);
+      final rows = (response as List).cast<Map<String, dynamic>>();
+      CacheService.writeString(cacheKey, jsonEncode(rows));
+      return rows.map((row) => ChurchAdminRole.fromJson(row)).toList();
+    } catch (_) {
+      return _readRolesCache(cacheKey);
+    }
+  }
+
+  static List<ChurchAdminRole> _readRolesCache(String key) {
+    try {
+      final raw = CacheService.readStringStale(key);
+      if (raw == null) return const [];
+      return (jsonDecode(raw) as List)
+          .map((r) => ChurchAdminRole.fromJson(r as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
   }
 }
 

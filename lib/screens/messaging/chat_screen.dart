@@ -3864,6 +3864,11 @@ class _VoiceBubble extends StatelessWidget {
 
   Future<void> _onPlay(BuildContext context) async {
     try {
+      // Tell the sender we've played their note (WhatsApp blue mic). Only
+      // for received notes; the server ignores own / already-played.
+      if (!isMine) {
+        unawaited(MessagingService.markVoicePlayed(message.id));
+      }
       await VoicePlayerService.instance.toggle(VoiceNote(
         messageId: message.id,
         storagePath: message.mediaUrl!,
@@ -4044,13 +4049,31 @@ class _VoiceBubble extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            timeLabel,
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: muted,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                timeLabel,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: muted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              // Play receipt on YOUR sent notes: gold mic once
+                              // the recipient has played it, muted before
+                              // (WhatsApp blue-mic parity).
+                              if (isMine) ...[
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.mic,
+                                  size: 13,
+                                  color: message.isVoicePlayed
+                                      ? AppColors.goldAccent
+                                      : muted,
+                                ),
+                              ],
+                            ],
                           ),
                           if (isActive)
                             GestureDetector(

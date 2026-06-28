@@ -250,6 +250,7 @@ class Message {
     this.isDeleted = false,
     this.meta,
     this.clientId,
+    this.voicePlayedAt,
   });
 
   final String id;
@@ -281,8 +282,12 @@ class Message {
   // against the server echo even when the temp id never became canonical
   // (offline outbox flush).
   final String? clientId;
+  // Voice-note play receipt (patch_137): set when the recipient first plays
+  // this voice note, so the sender sees a "played" state (WhatsApp blue mic).
+  final DateTime? voicePlayedAt;
 
   bool get isEdited => editedAt != null;
+  bool get isVoicePlayed => voicePlayedAt != null;
 
   Message copyWith({String? content, bool? isDeleted}) {
     return Message(
@@ -304,6 +309,7 @@ class Message {
       isDeleted: isDeleted ?? this.isDeleted,
       meta: meta,
       clientId: clientId,
+      voicePlayedAt: voicePlayedAt,
     );
   }
 
@@ -336,6 +342,9 @@ class Message {
           ? Map<String, dynamic>.from(json['meta'] as Map)
           : null,
       clientId: json['client_id'] as String?,
+      voicePlayedAt: json['voice_played_at'] == null
+          ? null
+          : DateTime.tryParse(json['voice_played_at'].toString()),
     );
   }
 }

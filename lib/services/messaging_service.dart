@@ -1299,6 +1299,19 @@ class MessagingService {
     }
   }
 
+  /// Mark a received voice note as played, so the SENDER sees a play receipt
+  /// (patch_137). No-op for your own notes / non-voice / already-played
+  /// (enforced server-side). Best-effort — never throws into the UI.
+  static Future<void> markVoicePlayed(String messageId) async {
+    final id = int.tryParse(messageId);
+    if (id == null) return; // optimistic 'pending-...' ids aren't on the server
+    try {
+      await _client.rpc('mark_voice_played', params: {'p_message_id': id});
+    } catch (_) {
+      // ignore — a missed receipt is harmless.
+    }
+  }
+
   /// Per-user pin/mute/archive flags, keyed by conversation id. Empty
   /// map on error so the inbox still renders with default (unflagged)
   /// state.

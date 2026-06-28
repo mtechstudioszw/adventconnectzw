@@ -78,32 +78,46 @@ class MusicPlayerService {
     _queue = items;
     _loadedSignature = signature;
 
-    final sources = items
-        .map(
-          (item) => AudioSource.uri(
-            Uri.parse(item.fileUrl),
-            // Only attach the MediaItem tag when the background handler is
-            // ready; a tag without it crashes playback. Tag-less still plays.
-            tag: _bgReady
-                ? MediaItem(
-                    id: item.id,
-                    title: item.title,
-                    artist: item.author ?? 'Advent Connect ZW',
-                    artUri:
-                        (item.coverUrl != null && item.coverUrl!.isNotEmpty)
-                            ? Uri.parse(item.coverUrl!)
-                            : null,
-                  )
-                : null,
-          ),
-        )
-        .toList();
+    ConcatenatingAudioSource build({required bool tagged}) =>
+        ConcatenatingAudioSource(
+          children: items
+              .map(
+                (item) => AudioSource.uri(
+                  Uri.parse(item.fileUrl),
+                  tag: tagged
+                      ? MediaItem(
+                          id: item.id,
+                          title: item.title,
+                          artist: item.author ?? 'Advent Connect ZW',
+                          artUri: (item.coverUrl != null &&
+                                  item.coverUrl!.isNotEmpty)
+                              ? Uri.parse(item.coverUrl!)
+                              : null,
+                        )
+                      : null,
+                ),
+              )
+              .toList(),
+        );
 
-    await player.setAudioSource(
-      ConcatenatingAudioSource(children: sources),
-      initialIndex: startIndex,
-      initialPosition: Duration.zero,
-    );
+    try {
+      // Use MediaItem tags only when the background handler is ready.
+      await player.setAudioSource(
+        build(tagged: _bgReady),
+        initialIndex: startIndex,
+        initialPosition: Duration.zero,
+      );
+    } catch (e) {
+      // Safety net: if a tagged source still throws (e.g. the media session
+      // failed to initialise on this device — "_audioHandler not initialized"),
+      // retry WITHOUT tags so music still plays (just no lock-screen controls).
+      _bgReady = false;
+      await player.setAudioSource(
+        build(tagged: false),
+        initialIndex: startIndex,
+        initialPosition: Duration.zero,
+      );
+    }
     await player.play();
   }
 

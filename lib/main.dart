@@ -50,11 +50,13 @@ void main() async {
   // controls + playback that continues when the app is backgrounded). Cheap
   // local setup; safe to await. Fails open so a platform without the media
   // service (e.g. desktop) never blocks launch.
-  // Initialise the audio media session in the BACKGROUND (don't block launch).
-  // It's idempotent and setQueueAndPlay awaits the same future before the first
-  // track loads, so music is still safe — but the platform-channel init no
-  // longer sits on the cold-start critical path (faster launch).
-  unawaited(MusicPlayerService.ensureBackgroundReady());
+  // Initialise the audio media session BEFORE runApp. just_audio_background
+  // must be init()'d before the first AudioPlayer is constructed (which happens
+  // when the Music tab first builds), otherwise loading a track throws
+  // "_audioHandler has not been initialized". Awaiting here guarantees that
+  // ordering. It's idempotent + fails open (tag-less playback) so a slow/failed
+  // init never blocks launch indefinitely.
+  await MusicPlayerService.ensureBackgroundReady();
 
   // CacheService opens a Hive box (reads the WHOLE box into memory). If it
   // ever grew large that openBox blocked the first frame for many seconds
@@ -325,6 +327,14 @@ class _AdventConnectAppState extends State<AdventConnectApp>
     '/account-banned',
     '/update-required',
     '/admin',
+    // Browsing/opening a church, event or product must not trigger a
+    // full-screen App-Open ad on resume — the tester hit an unskippable ad
+    // every time they tapped one of these. Revenue stays on the home feed +
+    // stories.
+    '/marketplace',
+    '/events',
+    '/churches',
+    '/library',
   ];
 
   void _maybeShowAppOpenAd() {

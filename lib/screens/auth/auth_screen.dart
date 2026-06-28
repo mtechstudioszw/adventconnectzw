@@ -2056,7 +2056,7 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
         obscureText: _obscurePassword,
         // Force the alphanumeric password keyboard — without this it could
         // inherit the numeric keyboard from the preceding 6-digit code step.
-        keyboardType: TextInputType.visiblePassword,
+        keyboardType: TextInputType.text,
         enableSuggestions: false,
         autocorrect: false,
         decoration: InputDecoration(

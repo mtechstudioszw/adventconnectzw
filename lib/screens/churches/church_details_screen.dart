@@ -6,7 +6,6 @@ import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/church_map.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
@@ -179,9 +178,6 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
       backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         child: _buildBody(),
-      ),
-      bottomNavigationBar: const SafeArea(
-        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
       ),
     );
   }

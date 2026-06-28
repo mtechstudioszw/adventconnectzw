@@ -21,7 +21,13 @@ class EventService {
 
     var query = _client
         .from(_table)
-        .select('*, profiles!events_organizer_id_fkey(id, full_name)');
+        .select('*, profiles!events_organizer_id_fkey(id, full_name)')
+        // Only show events that passed super-admin review. Community events
+        // default to status='pending' on insert and must be approved before
+        // they appear publicly (the organizer still sees their own pending
+        // ones under Profile → My events). This is the approval gate the
+        // tester found missing — posts were going live unreviewed.
+        .eq('status', 'approved');
 
     if (upcomingOnly) {
       query = query.gte('start_date', _formatDate(today));

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../services/download_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -77,6 +78,20 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
         ),
         foregroundColor: AppColors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Download',
+            icon: const Icon(Icons.download_outlined),
+            onPressed: () async {
+              final ok = await DownloadService.downloadAndShare(
+                url: widget.url,
+                suggestedName: widget.title,
+                mimeType: 'application/pdf',
+              );
+              if (mounted) DownloadService.toast(context, ok);
+            },
+          ),
+        ],
         bottom: _pages > 0
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(22),

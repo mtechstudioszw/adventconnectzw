@@ -62,9 +62,9 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
       if (!mounted) return;
       _showSnack('Event approved and organizer notified.');
       _load();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      _showSnack('Could not approve. Try again.', isError: true);
+      _showSnack('Could not approve: ${_clean(e)}', isError: true);
     } finally {
       if (mounted) setState(() => _busyIds.remove(id));
     }
@@ -100,12 +100,19 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
       if (!mounted) return;
       _showSnack('Event rejected.');
       _load();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      _showSnack('Could not reject. Try again.', isError: true);
+      _showSnack('Could not reject: ${_clean(e)}', isError: true);
     } finally {
       if (mounted) setState(() => _busyIds.remove(id));
     }
+  }
+
+  /// Trim noisy prefixes so the snackbar shows the meaningful part of a
+  /// Postgrest / Auth error.
+  String _clean(Object e) {
+    final s = e.toString().replaceFirst('Exception: ', '');
+    return s.length > 140 ? '${s.substring(0, 140)}…' : s;
   }
 
   void _showSnack(String msg, {bool isError = false}) {

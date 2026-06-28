@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../models/library_item_model.dart';
+import '../../services/download_service.dart';
 import '../../services/library_service.dart';
 import '../../services/music_player_service.dart';
 import '../../theme/app_colors.dart';
@@ -90,8 +91,18 @@ class _MusicTabState extends State<MusicTab>
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () async {
-          await _player.setQueueAndPlay(all, i);
-          if (mounted) setState(() {});
+          try {
+            await _player.setQueueAndPlay(all, i);
+            if (mounted) setState(() {});
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              backgroundColor: AppColors.red,
+              content: Text('Could not play this track: $e',
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: AppColors.white)),
+            ));
+          }
         },
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -143,6 +154,19 @@ class _MusicTabState extends State<MusicTab>
               Icon(
                 isCurrent ? Icons.equalizer_rounded : Icons.play_arrow_rounded,
                 color: isCurrent ? AppColors.primaryBlue : palette.textMuted,
+              ),
+              IconButton(
+                tooltip: 'Download',
+                icon: Icon(Icons.download_outlined,
+                    color: palette.textMuted, size: 20),
+                onPressed: () async {
+                  final ok = await DownloadService.downloadAndShare(
+                    url: item.fileUrl,
+                    suggestedName: item.title,
+                    mimeType: 'audio/mpeg',
+                  );
+                  if (mounted) DownloadService.toast(context, ok);
+                },
               ),
             ],
           ),

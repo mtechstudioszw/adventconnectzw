@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../models/hymn_model.dart';
 import '../../models/library_item_model.dart';
 import '../../services/library_admin_service.dart';
 import '../../theme/app_colors.dart';
@@ -50,7 +49,7 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
           labelStyle:
               AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w700),
           tabs: const [
-            Tab(text: 'Hymns'),
+            Tab(text: 'Hymnals'),
             Tab(text: 'Music'),
             Tab(text: 'EGW Books'),
           ],
@@ -61,7 +60,17 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
         child: TabBarView(
           controller: _tabs,
           children: const [
-            _HymnsAdminTab(),
+            // Multiple hymnal PDFs (e.g. Shona + English). Each upload adds
+            // one more hymnal to the public Hymnal tab.
+            _UploadAdminTab(
+              kind: 'hymnal',
+              extensions: ['pdf'],
+              addLabel: 'Add hymnal',
+              pickLabel: 'Pick hymnal PDF',
+              authorLabel: 'Language / edition (optional)',
+              emptyText: 'No hymnals yet. Tap “Add hymnal” to upload a PDF.',
+              leadingIcon: Icons.queue_music,
+            ),
             _UploadAdminTab(
               kind: 'music',
               extensions: ['mp3', 'm4a', 'aac', 'wav', 'ogg'],
@@ -79,254 +88,6 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
               authorLabel: 'Author (optional)',
               emptyText: 'No books yet. Tap “Add book” to upload a PDF.',
               leadingIcon: Icons.menu_book,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ===========================================================================
-//  Hymns
-// ===========================================================================
-
-class _HymnsAdminTab extends StatefulWidget {
-  const _HymnsAdminTab();
-
-  @override
-  State<_HymnsAdminTab> createState() => _HymnsAdminTabState();
-}
-
-class _HymnsAdminTabState extends State<_HymnsAdminTab> {
-  late Future<List<Hymn>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = LibraryAdminService.fetchAllHymns();
-  }
-
-  void _reload() =>
-      setState(() => _future = LibraryAdminService.fetchAllHymns());
-
-  Future<void> _openEditor([Hymn? hymn]) async {
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => _HymnEditorScreen(hymn: hymn)),
-    );
-    if (saved == true) _reload();
-  }
-
-  Future<void> _delete(Hymn hymn) async {
-    final ok = await _confirmDelete(context, hymn.displayTitle);
-    if (ok != true) return;
-    try {
-      await LibraryAdminService.deleteHymn(hymn.id);
-      _reload();
-    } catch (e) {
-      _toast(context, 'Could not delete: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primaryBlue,
-        foregroundColor: AppColors.white,
-        onPressed: () => _openEditor(),
-        icon: const Icon(Icons.add),
-        label: const Text('Add hymn'),
-      ),
-      body: FutureBuilder<List<Hymn>>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue));
-          }
-          if (snap.hasError) {
-            return _ErrorState(message: '${snap.error}', onRetry: _reload);
-          }
-          final hymns = snap.data ?? const [];
-          if (hymns.isEmpty) {
-            return const _EmptyState(
-              icon: Icons.library_music_outlined,
-              text: 'No hymns yet. Tap “Add hymn” to create one.',
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            itemCount: hymns.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, i) {
-              final h = hymns[i];
-              return Material(
-                color: palette.card,
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => _openEditor(h),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: palette.divider),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(h.displayTitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.titleSmall
-                                      .copyWith(fontWeight: FontWeight.w700)),
-                              const SizedBox(height: 2),
-                              Text(h.lyrics.replaceAll('\n', ' '),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.bodySmall
-                                      .copyWith(color: palette.textMuted)),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: AppColors.red),
-                          onPressed: () => _delete(h),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _HymnEditorScreen extends StatefulWidget {
-  const _HymnEditorScreen({this.hymn});
-  final Hymn? hymn;
-
-  @override
-  State<_HymnEditorScreen> createState() => _HymnEditorScreenState();
-}
-
-class _HymnEditorScreenState extends State<_HymnEditorScreen> {
-  late final _number = TextEditingController(
-      text: widget.hymn?.number?.toString() ?? '');
-  late final _title = TextEditingController(text: widget.hymn?.title ?? '');
-  late final _lyrics = TextEditingController(text: widget.hymn?.lyrics ?? '');
-  late final _language =
-      TextEditingController(text: widget.hymn?.language ?? 'Shona');
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _number.dispose();
-    _title.dispose();
-    _lyrics.dispose();
-    _language.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (_title.text.trim().isEmpty || _lyrics.text.trim().isEmpty) {
-      _toast(context, 'Title and lyrics are required.');
-      return;
-    }
-    setState(() => _saving = true);
-    try {
-      await LibraryAdminService.saveHymn(
-        id: widget.hymn?.id,
-        number: int.tryParse(_number.text.trim()),
-        title: _title.text,
-        lyrics: _lyrics.text,
-        language: _language.text,
-      );
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      _toast(context, 'Could not save: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Scaffold(
-      backgroundColor: palette.scaffoldBg,
-      appBar: AppBar(
-        title: Text(widget.hymn == null ? 'New hymn' : 'Edit hymn',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 18)),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 110,
-                  child: _field(context,
-                      controller: _number,
-                      label: 'Number',
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _field(context,
-                      controller: _language, label: 'Language'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _field(context, controller: _title, label: 'Title'),
-            const SizedBox(height: 12),
-            _field(context,
-                controller: _lyrics,
-                label: 'Lyrics',
-                minLines: 8,
-                maxLines: 30),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 52,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                onPressed: _saving ? null : _save,
-                icon: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: AppColors.white))
-                    : const Icon(Icons.check),
-                label: Text(_saving ? 'Saving…' : 'Save hymn',
-                    style: AppTextStyles.buttonText
-                        .copyWith(color: AppColors.white)),
-              ),
             ),
           ],
         ),

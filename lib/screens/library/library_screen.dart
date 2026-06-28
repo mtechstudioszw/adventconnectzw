@@ -7,7 +7,6 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import 'bible_tab.dart';
-import 'hymnal_tab.dart';
 import 'music_tab.dart';
 import 'pdf_viewer_screen.dart';
 
@@ -85,7 +84,13 @@ class _LibraryScreenState extends State<LibraryScreen>
           controller: _tabs,
           children: const [
             BibleTab(),
-            HymnalTab(),
+            // Hymnal = uploaded PDF hymnals (multiple supported). Opens in the
+            // in-app PDF reader, same as EGW Books.
+            _PdfLibraryTab(
+              kind: 'hymnal',
+              emptyIcon: Icons.queue_music_outlined,
+              emptyText: 'Hymnals will appear here once they are added.',
+            ),
             _PdfLibraryTab(
               kind: 'egw_book',
               emptyIcon: Icons.menu_book_outlined,

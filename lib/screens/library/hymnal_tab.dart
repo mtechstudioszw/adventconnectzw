@@ -27,6 +27,7 @@ class _HymnalTabState extends State<HymnalTab>
   List<Hymn> _shown = const [];
   bool _loading = true;
   bool _favOnly = false;
+  String _collection = HymnCollection.kristuMunzwiyo.key;
 
   @override
   bool get wantKeepAlive => true;
@@ -103,11 +104,64 @@ class _HymnalTabState extends State<HymnalTab>
         child: _empty(context),
       );
     }
-    final base = _favOnly
-        ? _shown.where((h) => HymnPrefs.favorites().contains(h.id)).toList()
-        : _shown;
+    final base = (_favOnly
+            ? _shown.where((h) => HymnPrefs.favorites().contains(h.id))
+            : _shown)
+        .where((h) => h.collection == _collection)
+        .toList();
     return Column(
       children: [
+        // Hymnal switcher: Kristu MuNzwiyo (Shona) ↔ SDA Hymnal (English).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: palette.inputFill,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                for (final c in HymnCollection.all)
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _collection = c.key),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _collection == c.key
+                              ? AppColors.primaryBlue
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(c.label,
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: _collection == c.key
+                                      ? AppColors.white
+                                      : palette.text,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                )),
+                            Text(c.subtitle,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: _collection == c.key
+                                      ? AppColors.white.withValues(alpha: 0.85)
+                                      : palette.textMuted,
+                                  fontSize: 10.5,
+                                )),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
           child: TextField(
@@ -178,7 +232,12 @@ class _HymnalTabState extends State<HymnalTab>
                       const SizedBox(height: 80),
                       Center(
                         child: Text(
-                            _favOnly ? 'No favorites yet.' : 'No hymns match.',
+                            _favOnly
+                                ? 'No favorites yet.'
+                                : _searchCtrl.text.trim().isEmpty
+                                    ? '${HymnCollection.fromKey(_collection).label} hymns will appear here once added.'
+                                    : 'No hymns match.',
+                            textAlign: TextAlign.center,
                             style: AppTextStyles.bodyMedium
                                 .copyWith(color: palette.textMuted)),
                       ),

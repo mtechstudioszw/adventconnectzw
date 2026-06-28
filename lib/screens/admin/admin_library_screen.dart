@@ -237,8 +237,7 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
       text: widget.hymn?.number?.toString() ?? '');
   late final _title = TextEditingController(text: widget.hymn?.title ?? '');
   late final _lyrics = TextEditingController(text: widget.hymn?.lyrics ?? '');
-  late final _language =
-      TextEditingController(text: widget.hymn?.language ?? 'Shona');
+  late String _collection = HymnCollection.fromKey(widget.hymn?.collection).key;
   bool _saving = false;
 
   @override
@@ -246,7 +245,6 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
     _number.dispose();
     _title.dispose();
     _lyrics.dispose();
-    _language.dispose();
     super.dispose();
   }
 
@@ -262,7 +260,11 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
         number: int.tryParse(_number.text.trim()),
         title: _title.text,
         lyrics: _lyrics.text,
-        language: _language.text,
+        collection: _collection,
+        // Language follows the collection.
+        language: _collection == HymnCollection.kristuMunzwiyo.key
+            ? 'Shona'
+            : 'English',
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -291,23 +293,58 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Which hymnal this hymn belongs to.
+            Text('HYMNAL',
+                style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2)),
+            const SizedBox(height: 8),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 110,
-                  child: _field(context,
-                      controller: _number,
-                      label: 'Number',
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _field(context,
-                      controller: _language, label: 'Language'),
-                ),
+                for (final c in HymnCollection.all) ...[
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _collection = c.key),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: _collection == c.key
+                              ? AppColors.primaryBlue
+                              : palette.inputFill,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _collection == c.key
+                                ? AppColors.primaryBlue
+                                : palette.divider,
+                          ),
+                        ),
+                        child: Text('${c.label} (${c.subtitle})',
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: _collection == c.key
+                                  ? AppColors.white
+                                  : palette.text,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12.5,
+                            )),
+                      ),
+                    ),
+                  ),
+                  if (c.key != HymnCollection.all.last.key)
+                    const SizedBox(width: 10),
+                ],
               ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 130,
+              child: _field(context,
+                  controller: _number,
+                  label: 'Number',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
             ),
             const SizedBox(height: 12),
             _field(context, controller: _title, label: 'Title'),

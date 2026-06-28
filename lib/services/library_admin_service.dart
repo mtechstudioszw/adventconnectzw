@@ -38,6 +38,7 @@ class LibraryAdminService {
     required String lyrics,
     String language = 'Shona',
     String? category,
+    String collection = 'kristu_munzwiyo',
     bool isPublished = true,
   }) async {
     final payload = <String, dynamic>{
@@ -45,6 +46,7 @@ class LibraryAdminService {
       'title': title.trim(),
       'lyrics': lyrics.trim(),
       'language': language.trim().isEmpty ? 'Shona' : language.trim(),
+      'collection': collection,
       'category': (category == null || category.trim().isEmpty)
           ? null
           : category.trim(),

@@ -17,7 +17,7 @@ class DirectoryService {
   }) async {
     var query = _client
         .from(_table)
-        .select('*, profiles(full_name, profile_photo_url), churches(name)')
+        .select('*, profiles(full_name, profile_photo_url, is_verified, is_verified_admin), churches(name)')
         .eq('is_visible', true);
 
     if (province != null && province.isNotEmpty) {
@@ -84,7 +84,7 @@ class DirectoryService {
       // profiles.
       var profilesQuery = _client
           .from('profiles')
-          .select('id, full_name, profile_photo_url, province, city, bio')
+          .select('id, full_name, profile_photo_url, province, city, bio, is_verified, is_verified_admin')
           .eq('is_discoverable', true)
           .eq('is_banned', false);
       if (user != null) {
@@ -104,6 +104,8 @@ class DirectoryService {
                 province: row['province'] as String?,
                 city: row['city'] as String?,
                 bio: row['bio'] as String?,
+                isVerified: row['is_verified'] == true ||
+                    row['is_verified_admin'] == true,
               ))
           .where((e) => (e.fullName ?? '').trim().isNotEmpty)
           .toList();
@@ -127,7 +129,7 @@ class DirectoryService {
     try {
       var q = _client
           .from('profiles')
-          .select('id, full_name, profile_photo_url, province, city, bio')
+          .select('id, full_name, profile_photo_url, province, city, bio, is_verified, is_verified_admin')
           .eq('is_discoverable', true)
           .eq('is_banned', false);
       if (user != null) q = q.neq('id', user.id);
@@ -144,6 +146,8 @@ class DirectoryService {
                 province: row['province'] as String?,
                 city: row['city'] as String?,
                 bio: row['bio'] as String?,
+                isVerified: row['is_verified'] == true ||
+                    row['is_verified_admin'] == true,
               ))
           .toList()
         ..sort(_byNameCi);
@@ -211,7 +215,7 @@ class DirectoryService {
       final user = _client.auth.currentUser;
       var q = _client
           .from('profiles')
-          .select('id, full_name, profile_photo_url, province, city, bio');
+          .select('id, full_name, profile_photo_url, province, city, bio, is_verified, is_verified_admin');
       filters.forEach((column, value) {
         q = q.eq(column, value);
       });
@@ -232,6 +236,8 @@ class DirectoryService {
                 province: row['province'] as String?,
                 city: row['city'] as String?,
                 bio: row['bio'] as String?,
+                isVerified: row['is_verified'] == true ||
+                    row['is_verified_admin'] == true,
               ))
           .toList();
     } catch (_) {

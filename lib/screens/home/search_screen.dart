@@ -1205,13 +1205,24 @@ class _PersonRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleSmall.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.titleSmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (person.isVerified) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.verified,
+                              color: AppColors.goldAccent, size: 15),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

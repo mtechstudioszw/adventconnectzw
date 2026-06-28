@@ -16,6 +16,7 @@ class MemberDirectoryEntry {
     this.fullName,
     this.profilePhotoUrl,
     this.createdAt,
+    this.isVerified = false,
   });
 
   final String id;
@@ -31,6 +32,9 @@ class MemberDirectoryEntry {
   final String? fullName;
   final String? profilePhotoUrl;
   final DateTime? createdAt;
+
+  /// Cosmetic gold tick — super admin or approved church admin (patch_134).
+  final bool isVerified;
 
   factory MemberDirectoryEntry.fromJson(Map<String, dynamic> json) {
     // The list endpoint joins the profiles row via Supabase's embed
@@ -56,6 +60,10 @@ class MemberDirectoryEntry {
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
+      isVerified: json['is_verified'] == true ||
+          json['is_verified_admin'] == true ||
+          profileMap?['is_verified'] == true ||
+          profileMap?['is_verified_admin'] == true,
     );
   }
 }

@@ -5,7 +5,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/app_bootstrap.dart';
 import 'config/router_config.dart';
@@ -19,6 +18,7 @@ import 'services/ads/app_open_ad_manager.dart';
 import 'services/connectivity_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
+import 'services/music_player_service.dart';
 import 'services/presence_service.dart';
 import 'services/push_service.dart';
 import 'services/theme_service.dart';
@@ -50,15 +50,11 @@ void main() async {
   // controls + playback that continues when the app is backgrounded). Cheap
   // local setup; safe to await. Fails open so a platform without the media
   // service (e.g. desktop) never blocks launch.
-  try {
-    await JustAudioBackground.init(
-      androidNotificationChannelId: 'zw.adventconnect.audio',
-      androidNotificationChannelName: 'Advent Connect Music',
-      androidNotificationOngoing: true,
-    );
-  } catch (_) {
-    // ignore — music just won't show a media notification on this platform.
-  }
+  // Initialise the audio media session ONCE, before any track loads. Routed
+  // through MusicPlayerService so the same idempotent future is reused if a
+  // track tries to play before this resolves (prevents the "_audioHandler not
+  // initialized" crash). Fails open — music falls back to foreground playback.
+  await MusicPlayerService.ensureBackgroundReady();
 
   // CacheService opens a Hive box (reads the WHOLE box into memory). If it
   // ever grew large that openBox blocked the first frame for many seconds

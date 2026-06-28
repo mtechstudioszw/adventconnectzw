@@ -18,6 +18,29 @@ class MusicPlayerService {
 
   final AudioPlayer player = AudioPlayer();
 
+  // just_audio_background must be init()'d exactly once, BEFORE any tagged
+  // AudioSource is loaded — otherwise loading a track throws
+  // "LateInitializationError: Field '_audioHandler' has not been initialized"
+  // (the "music won't play" crash). We run it through a single shared future
+  // so it's idempotent, and remember whether it succeeded. If it FAILS on a
+  // device (some OEMs reject the media service), we fall back to plain,
+  // tag-less playback so music still plays — just without the lock-screen
+  // notification.
+  static Future<void>? _bgInit;
+  static bool _bgReady = false;
+
+  static Future<void> ensureBackgroundReady() {
+    return _bgInit ??= JustAudioBackground.init(
+      androidNotificationChannelId: 'zw.adventconnect.audio',
+      androidNotificationChannelName: 'Advent Connect Music',
+      androidNotificationOngoing: true,
+    ).then((_) {
+      _bgReady = true;
+    }).catchError((_) {
+      _bgReady = false; // degrade to foreground-only playback
+    });
+  }
+
   /// The playlist currently loaded (the music tab's list), so the now-playing
   /// bar can resolve titles/art by index.
   List<LibraryItem> _queue = const [];
@@ -42,6 +65,10 @@ class MusicPlayerService {
     List<LibraryItem> items,
     int startIndex,
   ) async {
+    // Make sure the media session is up before loading a tagged source. Safe
+    // to await every time — it resolves instantly after the first run.
+    await ensureBackgroundReady();
+
     final signature = items.map((e) => e.id).join(',');
     if (signature == _loadedSignature) {
       await player.seek(Duration.zero, index: startIndex);
@@ -55,14 +82,19 @@ class MusicPlayerService {
         .map(
           (item) => AudioSource.uri(
             Uri.parse(item.fileUrl),
-            tag: MediaItem(
-              id: item.id,
-              title: item.title,
-              artist: item.author ?? 'Advent Connect ZW',
-              artUri: (item.coverUrl != null && item.coverUrl!.isNotEmpty)
-                  ? Uri.parse(item.coverUrl!)
-                  : null,
-            ),
+            // Only attach the MediaItem tag when the background handler is
+            // ready; a tag without it crashes playback. Tag-less still plays.
+            tag: _bgReady
+                ? MediaItem(
+                    id: item.id,
+                    title: item.title,
+                    artist: item.author ?? 'Advent Connect ZW',
+                    artUri:
+                        (item.coverUrl != null && item.coverUrl!.isNotEmpty)
+                            ? Uri.parse(item.coverUrl!)
+                            : null,
+                  )
+                : null,
           ),
         )
         .toList();

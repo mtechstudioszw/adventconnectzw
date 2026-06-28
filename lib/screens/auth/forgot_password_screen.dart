@@ -69,7 +69,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     setState(() => _sending = false);
 
     if (result.isSuccess) {
-      setState(() => _sent = true);
+      // We email a 6-digit CODE (not a link), so go straight to the in-app
+      // code-entry screen with the email — the user never leaves the app.
+      context.pushNamed('reset_password', extra: _emailController.text.trim());
     } else {
       setState(() => _error = result.errorMessage);
     }

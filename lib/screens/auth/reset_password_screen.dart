@@ -1,16 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'widgets/auth_hero.dart';
 
-/// Lands the user after they tap the password-recovery link from their
-/// email. Supabase's auth listener routes to this screen on the
-/// AuthChangeEvent.passwordRecovery event (wired in splash_screen).
+/// Sets a new password. Two modes:
+///  - OTP mode ([email] non-null): the user typed their email on the
+///    forgot-password screen, we emailed a 6-digit code; here they enter the
+///    code + a new password (no link, no leaving the app).
+///  - Session mode ([email] null): legacy path where a recovery deep-link
+///    already established a session and we just set the new password.
 class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key});
+  const ResetPasswordScreen({super.key, this.email});
+
+  final String? email;
+
+  bool get isOtpMode => email != null && email!.isNotEmpty;
 
   @override
   State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -19,8 +30,17 @@ class ResetPasswordScreen extends StatefulWidget {
 class _ResetPasswordScreenState extends State<ResetPasswordScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
+  bool _resending = false;
+
+  // Resend throttle: a code was just emailed when we arrived, so start a
+  // 60s cooldown before the user can request another (matches Supabase's
+  // smtp_max_frequency; the server also caps at 3 reset emails/hour).
+  static const _resendCooldownSeconds = 60;
+  int _resendIn = _resendCooldownSeconds;
+  Timer? _cooldownTimer;
 
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -43,11 +63,27 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
     _slide = Tween<double>(begin: 16, end: 0).animate(
       CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
     );
+    if (widget.isOtpMode) _startCooldown();
+  }
+
+  void _startCooldown() {
+    _cooldownTimer?.cancel();
+    setState(() => _resendIn = _resendCooldownSeconds);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _resendIn -= 1);
+      if (_resendIn <= 0) t.cancel();
+    });
   }
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     _entrance.dispose();
+    _codeController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
@@ -71,6 +107,28 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      if (widget.isOtpMode) {
+        // Verify the emailed 6-digit code, then set the new password.
+        final result = await AuthService.resetPasswordWithOtp(
+          email: widget.email!,
+          token: _codeController.text,
+          newPassword: _passwordController.text,
+        );
+        if (!mounted) return;
+        if (result.isSuccess) {
+          setState(() {
+            _saving = false;
+            _success = true;
+          });
+        } else {
+          setState(() {
+            _saving = false;
+            _error = result.errorMessage ?? 'Could not reset your password.';
+          });
+        }
+        return;
+      }
+      // Legacy session mode (recovery deep-link already signed us in).
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(password: _passwordController.text),
       );
@@ -94,11 +152,30 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
     }
   }
 
-  Future<void> _continueToHome() async {
-    // After a successful password reset the user is already in a session,
-    // so we drop them onto the home tab.
+  Future<void> _resendCode() async {
+    if (_resending || _resendIn > 0 || widget.email == null) return;
+    setState(() => _resending = true);
+    final result = await AuthService.sendPasswordReset(widget.email!);
     if (!mounted) return;
-    context.goNamed('home');
+    setState(() => _resending = false);
+    if (result.isSuccess) {
+      _startCooldown();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('New code sent to your email.')),
+      );
+    } else {
+      // Surfaces the server rate-limit message (max 3 reset emails/hour).
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.errorMessage ?? 'Could not resend.')),
+      );
+    }
+  }
+
+  Future<void> _continueAfterSuccess() async {
+    if (!mounted) return;
+    // OTP mode signs the user out, so send them to login to sign in with the
+    // new password. Session mode is still signed in → home.
+    context.goNamed(widget.isOtpMode ? 'login' : 'home');
   }
 
   @override
@@ -150,6 +227,75 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.isOtpMode) ...[
+                Text(
+                  'We emailed a 6-digit code to ${widget.email}. Enter it below '
+                  'with your new password.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '6-DIGIT CODE',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _codeController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
+                  validator: (v) => (v == null || v.trim().length < 6)
+                      ? 'Enter the 6-digit code'
+                      : null,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 8,
+                  ),
+                  decoration: _passwordDecoration(
+                    hint: '------',
+                    obscure: false,
+                    onToggle: () {},
+                  ).copyWith(
+                    counterText: '',
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.only(left: 14, right: 10),
+                      child: Icon(Icons.pin_outlined,
+                          color: AppColors.primaryBlue, size: 20),
+                    ),
+                    suffixIcon: null,
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed:
+                        (_resending || _resendIn > 0) ? null : _resendCode,
+                    child: Text(
+                        _resending
+                            ? 'Sending…'
+                            : _resendIn > 0
+                                ? 'Resend code in ${_resendIn}s'
+                                : 'Resend code',
+                        style: AppTextStyles.labelMedium.copyWith(
+                            color: _resendIn > 0
+                                ? AppColors.textMuted
+                                : AppColors.primaryBlue)),
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
               Text(
                 'NEW PASSWORD',
                 style: AppTextStyles.labelSmall.copyWith(
@@ -263,9 +409,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
             ),
             const SizedBox(height: 28),
             _GradientButton(
-              label: 'Continue',
+              label: widget.isOtpMode ? 'Sign in' : 'Continue',
               busy: false,
-              onTap: _continueToHome,
+              onTap: _continueAfterSuccess,
             ),
           ],
         ),

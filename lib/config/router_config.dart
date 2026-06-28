@@ -181,7 +181,11 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/reset-password',
       name: 'reset_password',
-      builder: (context, state) => const ResetPasswordScreen(),
+      // `extra` carries the email (String) for the in-app OTP reset flow;
+      // null falls back to the legacy session-based recovery.
+      builder: (context, state) => ResetPasswordScreen(
+        email: state.extra is String ? state.extra as String : null,
+      ),
     ),
     GoRoute(
       path: '/update-required',

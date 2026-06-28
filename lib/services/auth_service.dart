@@ -630,11 +630,43 @@ class AuthService {
       }
     }
     try {
-      await _client.auth.resetPasswordForEmail(
-        normalised,
-        redirectTo: _passwordResetRedirectUrl,
-      );
+      // No redirectTo — the recovery email is a 6-digit CODE (same as signup
+      // verification, which is known to deliver), verified in-app via
+      // [resetPasswordWithOtp]. A link/deep-link was unreliable on mobile.
+      await _client.auth.resetPasswordForEmail(normalised);
       await _recordResetAttempt(normalised);
+      return AuthResult.success(null);
+    } on AuthException catch (e) {
+      return AuthResult.failure(_friendlyAuthError(e.message));
+    } catch (e) {
+      return AuthResult.failure(_friendlyAuthError(e.toString()));
+    }
+  }
+
+  /// Complete an in-app password reset using the 6-digit code emailed by
+  /// [sendPasswordReset]. Verifying the recovery OTP establishes a short-lived
+  /// session, which we immediately use to set the new password, then sign out
+  /// so the user logs in fresh with it.
+  static Future<AuthResult> resetPasswordWithOtp({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    final normalised = email.trim().toLowerCase();
+    final code = token.trim();
+    if (code.length < 6) {
+      return AuthResult.failure('Enter the 6-digit code from your email.');
+    }
+    try {
+      await _client.auth.verifyOTP(
+        email: normalised,
+        token: code,
+        type: OtpType.recovery,
+      );
+      await _client.auth.updateUser(UserAttributes(password: newPassword));
+      // Sign out so they sign in cleanly with the new password (and so a
+      // shared/recovery session never lingers).
+      await _client.auth.signOut();
       return AuthResult.success(null);
     } on AuthException catch (e) {
       return AuthResult.failure(_friendlyAuthError(e.message));

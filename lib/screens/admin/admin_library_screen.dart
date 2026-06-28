@@ -422,6 +422,45 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
   void _reload() =>
       setState(() => _future = LibraryAdminService.fetchAllItems(widget.kind));
 
+  /// FAB tap → choose single (titled) upload or bulk (many files at once).
+  Future<void> _showAddMenu() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading:
+                  const Icon(Icons.upload_file, color: AppColors.primaryBlue),
+              title: const Text('Add one (with title)'),
+              onTap: () => Navigator.pop(ctx, 'one'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.library_add_outlined,
+                  color: AppColors.primaryBlue),
+              title: const Text('Add several files at once'),
+              subtitle: const Text('Titles are taken from the file names'),
+              onTap: () => Navigator.pop(ctx, 'bulk'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (choice == 'one') {
+      _add();
+    } else if (choice == 'bulk') {
+      _bulkAdd();
+    }
+  }
+
   Future<void> _add() async {
     final added = await showModalBottomSheet<bool>(
       context: context,
@@ -435,6 +474,69 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
       ),
     );
     if (added == true) _reload();
+  }
+
+  /// Bulk upload: pick many files, upload each with its file name as the title,
+  /// showing live progress. Best-effort per file — one failure doesn't abort
+  /// the batch.
+  Future<void> _bulkAdd() async {
+    final files =
+        await LibraryAdminService.pickFiles(extensions: widget.extensions);
+    if (files.isEmpty || !mounted) return;
+
+    final progress = ValueNotifier<int>(0);
+    var failed = 0;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ctx.palette.card,
+        content: ValueListenableBuilder<int>(
+          valueListenable: progress,
+          builder: (_, done, _) => Row(
+            children: [
+              const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.4, color: AppColors.primaryBlue)),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text('Uploading $done of ${files.length}…',
+                    style: AppTextStyles.bodyMedium),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    for (final f in files) {
+      try {
+        final dot = f.name.lastIndexOf('.');
+        final title = dot > 0 ? f.name.substring(0, dot) : f.name;
+        await LibraryAdminService.uploadAndAddItem(
+          kind: widget.kind,
+          title: title,
+          filePath: f.path,
+          fileName: f.name,
+        );
+      } catch (_) {
+        failed++;
+      }
+      progress.value = progress.value + 1;
+    }
+
+    progress.dispose();
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // close progress dialog
+    _reload();
+    final ok = files.length - failed;
+    _toast(
+        context,
+        failed == 0
+            ? 'Uploaded $ok file(s).'
+            : 'Uploaded $ok, $failed failed.');
   }
 
   Future<void> _delete(LibraryItem item) async {
@@ -456,7 +558,7 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: AppColors.white,
-        onPressed: _add,
+        onPressed: _showAddMenu,
         icon: const Icon(Icons.upload_file),
         label: Text(widget.addLabel),
       ),

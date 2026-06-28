@@ -99,6 +99,24 @@ class LibraryAdminService {
     return (path: path, name: picked.name);
   }
 
+  /// Pick MANY files at once for a bulk upload (e.g. all the EGW books). Returns
+  /// every picked file's path + name; empty if cancelled.
+  static Future<List<({String path, String name})>> pickFiles({
+    required List<String> extensions,
+  }) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: extensions,
+      allowMultiple: true,
+      withReadStream: false,
+    );
+    if (result == null) return const [];
+    return result.files
+        .where((f) => f.path != null)
+        .map((f) => (path: f.path!, name: f.name))
+        .toList();
+  }
+
   /// Upload the picked file into the `library` bucket, then insert the catalog
   /// row pointing at it. One step so the file + row land together (or not at
   /// all). [kind] is 'music' | 'egw_book' | 'hymnal'.

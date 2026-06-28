@@ -21,7 +21,7 @@ class AdminLibraryScreen extends StatefulWidget {
 
 class _AdminLibraryScreenState extends State<AdminLibraryScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 3, vsync: this);
+  late final TabController _tabs = TabController(length: 4, vsync: this);
 
   @override
   void dispose() {
@@ -51,6 +51,7 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
               AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w700),
           tabs: const [
             Tab(text: 'Hymns'),
+            Tab(text: 'Audio Bible'),
             Tab(text: 'Music'),
             Tab(text: 'EGW Books'),
           ],
@@ -62,6 +63,16 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
           controller: _tabs,
           children: const [
             _HymnsAdminTab(),
+            _UploadAdminTab(
+              kind: 'audio_bible',
+              extensions: ['mp3', 'm4a', 'aac', 'wav', 'ogg'],
+              addLabel: 'Add audio',
+              pickLabel: 'Pick audio file',
+              authorLabel: 'Book / reader (optional)',
+              emptyText:
+                  'No audio Bible yet. Tap “Add audio” to upload a chapter.',
+              leadingIcon: Icons.headset,
+            ),
             _UploadAdminTab(
               kind: 'music',
               extensions: ['mp3', 'm4a', 'aac', 'wav', 'ogg'],

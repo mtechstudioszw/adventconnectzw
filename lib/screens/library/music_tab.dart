@@ -14,7 +14,16 @@ import '../../widgets/cached_image.dart';
 /// [MusicPlayerService] (background playback + notification controls). A
 /// now-playing bar sits at the bottom and opens the full player.
 class MusicTab extends StatefulWidget {
-  const MusicTab({super.key});
+  const MusicTab({
+    super.key,
+    this.kind = 'music',
+    this.emptyText = 'Music will appear here once it\'s added.',
+  });
+
+  /// Library content kind to list — 'music' or 'audio_bible'. Both play
+  /// through the same shared [MusicPlayerService].
+  final String kind;
+  final String emptyText;
 
   @override
   State<MusicTab> createState() => _MusicTabState();
@@ -31,7 +40,7 @@ class _MusicTabState extends State<MusicTab>
   @override
   void initState() {
     super.initState();
-    _future = LibraryService.fetchItems('music');
+    _future = LibraryService.fetchItems(widget.kind);
   }
 
   @override
@@ -43,7 +52,7 @@ class _MusicTabState extends State<MusicTab>
           child: RefreshIndicator(
             color: AppColors.primaryBlue,
             onRefresh: () async {
-              final items = LibraryService.fetchItems('music');
+              final items = LibraryService.fetchItems(widget.kind);
               setState(() => _future = items);
               await items;
             },
@@ -185,7 +194,7 @@ class _MusicTabState extends State<MusicTab>
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Text('Music will appear here once it\'s added.',
+          child: Text(widget.emptyText,
               textAlign: TextAlign.center,
               style:
                   AppTextStyles.bodyMedium.copyWith(color: palette.textMuted)),

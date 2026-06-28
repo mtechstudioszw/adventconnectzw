@@ -33,6 +33,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   int _pages = 0;
   int _current = 0;
   late final int _resumePage;
+  bool _night = false;
+  PDFViewController? _ctrl;
 
   // Per-document last-page key, so reopening a book continues where you left
   // off (resume reading — a basic-feeling reader was the tester's complaint).
@@ -71,6 +73,53 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     }
   }
 
+  /// Jump to a page by number. Tapping the "Page X of Y" indicator opens this.
+  Future<void> _openJumpDialog() async {
+    if (_pages <= 0) return;
+    final palette = context.palette;
+    final controller = TextEditingController(text: '${_current + 1}');
+    final page = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.card,
+        title: Text('Go to page',
+            style: AppTextStyles.titleMedium
+                .copyWith(fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          style: AppTextStyles.bodyLarge.copyWith(color: palette.text),
+          decoration: InputDecoration(
+            hintText: '1 – $_pages',
+            filled: true,
+            fillColor: palette.inputFill,
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: palette.divider)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: palette.textMuted)),
+          ),
+          FilledButton(
+            style:
+                FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+            onPressed: () =>
+                Navigator.pop(ctx, int.tryParse(controller.text.trim())),
+            child: const Text('Go'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (page == null) return;
+    final target = page.clamp(1, _pages) - 1;
+    await _ctrl?.setPage(target);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -89,6 +138,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         foregroundColor: AppColors.white,
         actions: [
           IconButton(
+            tooltip: _night ? 'Day mode' : 'Night mode',
+            icon: Icon(_night
+                ? Icons.light_mode_outlined
+                : Icons.dark_mode_outlined),
+            onPressed: () => setState(() => _night = !_night),
+          ),
+          IconButton(
             tooltip: 'Download',
             icon: const Icon(Icons.download_outlined),
             onPressed: () async {
@@ -103,13 +159,26 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         ],
         bottom: _pages > 0
             ? PreferredSize(
-                preferredSize: const Size.fromHeight(22),
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    'Page ${_current + 1} of $_pages',
-                    style: AppTextStyles.labelSmall
-                        .copyWith(color: AppColors.white.withValues(alpha: 0.8)),
+                preferredSize: const Size.fromHeight(26),
+                child: GestureDetector(
+                  onTap: _openJumpDialog,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Page ${_current + 1} of $_pages',
+                          style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.white.withValues(alpha: 0.85)),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.unfold_more,
+                            size: 13,
+                            color: AppColors.white.withValues(alpha: 0.7)),
+                      ],
+                    ),
                   ),
                 ),
               )
@@ -129,8 +198,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   swipeHorizontal: false,
                   autoSpacing: true,
                   pageFling: true,
+                  nightMode: _night,
                   // Resume where the reader left off last time.
                   defaultPage: _resumePage,
+                  onViewCreated: (c) => _ctrl = c,
                   onRender: (pages) =>
                       setState(() => _pages = pages ?? 0),
                   onPageChanged: (page, _) {

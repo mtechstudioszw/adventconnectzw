@@ -693,6 +693,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                               'admin_user_insights',
                             ),
                           ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.quiz_outlined,
+                            label: 'Manage Quiz',
+                            onTap: () => context.pushNamed(
+                              'admin_quiz',
+                            ),
+                          ),
                         ],
                       ),
                     ],

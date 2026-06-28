@@ -87,6 +87,55 @@ class QuizService {
     return Random(seed);
   }
 
+  // ---- Admin (super admin only via RLS) ------------------------------------
+
+  /// Every question including unpublished, for the admin editor.
+  static Future<List<QuizQuestion>> fetchAllAdmin() async {
+    final rows = await _client
+        .from('quiz_questions')
+        .select()
+        .order('category', ascending: true)
+        .order('id', ascending: true);
+    return (rows as List)
+        .map((r) => QuizQuestion.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<void> saveQuestion({
+    String? id,
+    required String question,
+    required List<String> options,
+    required int correctIndex,
+    String? explanation,
+    String? reference,
+    required String category,
+    String difficulty = 'medium',
+  }) async {
+    final payload = <String, dynamic>{
+      'question': question.trim(),
+      'options': options,
+      'correct_index': correctIndex,
+      'explanation':
+          (explanation == null || explanation.trim().isEmpty) ? null : explanation.trim(),
+      'reference':
+          (reference == null || reference.trim().isEmpty) ? null : reference.trim(),
+      'category': category.trim().isEmpty ? 'General' : category.trim(),
+      'difficulty': difficulty,
+      'is_published': true,
+    };
+    if (id == null) {
+      await _client.from('quiz_questions').insert(payload);
+    } else {
+      await _client.from('quiz_questions').update(payload).eq('id', id);
+    }
+    invalidate();
+  }
+
+  static Future<void> deleteQuestion(String id) async {
+    await _client.from('quiz_questions').delete().eq('id', id);
+    invalidate();
+  }
+
   // ---- Streak (local) ------------------------------------------------------
 
   static String _todayKey() {

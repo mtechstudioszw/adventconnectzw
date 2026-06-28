@@ -36,11 +36,15 @@ class AdConfig {
       'ca-app-pub-9393348961586729/1250191425';
   static const String _realAndroidInterstitial =
       'ca-app-pub-9393348961586729/5924923285';
+  // Rewarded — opt-in "watch an ad for a bonus" (Bible Quiz hints). PASTE your
+  // real AdMob Rewarded ad-unit ID here; until then it uses Google's test unit.
+  static const String _realAndroidRewarded = '';
   // iOS (only needed once you publish an iOS build)
   static const String _realIosBanner = '';
   static const String _realIosNative = '';
   static const String _realIosAppOpen = '';
   static const String _realIosInterstitial = '';
+  static const String _realIosRewarded = '';
 
   // ----- Google's public TEST unit IDs (safe to ship in debug) -------
   static const String _testAndroidBanner =
@@ -59,6 +63,10 @@ class AdConfig {
       'ca-app-pub-3940256099942544/5575463023';
   static const String _testIosInterstitial =
       'ca-app-pub-3940256099942544/4411468910';
+  static const String _testAndroidRewarded =
+      'ca-app-pub-3940256099942544/5224354917';
+  static const String _testIosRewarded =
+      'ca-app-pub-3940256099942544/1712485313';
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
@@ -101,6 +109,13 @@ class AdConfig {
         realIos: _realIosInterstitial,
         testAndroid: _testAndroidInterstitial,
         testIos: _testIosInterstitial,
+      );
+
+  static String get rewardedUnitId => _pick(
+        realAndroid: _realAndroidRewarded,
+        realIos: _realIosRewarded,
+        testAndroid: _testAndroidRewarded,
+        testIos: _testIosRewarded,
       );
 
   /// True when we're still on a placeholder/test id for the current

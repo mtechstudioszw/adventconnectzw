@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/quiz_question_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
+import '../../services/ads/rewarded_ad_manager.dart';
 import '../../services/quiz_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -31,8 +32,44 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
   int _score = 0;
   int? _chosen; // null until the user answers the current question
   bool _finished = false;
+  bool _hintUsed = false;
+  final Set<int> _hidden = {}; // options removed by the 50/50 hint
+  bool _hintBusy = false;
 
   QuizQuestion get _q => widget.questions[_index];
+
+  @override
+  void initState() {
+    super.initState();
+    // Preload an opt-in rewarded ad for the 50/50 hint.
+    RewardedAdManager.loadAd();
+  }
+
+  /// Opt-in rewarded bonus: watch a short ad to remove two wrong answers.
+  Future<void> _useHint() async {
+    if (_hintUsed || _chosen != null || _hintBusy) return;
+    if (!RewardedAdManager.isReady) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hint available right now.')),
+      );
+      RewardedAdManager.loadAd();
+      return;
+    }
+    setState(() => _hintBusy = true);
+    final earned = await RewardedAdManager.showForReward();
+    if (!mounted) return;
+    setState(() {
+      _hintBusy = false;
+      if (earned) {
+        _hintUsed = true;
+        final wrong = [
+          for (var i = 0; i < _q.options.length; i++)
+            if (i != _q.correctIndex) i,
+        ]..shuffle();
+        _hidden.addAll(wrong.take(2)); // remove two wrong options
+      }
+    });
+  }
 
   void _answer(int i) {
     if (_chosen != null) return; // already answered
@@ -47,6 +84,8 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
       setState(() {
         _index++;
         _chosen = null;
+        _hintUsed = false;
+        _hidden.clear();
       });
     } else {
       if (widget.isDaily) await QuizService.recordDailyComplete();
@@ -121,17 +160,38 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
               Text(_q.question,
                   style: AppTextStyles.titleLarge.copyWith(
                       fontWeight: FontWeight.w700, height: 1.35)),
-              const SizedBox(height: 18),
-              for (var i = 0; i < _q.options.length; i++)
-                _OptionTile(
-                  label: _q.options[i],
-                  state: !answered
-                      ? _OptState.idle
-                      : i == _q.correctIndex
-                          ? _OptState.correct
-                          : (i == _chosen ? _OptState.wrong : _OptState.dim),
-                  onTap: () => _answer(i),
+              // 50/50 hint (opt-in rewarded ad) — only before answering.
+              if (!answered && !_hintUsed) ...[
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _hintBusy ? null : _useHint,
+                    icon: _hintBusy
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.primaryBlue))
+                        : const Icon(Icons.lightbulb_outline, size: 18),
+                    label: const Text('50/50 hint · watch ad'),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primaryBlue),
+                  ),
                 ),
+                const SizedBox(height: 4),
+              ] else
+                const SizedBox(height: 18),
+              for (var i = 0; i < _q.options.length; i++)
+                if (!_hidden.contains(i))
+                  _OptionTile(
+                    label: _q.options[i],
+                    state: !answered
+                        ? _OptState.idle
+                        : i == _q.correctIndex
+                            ? _OptState.correct
+                            : (i == _chosen ? _OptState.wrong : _OptState.dim),
+                    onTap: () => _answer(i),
+                  ),
               if (answered && (_q.explanation ?? '').isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Container(

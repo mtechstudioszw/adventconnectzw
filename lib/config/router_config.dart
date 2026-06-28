@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
+import '../screens/admin/admin_quiz_screen.dart';
 import '../screens/admin/church_members_screen.dart';
 import '../screens/admin/user_insights_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
@@ -660,6 +661,12 @@ final GoRouter appRouter = GoRouter(
           path: 'insights',
           name: 'admin_user_insights',
           builder: (context, state) => const UserInsightsScreen(),
+        ),
+        GoRoute(
+          // Super-admin Bible Quiz question manager (patch_147).
+          path: 'quiz',
+          name: 'admin_quiz',
+          builder: (context, state) => const AdminQuizScreen(),
         ),
       ],
     ),

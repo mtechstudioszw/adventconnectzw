@@ -1,0 +1,28 @@
+-- patch_146: daily auto-fetch of SDA news (#6).
+-- Applied LIVE via the Management API (the real secret/anon are not committed).
+-- The fetch-advent-news edge function pulls the Adventist Review + Adventist
+-- World RSS feeds and inserts new items (auto-approved via patch_145).
+--
+-- Secret: a CRON_SECRET edge-function secret gates the function; the cron job
+-- passes it as the x-cron-secret header. Rotate by re-setting the secret +
+-- re-running cron.schedule with the new value.
+--
+-- Equivalent of what was scheduled (placeholders for the committed copy):
+--
+--   select cron.schedule(
+--     'fetch-advent-news-daily',
+--     '0 6 * * *',                         -- daily 06:00 UTC
+--     $cron$
+--     select net.http_post(
+--       url := 'https://<ref>.supabase.co/functions/v1/fetch-advent-news',
+--       headers := jsonb_build_object(
+--         'Content-Type','application/json',
+--         'Authorization','Bearer <ANON_KEY>',
+--         'x-cron-secret','<CRON_SECRET>'
+--       ),
+--       body := '{}'::jsonb
+--     );
+--     $cron$
+--   );
+--
+-- Unschedule: select cron.unschedule('fetch-advent-news-daily');

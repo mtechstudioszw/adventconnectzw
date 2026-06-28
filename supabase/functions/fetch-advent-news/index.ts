@@ -1,0 +1,145 @@
+// =====================================================================
+//  Edge Function: fetch-advent-news
+//
+//  Pulls official SDA news RSS feeds and inserts new items into
+//  public.advent_news as APPROVED (auto-published to the News tab).
+//
+//  Source: adventist.news has no public RSS feed (it's an Astro SPA), so
+//  we use the official Adventist Review + Adventist World feeds (same
+//  SDA news). Add/remove feeds in FEEDS below.
+//
+//  Scheduled daily via pg_cron (see patch_145). Idempotent: items are
+//  de-duplicated by source_url, so re-running never creates duplicates.
+//
+//  Optional CRON_SECRET env: when set, callers must pass it as
+//  ?secret=... or x-cron-secret header (the cron job does).
+// =====================================================================
+// @ts-nocheck
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const FEEDS = [
+  { url: "https://adventistreview.org/feed/", label: "Adventist Review" },
+  { url: "https://www.adventistworld.org/feed/", label: "Adventist World" },
+];
+
+const PER_FEED = 8; // newest N items per feed per run
+
+function uncdata(s: string): string {
+  return (s || "").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
+}
+
+function decodeEntities(s: string): string {
+  return (s || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&nbsp;/g, " ");
+}
+
+function stripHtml(s: string): string {
+  return decodeEntities((s || "").replace(/<[^>]*>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tag(block: string, name: string): string {
+  const m = block.match(
+    new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"),
+  );
+  return m ? uncdata(m[1]) : "";
+}
+
+function parseItems(xml: string, label: string) {
+  const out: Array<Record<string, string | null>> = [];
+  const items = xml.match(/<item\b[\s\S]*?<\/item>/gi) || [];
+  for (const it of items) {
+    const title = stripHtml(tag(it, "title"));
+    let link = uncdata(tag(it, "link"));
+    if (!link) link = it.match(/<link[^>]*href="([^"]+)"/i)?.[1] ?? "";
+    const descRaw = tag(it, "description");
+    const content = tag(it, "content:encoded");
+    const img =
+      it.match(/<media:content[^>]*url="([^"]+)"/i)?.[1] ??
+      it.match(/<media:thumbnail[^>]*url="([^"]+)"/i)?.[1] ??
+      it.match(/<enclosure[^>]*url="([^"]+)"/i)?.[1] ??
+      content.match(/<img[^>]*src="([^"]+)"/i)?.[1] ??
+      descRaw.match(/<img[^>]*src="([^"]+)"/i)?.[1] ??
+      null;
+    const pubDate = uncdata(tag(it, "pubDate"));
+    const summary = stripHtml(descRaw).slice(0, 400);
+    if (title && link) {
+      out.push({ title, link, summary, img, pubDate, label });
+    }
+  }
+  return out;
+}
+
+Deno.serve(async (req) => {
+  const secret = Deno.env.get("CRON_SECRET");
+  if (secret) {
+    const url = new URL(req.url);
+    const got =
+      url.searchParams.get("secret") || req.headers.get("x-cron-secret");
+    if (got !== secret) {
+      return new Response("forbidden", { status: 403 });
+    }
+  }
+
+  const sb = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  let inserted = 0;
+  const errors: string[] = [];
+
+  for (const feed of FEEDS) {
+    try {
+      const res = await fetch(feed.url, {
+        headers: { "User-Agent": "Mozilla/5.0 (AdventConnectBot)" },
+      });
+      if (!res.ok) {
+        errors.push(`${feed.label}: HTTP ${res.status}`);
+        continue;
+      }
+      const xml = await res.text();
+      const items = parseItems(xml, feed.label).slice(0, PER_FEED);
+      for (const item of items) {
+        const { data: existing } = await sb
+          .from("advent_news")
+          .select("id")
+          .eq("source_url", item.link)
+          .maybeSingle();
+        if (existing) continue;
+
+        let publishedAt = new Date().toISOString();
+        if (item.pubDate) {
+          const d = new Date(item.pubDate as string);
+          if (!isNaN(d.getTime())) publishedAt = d.toISOString();
+        }
+
+        const { error } = await sb.from("advent_news").insert({
+          title: (item.title as string).slice(0, 200),
+          summary: (item.summary as string) || (item.title as string),
+          source_url: item.link,
+          source_label: item.label,
+          cover_photo_url: item.img,
+          category: "general",
+          status: "approved", // auto-publish
+          published_at: publishedAt,
+        });
+        if (!error) inserted++;
+        else errors.push(`${feed.label}: ${error.message}`);
+      }
+    } catch (e) {
+      errors.push(`${feed.label}: ${(e as Error).message}`);
+    }
+  }
+
+  return new Response(JSON.stringify({ inserted, errors }), {
+    headers: { "Content-Type": "application/json" },
+  });
+});

@@ -39,15 +39,19 @@ class ProductCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Stack(
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 1,
-                      child: _ProductImage(url: product.firstImage),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
+                // Image fills the space LEFT OVER after the text block, so the
+                // card never overflows its grid cell (the old AspectRatio(1)
+                // square + fixed text was taller than the cell → bottom
+                // overflow, worse at large font scales). BoxFit.cover keeps it
+                // looking square-ish without forcing a fixed height.
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _ProductImage(url: product.firstImage),
+                      Positioned(
+                        top: 8,
+                        left: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -69,6 +73,7 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),

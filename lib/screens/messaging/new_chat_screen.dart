@@ -74,10 +74,15 @@ class _NewChatScreenState extends State<NewChatScreen> {
 
   Future<void> _loadExploreSuggestions() async {
     try {
-      final list = await DirectoryService.fetchSuggestedMembers(limit: 40);
+      // Everyone on Advent, A→Z, minus the people you're already friends with
+      // (and yourself). This is the "find friends" list the tester wanted —
+      // all non-friends alphabetically, not a handful of suggestions.
+      final all = await DirectoryService.fetchAllDiscoverableProfiles();
       if (!mounted || !_explore) return;
+      final friendIds = _friends.map((f) => f.userId).toSet();
       setState(() {
-        _results = list;
+        _results =
+            all.where((m) => !friendIds.contains(m.userId)).toList();
         _loading = false;
       });
     } catch (_) {
@@ -118,6 +123,62 @@ class _NewChatScreenState extends State<NewChatScreen> {
         if (mounted) setState(() => _loading = false);
       }
     });
+  }
+
+  /// Tapping a person no longer jumps straight into a chat. Ask first:
+  /// message them, or view their profile (tester request).
+  Future<void> _onTapUser(MemberDirectoryEntry m) async {
+    final name = (m.fullName ?? '').trim().isEmpty ? 'Member' : m.fullName!.trim();
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+              child: Row(
+                children: [
+                  _Avatar(name: name, photoUrl: m.profilePhotoUrl),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleSmall
+                            .copyWith(fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.chat_bubble_outline, color: AppColors.primaryBlue),
+              title: const Text('Message'),
+              onTap: () => Navigator.pop(ctx, 'chat'),
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.person_outline, color: AppColors.primaryBlue),
+              title: const Text('View profile'),
+              onTap: () => Navigator.pop(ctx, 'profile'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'chat') {
+      _openChatWith(m);
+    } else if (choice == 'profile') {
+      context.pushNamed('user_profile', pathParameters: {'userId': m.userId});
+    }
   }
 
   Future<void> _openChatWith(MemberDirectoryEntry m) async {
@@ -238,7 +299,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
                                         color: context.palette.textMuted,
                                       ),
                                     ),
-                              onTap: () => _openChatWith(m),
+                              onTap: () => _onTapUser(m),
                             );
                           },
                         ),

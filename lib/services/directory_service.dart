@@ -139,6 +139,43 @@ class DirectoryService {
     }
   }
 
+  /// Every discoverable member on Advent, A→Z. RLS already restricts the
+  /// `profiles` table to discoverable (or self) rows, so this returns exactly
+  /// the people who can be messaged. The caller filters out existing friends
+  /// + self. Used by New chat → "Find people" so the user can browse EVERYONE
+  /// who isn't already a friend, alphabetically (not just a few suggestions).
+  static Future<List<MemberDirectoryEntry>> fetchAllDiscoverableProfiles({
+    int limit = 500,
+  }) async {
+    final user = _client.auth.currentUser;
+    try {
+      var q = _client
+          .from('profiles')
+          .select('id, full_name, profile_photo_url, province, city, bio')
+          .eq('is_discoverable', true)
+          .eq('is_banned', false);
+      if (user != null) q = q.neq('id', user.id);
+      final response =
+          await q.order('full_name', ascending: true).limit(limit);
+      return (response as List)
+          .map((row) => row as Map<String, dynamic>)
+          .map((row) => MemberDirectoryEntry(
+                id: row['id'].toString(),
+                userId: row['id'].toString(),
+                isVisible: true,
+                fullName: row['full_name'] as String?,
+                profilePhotoUrl: row['profile_photo_url'] as String?,
+                province: row['province'] as String?,
+                city: row['city'] as String?,
+                bio: row['bio'] as String?,
+              ))
+          .toList()
+        ..sort(_byNameCi);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Case-insensitive A→Z comparator on full name; blank names sort last.
   static int _byNameCi(MemberDirectoryEntry a, MemberDirectoryEntry b) {
     final an = (a.fullName ?? '').trim().toLowerCase();

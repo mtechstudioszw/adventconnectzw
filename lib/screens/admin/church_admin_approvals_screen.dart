@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -25,11 +27,22 @@ class _ChurchAdminApprovalsScreenState
   String? _error;
   List<PendingChurchAdmin> _items = const [];
   final _busy = <int>{};
+  Timer? _poll;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // New claims arrive at any time — poll quietly so the queue updates within
+    // ~15s instead of only on a manual pull-to-refresh.
+    _poll = Timer.periodic(
+        const Duration(seconds: 15), (_) => _silentReload());
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -50,6 +63,20 @@ class _ChurchAdminApprovalsScreenState
         _error = 'Could not load requests.';
         _loading = false;
       });
+    }
+  }
+
+  /// Refresh in the background without the full-screen spinner (used by the
+  /// poll), so the list updates without a visible flash. Skips while an
+  /// approve/reject is in flight to avoid clobbering the optimistic removal.
+  Future<void> _silentReload() async {
+    if (!mounted || _busy.isNotEmpty) return;
+    try {
+      final items = await ChurchService.listPendingChurchAdmins();
+      if (!mounted) return;
+      setState(() => _items = items);
+    } catch (_) {
+      // ignore — keep showing what we have; the next tick retries.
     }
   }
 

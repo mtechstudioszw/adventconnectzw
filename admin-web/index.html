@@ -153,6 +153,7 @@
         <a data-tab="jobs">💼 Jobs <span class="badge" id="b-jobs" style="display:none"></span></a>
         <a data-tab="churches">⛪ Church claims <span class="badge" id="b-churches" style="display:none"></span></a>
         <a data-tab="feedback">💬 Feedback <span class="badge" id="b-feedback" style="display:none"></span></a>
+        <a data-tab="insights">📈 Insights</a>
         <a data-tab="users">👤 Users</a>
         <a data-tab="broadcast">📣 Broadcast</a>
       </nav>
@@ -274,7 +275,7 @@ $("nav").addEventListener("click", (e) => {
 function switchTab(tab) {
   document.querySelectorAll("#nav a").forEach(a =>
     a.classList.toggle("active", a.dataset.tab === tab));
-  ({ overview, sellers, reports, news, events, jobs, churches, feedback, users, broadcast }[tab] || overview)();
+  ({ overview, sellers, reports, news, events, jobs, churches, feedback, insights, users, broadcast }[tab] || overview)();
 }
 
 async function refreshBadges() {
@@ -569,6 +570,37 @@ async function churches() {
       catch (e) { alert(e.message); }
     });
   } catch (err) { view().innerHTML = head("Church claims","") + errBox(err); }
+}
+
+async function insights() {
+  view().innerHTML = head("User insights", "How members found Advent Connect — from the first-run signup survey.") + loading();
+  try {
+    const summary = await rpc("admin_survey_summary");
+    const { data: recent } = await sb
+      .from("signup_surveys")
+      .select("source, answers, created_at, profiles(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    const total = (summary || []).reduce((s, r) => s + Number(r.total || 0), 0);
+    if (!total) { view().innerHTML = head("User insights", "How members found Advent Connect.") + empty("No survey responses yet."); return; }
+    const bars = (summary || []).map(r => {
+      const pct = total ? Math.round((Number(r.total) / total) * 100) : 0;
+      return `<div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <b>${esc(r.source)}</b><span class="meta">${r.total} (${pct}%)</span></div>
+        <div style="height:8px;background:var(--border);border-radius:6px;overflow:hidden">
+          <div style="height:100%;width:${Math.max(pct,2)}%;background:var(--blue)"></div></div>
+      </div>`;
+    }).join("");
+    const list = (recent || []).map(r => {
+      const hope = r.answers && r.answers.hoping_for ? `<div class="meta">“${esc(r.answers.hoping_for)}”</div>` : "";
+      const name = (r.profiles && r.profiles.full_name) ? r.profiles.full_name : "Member";
+      return `<tr><td><b>${esc(name)}</b>${hope}</td><td>${esc(r.source || "Not specified")}</td><td class="meta">${fmtDate(r.created_at)}</td></tr>`;
+    }).join("");
+    view().innerHTML = head("User insights", `${total} response(s)`) +
+      `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px">${bars}</div>` +
+      `<table><thead><tr><th>Member</th><th>Source</th><th>When</th></tr></thead><tbody>${list}</tbody></table>`;
+  } catch (err) { view().innerHTML = head("User insights","") + errBox(err); }
 }
 
 async function users() {

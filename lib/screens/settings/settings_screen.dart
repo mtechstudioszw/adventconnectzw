@@ -685,6 +685,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                               'admin_library',
                             ),
                           ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.insights_outlined,
+                            label: 'User insights',
+                            onTap: () => context.pushNamed(
+                              'admin_user_insights',
+                            ),
+                          ),
                         ],
                       ),
                     ],

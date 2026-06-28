@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
+import '../screens/admin/user_insights_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
 import '../screens/admin/church_admin_approvals_screen.dart';
 import '../screens/admin/seller_approvals_screen.dart';
@@ -628,6 +629,12 @@ final GoRouter appRouter = GoRouter(
           path: 'library',
           name: 'admin_library',
           builder: (context, state) => const AdminLibraryScreen(),
+        ),
+        GoRoute(
+          // Super-admin signup-survey insights (patch_136).
+          path: 'insights',
+          name: 'admin_user_insights',
+          builder: (context, state) => const UserInsightsScreen(),
         ),
       ],
     ),

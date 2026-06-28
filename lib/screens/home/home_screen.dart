@@ -46,6 +46,7 @@ import '../../widgets/ads/native_ad_card.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_sheet.dart';
+import '../../widgets/home/signup_survey_sheet.dart';
 import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
@@ -148,6 +149,12 @@ class _HomeScreenState extends State<HomeScreen>
     // once per session (the splash already hard-blocks once grace expires).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _maybeShowUpdateNudge();
+    });
+    // First-run welcome survey ("how did you hear about us"). One-shot, gated
+    // locally; shown a moment after home settles so it doesn't fight the
+    // update nudge for the screen.
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) SignupSurveySheet.maybeShow(context);
     });
     // Once home has settled, gently ask long-term users to rate the app.
     // Gated + best-effort; Google's native sheet handles "already rated".

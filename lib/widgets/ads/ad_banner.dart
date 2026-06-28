@@ -49,8 +49,12 @@ class _AdBannerState extends State<AdBanner> {
     }
 
     final width = MediaQuery.of(context).size.width.truncate();
-    final size =
-        await AdSize.getLargeAnchoredAdaptiveBannerAdSizeWithOrientation(
+    // Use the STANDARD anchored adaptive banner (~50dp), not the LARGE one
+    // (~90–100dp). The large banner sat right above the action buttons on the
+    // product / event / church detail screens, so users kept mis-tapping it
+    // and getting launched into a full-screen ad they couldn't skip. The
+    // smaller banner is far less intrusive and harder to hit by accident.
+    final size = await AdSize.getAnchoredAdaptiveBannerAdSize(
       Orientation.portrait,
       width,
     );

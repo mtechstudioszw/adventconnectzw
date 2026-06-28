@@ -11,12 +11,12 @@ import 'story_text_style.dart';
 
 /// Opens the "write a post" bottom sheet. Resolves to the freshly
 /// created Post or null if the user cancelled.
-Future<Post?> showPostComposer(BuildContext context) {
+Future<Post?> showPostComposer(BuildContext context, {String? churchId}) {
   return showModalBottomSheet<Post>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => const _PostComposer(),
+    builder: (ctx) => _PostComposer(churchId: churchId),
   );
 }
 
@@ -35,7 +35,11 @@ Future<Story?> showStoryComposer(BuildContext context) {
 //  Post composer
 // ===================================================================
 class _PostComposer extends StatefulWidget {
-  const _PostComposer();
+  const _PostComposer({this.churchId});
+
+  /// When set, the post is published as a church update (shows the church's
+  /// name + gold tick in the feed).
+  final String? churchId;
 
   @override
   State<_PostComposer> createState() => _PostComposerState();
@@ -87,6 +91,7 @@ class _PostComposerState extends State<_PostComposer> {
         body: body.isEmpty ? null : body,
         imageUrl: _imageUrl,
         visibility: _visibility,
+        churchId: widget.churchId,
       );
       if (!mounted) return;
       Navigator.of(context).pop(post);

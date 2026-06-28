@@ -10,6 +10,9 @@ class Post {
     required this.createdAt,
     this.authorPhotoUrl,
     this.authorIsVerified = false,
+    this.churchId,
+    this.churchName,
+    this.churchPhotoUrl,
     this.body,
     this.imageUrl,
     this.visibility = PostVisibility.public,
@@ -25,6 +28,17 @@ class Post {
 
   /// Cosmetic gold tick (super admin / approved church admin, patch_134).
   final bool authorIsVerified;
+
+  /// When set, this post is branded as a church update (patch_141) — shows the
+  /// church's name + gold tick instead of the individual author.
+  final String? churchId;
+  final String? churchName;
+
+  /// The church's logo (profile photo). Replaces the church icon on church
+  /// posts once an admin uploads it.
+  final String? churchPhotoUrl;
+
+  bool get isChurchPost => (churchName ?? '').trim().isNotEmpty;
   final String? body;
   final String? imageUrl;
   final PostVisibility visibility;
@@ -44,6 +58,9 @@ class Post {
       authorName: authorName,
       authorPhotoUrl: authorPhotoUrl,
       authorIsVerified: authorIsVerified,
+      churchId: churchId,
+      churchName: churchName,
+      churchPhotoUrl: churchPhotoUrl,
       body: body,
       imageUrl: imageUrl,
       visibility: visibility,
@@ -100,6 +117,14 @@ class Post {
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
       authorIsVerified: authorMap?['is_verified'] == true ||
           authorMap?['is_verified_admin'] == true,
+      churchId: json['church_id']?.toString(),
+      churchName: (json['churches'] is Map<String, dynamic>)
+          ? (json['churches'] as Map<String, dynamic>)['name'] as String?
+          : json['church_name'] as String?,
+      churchPhotoUrl: (json['churches'] is Map<String, dynamic>)
+          ? (json['churches'] as Map<String, dynamic>)['profile_photo_url']
+              as String?
+          : json['church_photo_url'] as String?,
       body: json['body'] as String?,
       imageUrl: json['image_url'] as String?,
       visibility: visibilityStr == 'friends_only'
@@ -125,6 +150,8 @@ class Post {
           'profile_photo_url': authorPhotoUrl,
           'is_verified_admin': authorIsVerified,
         },
+        'church_id': churchId,
+        if (churchName != null) 'church_name': churchName,
         'body': body,
         'image_url': imageUrl,
         'visibility': visibility == PostVisibility.friendsOnly

@@ -6,6 +6,7 @@ import '../../config/share_config.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/home/composer_sheet.dart';
 import '../../widgets/screen_shell.dart';
 
 /// Church admin dashboard. The post-an-announcement composer lives
@@ -46,6 +47,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       'Download it here: $appDownloadUrl',
       subject: 'Join us on Advent Connect ZW',
     );
+  }
+
+  /// Post a church-BRANDED update to the general home feed (shows the church
+  /// name + gold tick to everyone, members or not). patch_141 validates that
+  /// only this church's admin can attribute to it.
+  Future<void> _postUpdate() async {
+    final post = await showPostComposer(context, churchId: widget.role.churchId);
+    if (post != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text('Posted to the feed as ${widget.role.churchName}.',
+              style:
+                  AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+        ),
+      );
+    }
   }
 
   Future<void> _load() async {
@@ -130,6 +148,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     const SizedBox(height: 16),
                     _QuickActionsCard(
                       onPost: _openComposer,
+                      onPostUpdate: _postUpdate,
                       onMembers: () => context.pushNamed(
                         'church_members',
                         extra: widget.role,
@@ -268,6 +287,7 @@ class _StatDivider extends StatelessWidget {
 class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
     required this.onPost,
+    required this.onPostUpdate,
     required this.onMembers,
     required this.onPostEvent,
     required this.onManageInfo,
@@ -275,6 +295,7 @@ class _QuickActionsCard extends StatelessWidget {
   });
 
   final VoidCallback onPost;
+  final VoidCallback onPostUpdate;
   final VoidCallback onMembers;
   final VoidCallback onPostEvent;
   final VoidCallback onManageInfo;
@@ -304,9 +325,16 @@ class _QuickActionsCard extends StatelessWidget {
           ),
           const _Divider(),
           _Row(
+            icon: Icons.dynamic_feed_outlined,
+            title: 'Share an update',
+            subtitle: 'Post to the home feed as your church (everyone sees it).',
+            onTap: onPostUpdate,
+          ),
+          const _Divider(),
+          _Row(
             icon: Icons.event_outlined,
             title: 'Post an event',
-            subtitle: 'Add to the events feed.',
+            subtitle: 'Goes live instantly, featured on Home.',
             onTap: onPostEvent,
           ),
           const _Divider(),

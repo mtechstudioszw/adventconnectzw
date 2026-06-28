@@ -79,6 +79,31 @@ class _FeaturedChurchEventsState extends State<FeaturedChurchEvents> {
   }
 }
 
+/// Small round church logo for the featured card. Falls back to a church
+/// glyph until an admin uploads the church's photo.
+class _ChurchLogo extends StatelessWidget {
+  const _ChurchLogo({this.photoUrl});
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
+    return Container(
+      width: 20,
+      height: 20,
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: AppColors.primaryGradient,
+      ),
+      child: hasPhoto
+          ? CachedImage(photoUrl!, fit: BoxFit.cover, width: 20, height: 20)
+          : const Icon(Icons.church, color: AppColors.white, size: 12),
+    );
+  }
+}
+
 class _Card extends StatelessWidget {
   const _Card({required this.event, required this.dateLabel});
   final Event event;
@@ -138,9 +163,11 @@ class _Card extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Church name + gold tick (official).
+                    // Church logo (once uploaded) + name + gold tick (official).
                     Row(
                       children: [
+                        _ChurchLogo(photoUrl: event.churchPhotoUrl),
+                        const SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             (event.churchName ?? 'Church').trim(),

@@ -92,10 +92,12 @@ class PostCard extends StatelessWidget {
             child: _StoryRing(
               hasStory: hasStory,
               viewed: storyViewed,
-              child: _Avatar(
-                name: post.authorName,
-                photoUrl: post.authorPhotoUrl,
-              ),
+              child: post.isChurchPost
+                  ? _ChurchAvatar(photoUrl: post.churchPhotoUrl)
+                  : _Avatar(
+                      name: post.authorName,
+                      photoUrl: post.authorPhotoUrl,
+                    ),
             ),
           ),
           const SizedBox(width: 10),
@@ -110,7 +112,10 @@ class PostCard extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          post.authorName,
+                          // Church-branded posts show the CHURCH name.
+                          post.isChurchPost
+                              ? post.churchName!.trim()
+                              : post.authorName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.titleMedium.copyWith(
@@ -119,7 +124,8 @@ class PostCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (post.authorIsVerified) ...[
+                      // Gold tick for church posts (always) or verified authors.
+                      if (post.isChurchPost || post.authorIsVerified) ...[
                         const SizedBox(width: 4),
                         const Icon(Icons.verified,
                             size: 14, color: AppColors.goldAccent),
@@ -136,7 +142,10 @@ class PostCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    _formatTimeAgo(post.createdAt),
+                    // For church posts, show who posted it under the time.
+                    post.isChurchPost
+                        ? '${_formatTimeAgo(post.createdAt)} · by ${post.authorName}'
+                        : _formatTimeAgo(post.createdAt),
                     style: AppTextStyles.labelSmall.copyWith(
                       color: context.palette.textMuted,
                       fontSize: 11.5,
@@ -342,6 +351,32 @@ class _StoryRing extends StatelessWidget {
         ),
         child: child,
       ),
+    );
+  }
+}
+
+/// Avatar for a church-branded post. Shows the church's uploaded logo once
+/// it's set; until then a church glyph on the brand gradient. Swaps to the
+/// real photo automatically the moment an admin uploads one.
+class _ChurchAvatar extends StatelessWidget {
+  const _ChurchAvatar({this.photoUrl});
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
+    return Container(
+      width: 44,
+      height: 44,
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: AppColors.primaryGradient,
+      ),
+      child: hasPhoto
+          ? CachedImage(photoUrl!, fit: BoxFit.cover, width: 44, height: 44)
+          : const Icon(Icons.church, color: AppColors.white, size: 22),
     );
   }
 }

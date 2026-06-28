@@ -11,6 +11,7 @@ class Event {
     this.location,
     this.churchId,
     this.churchName,
+    this.churchPhotoUrl,
     this.organizerId,
     this.organizerName,
     this.contactPhone,
@@ -35,6 +36,9 @@ class Event {
   /// Name of the church that posted this event (when church-hosted). Drives
   /// the featured Home card + gold tick.
   final String? churchName;
+
+  /// The church's logo (profile photo), shown on the featured card once set.
+  final String? churchPhotoUrl;
   final String? organizerId;
 
   /// True for events posted by a church admin (tagged with a church).
@@ -144,6 +148,7 @@ class Event {
       location: resolvedLocation,
       churchId: json['church_id']?.toString(),
       churchName: churchMap?['name'] as String?,
+      churchPhotoUrl: churchMap?['profile_photo_url'] as String?,
       organizerId: json['organizer_id']?.toString(),
       organizerName: (organizerName == null || organizerName.isEmpty)
           ? (json['contact_name'] as String?)?.trim()

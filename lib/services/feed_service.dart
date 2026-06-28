@@ -62,6 +62,7 @@ class FeedService {
         .select(
           '*, '
           'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+            'churches(name, profile_photo_url), '
           'post_likes(user_id), '
           'post_comments(id)',
         )
@@ -96,6 +97,7 @@ class FeedService {
         .select(
           '*, '
           'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+            'churches(name, profile_photo_url), '
           'post_likes(user_id), '
           'post_comments(id)',
         )
@@ -154,6 +156,7 @@ class FeedService {
     String? body,
     String? imageUrl,
     PostVisibility visibility = PostVisibility.public,
+    String? churchId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -176,10 +179,15 @@ class FeedService {
             'visibility': visibility == PostVisibility.friendsOnly
                 ? 'friends_only'
                 : 'public',
+            // Church-branded post: validated server-side (patch_141 trigger)
+            // so only an approved admin of the church can attribute to it.
+            if (churchId != null)
+              'church_id': int.tryParse(churchId) ?? churchId,
           })
           .select(
             '*, '
             'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+            'churches(name, profile_photo_url), '
             'post_likes(user_id), '
             'post_comments(id)',
           )
@@ -202,6 +210,7 @@ class FeedService {
         .select(
           '*, '
           'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+            'churches(name, profile_photo_url), '
           'post_likes(user_id), '
           'post_comments(id)',
         )
@@ -241,6 +250,7 @@ class FeedService {
         .select(
           '*, '
           'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+            'churches(name, profile_photo_url), '
           'post_likes(user_id), '
           'post_comments(id)',
         )

@@ -91,7 +91,7 @@ class EventService {
       final response = await _client
           .from(_table)
           .select(
-              '*, profiles!events_organizer_id_fkey(id, full_name), churches(name)')
+              '*, profiles!events_organizer_id_fkey(id, full_name), churches(name, profile_photo_url)')
           .eq('status', 'approved')
           .not('church_id', 'is', null)
           .gte('start_date', _formatDate(today))

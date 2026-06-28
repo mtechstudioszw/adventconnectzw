@@ -62,7 +62,7 @@ class RewardedAdManager {
       },
     );
     await ad.show(
-      onUserEarnedReward: (_, __) {
+      onUserEarnedReward: (_, _) {
         earned = true;
       },
     );

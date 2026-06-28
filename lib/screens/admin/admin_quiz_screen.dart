@@ -206,7 +206,9 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
   @override
   void dispose() {
     _question.dispose();
-    for (final c in _opts) c.dispose();
+    for (final c in _opts) {
+      c.dispose();
+    }
     _explanation.dispose();
     _reference.dispose();
     _category.dispose();

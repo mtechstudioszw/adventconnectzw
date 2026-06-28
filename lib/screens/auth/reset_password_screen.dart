@@ -284,7 +284,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
                     TextButton.icon(
                       onPressed: () => showSupportSheet(context,
                           topic: 'Didn\'t get my reset code'),
-                      icon: const Icon(Icons.help_outline,
+                      icon: Icon(Icons.help_outline,
                           size: 15, color: AppColors.textMuted),
                       label: Text('No code? Get help',
                           style: AppTextStyles.bodySmall.copyWith(

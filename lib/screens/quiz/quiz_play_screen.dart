@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../models/quiz_question_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';

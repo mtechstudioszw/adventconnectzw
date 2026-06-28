@@ -84,6 +84,7 @@ class MusicPlayerService {
               .map(
                 // LockCachingAudioSource streams the track AND saves it to
                 // disk, so a track played once replays OFFLINE later (#7).
+                // ignore: experimental_member_use
                 (item) => LockCachingAudioSource(
                   Uri.parse(item.fileUrl),
                   tag: tagged

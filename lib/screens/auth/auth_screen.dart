@@ -820,7 +820,7 @@ class _AuthScreenState extends State<AuthScreen>
           child: TextButton.icon(
             onPressed: () =>
                 showSupportSheet(context, topic: 'Sign-in problem'),
-            icon: const Icon(Icons.help_outline,
+            icon: Icon(Icons.help_outline,
                 size: 16, color: AppColors.textMuted),
             label: Text(
               'Having trouble? Contact support',

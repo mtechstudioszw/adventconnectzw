@@ -48,15 +48,15 @@ class _AdBannerState extends State<AdBanner> {
       return;
     }
 
-    final width = MediaQuery.of(context).size.width.truncate();
-    // Use the STANDARD anchored adaptive banner (~50dp), not the LARGE one
+    if (!mounted) return;
+    // Use the fixed STANDARD banner (320×50), not the LARGE adaptive one
     // (~90–100dp). The large banner sat right above the action buttons on the
     // product / event / church detail screens, so users kept mis-tapping it
-    // and getting launched into a full-screen ad they couldn't skip. The
-    // smaller banner is far less intrusive and harder to hit by accident.
-    final size =
-        await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(width);
-    if (size == null || !mounted) return;
+    // and getting launched into a full-screen ad they couldn't skip. (The
+    // small anchored-adaptive size was dropped in google_mobile_ads 9 — only
+    // the "large" variant remains adaptive — so we pin the standard banner to
+    // keep that low, non-intrusive height.)
+    const size = AdSize.banner;
 
     final ad = BannerAd(
       adUnitId: AdConfig.bannerUnitId,

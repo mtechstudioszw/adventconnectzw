@@ -33,9 +33,9 @@ class _LibraryScreenState extends State<LibraryScreen>
   void initState() {
     super.initState();
     _tabs = TabController(
-      length: 5,
+      length: 4,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 4),
+      initialIndex: widget.initialTab.clamp(0, 3),
     );
   }
 
@@ -73,7 +73,6 @@ class _LibraryScreenState extends State<LibraryScreen>
               AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w700),
           tabs: const [
             Tab(text: 'Bible'),
-            Tab(text: 'Audio Bible'),
             Tab(text: 'Hymnal'),
             Tab(text: 'EGW Books'),
             Tab(text: 'Music'),
@@ -85,13 +84,9 @@ class _LibraryScreenState extends State<LibraryScreen>
         child: TabBarView(
           controller: _tabs,
           children: const [
+            // Audio Bible lives as a button INSIDE the Bible tab, not its own
+            // tab (founder preference).
             BibleTab(),
-            // Audio Bible — uploaded audio, played through the shared player
-            // (background playback + lock-screen controls), like Music.
-            MusicTab(
-              kind: 'audio_bible',
-              emptyText: 'Audio Bible will appear here once it\'s added.',
-            ),
             // Hymnal = structured, searchable hymns (number/title/lyrics),
             // entered by the admin one at a time. NOT PDFs.
             HymnalTab(),

@@ -201,6 +201,19 @@ class _ChurchAdminApprovalsScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.primaryBlue,
+        foregroundColor: AppColors.white,
+        onPressed: _loading ? null : _load,
+        tooltip: 'Refresh',
+        child: _loading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.4, color: AppColors.white))
+            : const Icon(Icons.refresh),
+      ),
       body: RefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,

@@ -10,6 +10,36 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 
+/// Full-screen Audio Bible — opened from a button inside the Bible tab
+/// (founder preference: not its own Library tab). Reuses [MusicTab] with the
+/// 'audio_bible' kind so it plays through the same background player.
+class AudioBibleScreen extends StatelessWidget {
+  const AudioBibleScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Scaffold(
+      backgroundColor: palette.scaffoldBg,
+      appBar: AppBar(
+        title: Text('Audio Bible',
+            style: AppTextStyles.appBarTitle.copyWith(fontSize: 18)),
+        foregroundColor: AppColors.white,
+        flexibleSpace: const DecoratedBox(
+          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+        ),
+      ),
+      body: const SafeArea(
+        top: false,
+        child: MusicTab(
+          kind: 'audio_bible',
+          emptyText: 'Audio Bible will appear here once it\'s added.',
+        ),
+      ),
+    );
+  }
+}
+
 /// Library → Music tab. Lists uploaded tracks; tapping plays via the shared
 /// [MusicPlayerService] (background playback + notification controls). A
 /// now-playing bar sits at the bottom and opens the full player.

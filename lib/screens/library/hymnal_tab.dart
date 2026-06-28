@@ -59,6 +59,19 @@ class _HymnalTabState extends State<HymnalTab>
     });
   }
 
+  /// Pull-to-refresh: bust the cached hymn list and refetch, so hymns the admin
+  /// just added (or removed) show up without restarting the app.
+  Future<void> _refresh() async {
+    HymnService.invalidate();
+    final hymns = await HymnService.all();
+    if (!mounted) return;
+    setState(() {
+      _all = hymns;
+      _shown = hymns;
+      _searchCtrl.clear();
+    });
+  }
+
   Future<void> _onQuery(String q) async {
     final results = await HymnService.search(q);
     if (!mounted) return;
@@ -84,7 +97,11 @@ class _HymnalTabState extends State<HymnalTab>
           child: CircularProgressIndicator(color: AppColors.primaryBlue));
     }
     if (_all.isEmpty) {
-      return _empty(context);
+      return RefreshIndicator(
+        color: AppColors.primaryBlue,
+        onRefresh: _refresh,
+        child: _empty(context),
+      );
     }
     final base = _favOnly
         ? _shown.where((h) => HymnPrefs.favorites().contains(h.id)).toList()
@@ -151,19 +168,30 @@ class _HymnalTabState extends State<HymnalTab>
           ),
         ),
         Expanded(
-          child: base.isEmpty
-              ? Center(
-                  child: Text(
-                      _favOnly ? 'No favorites yet.' : 'No hymns match.',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: palette.textMuted)),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  itemCount: base.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) => _hymnTile(context, base[i]),
-                ),
+          child: RefreshIndicator(
+            color: AppColors.primaryBlue,
+            onRefresh: _refresh,
+            child: base.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      const SizedBox(height: 80),
+                      Center(
+                        child: Text(
+                            _favOnly ? 'No favorites yet.' : 'No hymns match.',
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: palette.textMuted)),
+                      ),
+                    ],
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: base.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _hymnTile(context, base[i]),
+                  ),
+          ),
         ),
       ],
     );

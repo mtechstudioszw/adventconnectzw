@@ -3387,10 +3387,9 @@ class _LibraryChips extends StatelessWidget {
 
   static const _items = <(String, IconData, int)>[
     ('Bible', Icons.menu_book_rounded, 0),
-    ('Audio', Icons.headset_rounded, 1),
-    ('Hymnal', Icons.queue_music_rounded, 2),
-    ('EGW', Icons.auto_stories_rounded, 3),
-    ('Music', Icons.headphones_rounded, 4),
+    ('Hymnal', Icons.queue_music_rounded, 1),
+    ('EGW', Icons.auto_stories_rounded, 2),
+    ('Music', Icons.headphones_rounded, 3),
   ];
 
   @override
@@ -3470,7 +3469,7 @@ class _HomeMusicStripState extends State<_HomeMusicStrip> {
                       .copyWith(fontWeight: FontWeight.w800)),
               const Spacer(),
               GestureDetector(
-                onTap: () => context.pushNamed('library', extra: 4),
+                onTap: () => context.pushNamed('library', extra: 3),
                 child: Text('See all',
                     style: AppTextStyles.labelMedium.copyWith(
                         color: AppColors.primaryBlue,
@@ -3489,7 +3488,7 @@ class _HomeMusicStripState extends State<_HomeMusicStrip> {
             itemBuilder: (context, i) {
               final item = _items[i];
               return GestureDetector(
-                onTap: () => context.pushNamed('library', extra: 4),
+                onTap: () => context.pushNamed('library', extra: 3),
                 child: Container(
                   width: 130,
                   decoration: BoxDecoration(

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../config/share_config.dart';
+import 'music_tab.dart';
 import '../../services/bible_prefs_service.dart';
 import '../../services/bible_service.dart';
 import '../../theme/app_colors.dart';
@@ -95,6 +96,18 @@ class _BibleTabState extends State<BibleTab>
                       MaterialPageRoute<void>(
                         builder: (_) =>
                             BibleSavedScreen(books: books, onOpen: _openReader),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ToolButton(
+                    icon: Icons.headset_rounded,
+                    label: 'Audio',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AudioBibleScreen(),
                       ),
                     ),
                   ),

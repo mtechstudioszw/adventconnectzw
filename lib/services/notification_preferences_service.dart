@@ -95,6 +95,7 @@ class NotificationCategoryPrefs {
     this.marketplace = true,
     this.announcements = true,
     this.news = true,
+    this.social = true,
   });
 
   final bool events;
@@ -103,6 +104,9 @@ class NotificationCategoryPrefs {
   final bool marketplace;
   final bool announcements;
   final bool news;
+
+  /// Likes & comments on your posts/comments (engagement pushes).
+  final bool social;
 
   static const defaults = NotificationCategoryPrefs();
 
@@ -124,6 +128,7 @@ class NotificationCategoryPrefs {
       marketplace: read('marketplace', true),
       announcements: read('announcements', true),
       news: read('news', true),
+      social: read('social', true),
     );
   }
 
@@ -134,6 +139,7 @@ class NotificationCategoryPrefs {
         'marketplace': marketplace,
         'announcements': announcements,
         'news': news,
+        'social': social,
       };
 
   NotificationCategoryPrefs copyWith({
@@ -143,6 +149,7 @@ class NotificationCategoryPrefs {
     bool? marketplace,
     bool? announcements,
     bool? news,
+    bool? social,
   }) {
     return NotificationCategoryPrefs(
       events: events ?? this.events,
@@ -151,6 +158,7 @@ class NotificationCategoryPrefs {
       marketplace: marketplace ?? this.marketplace,
       announcements: announcements ?? this.announcements,
       news: news ?? this.news,
+      social: social ?? this.social,
     );
   }
 }

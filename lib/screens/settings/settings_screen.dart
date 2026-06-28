@@ -518,6 +518,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ),
                         const _Divider(),
                         _ToggleRow(
+                          icon: Icons.favorite_border,
+                          label: 'Likes & comments',
+                          value: _categoryPrefs.social,
+                          onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(social: v)),
+                        ),
+                        const _Divider(),
+                        _ToggleRow(
                           icon: Icons.storefront_outlined,
                           label: 'Marketplace alerts',
                           value: _categoryPrefs.marketplace,

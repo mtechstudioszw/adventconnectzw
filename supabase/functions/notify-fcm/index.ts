@@ -183,6 +183,18 @@ async function sendFcm({
 // doesn't map (we fall through and send by default in that case).
 function mapTypeToCategory(type: string): string | null {
   const t = (type || "").toLowerCase();
+  // Likes & comments on posts/comments — the Settings "Likes & comments"
+  // toggle (profiles.notif_categories.social). Checked before the generic
+  // rules so e.g. "post_comment" isn't mis-bucketed.
+  if (
+    t === "post_like" ||
+    t === "post_comment" ||
+    t === "comment_reply" ||
+    t === "comment_like" ||
+    t === "reaction"
+  ) {
+    return "social";
+  }
   if (t.includes("event")) return "events";
   if (t.includes("prayer")) return "prayers";
   if (t.includes("message") || t === "chat") return "messages";

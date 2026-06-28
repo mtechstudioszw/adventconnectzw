@@ -5,6 +5,7 @@ import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/screen_shell.dart';
 
 /// In-app notification inbox. DB triggers populate `notifications` when
@@ -130,6 +131,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case 'prayer':
       case 'conversation':
       case 'job':
+      case 'post':
         return hasId;
       case 'friend_request':
       case 'seller':
@@ -172,6 +174,17 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case 'job':
         if (id.isNotEmpty) {
           context.pushNamed('job_details', pathParameters: {'id': id});
+        }
+        break;
+      case 'post':
+        // Likes & comments all carry the post id — open the post's
+        // discussion (the same comments sheet used in the feed).
+        if (id.isNotEmpty) {
+          showCommentsSheet(
+            context,
+            postId: id,
+            onCommentCountChanged: (_) {},
+          );
         }
         break;
       case 'friend_request':
@@ -283,6 +296,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       _NotifCategory.announcements,
       _NotifCategory.messages,
       _NotifCategory.social,
+      _NotifCategory.engagement,
       _NotifCategory.activity,
     ];
     final present =
@@ -498,6 +512,15 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     if (ref == 'conversation' || type.contains('message')) {
       return _NotifCategory.messages;
     }
+    // Likes & comments on posts/comments — the engagement bucket.
+    if (ref == 'post' ||
+        type == 'post_like' ||
+        type == 'post_comment' ||
+        type == 'comment_reply' ||
+        type == 'comment_like' ||
+        type == 'reaction') {
+      return _NotifCategory.engagement;
+    }
     if (ref == 'friend_request' ||
         ref == 'friendship' ||
         type.contains('friend')) {
@@ -521,6 +544,8 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
         return 'Messages';
       case _NotifCategory.social:
         return 'Friends & requests';
+      case _NotifCategory.engagement:
+        return 'Likes & comments';
       case _NotifCategory.announcements:
         return 'Announcements';
       case _NotifCategory.activity:
@@ -534,6 +559,8 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
         return Icons.forum_outlined;
       case _NotifCategory.social:
         return Icons.people_outline;
+      case _NotifCategory.engagement:
+        return Icons.favorite_border;
       case _NotifCategory.announcements:
         return Icons.campaign_outlined;
       case _NotifCategory.activity:
@@ -542,7 +569,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   }
 }
 
-enum _NotifCategory { messages, social, announcements, activity }
+enum _NotifCategory { messages, social, engagement, announcements, activity }
 
 class _NotificationRow extends StatelessWidget {
   const _NotificationRow({required this.item, required this.onTap});
@@ -558,6 +585,14 @@ class _NotificationRow extends StatelessWidget {
         return Icons.volunteer_activism_outlined;
       case 'message':
         return Icons.mail_outline;
+      case 'post_like':
+      case 'comment_like':
+      case 'reaction':
+        return Icons.favorite_border;
+      case 'post_comment':
+        return Icons.mode_comment_outlined;
+      case 'comment_reply':
+        return Icons.reply_outlined;
       case 'seller_status':
         return Icons.storefront_outlined;
       case 'church_admin_status':

@@ -63,7 +63,7 @@ const TYPES = {
       fetchRow(
         env,
         "products",
-        `id=eq.${encodeURIComponent(id)}&select=title,description,image_urls,price,currency,category`,
+        `id=eq.${encodeURIComponent(id)}&select=title,description,image_urls,price,price_currency,category`,
       ),
     map: (d) => ({
       title: d.title,
@@ -72,7 +72,8 @@ const TYPES = {
         Array.isArray(d.image_urls) && d.image_urls.length
           ? String(d.image_urls[0])
           : "",
-      meta: d.price && d.currency ? `${d.currency} ${d.price}` : "",
+      meta:
+        d.price && d.price_currency ? `${d.price_currency} ${d.price}` : "",
     }),
   },
   "event-share": {
@@ -104,13 +105,13 @@ const TYPES = {
       fetchRow(
         env,
         "jobs",
-        `id=eq.${encodeURIComponent(id)}&select=title,description,category,province,city`,
+        `id=eq.${encodeURIComponent(id)}&select=title,description,category,province,location`,
       ),
     map: (d) => ({
       title: d.title,
       description: d.description,
       image: "",
-      meta: [d.city, d.province].filter(Boolean).join(", "),
+      meta: [d.location, d.province].filter(Boolean).join(", "),
     }),
   },
   "seller-share": {

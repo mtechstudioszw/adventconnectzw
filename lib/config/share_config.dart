@@ -16,11 +16,10 @@ String get appDownloadUrl =>
 /// pages are served from a Cloudflare Worker that returns real `text/html`
 /// (see `cloudflare/share-worker.js`).
 ///
-/// TODO(deploy): set this to your deployed Worker route, e.g.
-///   `https://share.adventconnectzw.com`  (custom domain), or
-///   `https://advent-share.ACCOUNT.workers.dev`.
-/// Until then sharing falls back to the (thumbnail-less) plain-text page.
-const String kShareBaseUrl = 'https://advent-share.REPLACE_ME.workers.dev';
+/// Deployed Cloudflare Worker (see cloudflare/share-worker.js). Swap for a
+/// custom domain like `https://share.adventconnectzw.com` if one is added.
+const String kShareBaseUrl =
+    'https://advent-share.tanatswamichaelmikuwa.workers.dev';
 
 /// Open Graph share link for a marketplace product.
 String productShareUrl(Object id) => '$kShareBaseUrl/product-share?id=$id';

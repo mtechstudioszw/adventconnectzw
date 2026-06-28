@@ -151,6 +151,7 @@
         <a data-tab="news">📰 News <span class="badge" id="b-news" style="display:none"></span></a>
         <a data-tab="events">📅 Events <span class="badge" id="b-events" style="display:none"></span></a>
         <a data-tab="jobs">💼 Jobs <span class="badge" id="b-jobs" style="display:none"></span></a>
+        <a data-tab="churches">⛪ Church claims <span class="badge" id="b-churches" style="display:none"></span></a>
         <a data-tab="feedback">💬 Feedback <span class="badge" id="b-feedback" style="display:none"></span></a>
         <a data-tab="users">👤 Users</a>
         <a data-tab="broadcast">📣 Broadcast</a>
@@ -273,7 +274,7 @@ $("nav").addEventListener("click", (e) => {
 function switchTab(tab) {
   document.querySelectorAll("#nav a").forEach(a =>
     a.classList.toggle("active", a.dataset.tab === tab));
-  ({ overview, sellers, reports, news, events, jobs, feedback, users, broadcast }[tab] || overview)();
+  ({ overview, sellers, reports, news, events, jobs, churches, feedback, users, broadcast }[tab] || overview)();
 }
 
 async function refreshBadges() {
@@ -283,6 +284,12 @@ async function refreshBadges() {
     setBadge("b-reports", s.open_reports);
     setBadge("b-feedback", s.untriaged_feedback);
     if (s.pending_news != null) setBadge("b-news", s.pending_news);
+  } catch (_) {}
+  // Pending church-admin claims aren't in admin_overview_stats — count the
+  // list directly (cheap; gated by assert_super_admin server-side).
+  try {
+    const claims = await rpc("admin_list_pending_church_admins");
+    setBadge("b-churches", claims.length);
   } catch (_) {}
 }
 function setBadge(id, n) {
@@ -481,7 +488,7 @@ async function events() {
     const body = rows.map(e => `
       <tr>
         <td style="max-width:120px">${e.cover_photo_url ? `<img src="${esc(e.cover_photo_url)}" style="width:100px;height:60px;object-fit:cover;border-radius:8px"/>` : "—"}</td>
-        <td><b>${esc(e.title)}</b><div class="meta">${esc(e.category || "")} · ${esc(String(e.event_date||"").slice(0,10))} · ${esc(e.location || "")}</div>
+        <td><b>${esc(e.title)}</b><div class="meta">${esc(e.category || "")} · ${esc(String(e.start_date||e.event_date||"").slice(0,10))} · ${esc([e.venue, e.city].filter(Boolean).join(", ") || e.location || "")}</div>
             <div class="meta">${esc(String(e.description||"").slice(0,300))}</div></td>
         <td style="white-space:nowrap">
           <button class="btn green" data-approve-event="${e.id}">Approve</button>
@@ -528,6 +535,40 @@ async function jobs() {
       catch (e) { alert(e.message); }
     });
   } catch (err) { view().innerHTML = head("Jobs","") + errBox(err); }
+}
+
+async function churches() {
+  view().innerHTML = head("Church claims", "Approve or reject members applying to manage a church. Approving grants them posting rights to that church's announcement channel only.") + loading();
+  try {
+    const rows = await rpc("admin_list_pending_church_admins");
+    if (!rows.length) { view().innerHTML = head("Church claims","Approve or reject church-admin applications.") + empty("No church claims awaiting review."); return; }
+    const body = rows.map(c => `
+      <tr>
+        <td><b>${esc(c.church_name || "Church")}</b><div class="meta">${esc(c.church_city || "")}</div></td>
+        <td><b>${esc(c.applicant_name || "—")}</b>
+            <div class="meta">${esc(c.role || "admin")} · ${fmtDate(c.created_at)}</div>
+            <div class="meta">📞 ${esc(c.applicant_phone || "—")} · ✉️ ${esc(c.applicant_email || "—")}</div>
+            ${c.note ? `<div class="meta" style="margin-top:4px">“${esc(String(c.note).slice(0,300))}”</div>` : ""}</td>
+        <td style="white-space:nowrap">
+          ${c.applicant_phone ? `<a class="btn ghost" href="https://wa.me/${esc(String(c.applicant_phone).replace(/[^0-9]/g,''))}" target="_blank" rel="noopener">WhatsApp</a>` : ""}
+          <button class="btn green" data-approve-church="${c.id}">Approve</button>
+          <button class="btn red" data-reject-church="${c.id}">Reject</button>
+        </td>
+      </tr>`).join("");
+    view().innerHTML = head("Church claims","Approve or reject church-admin applications.") +
+      `<table><thead><tr><th>Church</th><th>Applicant</th><th></th></tr></thead><tbody>${body}</tbody></table>`;
+    view().querySelectorAll("[data-approve-church]").forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await rpc("admin_approve_church_admin", { p_id: Number(b.dataset.approveChurch) }); churches(); refreshBadges(); }
+      catch (e) { alert(e.message); b.disabled = false; }
+    });
+    view().querySelectorAll("[data-reject-church]").forEach(b => b.onclick = async () => {
+      const reason = await ask({ title: "Reject church claim", sub: "Optional reason sent to the applicant.", placeholder: "Reason (optional)", okLabel: "Reject", okClass: "red" });
+      if (reason === null) return;
+      try { await rpc("admin_reject_church_admin", { p_id: Number(b.dataset.rejectChurch), p_reason: reason }); churches(); refreshBadges(); }
+      catch (e) { alert(e.message); }
+    });
+  } catch (err) { view().innerHTML = head("Church claims","") + errBox(err); }
 }
 
 async function users() {

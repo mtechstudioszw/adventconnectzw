@@ -50,11 +50,11 @@ void main() async {
   // controls + playback that continues when the app is backgrounded). Cheap
   // local setup; safe to await. Fails open so a platform without the media
   // service (e.g. desktop) never blocks launch.
-  // Initialise the audio media session ONCE, before any track loads. Routed
-  // through MusicPlayerService so the same idempotent future is reused if a
-  // track tries to play before this resolves (prevents the "_audioHandler not
-  // initialized" crash). Fails open — music falls back to foreground playback.
-  await MusicPlayerService.ensureBackgroundReady();
+  // Initialise the audio media session in the BACKGROUND (don't block launch).
+  // It's idempotent and setQueueAndPlay awaits the same future before the first
+  // track loads, so music is still safe — but the platform-channel init no
+  // longer sits on the cold-start critical path (faster launch).
+  unawaited(MusicPlayerService.ensureBackgroundReady());
 
   // CacheService opens a Hive box (reads the WHOLE box into memory). If it
   // ever grew large that openBox blocked the first frame for many seconds

@@ -20,6 +20,7 @@ import '../../services/connectivity_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/push_service.dart';
 import '../../services/voice_player_service.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/home/story_viewer.dart';
@@ -768,6 +769,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _bootstrap();
     _resolveConversation();
+    // Opening the chat clears its tray notification (WhatsApp parity) — the
+    // user is now reading it, so the heads-up shouldn't linger.
+    PushService.cancelConversationNotification(widget.conversationId);
     // Continuous voice playback — when one note finishes, the shared
     // player rolls on to the next voice note in this thread.
     VoicePlayerService.instance.nextResolver = _voiceQueueResolver;

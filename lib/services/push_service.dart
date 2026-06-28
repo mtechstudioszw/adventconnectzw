@@ -268,6 +268,18 @@ class PushService {
     });
   }
 
+  /// Dismiss the tray notification for a conversation when the user opens it
+  /// (WhatsApp parity: opening the chat clears its notification). The id
+  /// mirrors [_renderIncomingChat] (`reference_id.hashCode`).
+  static Future<void> cancelConversationNotification(String conversationId) async {
+    if (conversationId.isEmpty) return;
+    try {
+      await _local.cancel(conversationId.hashCode);
+    } catch (_) {
+      // best-effort
+    }
+  }
+
   /// Clear the FCM token on the profile (call from sign-out so old
   /// devices stop receiving pushes for accounts that are no longer
   /// logged in). Best-effort — failures don't block sign-out.

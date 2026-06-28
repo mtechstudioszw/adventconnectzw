@@ -130,6 +130,7 @@ async function sendFcm({
   title,
   body,
   data,
+  dataOnly = false,
 }: {
   account: ServiceAccount;
   accessToken: string;
@@ -137,20 +138,31 @@ async function sendFcm({
   title: string;
   body: string;
   data: Record<string, string>;
+  // When true, send a DATA-ONLY message (no `notification` block). The app
+  // then renders the notification itself with an inline Reply button + the
+  // sender's photo (chat messages). When false, the system renders it.
+  dataOnly?: boolean;
 }): Promise<void> {
   const url =
     `https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`;
-  const message = {
+  // For data-only, fold title/body into data so the app can build the banner.
+  const fullData = dataOnly ? { ...data, title, body } : data;
+  // deno-lint-ignore no-explicit-any
+  const message: any = {
     message: {
       token: deviceToken,
-      notification: { title, body },
-      data, // all values must be strings per FCM v1
+      data: fullData, // all values must be strings per FCM v1
       android: {
         priority: "HIGH",
-        notification: { channel_id: "advent_connect_zw_default" },
       },
     },
   };
+  if (!dataOnly) {
+    message.message.notification = { title, body };
+    message.message.android.notification = {
+      channel_id: "advent_connect_zw_default",
+    };
+  }
   const resp = await fetch(url, {
     method: "POST",
     headers: {
@@ -295,6 +307,34 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // For chat pushes, look up the latest sender's photo so the app can show it
+  // as the notification's large icon, and send DATA-ONLY so the app renders
+  // the banner itself with an inline Reply button (#10/#11). Non-chat pushes
+  // stay system-rendered.
+  const isConversation = referenceType === "conversation" && !!referenceId;
+  let senderPhoto = "";
+  if (isConversation) {
+    try {
+      const { data: lastMsg } = await supabase
+        .from("messages")
+        .select("sender_id")
+        .eq("conversation_id", Number(referenceId))
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastMsg?.sender_id) {
+        const { data: sp } = await supabase
+          .from("profiles")
+          .select("profile_photo_url")
+          .eq("id", lastMsg.sender_id)
+          .maybeSingle();
+        senderPhoto = (sp?.profile_photo_url as string | null) ?? "";
+      }
+    } catch (_) {
+      // best-effort; the notification just shows without a photo.
+    }
+  }
+
   try {
     const accessToken = await fetchGoogleAccessToken(account);
     await sendFcm({
@@ -303,10 +343,12 @@ Deno.serve(async (req: Request) => {
       deviceToken,
       title,
       body,
+      dataOnly: isConversation,
       data: {
         reference_id: referenceId,
         reference_type: referenceType,
         type: notifType,
+        ...(isConversation ? { sender_photo: senderPhoto } : {}),
       },
     });
   } catch (e) {

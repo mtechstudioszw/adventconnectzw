@@ -25,6 +25,7 @@ import '../screens/churches/suggest_edit_screen.dart';
 import '../screens/home/post_notice_screen.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/library/library_screen.dart';
+import '../screens/quiz/quiz_home_screen.dart';
 import '../screens/profile/blocked_users_screen.dart';
 import '../screens/profile/member_directory_screen.dart';
 import '../screens/profile/my_directory_profile_screen.dart';
@@ -562,6 +563,11 @@ final GoRouter appRouter = GoRouter(
       // extra is an optional int initial tab (0=Bible,1=Hymnal,2=EGW,3=Music).
       builder: (context, state) =>
           LibraryScreen(initialTab: state.extra is int ? state.extra as int : 0),
+    ),
+    GoRoute(
+      path: '/quiz',
+      name: 'quiz',
+      builder: (context, state) => const QuizHomeScreen(),
     ),
     GoRoute(
       path: '/directory',

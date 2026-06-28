@@ -3385,11 +3385,13 @@ class _DevotionCard extends StatelessWidget {
 class _LibraryChips extends StatelessWidget {
   const _LibraryChips();
 
+  // Tab index, or -1 for the Bible Quiz (its own /quiz route).
   static const _items = <(String, IconData, int)>[
     ('Bible', Icons.menu_book_rounded, 0),
     ('Hymnal', Icons.queue_music_rounded, 1),
     ('EGW', Icons.auto_stories_rounded, 2),
     ('Music', Icons.headphones_rounded, 3),
+    ('Quiz', Icons.quiz_rounded, -1),
   ];
 
   @override
@@ -3401,7 +3403,9 @@ class _LibraryChips extends StatelessWidget {
           if (i > 0) const SizedBox(width: 10),
           Expanded(
             child: GestureDetector(
-              onTap: () => context.pushNamed('library', extra: _items[i].$3),
+              onTap: () => _items[i].$3 == -1
+                  ? context.pushNamed('quiz')
+                  : context.pushNamed('library', extra: _items[i].$3),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(

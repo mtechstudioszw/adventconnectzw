@@ -10,7 +10,6 @@ import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 
@@ -281,10 +280,6 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
     }
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      bottomNavigationBar: const SafeArea(
-        top: false,
-        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
-      ),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _buildHero(item, context)),

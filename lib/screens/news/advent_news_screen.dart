@@ -6,7 +6,6 @@ import '../../services/advent_news_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
 
 /// Editorial Advent News feed — distinct from the user post feed.
@@ -59,9 +58,6 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      bottomNavigationBar: const SafeArea(
-        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
-      ),
       // Open to any signed-in member (patch_030). Tap "+" to open the
       // composer; if a story was published, refresh the feed so the
       // new card shows up at the top without a manual pull.

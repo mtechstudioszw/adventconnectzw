@@ -335,6 +335,7 @@ class _AdventConnectAppState extends State<AdventConnectApp>
     '/events',
     '/churches',
     '/library',
+    '/news',
   ];
 
   void _maybeShowAppOpenAd() {

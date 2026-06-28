@@ -552,24 +552,55 @@ async function churches() {
             ${c.note ? `<div class="meta" style="margin-top:4px">“${esc(String(c.note).slice(0,300))}”</div>` : ""}</td>
         <td style="white-space:nowrap">
           ${c.applicant_phone ? `<a class="btn ghost" href="https://wa.me/${esc(String(c.applicant_phone).replace(/[^0-9]/g,''))}" target="_blank" rel="noopener">WhatsApp</a>` : ""}
-          <button class="btn green" data-approve-church="${c.id}">Approve</button>
-          <button class="btn red" data-reject-church="${c.id}">Reject</button>
+          <button class="btn green" data-approve-church="${c.id}" data-phone="${esc(c.applicant_phone||'')}" data-name="${esc(c.applicant_name||'')}" data-church="${esc(c.church_name||'')}">Approve</button>
+          <button class="btn red" data-reject-church="${c.id}" data-phone="${esc(c.applicant_phone||'')}" data-name="${esc(c.applicant_name||'')}" data-church="${esc(c.church_name||'')}">Reject</button>
         </td>
       </tr>`).join("");
     view().innerHTML = head("Church claims","Approve or reject church-admin applications.") +
       `<table><thead><tr><th>Church</th><th>Applicant</th><th></th></tr></thead><tbody>${body}</tbody></table>`;
     view().querySelectorAll("[data-approve-church]").forEach(b => b.onclick = async () => {
       b.disabled = true;
-      try { await rpc("admin_approve_church_admin", { p_id: Number(b.dataset.approveChurch) }); churches(); refreshBadges(); }
+      try {
+        await rpc("admin_approve_church_admin", { p_id: Number(b.dataset.approveChurch) });
+        waChurch(b.dataset.phone, churchApprovedMsg(b.dataset.name, b.dataset.church));
+        churches(); refreshBadges();
+      }
       catch (e) { alert(e.message); b.disabled = false; }
     });
     view().querySelectorAll("[data-reject-church]").forEach(b => b.onclick = async () => {
-      const reason = await ask({ title: "Reject church claim", sub: "Optional reason sent to the applicant.", placeholder: "Reason (optional)", okLabel: "Reject", okClass: "red" });
+      const reason = await ask({ title: "Reject / request proof", sub: "Optional note. We'll open WhatsApp asking for proof of position.", placeholder: "Reason (optional)", okLabel: "Reject", okClass: "red" });
       if (reason === null) return;
-      try { await rpc("admin_reject_church_admin", { p_id: Number(b.dataset.rejectChurch), p_reason: reason }); churches(); refreshBadges(); }
+      try {
+        await rpc("admin_reject_church_admin", { p_id: Number(b.dataset.rejectChurch), p_reason: reason });
+        waChurch(b.dataset.phone, churchProofMsg(b.dataset.name, b.dataset.church));
+        churches(); refreshBadges();
+      }
       catch (e) { alert(e.message); }
     });
   } catch (err) { view().innerHTML = head("Church claims","") + errBox(err); }
+}
+
+// ---- Church-claim WhatsApp auto-messages ----
+function waChurch(phone, msg) {
+  const cleaned = String(phone || "").replace(/[^0-9]/g, "");
+  if (!cleaned) return;
+  window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(msg)}`, "_blank");
+}
+function churchApprovedMsg(name, church) {
+  return `Hi ${name || "there"}, you are now an approved admin for ${church || "your church"} on Advent Connect! 🎉\n\n`
+    + `In your church dashboard you can:\n`
+    + `• Post announcements to your members\n`
+    + `• Share church updates to the whole app (shown with your church name + verified tick)\n`
+    + `• Post church events — they go live instantly and are featured on Home\n`
+    + `• See your members by name and how many follow your church\n`
+    + `• Invite members via WhatsApp\n`
+    + `• Manage your church info, logo and cover photo\n\n`
+    + `Open the app → Settings → your church dashboard. God bless!`;
+}
+function churchProofMsg(name, church) {
+  return `Hi ${name || "there"}, thank you for requesting to manage ${church || "your church"} on Advent Connect. `
+    + `Before we can approve you, please send proof of your position at the church (e.g. Elder, Clerk, Pastor) — `
+    + `a photo of an appointment letter or your church ID. Reply here with it and we will review again. Thank you!`;
 }
 
 async function insights() {

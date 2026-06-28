@@ -80,12 +80,36 @@ class _ChurchAdminApprovalsScreenState
     }
   }
 
-  Future<void> _openWhatsApp(String phone) async {
+  Future<void> _openWhatsApp(String phone, [String? message]) async {
     final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final text = message ??
+        'Hi, about your Advent Connect church-admin request…';
     final uri = Uri.parse(
-        'https://wa.me/$cleaned?text=${Uri.encodeComponent('Hi, about your Advent Connect church-admin request…')}');
+        'https://wa.me/$cleaned?text=${Uri.encodeComponent(text)}');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
+
+  /// Welcome + feature rundown sent on WhatsApp when a claim is approved.
+  String _approvedMessage(PendingChurchAdmin a) =>
+      'Hi ${a.applicantName}, you are now an approved admin for '
+      '${a.churchName} on Advent Connect! 🎉\n\n'
+      'In your church dashboard you can:\n'
+      '• Post announcements to your members\n'
+      '• Share church updates to the whole app (shown with your church name + verified tick)\n'
+      '• Post church events — they go live instantly and are featured on Home\n'
+      '• See your members by name and how many follow your church\n'
+      '• Invite members via WhatsApp\n'
+      '• Manage your church info, logo and cover photo\n\n'
+      'Open the app → Settings → your church dashboard. God bless!';
+
+  /// Proof-of-position request sent on WhatsApp when a claim is rejected /
+  /// needs verification before approval.
+  String _proofMessage(PendingChurchAdmin a) =>
+      'Hi ${a.applicantName}, thank you for requesting to manage '
+      '${a.churchName} on Advent Connect. Before we can approve you, please '
+      'send proof of your position at the church (e.g. Elder, Clerk, Pastor) '
+      '— a photo of an appointment letter or your church ID. Reply here with '
+      'it and we will review again. Thank you!';
 
   Future<void> _email(String email) async {
     await launchUrl(Uri.parse('mailto:$email'),
@@ -98,8 +122,12 @@ class _ChurchAdminApprovalsScreenState
       await ChurchService.approveChurchAdmin(a.id);
       if (!mounted) return;
       setState(() => _items = _items.where((x) => x.id != a.id).toList());
-      _toast('${a.applicantName} approved for ${a.churchName}.',
+      _toast('${a.applicantName} approved — messaging them on WhatsApp.',
           AppColors.successGreen);
+      // Auto-open WhatsApp with the welcome + features rundown.
+      if (a.applicantPhone.trim().isNotEmpty) {
+        await _openWhatsApp(a.applicantPhone, _approvedMessage(a));
+      }
     } catch (_) {
       _toast('Could not approve. Try again.', AppColors.red);
     } finally {
@@ -115,7 +143,11 @@ class _ChurchAdminApprovalsScreenState
       await ChurchService.rejectChurchAdmin(a.id, reason: reason);
       if (!mounted) return;
       setState(() => _items = _items.where((x) => x.id != a.id).toList());
-      _toast('Request rejected.', AppColors.darkNavy);
+      _toast('Rejected — asking for proof on WhatsApp.', AppColors.darkNavy);
+      // Auto-open WhatsApp asking for proof of position (Elder/Clerk/etc).
+      if (a.applicantPhone.trim().isNotEmpty) {
+        await _openWhatsApp(a.applicantPhone, _proofMessage(a));
+      }
     } catch (_) {
       _toast('Could not reject. Try again.', AppColors.red);
     } finally {

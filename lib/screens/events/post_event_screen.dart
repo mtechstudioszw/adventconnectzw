@@ -14,12 +14,16 @@ import '../widgets/post_form_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class PostEventScreen extends StatefulWidget {
-  const PostEventScreen({super.key, this.existing});
+  const PostEventScreen({super.key, this.existing, this.churchId});
 
   /// When non-null, the screen runs in edit mode: title/labels switch
   /// to "Update event", the form is pre-filled, and submission calls
   /// `EventService.updateEvent` instead of `postEvent`.
   final Event? existing;
+
+  /// When non-null, this is a church admin posting on behalf of their church
+  /// — the new event is tagged with this church so it can be featured on Home.
+  final String? churchId;
 
   bool get isEditing => existing != null;
 
@@ -243,6 +247,7 @@ class _PostEventScreenState extends State<PostEventScreen>
         );
       } else {
         await EventService.postEvent(
+          churchId: widget.churchId,
           title: _titleController.text,
           startDate: _startDate!,
           startTime: startTimeStr,

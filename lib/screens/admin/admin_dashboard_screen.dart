@@ -134,7 +134,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         'church_members',
                         extra: widget.role,
                       ),
-                      onPostEvent: () => context.pushNamed('post_event'),
+                      onPostEvent: () => context.pushNamed('post_event',
+                          extra: widget.role.churchId),
                       onManageInfo: () => context.pushNamed(
                         'edit_church',
                         extra: widget.role,

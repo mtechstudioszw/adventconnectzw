@@ -82,6 +82,29 @@ class EventService {
         .toList();
   }
 
+  /// Approved, upcoming events posted by a church (church_id set). Surfaced as
+  /// a featured strip at the top of Home so official church events stand out
+  /// from regular community events.
+  static Future<List<Event>> fetchFeaturedChurchEvents({int limit = 10}) async {
+    final today = _dateOnly(DateTime.now());
+    try {
+      final response = await _client
+          .from(_table)
+          .select(
+              '*, profiles!events_organizer_id_fkey(id, full_name), churches(name)')
+          .eq('status', 'approved')
+          .not('church_id', 'is', null)
+          .gte('start_date', _formatDate(today))
+          .order('start_date', ascending: true)
+          .limit(limit);
+      return (response as List)
+          .map((row) => Event.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   static Future<Event?> fetchEventById(String id) async {
     final response = await _client
         .from(_table)
@@ -132,6 +155,7 @@ class EventService {
     String? contactName,
     String? contactPhone,
     String? coverPhotoUrl,
+    String? churchId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -156,7 +180,8 @@ class EventService {
       'contact_phone': contactPhone?.trim(),
       'cover_photo_url': coverPhotoUrl?.trim(),
       'organizer_id': user.id,
-      'event_source': 'community',
+      'event_source': churchId != null ? 'church' : 'community',
+      if (churchId != null) 'church_id': int.tryParse(churchId) ?? churchId,
     };
     Map<String, dynamic> inserted;
     try {

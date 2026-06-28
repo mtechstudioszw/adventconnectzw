@@ -46,6 +46,7 @@ import '../../widgets/ads/native_ad_card.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_sheet.dart';
+import '../../widgets/home/featured_church_events.dart';
 import '../../widgets/home/signup_survey_sheet.dart';
 import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
@@ -832,6 +833,10 @@ class _HomeScreenState extends State<HomeScreen>
                     child: _AdventNewsHero(items: _topNews),
                   ),
                 ],
+                // Official church-posted events, featured prominently with the
+                // church's name + gold tick. Self-hides when there are none.
+                const SizedBox(height: 16),
+                const FeaturedChurchEvents(),
                 const SizedBox(height: 16),
                 const _HomeMusicStrip(),
                 const SizedBox(height: 6),

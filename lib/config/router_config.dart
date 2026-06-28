@@ -275,7 +275,12 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'post',
           name: 'post_event',
-          builder: (context, state) => const PostEventScreen(),
+          builder: (context, state) {
+            // A church admin posting from their dashboard passes their
+            // church id (String) as extra, tagging the event to the church.
+            final churchId = state.extra is String ? state.extra as String : null;
+            return PostEventScreen(churchId: churchId);
+          },
         ),
         GoRoute(
           path: 'edit',

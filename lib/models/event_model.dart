@@ -10,6 +10,7 @@ class Event {
     this.description,
     this.location,
     this.churchId,
+    this.churchName,
     this.organizerId,
     this.organizerName,
     this.contactPhone,
@@ -30,7 +31,14 @@ class Event {
   final String? endTime;
   final String? location;
   final String? churchId;
+
+  /// Name of the church that posted this event (when church-hosted). Drives
+  /// the featured Home card + gold tick.
+  final String? churchName;
   final String? organizerId;
+
+  /// True for events posted by a church admin (tagged with a church).
+  bool get isChurchEvent => (churchId ?? '').isNotEmpty;
   /// Display name of the user who posted this event. Populated from
   /// the joined profile in EventService.fetchEvents / fetchEventById.
   /// May be null on cached payloads written by older builds.
@@ -122,6 +130,9 @@ class Event {
         organizer is Map<String, dynamic> ? organizer : null;
     final organizerName = (organizerMap?['full_name'] as String?)?.trim();
 
+    final church = json['churches'];
+    final churchMap = church is Map<String, dynamic> ? church : null;
+
     return Event(
       id: json['id'].toString(),
       title: (json['title'] ?? '') as String,
@@ -132,6 +143,7 @@ class Event {
       endTime: endTime,
       location: resolvedLocation,
       churchId: json['church_id']?.toString(),
+      churchName: churchMap?['name'] as String?,
       organizerId: json['organizer_id']?.toString(),
       organizerName: (organizerName == null || organizerName.isEmpty)
           ? (json['contact_name'] as String?)?.trim()

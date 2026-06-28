@@ -3272,7 +3272,7 @@ class _DevotionCard extends StatelessWidget {
       onTap: onOpenLibrary,
       child: Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         gradient: AppColors.appBarGradient,
         borderRadius: BorderRadius.circular(20),
@@ -3305,9 +3305,11 @@ class _DevotionCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             '"${devotion.bibleText}"',
-            style: AppTextStyles.bodyLarge.copyWith(
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.white,
-              height: 1.5,
+              height: 1.45,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -3320,7 +3322,7 @@ class _DevotionCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: Divider(
               color: AppColors.white.withValues(alpha: 0.18),
               height: 1,
@@ -3328,9 +3330,11 @@ class _DevotionCard extends StatelessWidget {
           ),
           Text(
             devotion.egwQuote,
-            style: AppTextStyles.bodyMedium.copyWith(
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.white.withValues(alpha: 0.92),
-              height: 1.45,
+              height: 1.4,
             ),
           ),
           const SizedBox(height: 6),
@@ -3339,38 +3343,6 @@ class _DevotionCard extends StatelessWidget {
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.white.withValues(alpha: 0.7),
               fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Tap affordance → opens the Library (Bible tab).
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                  color: AppColors.goldAccent.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.menu_book_rounded,
-                    color: AppColors.goldAccent, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Open Library · Bible · Hymnal · EGW · Music',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios,
-                    color: AppColors.white, size: 12),
-              ],
             ),
           ),
         ],

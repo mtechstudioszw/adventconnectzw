@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
@@ -49,16 +51,27 @@ class RewardedAdManager {
     _ad = null;
     _isShowing = true;
     var earned = false;
+    // ad.show() resolves as soon as the ad is DISPLAYED, not when it's
+    // dismissed — so reading `earned` right after it would always be false
+    // (the reward callback fires later). Gate completion on dismissal via a
+    // Completer so the caller gets the real earned/not-earned result.
+    final done = Completer<bool>();
+    void finish(bool value) {
+      if (!done.isCompleted) done.complete(value);
+    }
+
     ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
         _isShowing = false;
         ad.dispose();
         loadAd();
+        finish(earned);
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         _isShowing = false;
         ad.dispose();
         loadAd();
+        finish(false);
       },
     );
     await ad.show(
@@ -66,6 +79,6 @@ class RewardedAdManager {
         earned = true;
       },
     );
-    return earned;
+    return done.future;
   }
 }

@@ -16,19 +16,25 @@ class QuizPlayScreen extends StatefulWidget {
     required this.questions,
     required this.title,
     this.isDaily = false,
+    this.startIndex = 0,
+    this.startScore = 0,
   });
 
   final List<QuizQuestion> questions;
   final String title;
   final bool isDaily;
 
+  /// Resume support: where to start and the score carried over.
+  final int startIndex;
+  final int startScore;
+
   @override
   State<QuizPlayScreen> createState() => _QuizPlayScreenState();
 }
 
 class _QuizPlayScreenState extends State<QuizPlayScreen> {
-  int _index = 0;
-  int _score = 0;
+  late int _index;
+  late int _score;
   int? _chosen; // null until the user answers the current question
   bool _finished = false;
   bool _hintUsed = false;
@@ -40,8 +46,23 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
   @override
   void initState() {
     super.initState();
+    _index = widget.startIndex.clamp(0, widget.questions.length - 1);
+    _score = widget.startScore;
+    // Mark these as seen so the next round rotates to fresh questions.
+    QuizService.markSeen(widget.questions);
+    // Persist immediately so leaving now still leaves a resumable round.
+    _persist();
     // Preload an opt-in rewarded ad for the 50/50 hint.
     RewardedAdManager.loadAd();
+  }
+
+  void _persist() {
+    QuizService.saveSession(
+      ids: [for (final q in widget.questions) q.id],
+      index: _index,
+      score: _score,
+      title: widget.title,
+    );
   }
 
   /// Opt-in rewarded bonus: watch a short ad to remove two wrong answers.
@@ -72,10 +93,13 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
 
   void _answer(int i) {
     if (_chosen != null) return; // already answered
+    final correct = _q.isCorrect(i);
     setState(() {
       _chosen = i;
-      if (_q.isCorrect(i)) _score++;
+      if (correct) _score++;
     });
+    // Feed the lifetime rating.
+    QuizService.recordAnswer(correct);
   }
 
   Future<void> _next() async {
@@ -86,8 +110,10 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
         _hintUsed = false;
         _hidden.clear();
       });
+      _persist(); // save progress so the round is resumable
     } else {
       if (widget.isDaily) await QuizService.recordDailyComplete();
+      await QuizService.clearSession(); // round done — nothing to resume
       if (!mounted) return;
       setState(() => _finished = true);
       // One capped interstitial at the natural end of a session (never

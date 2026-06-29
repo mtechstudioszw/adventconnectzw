@@ -28,12 +28,13 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
     required String title,
     required bool isDaily,
     String? category,
+    int count = 10,
   }) async {
     if (_busy) return;
     setState(() => _busy = true);
     final qs = isDaily
         ? await QuizService.dailySet()
-        : await QuizService.practiceSet(category: category);
+        : await QuizService.practiceSet(category: category, count: count);
     if (!mounted) return;
     setState(() => _busy = false);
     if (qs.isEmpty) {
@@ -46,12 +47,38 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
       builder: (_) =>
           QuizPlayScreen(questions: qs, title: title, isDaily: isDaily),
     ));
-    if (mounted) setState(() {}); // refresh streak after a daily round
+    if (mounted) setState(() {}); // refresh streak/rating/resume after a round
+  }
+
+  /// Continue an interrupted round saved by the play screen.
+  Future<void> _resume(Map<String, dynamic> s) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ids = (s['ids'] as List? ?? const []).map((e) => e.toString()).toList();
+    final qs = await QuizService.questionsByIds(ids);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    // Questions changed underneath us (e.g. admin edits) — drop the stale save.
+    if (qs.length != ids.length || qs.isEmpty) {
+      await QuizService.clearSession();
+      if (mounted) setState(() {});
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => QuizPlayScreen(
+        questions: qs,
+        title: s['title']?.toString() ?? 'Quiz',
+        startIndex: (s['index'] as num?)?.toInt() ?? 0,
+        startScore: (s['score'] as num?)?.toInt() ?? 0,
+      ),
+    ));
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final session = QuizService.loadSession();
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
@@ -67,10 +94,32 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
           children: [
+            if (session != null) ...[
+              _ResumeCard(
+                index: (session['index'] as num?)?.toInt() ?? 0,
+                total: (session['ids'] as List?)?.length ?? 0,
+                title: session['title']?.toString() ?? 'Quiz',
+                onResume: () => _resume(session),
+                onDiscard: () async {
+                  await QuizService.clearSession();
+                  if (mounted) setState(() {});
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
             _DailyCard(
               streak: QuizService.currentStreak(),
               playedToday: QuizService.playedToday(),
-              onPlay: () => _play(title: 'Daily Challenge', isDaily: true),
+              onPlay: () => QuizService.playedToday()
+                  ? _play(title: 'Daily Challenge', isDaily: false, count: 5)
+                  : _play(title: 'Daily Challenge', isDaily: true),
+            ),
+            const SizedBox(height: 16),
+            _RatingCard(
+              label: QuizService.ratingLabel(),
+              accuracy: QuizService.accuracyPct(),
+              answered: QuizService.totalAnswered(),
+              stars: QuizService.ratingStars(),
             ),
             const SizedBox(height: 20),
             Text('PRACTICE',
@@ -213,6 +262,155 @@ class _DailyCard extends StatelessWidget {
                   style: AppTextStyles.buttonText.copyWith(
                       color: AppColors.primaryBlue,
                       fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Continue-where-you-left-off banner, shown when a round was interrupted.
+class _ResumeCard extends StatelessWidget {
+  const _ResumeCard({
+    required this.index,
+    required this.total,
+    required this.title,
+    required this.onResume,
+    required this.onDiscard,
+  });
+  final int index;
+  final int total;
+  final String title;
+  final VoidCallback onResume;
+  final VoidCallback onDiscard;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.goldAccent.withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.play_circle_outline, color: AppColors.primaryBlue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Resume “$title”',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleSmall
+                        .copyWith(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text('You stopped at question ${index + 1} of $total',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: palette.textMuted)),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onDiscard,
+            child: Text('Discard',
+                style: AppTextStyles.labelMedium
+                    .copyWith(color: palette.textMuted)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: onResume,
+            child: Text('Resume',
+                style: AppTextStyles.labelMedium
+                    .copyWith(color: AppColors.white, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The player's lifetime "rating" — rank, stars and accuracy.
+class _RatingCard extends StatelessWidget {
+  const _RatingCard({
+    required this.label,
+    required this.accuracy,
+    required this.answered,
+    required this.stars,
+  });
+  final String label;
+  final int accuracy;
+  final int answered;
+  final int stars;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.divider),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.workspace_premium_outlined,
+                color: AppColors.primaryBlue),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('Your rating: ',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: palette.textMuted)),
+                    Text(label,
+                        style: AppTextStyles.titleSmall.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryBlue)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                if (answered == 0)
+                  Text('Play a round to start your rating.',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: palette.textMuted))
+                else
+                  Row(
+                    children: [
+                      for (var i = 0; i < 5; i++)
+                        Icon(
+                          i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                          size: 18,
+                          color: AppColors.goldAccent,
+                        ),
+                      const SizedBox(width: 8),
+                      Text('$accuracy% · $answered answered',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: palette.textMuted)),
+                    ],
+                  ),
+              ],
             ),
           ),
         ],

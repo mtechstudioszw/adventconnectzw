@@ -68,7 +68,9 @@ class QuizService {
     return pool.take(count).toList();
   }
 
-  /// A practice round: [count] random questions, optionally from one category.
+  /// A practice round that ROTATES: prefers questions the player hasn't seen
+  /// recently, so tapping "play again" keeps serving fresh questions until the
+  /// pool is exhausted, then cycles. [category] limits to one topic.
   static Future<List<QuizQuestion>> practiceSet({
     String? category,
     int count = 10,
@@ -77,8 +79,20 @@ class QuizService {
     final pool = category == null
         ? List.of(list)
         : list.where((q) => q.category == category).toList();
-    pool.shuffle();
-    return pool.take(count).toList();
+    if (pool.isEmpty) return const [];
+
+    var seen = _seenIds();
+    var unseen = pool.where((q) => !seen.contains(q.id)).toList();
+    // Not enough fresh questions left in this pool → reset the "seen" marks
+    // for this pool so we start cycling through it again.
+    if (unseen.length < count) {
+      final poolIds = pool.map((q) => q.id).toSet();
+      seen = seen.where((id) => !poolIds.contains(id)).toSet();
+      _writeSeen(seen);
+      unseen = List.of(pool);
+    }
+    unseen.shuffle();
+    return unseen.take(count).toList();
   }
 
   static Random _dayRng() {
@@ -167,4 +181,126 @@ class QuizService {
       await CacheService.writePref(_kBestStreak, next.toString());
     }
   }
+
+  // ---- Seen-question rotation (local) --------------------------------------
+
+  static const _kSeen = 'quiz_seen_ids';
+
+  static Set<String> _seenIds() {
+    final raw = CacheService.readPref(_kSeen);
+    if (raw == null) return <String>{};
+    try {
+      return (jsonDecode(raw) as List).map((e) => e.toString()).toSet();
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  static void _writeSeen(Set<String> ids) {
+    CacheService.writePref(_kSeen, jsonEncode(ids.toList())).ignore();
+  }
+
+  /// Remember that [questions] were just played, so the next round rotates to
+  /// fresh ones. Called by the play screen when a round loads.
+  static void markSeen(Iterable<QuizQuestion> questions) {
+    final set = _seenIds()..addAll(questions.map((q) => q.id));
+    _writeSeen(set);
+  }
+
+  // ---- Rating / lifetime stats (local) -------------------------------------
+
+  static const _kAnswered = 'quiz_total_answered';
+  static const _kCorrect = 'quiz_total_correct';
+
+  static int totalAnswered() =>
+      int.tryParse(CacheService.readPref(_kAnswered) ?? '') ?? 0;
+
+  static int totalCorrect() =>
+      int.tryParse(CacheService.readPref(_kCorrect) ?? '') ?? 0;
+
+  /// Lifetime accuracy as a 0–100 percentage (0 when nothing answered yet).
+  static int accuracyPct() {
+    final a = totalAnswered();
+    if (a == 0) return 0;
+    return (totalCorrect() / a * 100).round();
+  }
+
+  /// A friendly rank that grows with how many questions the player has gotten
+  /// right — the visible "rating".
+  static String ratingLabel() {
+    final c = totalCorrect();
+    if (c >= 400) return 'Master';
+    if (c >= 150) return 'Teacher';
+    if (c >= 50) return 'Scholar';
+    if (c >= 10) return 'Student';
+    return 'Beginner';
+  }
+
+  /// 1–5 stars derived from lifetime accuracy, for a quick visual rating.
+  static int ratingStars() {
+    if (totalAnswered() < 5) return 0; // not enough data yet
+    final p = accuracyPct();
+    if (p >= 90) return 5;
+    if (p >= 75) return 4;
+    if (p >= 60) return 3;
+    if (p >= 40) return 2;
+    return 1;
+  }
+
+  /// Record one answered question (correct or not) toward the lifetime rating.
+  static Future<void> recordAnswer(bool correct) async {
+    await CacheService.writePref(_kAnswered, (totalAnswered() + 1).toString());
+    if (correct) {
+      await CacheService.writePref(_kCorrect, (totalCorrect() + 1).toString());
+    }
+  }
+
+  // ---- Resume an interrupted round (local) ---------------------------------
+
+  static const _kSession = 'quiz_session';
+
+  /// Rebuild questions from saved ids, preserving order. Skips any that no
+  /// longer exist (e.g. the admin deleted one).
+  static Future<List<QuizQuestion>> questionsByIds(List<String> ids) async {
+    final byId = {for (final q in await all()) q.id: q};
+    return [
+      for (final id in ids)
+        if (byId[id] != null) byId[id]!,
+    ];
+  }
+
+  /// Persist the in-progress round so the player can resume after leaving.
+  static Future<void> saveSession({
+    required List<String> ids,
+    required int index,
+    required int score,
+    required String title,
+  }) async {
+    await CacheService.writePref(
+      _kSession,
+      jsonEncode({
+        'ids': ids,
+        'index': index,
+        'score': score,
+        'title': title,
+      }),
+    );
+  }
+
+  /// The saved in-progress round, or null. Shape:
+  /// `{ids: [...], index, score, title}`.
+  static Map<String, dynamic>? loadSession() {
+    final raw = CacheService.readPref(_kSession);
+    if (raw == null) return null;
+    try {
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      final ids = (m['ids'] as List?) ?? const [];
+      if (ids.isEmpty) return null;
+      return m;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> clearSession() => CacheService.writePref(_kSession, '');
 }

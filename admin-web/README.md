@@ -15,6 +15,7 @@ is far nicer on a big screen.
 | **Feedback** | `admin_list_feedback` / `admin_reply_feedback` (patch_040) |
 | **Church claims** | `admin_list_pending_church_admins` / `admin_approve_church_admin` / `admin_reject_church_admin` (patch_112) |
 | **Church admins** | `admin_list_church_admins` / `admin_warn_church_admin` / `admin_revoke_church_admin` (patch_153) |
+| **YouTube** | `admin_list_youtube_channels` / `admin_list_youtube_submissions` / `admin_add_youtube_channel` / `admin_review_youtube_submission` / `admin_set_youtube_channel_status` (patch_154) |
 | **Users** | `admin_search_users` / `admin_set_banned` (patch_040) |
 | **Broadcast** | `admin_broadcast` (patch_040) |
 

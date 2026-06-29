@@ -153,6 +153,7 @@
         <a data-tab="jobs">💼 Jobs <span class="badge" id="b-jobs" style="display:none"></span></a>
         <a data-tab="churches">⛪ Church claims <span class="badge" id="b-churches" style="display:none"></span></a>
         <a data-tab="churchadmins">🛡️ Church admins</a>
+        <a data-tab="youtube">📺 YouTube</a>
         <a data-tab="feedback">💬 Feedback <span class="badge" id="b-feedback" style="display:none"></span></a>
         <a data-tab="insights">📈 Insights</a>
         <a data-tab="users">👤 Users</a>
@@ -276,7 +277,7 @@ $("nav").addEventListener("click", (e) => {
 function switchTab(tab) {
   document.querySelectorAll("#nav a").forEach(a =>
     a.classList.toggle("active", a.dataset.tab === tab));
-  ({ overview, sellers, reports, news, events, jobs, churches, churchadmins, feedback, insights, users, broadcast }[tab] || overview)();
+  ({ overview, sellers, reports, news, events, jobs, churches, churchadmins, youtube, feedback, insights, users, broadcast }[tab] || overview)();
 }
 
 async function refreshBadges() {
@@ -668,6 +669,100 @@ async function churchadmins() {
   }
 
   loadCa();
+}
+
+// ---- YouTube channels (Watch) — approve submissions + manage channels ----
+async function youtube() {
+  view().innerHTML = head("YouTube channels",
+    "Approve creator submissions, add channels, and manage what feeds the Watch tab.") +
+    `<div class="form" style="max-width:560px;margin-bottom:18px">
+       <label>Add a channel</label>
+       <div class="toolbar">
+         <input id="ytlink" placeholder="YouTube channel link or @handle" />
+         <button class="btn primary" id="ytadd">Add</button>
+       </div>
+       <div class="ok" id="ytaddok"></div>
+     </div>
+     <div id="ytsubs"></div>
+     <div id="ytchans"></div>`;
+  $("ytadd").onclick = async () => {
+    const link = $("ytlink").value.trim();
+    if (!link) return;
+    $("ytadd").disabled = true;
+    try {
+      await rpc("admin_add_youtube_channel", { p_link: link });
+      $("ytlink").value = "";
+      $("ytaddok").style.color = "var(--green)";
+      $("ytaddok").textContent = "Added — it will resolve + sync shortly.";
+      loadYt();
+    } catch (e) { $("ytaddok").style.color = "var(--red)"; $("ytaddok").textContent = e.message; }
+    finally { $("ytadd").disabled = false; }
+  };
+  loadYt();
+
+  async function loadYt() {
+    // Pending creator submissions.
+    try {
+      const subs = await rpc("admin_list_youtube_submissions", { p_status: "pending" });
+      $("ytsubs").innerHTML = !subs.length ? "" :
+        `<h2 style="font-size:15px;margin:6px 2px">Pending submissions</h2>` +
+        `<table><thead><tr><th>Channel</th><th>Submitter</th><th></th></tr></thead><tbody>` +
+        subs.map(s => {
+          const wa = String(s.submitter_contact || "").replace(/[^0-9]/g, "");
+          return `<tr>
+            <td><a href="${esc(s.link)}" target="_blank" rel="noopener">${esc(s.link)}</a>
+                ${s.note ? `<div class="meta">“${esc(s.note)}”</div>` : ""}</td>
+            <td>${esc(s.submitter_name || s.profile_name || "—")}
+                <div class="meta">${esc(s.submitter_contact || s.profile_email || "")}</div></td>
+            <td style="white-space:nowrap">
+              ${wa ? `<a class="btn ghost" href="https://wa.me/${wa}" target="_blank" rel="noopener">WhatsApp</a>` : ""}
+              <button class="btn green" data-ytok="${s.id}">Approve</button>
+              <button class="btn red" data-ytno="${s.id}">Reject</button>
+            </td></tr>`;
+        }).join("") + `</tbody></table>`;
+      $("ytsubs").querySelectorAll("[data-ytok]").forEach(b => b.onclick = async () => {
+        b.disabled = true;
+        try { await rpc("admin_review_youtube_submission", { p_id: Number(b.dataset.ytok), p_approve: true }); loadYt(); }
+        catch (e) { alert(e.message); b.disabled = false; }
+      });
+      $("ytsubs").querySelectorAll("[data-ytno]").forEach(b => b.onclick = async () => {
+        const reason = await ask({ title: "Reject submission", sub: "Optional reason sent to the submitter.", placeholder: "Reason (optional)", okLabel: "Reject", okClass: "red" });
+        if (reason === null) return;
+        try { await rpc("admin_review_youtube_submission", { p_id: Number(b.dataset.ytno), p_approve: false, p_reason: reason }); loadYt(); }
+        catch (e) { alert(e.message); }
+      });
+    } catch (e) { $("ytsubs").innerHTML = errBox(e); }
+
+    // All channels.
+    try {
+      const chans = await rpc("admin_list_youtube_channels", { p_status: "all" });
+      $("ytchans").innerHTML = `<h2 style="font-size:15px;margin:18px 2px 6px">Channels</h2>` +
+        (!chans.length ? empty("No channels yet — add one above.") :
+          `<table><thead><tr><th>Channel</th><th>Status</th><th></th></tr></thead><tbody>` +
+          chans.map(c => `<tr>
+            <td><b>${esc(c.title || c.channel_id)}</b>${c.handle ? `<div class="meta">${esc(c.handle)}</div>` : ""}
+                ${c.is_live ? ` <span class="chip red">LIVE</span>` : ""}</td>
+            <td>${c.status === 'active' ? `<span class="chip green">ACTIVE</span>` :
+                  c.status === 'disabled' ? `<span class="chip grey">DISABLED</span>` :
+                  `<span class="chip grey">${esc((c.status || '').toUpperCase())}</span>`}
+                ${c.status === 'active' && !c.backfill_done ? `<div class="meta">syncing…</div>` : ""}</td>
+            <td style="white-space:nowrap">
+              ${c.status === 'active'
+                ? `<button class="btn ghost" data-ytoff="${esc(c.channel_id)}">Disable</button>`
+                : `<button class="btn green" data-yton="${esc(c.channel_id)}">Enable</button>`}
+            </td></tr>`).join("") + `</tbody></table>`);
+      $("ytchans").querySelectorAll("[data-ytoff]").forEach(b => b.onclick = async () => {
+        const ok = await ask({ title: "Disable channel", sub: "Hides its videos from Watch and stops syncing.", okLabel: "Disable", okClass: "red", needText: false });
+        if (!ok) return;
+        try { await rpc("admin_set_youtube_channel_status", { p_channel_id: b.dataset.ytoff, p_status: "disabled" }); loadYt(); }
+        catch (e) { alert(e.message); }
+      });
+      $("ytchans").querySelectorAll("[data-yton]").forEach(b => b.onclick = async () => {
+        try { await rpc("admin_set_youtube_channel_status", { p_channel_id: b.dataset.yton, p_status: "active" }); loadYt(); }
+        catch (e) { alert(e.message); }
+      });
+    } catch (e) { $("ytchans").innerHTML = errBox(e); }
+  }
 }
 
 async function insights() {

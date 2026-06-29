@@ -1,14 +1,15 @@
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 
 import '../models/library_item_model.dart';
 
-/// App-wide background music player for the Library Music tab.
+/// App-wide music player for the Library Music tab.
 ///
-/// Wraps a single [AudioPlayer] from `just_audio`. Because the app calls
-/// `JustAudioBackground.init()` in main(), each [MediaItem] tag below surfaces
-/// as a lock-screen / notification media session — so playback continues when
-/// the app is backgrounded and the user can play/pause/skip from there.
+/// Plain [just_audio] — NO just_audio_background. The background plugin kept
+/// throwing "_audioHandler has not been initialized" / MediaItem-tag errors on
+/// some devices, so music wouldn't play at all. A plain AudioPlayer plays
+/// reliably (in-app now-playing bar + full player). Lock-screen / background
+/// notification controls are intentionally dropped for reliability; they can
+/// be re-added later via a properly-configured audio_service.
 ///
 /// Singleton so the now-playing bar, the music tab and the full player screen
 /// all reflect one shared playback state.
@@ -17,29 +18,6 @@ class MusicPlayerService {
   static final MusicPlayerService instance = MusicPlayerService._();
 
   final AudioPlayer player = AudioPlayer();
-
-  // just_audio_background must be init()'d exactly once, BEFORE any tagged
-  // AudioSource is loaded — otherwise loading a track throws
-  // "LateInitializationError: Field '_audioHandler' has not been initialized"
-  // (the "music won't play" crash). We run it through a single shared future
-  // so it's idempotent, and remember whether it succeeded. If it FAILS on a
-  // device (some OEMs reject the media service), we fall back to plain,
-  // tag-less playback so music still plays — just without the lock-screen
-  // notification.
-  static Future<void>? _bgInit;
-  static bool _bgReady = false;
-
-  static Future<void> ensureBackgroundReady() {
-    return _bgInit ??= JustAudioBackground.init(
-      androidNotificationChannelId: 'zw.adventconnect.audio',
-      androidNotificationChannelName: 'Advent Connect Music',
-      androidNotificationOngoing: true,
-    ).then((_) {
-      _bgReady = true;
-    }).catchError((_) {
-      _bgReady = false; // degrade to foreground-only playback
-    });
-  }
 
   /// The playlist currently loaded (the music tab's list), so the now-playing
   /// bar can resolve titles/art by index.
@@ -65,10 +43,6 @@ class MusicPlayerService {
     List<LibraryItem> items,
     int startIndex,
   ) async {
-    // Make sure the media session is up before loading a tagged source. Safe
-    // to await every time — it resolves instantly after the first run.
-    await ensureBackgroundReady();
-
     final signature = items.map((e) => e.id).join(',');
     if (signature == _loadedSignature) {
       await player.seek(Duration.zero, index: startIndex);
@@ -78,51 +52,18 @@ class MusicPlayerService {
     _queue = items;
     _loadedSignature = signature;
 
-    ConcatenatingAudioSource build({required bool tagged}) =>
-        ConcatenatingAudioSource(
-          children: items
-              .map(
-                // Plain progressive streaming. We previously used the
-                // experimental LockCachingAudioSource (stream + cache to disk),
-                // but it silently failed to start playback on some devices —
-                // "music won't play". AudioSource.uri is the stable path;
-                // offline is still available via the per-track Download button.
-                (item) => AudioSource.uri(
-                  Uri.parse(item.fileUrl),
-                  tag: tagged
-                      ? MediaItem(
-                          id: item.id,
-                          title: item.title,
-                          artist: item.author ?? 'Advent Connect ZW',
-                          artUri: (item.coverUrl != null &&
-                                  item.coverUrl!.isNotEmpty)
-                              ? Uri.parse(item.coverUrl!)
-                              : null,
-                        )
-                      : null,
-                ),
-              )
-              .toList(),
-        );
-
-    try {
-      // Use MediaItem tags only when the background handler is ready.
-      await player.setAudioSource(
-        build(tagged: _bgReady),
-        initialIndex: startIndex,
-        initialPosition: Duration.zero,
-      );
-    } catch (e) {
-      // Safety net: if a tagged source still throws (e.g. the media session
-      // failed to initialise on this device — "_audioHandler not initialized"),
-      // retry WITHOUT tags so music still plays (just no lock-screen controls).
-      _bgReady = false;
-      await player.setAudioSource(
-        build(tagged: false),
-        initialIndex: startIndex,
-        initialPosition: Duration.zero,
-      );
-    }
+    // Plain progressive streaming, no MediaItem tags. The PDF/audio is cached
+    // by the OS HTTP layer; offline downloads use the per-track Download button.
+    final source = ConcatenatingAudioSource(
+      children: [
+        for (final item in items) AudioSource.uri(Uri.parse(item.fileUrl)),
+      ],
+    );
+    await player.setAudioSource(
+      source,
+      initialIndex: startIndex,
+      initialPosition: Duration.zero,
+    );
     await player.play();
   }
 

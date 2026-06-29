@@ -18,7 +18,6 @@ import 'services/ads/app_open_ad_manager.dart';
 import 'services/connectivity_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
-import 'services/music_player_service.dart';
 import 'services/presence_service.dart';
 import 'services/push_service.dart';
 import 'services/theme_service.dart';
@@ -46,17 +45,9 @@ void main() async {
     ThemeService.init(),
   ]);
 
-  // Background audio for the Library Music player (lock-screen / notification
-  // controls + playback that continues when the app is backgrounded). Cheap
-  // local setup; safe to await. Fails open so a platform without the media
-  // service (e.g. desktop) never blocks launch.
-  // Initialise the audio media session BEFORE runApp. just_audio_background
-  // must be init()'d before the first AudioPlayer is constructed (which happens
-  // when the Music tab first builds), otherwise loading a track throws
-  // "_audioHandler has not been initialized". Awaiting here guarantees that
-  // ordering. It's idempotent + fails open (tag-less playback) so a slow/failed
-  // init never blocks launch indefinitely.
-  await MusicPlayerService.ensureBackgroundReady();
+  // (Music playback uses plain just_audio now — no just_audio_background init.
+  // The background plugin's "_audioHandler not initialized" race stopped music
+  // from playing at all, so it was removed for reliability.)
 
   // CacheService opens a Hive box (reads the WHOLE box into memory). If it
   // ever grew large that openBox blocked the first frame for many seconds

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -95,6 +98,47 @@ class LocationService {
   /// it on. Use this when [LocationFailure.servicesDisabled] is hit.
   static Future<bool> openLocationSettings() =>
       Geolocator.openLocationSettings();
+
+  /// Forward-geocode a free-text address into coordinates using OpenStreetMap's
+  /// free Nominatim service (no API key). Used so a church admin only has to
+  /// type the church's address and "Near me" can then rank it by real distance.
+  ///
+  /// Biased to Zimbabwe. Returns null when the address can't be resolved or the
+  /// request fails — callers fall back to saving without coordinates.
+  static Future<({double lat, double lng})?> geocodeAddress(
+    String address,
+  ) async {
+    final q = address.trim();
+    if (q.length < 3) return null;
+    final uri = Uri.parse(
+      'https://nominatim.openstreetmap.org/search'
+      '?q=${Uri.encodeQueryComponent(q)}'
+      '&format=json&limit=1&countrycodes=zw',
+    );
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+      final req = await client.getUrl(uri);
+      // Nominatim's usage policy requires a descriptive User-Agent.
+      req.headers.set(HttpHeaders.userAgentHeader,
+          'AdventConnectZW/1.0 (church-locator)');
+      final resp = await req.close().timeout(const Duration(seconds: 15));
+      if (resp.statusCode != 200) return null;
+      final body = await resp.transform(utf8.decoder).join();
+      final data = jsonDecode(body);
+      if (data is! List || data.isEmpty) return null;
+      final first = data.first as Map<String, dynamic>;
+      final lat = double.tryParse('${first['lat']}');
+      final lng = double.tryParse('${first['lon']}');
+      if (lat == null || lng == null) return null;
+      return (lat: lat, lng: lng);
+    } catch (e) {
+      debugPrint('LocationService.geocodeAddress failed: $e');
+      return null;
+    } finally {
+      client?.close(force: true);
+    }
+  }
 
   /// Great-circle distance in metres between two points.
   static double distanceMeters({

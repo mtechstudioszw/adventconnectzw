@@ -47,6 +47,12 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   String? _cityFilter;
   bool _verifiedOnly = false;
 
+  // "Near me" by real distance: the device location + a flag to rank churches
+  // (that have coordinates) nearest-first.
+  double? _devLat;
+  double? _devLng;
+  bool _nearMode = false;
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +108,29 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     if (_verifiedOnly) {
       list = list.where((c) => c.isVerified).toList();
     }
+    // Near me: rank churches that have coordinates (geocoded from the address
+    // a church admin entered) nearest-first, then the rest.
+    if (_nearMode && _devLat != null && _devLng != null) {
+      final ranked = <(double, Church)>[];
+      final rest = <Church>[];
+      for (final c in list) {
+        if (c.latitude != null && c.longitude != null) {
+          ranked.add((
+            LocationService.distanceMeters(
+              fromLat: _devLat!,
+              fromLng: _devLng!,
+              toLat: c.latitude!,
+              toLng: c.longitude!,
+            ),
+            c,
+          ));
+        } else {
+          rest.add(c);
+        }
+      }
+      ranked.sort((a, b) => a.$1.compareTo(b.$1));
+      list = [...ranked.map((e) => e.$2), ...rest];
+    }
     return list;
   }
 
@@ -136,10 +165,22 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
       });
       return;
     }
-    final city = nearestZimbabweCity(
-        result.position!.latitude, result.position!.longitude);
-    if (city == null) return;
-    setState(() => _cityFilter = city);
+    // Rank ALL churches by real distance from the device. Churches with
+    // coordinates (geocoded from their address) float to the top, nearest
+    // first. If none have coordinates yet, fall back to the nearest city so
+    // the button still does something useful.
+    setState(() {
+      _devLat = result.position!.latitude;
+      _devLng = result.position!.longitude;
+      _nearMode = true;
+      _cityFilter = null;
+    });
+    final anyCoords = _churches.any((c) => c.latitude != null);
+    if (!anyCoords) {
+      final city = nearestZimbabweCity(
+          result.position!.latitude, result.position!.longitude);
+      if (city != null) setState(() => _cityFilter = city);
+    }
   }
 
   /// Searchable picker over every city in the loaded data.
@@ -388,10 +429,13 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           _FilterChip(
             label: 'All',
             icon: Icons.apps,
-            selected: _cityFilter == null && !_verifiedOnly,
+            selected: _cityFilter == null && !_verifiedOnly && !_nearMode,
             onTap: () => setState(() {
               _cityFilter = null;
               _verifiedOnly = false;
+              _nearMode = false;
+              _devLat = null;
+              _devLng = null;
             }),
           ),
           const SizedBox(width: 8),

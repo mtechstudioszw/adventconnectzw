@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/church_service.dart';
+import '../../services/location_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -136,6 +137,22 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      var lat = double.tryParse(_latitude.text.trim());
+      var lng = double.tryParse(_longitude.text.trim());
+      // If there's an address but no manual coordinates, geocode the address so
+      // this church can be found by real distance in "Near me". Best-effort —
+      // a failed geocode just saves without coordinates.
+      if ((lat == null || lng == null) && _address.text.trim().isNotEmpty) {
+        final geo = await LocationService.geocodeAddress(
+          [_address.text, _suburb.text, _city.text, 'Zimbabwe']
+              .where((s) => s.trim().isNotEmpty)
+              .join(', '),
+        );
+        if (geo != null) {
+          lat = geo.lat;
+          lng = geo.lng;
+        }
+      }
       await ChurchService.updateChurch(
         churchId: widget.role.churchId,
         description: _description.text,
@@ -146,8 +163,8 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
         phone: _phone.text,
         email: _email.text,
         foundedYear: int.tryParse(_foundedYear.text.trim()),
-        latitude: double.tryParse(_latitude.text.trim()),
-        longitude: double.tryParse(_longitude.text.trim()),
+        latitude: lat,
+        longitude: lng,
         coverPhotoUrl: _coverUrl,
         profilePhotoUrl: _logoUrl,
       );

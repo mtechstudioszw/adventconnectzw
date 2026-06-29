@@ -255,7 +255,7 @@ class _HymnalTabState extends State<HymnalTab>
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: base.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, i) => _hymnTile(context, base[i]),
+                    itemBuilder: (context, i) => _hymnTile(context, base, i),
                   ),
           ),
         ),
@@ -263,8 +263,9 @@ class _HymnalTabState extends State<HymnalTab>
     );
   }
 
-  Widget _hymnTile(BuildContext context, Hymn h) {
+  Widget _hymnTile(BuildContext context, List<Hymn> hymns, int index) {
     final palette = context.palette;
+    final h = hymns[index];
     final fav = HymnPrefs.favorites().contains(h.id);
     return Material(
       color: palette.card,
@@ -272,7 +273,8 @@ class _HymnalTabState extends State<HymnalTab>
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => _HymnReaderScreen(hymn: h),
+          builder: (_) =>
+              _HymnReaderScreen(hymns: hymns, initialIndex: index),
         )),
         child: Container(
           padding: const EdgeInsets.all(14),
@@ -336,8 +338,11 @@ class _HymnalTabState extends State<HymnalTab>
 // ---------------------------------------------------------------------------
 
 class _HymnReaderScreen extends StatefulWidget {
-  const _HymnReaderScreen({required this.hymn});
-  final Hymn hymn;
+  const _HymnReaderScreen({required this.hymns, required this.initialIndex});
+
+  /// The list being browsed, so the reader can SWIPE between hymns.
+  final List<Hymn> hymns;
+  final int initialIndex;
 
   @override
   State<_HymnReaderScreen> createState() => _HymnReaderScreenState();
@@ -345,6 +350,23 @@ class _HymnReaderScreen extends StatefulWidget {
 
 class _HymnReaderScreenState extends State<_HymnReaderScreen> {
   double _scale = HymnPrefs.fontScale();
+  late final PageController _pageCtrl;
+  late int _index;
+
+  Hymn get _h => widget.hymns[_index];
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex.clamp(0, widget.hymns.length - 1);
+    _pageCtrl = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
 
   void _setScale(double v) {
     final clamped = v.clamp(0.8, 1.8);
@@ -353,10 +375,20 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
     HymnPrefs.setFontScale(clamped);
   }
 
+  void _go(int delta) {
+    final target = (_index + delta).clamp(0, widget.hymns.length - 1);
+    if (target == _index) return;
+    _pageCtrl.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final h = widget.hymn;
+    final h = _h;
     final fav = HymnPrefs.favorites().contains(h.id);
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
@@ -397,36 +429,77 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
           ),
         ],
       ),
+      // Swipe left/right to flip between hymns (like turning pages).
       body: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: PageView.builder(
+          controller: _pageCtrl,
+          itemCount: widget.hymns.length,
+          onPageChanged: (i) => setState(() => _index = i),
+          itemBuilder: (context, i) => _hymnPage(context, widget.hymns[i]),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: SizedBox(
+          height: 50,
+          child: Row(
             children: [
-              Text(h.title,
-                  style: AppTextStyles.headlineSmall.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 22 * _scale,
-                      color: palette.text)),
-              if (h.category != null && h.category!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(h.category!,
-                    style: AppTextStyles.labelMedium
-                        .copyWith(color: AppColors.primaryBlue)),
-              ],
-              const SizedBox(height: 18),
-              SelectableText(
-                h.lyrics,
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: palette.text,
-                  height: 1.8,
-                  fontSize: 17 * _scale,
+              Expanded(
+                child: IconButton(
+                  tooltip: 'Previous hymn',
+                  color: AppColors.primaryBlue,
+                  onPressed: _index <= 0 ? null : () => _go(-1),
+                  icon: const Icon(Icons.chevron_left),
+                ),
+              ),
+              Text('${_index + 1} of ${widget.hymns.length}',
+                  style: AppTextStyles.labelMedium
+                      .copyWith(color: palette.textMuted)),
+              Expanded(
+                child: IconButton(
+                  tooltip: 'Next hymn',
+                  color: AppColors.primaryBlue,
+                  onPressed: _index >= widget.hymns.length - 1
+                      ? null
+                      : () => _go(1),
+                  icon: const Icon(Icons.chevron_right),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _hymnPage(BuildContext context, Hymn h) {
+    final palette = context.palette;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(h.title,
+              style: AppTextStyles.headlineSmall.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 22 * _scale,
+                  color: palette.text)),
+          if (h.category != null && h.category!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(h.category!,
+                style: AppTextStyles.labelMedium
+                    .copyWith(color: AppColors.primaryBlue)),
+          ],
+          const SizedBox(height: 18),
+          SelectableText(
+            h.lyrics,
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: palette.text,
+              height: 1.8,
+              fontSize: 17 * _scale,
+            ),
+          ),
+        ],
       ),
     );
   }

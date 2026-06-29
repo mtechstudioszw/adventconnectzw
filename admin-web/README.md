@@ -13,8 +13,16 @@ is far nicer on a big screen.
 | **Sellers** | `admin_pending_sellers` / `admin_approve_seller` / `admin_reject_seller` (patch_031/037) |
 | **Reports** | `admin_list_reports` / `admin_resolve_report` (patch_040) |
 | **Feedback** | `admin_list_feedback` / `admin_reply_feedback` (patch_040) |
+| **Church claims** | `admin_list_pending_church_admins` / `admin_approve_church_admin` / `admin_reject_church_admin` (patch_112) |
+| **Church admins** | `admin_list_church_admins` / `admin_warn_church_admin` / `admin_revoke_church_admin` (patch_153) |
 | **Users** | `admin_search_users` / `admin_set_banned` (patch_040) |
 | **Broadcast** | `admin_broadcast` (patch_040) |
+
+> **Church admins** manages *already-approved* admins (vs **Church claims**,
+> the pending queue). Removing one sets `church_admins.status='revoked'` —
+> a terminal, sticky state: they instantly lose every posting right and the
+> in-app re-claim is hard-blocked server-side, so the removal can't be
+> bypassed. Only a super admin can re-instate (Re-instate button).
 
 > Seller approve/reject also stays available **in-app** (Settings → Super
 > admin → Seller approvals) per the founder's request. Both surfaces call

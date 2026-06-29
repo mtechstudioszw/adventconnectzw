@@ -152,6 +152,7 @@
         <a data-tab="events">📅 Events <span class="badge" id="b-events" style="display:none"></span></a>
         <a data-tab="jobs">💼 Jobs <span class="badge" id="b-jobs" style="display:none"></span></a>
         <a data-tab="churches">⛪ Church claims <span class="badge" id="b-churches" style="display:none"></span></a>
+        <a data-tab="churchadmins">🛡️ Church admins</a>
         <a data-tab="feedback">💬 Feedback <span class="badge" id="b-feedback" style="display:none"></span></a>
         <a data-tab="insights">📈 Insights</a>
         <a data-tab="users">👤 Users</a>
@@ -275,7 +276,7 @@ $("nav").addEventListener("click", (e) => {
 function switchTab(tab) {
   document.querySelectorAll("#nav a").forEach(a =>
     a.classList.toggle("active", a.dataset.tab === tab));
-  ({ overview, sellers, reports, news, events, jobs, churches, feedback, insights, users, broadcast }[tab] || overview)();
+  ({ overview, sellers, reports, news, events, jobs, churches, churchadmins, feedback, insights, users, broadcast }[tab] || overview)();
 }
 
 async function refreshBadges() {
@@ -601,6 +602,72 @@ function churchProofMsg(name, church) {
   return `Hi ${name || "there"}, thank you for requesting to manage ${church || "your church"} on Advent Connect. `
     + `Before we can approve you, please send proof of your position at the church (e.g. Elder, Clerk, Pastor) — `
     + `a photo of an appointment letter or your church ID. Reply here with it and we will review again. Thank you!`;
+}
+
+// ---- Manage APPROVED church admins (warn / remove) ----
+let caFilter = "approved";
+async function churchadmins() {
+  view().innerHTML = head("Church admins",
+    "Approved church admins. Send a warning, or remove access — a removed admin loses every posting right and cannot re-claim that church.") +
+    `<div class="toolbar">${statusSelect("caf", ["approved","revoked","all"], caFilter)}
+       <input id="caq" placeholder="Search church, name or email…" />
+       <button class="btn primary" id="casearch">Search</button></div>
+     <div id="calist"></div>`;
+  $("caf").onchange = (e) => { caFilter = e.target.value; loadCa(); };
+  $("casearch").onclick = loadCa;
+  $("caq").addEventListener("keydown", e => { if (e.key === "Enter") loadCa(); });
+
+  async function loadCa() {
+    $("calist").innerHTML = loading();
+    try {
+      const rows = await rpc("admin_list_church_admins", { p_status: caFilter, p_search: $("caq").value.trim() });
+      if (!rows.length) { $("calist").innerHTML = empty("No church admins."); return; }
+      const body = rows.map(a => {
+        const wa = String(a.applicant_phone || "").replace(/[^0-9]/g, "");
+        const removed = a.status === "revoked";
+        const actions = removed
+          ? `<button class="btn green" data-reinstate="${a.id}">Re-instate</button>`
+          : `${wa ? `<a class="btn ghost" href="https://wa.me/${wa}" target="_blank" rel="noopener">WhatsApp</a>` : ""}
+             <button class="btn ghost" data-warn="${a.id}">Warn</button>
+             <button class="btn red" data-remove="${a.id}" data-church="${esc(a.church_name||'')}" data-name="${esc(a.profile_name||a.applicant_name||'')}">Remove</button>`;
+        return `<tr>
+          <td><b>${esc(a.church_name||"Church")}</b><div class="meta">${esc(a.church_city||"")} · ${a.follower_count} member(s)</div></td>
+          <td><b>${esc(a.profile_name||a.applicant_name||"—")}</b>
+              <div class="meta">${esc(a.profile_email||a.applicant_email||"—")}</div>
+              <div class="meta">📞 ${esc(a.applicant_phone||"—")} · ${esc(a.role||"")} · since ${fmtDate(a.approved_at||a.created_at)}</div>
+              ${removed && a.rejection_reason ? `<div class="meta">↳ removed: ${esc(a.rejection_reason)}</div>` : ""}</td>
+          <td>${removed ? `<span class="chip red">REMOVED</span>` : `<span class="chip green">ACTIVE</span>`}</td>
+          <td style="white-space:nowrap">${actions}</td>
+        </tr>`;
+      }).join("");
+      $("calist").innerHTML =
+        `<table><thead><tr><th>Church</th><th>Admin</th><th>Status</th><th></th></tr></thead><tbody>${body}</tbody></table>`;
+
+      $("calist").querySelectorAll("[data-warn]").forEach(b => b.onclick = async () => {
+        const msg = await ask({ title: "Warn church admin", sub: "Sent to them as an in-app notification (and a push).", placeholder: "Write the warning…", okLabel: "Send warning" });
+        if (!msg) return;
+        try { await rpc("admin_warn_church_admin", { p_id: Number(b.dataset.warn), p_message: msg }); alert("Warning sent."); }
+        catch (e) { alert(e.message); }
+      });
+      $("calist").querySelectorAll("[data-remove]").forEach(b => b.onclick = async () => {
+        const reason = await ask({
+          title: "Remove church admin",
+          sub: `Removes admin access for ${b.dataset.name || "this user"}${b.dataset.church ? " at " + b.dataset.church : ""}. They lose all posting rights and cannot re-claim this church. The optional reason is sent to them.`,
+          placeholder: "Reason (optional)", okLabel: "Remove", okClass: "red" });
+        if (reason === null) return;
+        try { await rpc("admin_revoke_church_admin", { p_id: Number(b.dataset.remove), p_reason: reason }); loadCa(); refreshBadges(); }
+        catch (e) { alert(e.message); }
+      });
+      $("calist").querySelectorAll("[data-reinstate]").forEach(b => b.onclick = async () => {
+        const ok = await ask({ title: "Re-instate admin", sub: "Restores their approved admin access to this church.", okLabel: "Re-instate", okClass: "green", needText: false });
+        if (!ok) return;
+        try { await rpc("admin_approve_church_admin", { p_id: Number(b.dataset.reinstate) }); loadCa(); }
+        catch (e) { alert(e.message); }
+      });
+    } catch (err) { $("calist").innerHTML = errBox(err); }
+  }
+
+  loadCa();
 }
 
 async function insights() {

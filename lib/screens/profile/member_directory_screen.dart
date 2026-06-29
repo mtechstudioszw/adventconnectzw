@@ -11,6 +11,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/verified_tick.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 /// Browse other community members who opted into the directory.
@@ -345,13 +346,21 @@ class _DirectoryRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  entry.fullName ?? 'Member',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.titleSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        entry.fullName ?? 'Member',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (entry.isVerified) const VerifiedTick(size: 14),
+                  ],
                 ),
                 if (entry.profession != null &&
                     entry.profession!.trim().isNotEmpty) ...[

@@ -47,6 +47,7 @@ class Conversation {
     this.pinnedMessageId,
     this.lastDelivered = false,
     this.lastRead = false,
+    this.otherUserIsVerified = false,
   });
 
   final String id;
@@ -81,6 +82,11 @@ class Conversation {
   // — drives the inbox tick (✓ / ✓✓ / ✓✓ blue). Both false otherwise.
   final bool lastDelivered;
   final bool lastRead;
+
+  /// The OTHER participant is a verified account (is_verified /
+  /// is_verified_admin) — drives the gold tick on the inbox tile + chat
+  /// header. Always false for groups.
+  final bool otherUserIsVerified;
 
   bool get isChurchGroup => churchKind != null;
   bool get isChurchChannel => churchKind == 'channel';
@@ -148,12 +154,18 @@ class Conversation {
     String? otherPhoto;
     final pa = json['participant_a'];
     final pb = json['participant_b'];
+    bool verifiedOf(dynamic p) =>
+        p is Map && (p['is_verified'] == true || p['is_verified_admin'] == true);
+    bool otherVerified;
     if (selfChat) {
       otherPhoto = (pa is Map ? pa['profile_photo_url'] : null) as String?;
+      otherVerified = verifiedOf(pa);
     } else if (isCurrentA) {
       otherPhoto = (pb is Map ? pb['profile_photo_url'] : null) as String?;
+      otherVerified = verifiedOf(pb);
     } else {
       otherPhoto = (pa is Map ? pa['profile_photo_url'] : null) as String?;
+      otherVerified = verifiedOf(pa);
     }
     return Conversation(
       id: json['id'].toString(),
@@ -176,6 +188,7 @@ class Conversation {
       // keeps ✓✓ instead of reverting to a single ✓ — the "lying tick" bug.
       lastDelivered: json['last_delivered'] == true,
       lastRead: json['last_read'] == true,
+      otherUserIsVerified: otherVerified,
     );
   }
 
@@ -211,6 +224,7 @@ class Conversation {
       churchId: churchId,
       lastDelivered: lastDelivered ?? this.lastDelivered,
       lastRead: lastRead ?? this.lastRead,
+      otherUserIsVerified: otherUserIsVerified,
     );
   }
 

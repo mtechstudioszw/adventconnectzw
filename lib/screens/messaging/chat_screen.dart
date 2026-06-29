@@ -25,6 +25,7 @@ import '../../services/voice_player_service.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/linkified_text.dart';
+import '../../widgets/verified_tick.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -2453,15 +2454,26 @@ class _ChatScreenState extends State<ChatScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.titleLarge.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style:
+                                            AppTextStyles.titleLarge.copyWith(
+                                          color: AppColors.white,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ),
+                                    if (!isGroup &&
+                                        (convo?.otherUserIsVerified ?? false))
+                                      const VerifiedTick(size: 16),
+                                  ],
                                 ),
                                 const SizedBox(height: 2),
                                 AnimatedSwitcher(

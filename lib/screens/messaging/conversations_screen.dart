@@ -18,6 +18,7 @@ import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
+import '../../widgets/verified_tick.dart';
 import 'chat_search_delegate.dart';
 
 class ConversationsScreen extends StatefulWidget {
@@ -1821,6 +1822,8 @@ class _ConversationTile extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (conversation.otherUserIsVerified)
+                          const VerifiedTick(size: 15),
                         if (conversation.isBusiness) ...[
                           const SizedBox(width: 6),
                           Container(
@@ -2255,6 +2258,8 @@ class _RequestTile extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            if (conversation.otherUserIsVerified)
+                              const VerifiedTick(size: 15),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,

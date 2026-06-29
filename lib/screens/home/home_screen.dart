@@ -56,6 +56,7 @@ import '../../widgets/job_card.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
+import '../../widgets/verified_tick.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/chat_contact_sheet.dart';
@@ -2029,15 +2030,24 @@ class _SuggestedMemberTile extends StatelessWidget {
                 name: name,
               ),
               const SizedBox(height: 10),
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.titleMedium.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ),
+                  if (entry.isVerified) const VerifiedTick(size: 13),
+                ],
               ),
               const SizedBox(height: 2),
               Text(

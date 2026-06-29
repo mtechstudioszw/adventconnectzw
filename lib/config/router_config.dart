@@ -26,6 +26,10 @@ import '../screens/churches/suggest_edit_screen.dart';
 import '../screens/home/post_notice_screen.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/library/library_screen.dart';
+import '../screens/watch/watch_screen.dart';
+import '../screens/watch/watch_search_screen.dart';
+import '../screens/watch/video_player_screen.dart';
+import '../models/youtube_video.dart';
 import '../screens/quiz/quiz_home_screen.dart';
 import '../screens/profile/blocked_users_screen.dart';
 import '../screens/profile/member_directory_screen.dart';
@@ -569,6 +573,30 @@ final GoRouter appRouter = GoRouter(
       path: '/quiz',
       name: 'quiz',
       builder: (context, state) => const QuizHomeScreen(),
+    ),
+    GoRoute(
+      path: '/watch',
+      name: 'watch',
+      builder: (context, state) => const WatchScreen(),
+      routes: [
+        // Static 'search' must precede ':id' so /watch/search isn't
+        // swallowed by the video-id param route.
+        GoRoute(
+          path: 'search',
+          name: 'watch_search',
+          builder: (context, state) => const WatchSearchScreen(),
+        ),
+        GoRoute(
+          path: ':id',
+          name: 'watch_video',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            final initial =
+                state.extra is YoutubeVideo ? state.extra as YoutubeVideo : null;
+            return VideoPlayerScreen(videoId: id, initialVideo: initial);
+          },
+        ),
+      ],
     ),
     GoRoute(
       path: '/directory',

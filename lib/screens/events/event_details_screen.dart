@@ -281,7 +281,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                   icon: Icons.arrow_back,
                   onTap: () => context.canPop()
                       ? context.pop()
-                      : context.goNamed('events'),
+                      // Events is no longer a tab; fall back to Home (which
+                      // carries the bottom nav) when there's nothing to pop.
+                      : context.goNamed('home'),
                 ),
                 const Spacer(),
                 if (_isOrganizer(event)) ...[

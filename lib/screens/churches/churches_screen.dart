@@ -237,7 +237,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   Widget build(BuildContext context) {
     return MainScaffold(
       title: 'Churches',
-      currentIndex: 1,
+      currentIndex: 2,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _nearMe,
         backgroundColor: AppColors.primaryBlue,

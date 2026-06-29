@@ -13,6 +13,7 @@ class MainScaffold extends StatelessWidget {
     required this.body,
     this.floatingActionButton,
     this.showAd = true,
+    this.showNav = true,
   });
 
   final String title;
@@ -23,6 +24,12 @@ class MainScaffold extends StatelessWidget {
   /// Anchored banner above the bottom nav. Default on; pass false for
   /// faith-sensitive tabs (Prayer) that must stay ad-free.
   final bool showAd;
+
+  /// Show the bottom nav. Default on. Pass false for screens that are
+  /// PUSHED (not top-level tabs) — e.g. Events, which moved off the nav
+  /// bar but still uses this scaffold; it then shows the AppBar back
+  /// button instead of a tab highlight.
+  final bool showNav;
 
   @override
   Widget build(BuildContext context) {
@@ -38,13 +45,17 @@ class MainScaffold extends StatelessWidget {
       body: SafeArea(child: body),
       // Banner sits directly above the main bottom nav. AdBanner self-hides
       // (zero height) until an ad loads, so the nav never shifts on a miss.
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showAd) const AdBanner(),
-          MainBottomNav(currentIndex: currentIndex),
-        ],
-      ),
+      bottomNavigationBar: showNav
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showAd) const AdBanner(),
+                MainBottomNav(currentIndex: currentIndex),
+              ],
+            )
+          : (showAd
+              ? const SafeArea(top: false, child: AdBanner())
+              : null),
       floatingActionButton: floatingActionButton,
     );
   }

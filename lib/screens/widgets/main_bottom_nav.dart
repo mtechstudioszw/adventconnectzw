@@ -5,10 +5,12 @@ import '../../theme/app_text_styles.dart';
 
 /// Bottom navigation shared by the 5 top-level tabs.
 ///
-/// Per master reference Part 7: Home, Churches, Events, Marketplace,
-/// Profile. Prayer and Messaging live inside the Profile tab's menu
-/// rather than as top-level tabs — which is why unread chat / friend
-/// request counts surface on the Profile icon here.
+/// Home, Watch, Churches, Marketplace, Profile. (Watch replaced the
+/// Events tab — Events now lives on Home via the featured-events strip +
+/// the events discovery row + a "See all" entry.) Prayer and Messaging
+/// live inside the Profile tab's menu rather than as top-level tabs —
+/// which is why unread chat / friend request counts surface on the
+/// Profile icon here.
 ///
 /// Each tab can optionally show a red badge with a count by passing
 /// [badges] (map of tab-index → count). A count of 0 hides the badge.
@@ -24,8 +26,8 @@ class MainBottomNav extends StatelessWidget {
 
   static const _routes = [
     'home',
+    'watch',
     'churches',
-    'events',
     'marketplace',
     'profile',
   ];
@@ -40,8 +42,9 @@ class MainBottomNav extends StatelessWidget {
       },
       items: [
         _item(Icons.home_outlined, Icons.home, 'Home', badges[0] ?? 0),
-        _item(Icons.church_outlined, Icons.church, 'Churches', badges[1] ?? 0),
-        _item(Icons.event_outlined, Icons.event, 'Events', badges[2] ?? 0),
+        _item(Icons.play_circle_outline, Icons.play_circle, 'Watch',
+            badges[1] ?? 0),
+        _item(Icons.church_outlined, Icons.church, 'Churches', badges[2] ?? 0),
         _item(
           Icons.shopping_bag_outlined,
           Icons.shopping_bag,

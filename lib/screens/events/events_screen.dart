@@ -209,7 +209,10 @@ class _EventsScreenState extends State<EventsScreen>
   Widget build(BuildContext context) {
     return MainScaffold(
       title: 'Events',
-      currentIndex: 2,
+      // Events is no longer a bottom-nav tab (Watch replaced it). It's now
+      // PUSHED from Home, so hide the nav and show the AppBar back button.
+      currentIndex: 0,
+      showNav: false,
       floatingActionButton: const PostFab(
         routeName: 'post_event',
         tooltip: 'Post an event',

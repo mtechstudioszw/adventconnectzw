@@ -1099,7 +1099,7 @@ class _HomeScreenState extends State<HomeScreen>
               icon: Icons.event_available_outlined,
               value: '$upcomingForUser',
               label: 'Events',
-              onTap: () => context.goNamed('events'),
+              onTap: () => context.pushNamed('events'),
             ),
           ),
           const SizedBox(width: 10),
@@ -1446,7 +1446,7 @@ class _HomeScreenState extends State<HomeScreen>
         widget: _discoverySection(
           title: 'Upcoming events',
           action: 'See all',
-          onAction: () => context.goNamed('events'),
+          onAction: () => context.pushNamed('events'),
           child: _buildEventsRow(),
         ),
       ));

@@ -665,7 +665,7 @@ class _SearchScreenState extends State<SearchScreen> {
       sections.add(_landingHeader(
         'Upcoming events',
         actionLabel: 'See all',
-        onAction: () => context.goNamed('events'),
+        onAction: () => context.pushNamed('events'),
       ));
       sections.add(_landingList([
         for (final e in _suggEvents)

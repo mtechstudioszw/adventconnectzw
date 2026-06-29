@@ -18,6 +18,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
+import '../../widgets/verified_tick.dart';
 
 /// Group info / management. Members + admin badges, add/remove/promote,
 /// invite link share, leave/delete. Admin-only actions are gated in the
@@ -717,9 +718,19 @@ class _MemberTile extends StatelessWidget {
                     .copyWith(color: AppColors.white, fontWeight: FontWeight.w700),
               ),
       ),
-      title: Text(
-        isSelf ? '${member.fullName} (You)' : member.fullName,
-        style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(
+              isSelf ? '${member.fullName} (You)' : member.fullName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (member.isVerified) const VerifiedTick(size: 14),
+        ],
       ),
       trailing: member.isAdmin
           ? Container(

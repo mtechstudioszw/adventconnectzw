@@ -4,6 +4,7 @@ import '../models/prayer_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
+import 'verified_tick.dart';
 
 class PrayerCard extends StatelessWidget {
   const PrayerCard({
@@ -75,14 +76,22 @@ class PrayerCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            prayer.authorName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                            ),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  prayer.authorName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.titleMedium.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              if (prayer.authorIsVerified)
+                                const VerifiedTick(size: 14),
+                            ],
                           ),
                           const SizedBox(height: 2),
                           Text(

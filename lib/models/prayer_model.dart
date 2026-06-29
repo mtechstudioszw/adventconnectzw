@@ -32,6 +32,7 @@ class Prayer {
     required this.prayerCount,
     required this.createdAt,
     this.authorPhotoUrl,
+    this.authorIsVerified = false,
     this.commentCount = 0,
     this.category = PrayerCategory.other,
     this.isMine = false,
@@ -42,6 +43,7 @@ class Prayer {
   final String authorId;
   final String authorName;
   final String? authorPhotoUrl;
+  final bool authorIsVerified;
   final String content;
   final int prayerCount;
   final int commentCount;
@@ -62,6 +64,7 @@ class Prayer {
       authorId: (json['author_id'] ?? '').toString(),
       authorName: (json['author_name'] ?? 'A friend') as String,
       authorPhotoUrl: json['author_photo_url'] as String?,
+      authorIsVerified: json['author_is_verified'] == true,
       content: (json['content'] ?? '') as String,
       prayerCount: _readInt(json['prayer_count']),
       commentCount: _readInt(json['comment_count']),
@@ -79,6 +82,7 @@ class Prayer {
       authorId: authorId,
       authorName: authorName,
       authorPhotoUrl: authorPhotoUrl,
+      authorIsVerified: authorIsVerified,
       content: content,
       prayerCount: prayerCount ?? this.prayerCount,
       commentCount: commentCount ?? this.commentCount,
@@ -105,6 +109,7 @@ class PrayerComment {
     required this.content,
     required this.createdAt,
     this.authorPhotoUrl,
+    this.authorIsVerified = false,
     this.parentCommentId,
     this.replies = const [],
   });
@@ -114,6 +119,7 @@ class PrayerComment {
   final String authorId;
   final String authorName;
   final String? authorPhotoUrl;
+  final bool authorIsVerified;
   final String content;
   final DateTime createdAt;
   // patch_035: NULL for top-level comments; otherwise the id of the
@@ -132,6 +138,7 @@ class PrayerComment {
       authorId: authorId,
       authorName: authorName,
       authorPhotoUrl: authorPhotoUrl,
+      authorIsVerified: authorIsVerified,
       content: content,
       createdAt: createdAt,
       parentCommentId: parentCommentId,
@@ -146,6 +153,7 @@ class PrayerComment {
       authorId: (json['author_id'] ?? '').toString(),
       authorName: (json['author_name'] ?? 'A friend') as String,
       authorPhotoUrl: json['author_photo_url'] as String?,
+      authorIsVerified: json['author_is_verified'] == true,
       content: (json['content'] ?? '') as String,
       parentCommentId: json['parent_comment_id']?.toString(),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??

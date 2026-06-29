@@ -9,6 +9,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/prayer_card.dart';
+import '../../widgets/verified_tick.dart';
 
 class PrayerDetailsScreen extends StatefulWidget {
   const PrayerDetailsScreen({
@@ -448,11 +449,21 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    prayer.authorName,
-                    style: AppTextStyles.titleLarge.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          prayer.authorName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleLarge.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (prayer.authorIsVerified)
+                        const VerifiedTick(size: 16),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -833,6 +844,8 @@ class _CommentTile extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (comment.authorIsVerified)
+                    const VerifiedTick(size: 13),
                   if (isOwner) ...[
                     const SizedBox(width: 6),
                     Container(

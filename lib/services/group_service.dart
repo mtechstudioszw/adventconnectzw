@@ -93,7 +93,7 @@ class GroupService {
         .select(
           'user_id, role, '
           'profiles!conversation_members_user_id_fkey('
-          'id, full_name, profile_photo_url)',
+          'id, full_name, profile_photo_url, is_verified, is_verified_admin)',
         )
         .eq('conversation_id', int.parse(conversationId))
         // Members who left (patch_079) keep their row but aren't shown.
@@ -108,6 +108,7 @@ class GroupService {
             ? (p!['full_name'] as String).trim()
             : 'Member',
         photoUrl: p?['profile_photo_url'] as String?,
+        isVerified: p?['is_verified'] == true || p?['is_verified_admin'] == true,
       );
     }).toList();
     list.sort((a, b) {
@@ -134,6 +135,8 @@ class GroupService {
             ? (map['full_name'] as String).trim()
             : 'Member',
         photoUrl: map['photo_url'] as String?,
+        isVerified:
+            map['is_verified'] == true || map['is_verified_admin'] == true,
       );
     }).toList();
   }
@@ -169,12 +172,14 @@ class GroupMember {
     required this.role,
     required this.fullName,
     this.photoUrl,
+    this.isVerified = false,
   });
 
   final String userId;
   final String role;
   final String fullName;
   final String? photoUrl;
+  final bool isVerified;
 
   bool get isAdmin => role == 'admin';
 }

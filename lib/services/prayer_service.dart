@@ -24,7 +24,7 @@ class PrayerService {
   static const _responsesTable = 'prayer_responses';
 
   static const _authorEmbed =
-      'author:author_id(full_name, profile_photo_url)';
+      'author:author_id(full_name, profile_photo_url, is_verified, is_verified_admin)';
 
   /// Optionally filter by [category] code ('healing', 'family',
   /// 'spiritual', 'provision', 'thanksgiving', 'ministry', 'other').
@@ -219,7 +219,7 @@ class PrayerService {
         .from(_responsesTable)
         .select('id, prayer_id, user_id, message, created_at, '
             'parent_response_id, '
-            'profiles:user_id(full_name, profile_photo_url)')
+            'profiles:user_id(full_name, profile_photo_url, is_verified, is_verified_admin)')
         .eq('prayer_id', prayerId)
         .eq('response_type', 'message')
         .order('created_at', ascending: true)
@@ -234,6 +234,8 @@ class PrayerService {
         'author_id': map['user_id'],
         'author_name': name?.isNotEmpty == true ? name : 'A friend',
         'author_photo_url': profile?['profile_photo_url'],
+        'author_is_verified': profile?['is_verified'] == true ||
+            profile?['is_verified_admin'] == true,
         'content': map['message'] ?? '',
         'created_at': map['created_at'],
         'parent_comment_id': map['parent_response_id'],
@@ -314,6 +316,10 @@ class PrayerService {
       // prayer card can render a real avatar instead of initials.
       'author_photo_url':
           isAnonymous ? null : (photo?.isNotEmpty == true ? photo : null),
+      // Verified tick — never for anonymous posts (hides the identity).
+      'author_is_verified': !isAnonymous &&
+          (author?['is_verified'] == true ||
+              author?['is_verified_admin'] == true),
     };
     return Prayer.fromJson(masked);
   }

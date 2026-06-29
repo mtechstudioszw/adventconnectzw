@@ -119,6 +119,10 @@ class Conversation {
         deletedAt: json['deleted_at'] == null
             ? null
             : DateTime.tryParse(json['deleted_at'].toString()),
+        // Hydrate the inbox tick from the (cached) row so a cache-restore
+        // keeps ✓✓ instead of reverting to a single ✓.
+        lastDelivered: json['last_delivered'] == true,
+        lastRead: json['last_read'] == true,
       );
     }
     final participantA = (json['participant_a_id'] ?? '').toString();
@@ -168,6 +172,10 @@ class Conversation {
       isBusiness: json['is_business'] == true,
       isSelfChat: selfChat,
       pinnedMessageId: json['pinned_message_id']?.toString(),
+      // Hydrate the inbox tick from the (cached) row so a cache-restore
+      // keeps ✓✓ instead of reverting to a single ✓ — the "lying tick" bug.
+      lastDelivered: json['last_delivered'] == true,
+      lastRead: json['last_read'] == true,
     );
   }
 

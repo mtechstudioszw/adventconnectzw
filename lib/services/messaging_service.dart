@@ -335,6 +335,13 @@ class MessagingService {
           final raw = Map<String, dynamic>.from(r as Map);
           final id = raw['id'].toString();
           raw['unread_count'] = unreadById[id] ?? 0;
+          // Persist the inbox tick (delivered/read of the LAST outgoing
+          // message) INTO the cached row, so a cache-restore on app open
+          // paints the correct ✓ / ✓✓ / ✓✓(blue) instead of reverting to a
+          // single ✓ — the "tick says sent but it was delivered" bug.
+          final stTick = lastStatus[id];
+          raw['last_delivered'] = stTick?.delivered ?? false;
+          raw['last_read'] = stTick?.read ?? false;
           // Overlay the per-user preview when we have one (covered convo +
           // at least one visible message). Church groups / all-hidden convos
           // aren't returned, so they keep the shared column. Overlaying into

@@ -204,6 +204,13 @@ class _HymnalTabState extends State<HymnalTab>
                   style: AppTextStyles.labelMedium
                       .copyWith(color: palette.textMuted)),
               const Spacer(),
+              IconButton(
+                tooltip: 'Refresh hymns',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.refresh, color: palette.textMuted, size: 20),
+                onPressed: _refresh,
+              ),
+              const SizedBox(width: 4),
               FilterChip(
                 label: const Text('Favorites'),
                 selected: _favOnly,
@@ -339,6 +346,13 @@ class _HymnReaderScreen extends StatefulWidget {
 class _HymnReaderScreenState extends State<_HymnReaderScreen> {
   double _scale = HymnPrefs.fontScale();
 
+  void _setScale(double v) {
+    final clamped = v.clamp(0.8, 1.8);
+    if (clamped == _scale) return;
+    setState(() => _scale = clamped);
+    HymnPrefs.setFontScale(clamped);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -354,7 +368,20 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
         ),
         actions: [
+          // Reliable A- / A+ text sizing (replaces the old bottom slider,
+          // which felt fiddly). Persists via HymnPrefs.
           IconButton(
+            tooltip: 'Smaller text',
+            icon: const Icon(Icons.text_decrease),
+            onPressed: _scale <= 0.8 ? null : () => _setScale(_scale - 0.1),
+          ),
+          IconButton(
+            tooltip: 'Larger text',
+            icon: const Icon(Icons.text_increase),
+            onPressed: _scale >= 1.8 ? null : () => _setScale(_scale + 0.1),
+          ),
+          IconButton(
+            tooltip: fav ? 'Remove favourite' : 'Add favourite',
             icon: Icon(fav ? Icons.favorite : Icons.favorite_border),
             color: fav ? AppColors.red : AppColors.white,
             onPressed: () {
@@ -363,6 +390,7 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
             },
           ),
           IconButton(
+            tooltip: 'Share',
             icon: const Icon(Icons.share_outlined),
             onPressed: () => Share.share(
                 '${h.displayTitle}\n\n${h.lyrics}\n\nShared from Advent Connect ZW'),
@@ -396,31 +424,6 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
                   fontSize: 17 * _scale,
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('A', style: TextStyle(fontSize: 14)),
-              Expanded(
-                child: Slider(
-                  value: _scale,
-                  min: 0.8,
-                  max: 1.8,
-                  divisions: 10,
-                  activeColor: AppColors.primaryBlue,
-                  onChanged: (v) {
-                    setState(() => _scale = v);
-                    HymnPrefs.setFontScale(v);
-                  },
-                ),
-              ),
-              const Text('A', style: TextStyle(fontSize: 24)),
             ],
           ),
         ),

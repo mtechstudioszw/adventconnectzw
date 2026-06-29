@@ -108,7 +108,10 @@ class EventService {
   static Future<Event?> fetchEventById(String id) async {
     final response = await _client
         .from(_table)
-        .select('*, profiles!events_organizer_id_fkey(id, full_name)')
+        // Join the church so church-hosted events can be credited to the
+        // church (name + logo) instead of the individual admin organizer.
+        .select(
+            '*, profiles!events_organizer_id_fkey(id, full_name), churches(name, profile_photo_url)')
         .eq('id', id)
         .maybeSingle();
     if (response == null) return null;

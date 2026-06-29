@@ -4,7 +4,9 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../config/share_config.dart';
 import '../../services/cache_service.dart';
 import '../../services/download_service.dart';
 import '../../theme/app_colors.dart';
@@ -30,6 +32,7 @@ class PdfViewerScreen extends StatefulWidget {
 class _PdfViewerScreenState extends State<PdfViewerScreen> {
   String? _localPath;
   String? _error;
+  double? _progress; // download progress 0–1 (null = size unknown)
   int _pages = 0;
   int _current = 0;
   late final int _resumePage;
@@ -62,7 +65,19 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         if (resp.statusCode != 200) {
           throw HttpException('HTTP ${resp.statusCode}');
         }
-        await resp.pipe(file.openWrite());
+        // Stream to disk while reporting progress, so a big book shows a
+        // real "Downloading 42%" instead of an endless spinner.
+        final total = resp.contentLength;
+        final sink = file.openWrite();
+        var received = 0;
+        await for (final chunk in resp) {
+          sink.add(chunk);
+          received += chunk.length;
+          if (total > 0 && mounted) {
+            setState(() => _progress = received / total);
+          }
+        }
+        await sink.close();
       }
       if (!mounted) return;
       setState(() => _localPath = file.path);
@@ -145,6 +160,13 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             onPressed: () => setState(() => _night = !_night),
           ),
           IconButton(
+            tooltip: 'Share',
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () => Share.share(
+              '${widget.title}\n\nReading on Advent Connect ZW — get the app:\n$appDownloadUrl',
+            ),
+          ),
+          IconButton(
             tooltip: 'Download',
             icon: const Icon(Icons.download_outlined),
             onPressed: () async {
@@ -190,8 +212,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
               _prepare();
             })
           : _localPath == null
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppColors.primaryBlue),
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                          value: _progress, color: AppColors.primaryBlue),
+                      const SizedBox(height: 14),
+                      Text(
+                        _progress == null
+                            ? 'Opening…'
+                            : 'Downloading ${(_progress! * 100).round()}%',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: palette.textMuted),
+                      ),
+                    ],
+                  ),
                 )
               : PDFView(
                   filePath: _localPath,

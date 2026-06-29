@@ -748,9 +748,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   }
 
   String _organizerLabel(Event event) {
+    // Church-hosted events (posted from the admin dashboard) are credited to
+    // the local church, never the individual admin. Personal events keep the
+    // organizer's own name.
+    if (event.isChurchEvent) {
+      final church = event.churchName?.trim();
+      if (church != null && church.isNotEmpty) return church;
+      return 'Affiliated SDA church';
+    }
     final name = event.organizerName?.trim();
     if (name != null && name.isNotEmpty) return name;
-    if (event.churchId != null) return 'Affiliated SDA church';
     return 'Advent Connect ZW';
   }
 

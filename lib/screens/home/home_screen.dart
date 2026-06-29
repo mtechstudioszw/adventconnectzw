@@ -316,7 +316,14 @@ class _HomeScreenState extends State<HomeScreen>
           .where((e) => e.startsAt.isAfter(now.subtract(const Duration(hours: 6))))
           .toList();
       final events = stillUpcoming.take(8).toList();
-      final churches = (results[1] as List<Church>).take(6).toList();
+      // Show a per-user RANDOM selection of churches (stable for a given user,
+      // but different between users) instead of the same alphabetical first-6
+      // for everyone — so smaller/newer churches also get discovered.
+      final allChurches = List<Church>.of(results[1] as List<Church>);
+      allChurches.shuffle(
+        Random((AuthService.currentUser?.id ?? 'guest').hashCode),
+      );
+      final churches = allChurches.take(6).toList();
       final friendships = results[9] as List<Friendship>;
       final viewerId = AuthService.currentUser?.id;
       final friendsByUser = <String, Friendship>{};

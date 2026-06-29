@@ -142,10 +142,10 @@ class PostCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    // For church posts, show who posted it under the time.
-                    post.isChurchPost
-                        ? '${_formatTimeAgo(post.createdAt)} · by ${post.authorName}'
-                        : _formatTimeAgo(post.createdAt),
+                    // Church posts are attributed ONLY to the church — the
+                    // admin's personal name is never shown (the post speaks
+                    // for the local church, not the individual).
+                    _formatTimeAgo(post.createdAt),
                     style: AppTextStyles.labelSmall.copyWith(
                       color: context.palette.textMuted,
                       fontSize: 11.5,

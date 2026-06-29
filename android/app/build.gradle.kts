@@ -78,6 +78,17 @@ android {
         }
     }
 
+    // Android 15+ devices use 16 KB memory pages, which Google Play now
+    // requires apps to support. AGP 8.5.1+ aligns native (.so) libraries to
+    // 16 KB when JNI libs are packaged uncompressed (non-legacy) — which is
+    // the default at our AGP version. We pin it explicitly so the requirement
+    // can't silently regress and Play stops rejecting updates.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
     buildTypes {
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {

@@ -155,11 +155,16 @@ class _PostComposerState extends State<_PostComposer> {
                       fontSize: 18,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  _VisibilityPill(
-                    visibility: _visibility,
-                    onTap: _toggleVisibility,
-                  ),
+                  // Church updates are always public to everyone — no
+                  // audience picker. The personal Public/Friends toggle only
+                  // appears for an individual's own post.
+                  if (widget.churchId == null) ...[
+                    const SizedBox(width: 10),
+                    _VisibilityPill(
+                      visibility: _visibility,
+                      onTap: _toggleVisibility,
+                    ),
+                  ],
                   const Spacer(),
                   _publishing
                       ? const SizedBox(

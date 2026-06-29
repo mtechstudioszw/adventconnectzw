@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../config/share_config.dart';
 import '../../models/library_item_model.dart';
 import '../../services/library_service.dart';
 import '../../theme/app_colors.dart';
@@ -174,6 +176,11 @@ class _PdfLibraryTabState extends State<_PdfLibraryTab>
                         PdfViewerScreen(title: item.title, url: item.fileUrl),
                   ),
                 ),
+                onShare: () => Share.share(
+                  '${item.title}'
+                  '${(item.author ?? '').isNotEmpty ? ' by ${item.author}' : ''}'
+                  '\n\nReading on Advent Connect ZW — get the app:\n$appDownloadUrl',
+                ),
               );
             },
           );
@@ -188,11 +195,13 @@ class _LibraryCard extends StatelessWidget {
     required this.item,
     required this.leadingIcon,
     required this.onTap,
+    this.onShare,
   });
 
   final LibraryItem item;
   final IconData leadingIcon;
   final VoidCallback onTap;
+  final VoidCallback? onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +260,15 @@ class _LibraryCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              if (onShare != null)
+                IconButton(
+                  tooltip: 'Share',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.share_outlined,
+                      color: palette.textMuted, size: 20),
+                  onPressed: onShare,
+                ),
+              const SizedBox(width: 4),
               Icon(Icons.chevron_right, color: palette.textMuted),
             ],
           ),

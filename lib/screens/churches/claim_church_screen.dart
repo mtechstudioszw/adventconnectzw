@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/support_sheet.dart';
 
 /// Apply to manage a church. Two steps:
 ///   1. A showcase of what a church admin can do (the "power" pitch).
@@ -89,7 +90,9 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
         title: 'This church is already claimed',
         message:
             'Someone is already verified to manage this church, so it can\'t '
-            'be claimed again.',
+            'be claimed again.\n\nIf you believe this church was claimed by the '
+            'wrong person, contact support and we\'ll look into it.',
+        contactSupport: true,
       );
     } else if (state.churchHasPendingOther) {
       block = const _ClaimBlock(
@@ -97,7 +100,9 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
         title: 'A claim is already under review',
         message:
             'Someone has already applied to manage this church and we\'re '
-            'reviewing it. If they\'re not approved, you can try again.',
+            'reviewing it. If they\'re not approved, you can try again.\n\nIf you '
+            'think the wrong person is claiming it, contact support.',
+        contactSupport: true,
       );
     } else if (state.myOtherPendingCount > 0) {
       block = const _ClaimBlock(
@@ -287,6 +292,29 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                   ),
                 ),
                 const SizedBox(height: 26),
+                if (block.contactSupport) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => showSupportSheet(
+                        context,
+                        topic: 'Church claim dispute — ${widget.church.name}',
+                      ),
+                      icon: const Icon(Icons.support_agent_outlined),
+                      label: const Text('Contact support'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryBlue,
+                        side: BorderSide(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.4)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -537,11 +565,16 @@ class _ClaimBlock {
     required this.icon,
     required this.title,
     required this.message,
+    this.contactSupport = false,
   });
 
   final IconData icon;
   final String title;
   final String message;
+
+  /// Show a "Contact support" action — used when the church is already
+  /// claimed / under review, so a rightful owner can dispute it.
+  final bool contactSupport;
 }
 
 class _Capability extends StatelessWidget {

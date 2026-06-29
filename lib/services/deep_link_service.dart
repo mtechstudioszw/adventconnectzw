@@ -82,6 +82,10 @@ class DeepLinkService {
           // exactly the seller_profile route's :userId path param.
           appRouter.pushNamed('seller_profile', pathParameters: {'userId': id});
           break;
+        case 'video':
+          // YouTube Watch deep link → open the in-app player by video id.
+          appRouter.pushNamed('watch_video', pathParameters: {'id': id});
+          break;
         default:
           // Unknown host — nothing to open.
           break;

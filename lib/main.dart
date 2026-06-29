@@ -188,6 +188,12 @@ Future<void> _initBackgroundServices() async {
           case 'church_admin':
             appRouter.pushNamed('admin_login');
             break;
+          case 'video':
+            // YouTube live / new-upload push → open the in-app player.
+            if (id.isNotEmpty) {
+              appRouter.pushNamed('watch_video', pathParameters: {'id': id});
+            }
+            break;
           default:
             appRouter.pushNamed('notification_centre');
         }

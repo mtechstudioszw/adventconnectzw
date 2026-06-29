@@ -114,21 +114,51 @@ async function livePoll(sb): Promise<string[]> {
 
   // Recompute each channel's denormalised live flag from the videos table.
   const { data: liveVids } = await sb
-    .from("youtube_videos").select("channel_id, video_id, actual_start_at, published_at")
+    .from("youtube_videos").select("channel_id, video_id, title, channel_title")
     .eq("live_status", "live");
-  const liveByChannel = new Map<string, string>();
-  for (const v of liveVids ?? []) if (!liveByChannel.has(v.channel_id)) liveByChannel.set(v.channel_id, v.video_id);
-
-  const { data: chans } = await sb.from("youtube_channels").select("channel_id, is_live");
-  for (const c of chans ?? []) {
-    const nowLive = liveByChannel.has(c.channel_id);
-    if (nowLive !== c.is_live) {
-      await sb.from("youtube_channels").update({
-        is_live: nowLive, live_video_id: nowLive ? liveByChannel.get(c.channel_id) : null,
-      }).eq("channel_id", c.channel_id);
+  const liveByChannel = new Map<string, { videoId: string; title: string; channelTitle: string }>();
+  for (const v of liveVids ?? []) {
+    if (!liveByChannel.has(v.channel_id)) {
+      liveByChannel.set(v.channel_id, {
+        videoId: v.video_id,
+        title: v.title ?? "",
+        channelTitle: v.channel_title ?? "",
+      });
     }
   }
-  log.push(`live: checked ${ids.length} video(s), ${liveByChannel.size} channel(s) live`);
+
+  const { data: chans } = await sb
+    .from("youtube_channels")
+    .select("channel_id, is_live, live_notified_video_id");
+  let pushed = 0;
+  for (const c of chans ?? []) {
+    const info = liveByChannel.get(c.channel_id);
+    const nowLive = !!info;
+    if (nowLive !== c.is_live) {
+      await sb.from("youtube_channels").update({
+        is_live: nowLive,
+        live_video_id: nowLive ? info!.videoId : null,
+      }).eq("channel_id", c.channel_id);
+    }
+    // One-time "🔴 live now" push per broadcast (deduped by video id).
+    if (nowLive && info!.videoId !== c.live_notified_video_id) {
+      try {
+        const ch = info!.channelTitle || "A channel";
+        await sb.rpc("youtube_fanout_notification", {
+          p_title: `🔴 ${ch} is live`,
+          p_body: `${ch} has just started a live stream${info!.title ? `: ${info!.title}` : ""}. Tap to watch now.`,
+          p_video_id: info!.videoId,
+        });
+        await sb.from("youtube_channels")
+          .update({ live_notified_video_id: info!.videoId })
+          .eq("channel_id", c.channel_id);
+        pushed++;
+      } catch (e) {
+        log.push(`live push ${c.channel_id}: ${(e as Error).message}`);
+      }
+    }
+  }
+  log.push(`live: checked ${ids.length} video(s), ${liveByChannel.size} live, ${pushed} pushed`);
   return log;
 }
 

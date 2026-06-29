@@ -70,6 +70,9 @@ async function backfill(sb): Promise<string[]> {
     .select("channel_id, uploads_playlist_id, backfill_page_token, thumbnail_url")
     .eq("status", "active").eq("backfill_done", false)
     .not("uploads_playlist_id", "is", null)
+    // Round-robin: least-recently-synced first, so one huge channel can't
+    // starve the others during the initial backfill.
+    .order("last_synced_at", { ascending: true, nullsFirst: true })
     .limit(BACKFILL_CHANNELS_PER_TICK);
 
   for (const c of chans ?? []) {

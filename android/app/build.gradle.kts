@@ -26,7 +26,11 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "io.supabase.adventconnectzw.advent_connect_zw"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Pin NDK r27+ — its toolchain links native (.so) libraries with a 16 KB
+    // max page size by default, which is required for Android 15's 16 KB memory
+    // pages (Google Play "16 KB page sizes" requirement). Flutter's default NDK
+    // can be older, so set it explicitly.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

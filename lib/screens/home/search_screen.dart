@@ -642,7 +642,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
     if (_suggChurches.isNotEmpty) {
       sections.add(_landingHeader(
-        'Churches near you',
+        // Not location-based — these are suggestions, so don't claim "near you".
+        // Real distance ranking lives on the Churches screen's "Near me".
+        'Discover churches',
         actionLabel: 'See all',
         onAction: () => context.goNamed('churches'),
       ));

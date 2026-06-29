@@ -12,6 +12,7 @@ class PostComment {
     required this.body,
     required this.createdAt,
     this.authorPhotoUrl,
+    this.authorIsVerified = false,
     this.parentCommentId,
     this.likeCount = 0,
     this.dislikeCount = 0,
@@ -24,6 +25,7 @@ class PostComment {
   final String authorId;
   final String authorName;
   final String? authorPhotoUrl;
+  final bool authorIsVerified;
   final String body;
   final DateTime createdAt;
   final String? parentCommentId;
@@ -51,6 +53,7 @@ class PostComment {
       authorId: authorId,
       authorName: authorName,
       authorPhotoUrl: authorPhotoUrl,
+      authorIsVerified: authorIsVerified,
       body: body,
       createdAt: createdAt,
       parentCommentId: parentCommentId,
@@ -93,6 +96,8 @@ class PostComment {
       authorId: (json['author_id'] ?? '').toString(),
       authorName: (authorMap?['full_name'] as String?) ?? 'Member',
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
+      authorIsVerified: authorMap?['is_verified'] == true ||
+          authorMap?['is_verified_admin'] == true,
       body: (json['body'] ?? '') as String,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),

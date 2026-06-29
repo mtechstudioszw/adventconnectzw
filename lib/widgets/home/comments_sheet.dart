@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
+import '../verified_tick.dart';
 
 /// Bottom sheet that opens when the user taps "Comment" on a feed post.
 /// Loads comments lazily and lets the viewer post a new one, reply to
@@ -575,6 +576,8 @@ class _CommentRow extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (comment.authorIsVerified)
+                          const VerifiedTick(size: 13),
                         if (isOwner) ...[
                           const SizedBox(width: 6),
                           Container(

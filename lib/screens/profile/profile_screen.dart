@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
 import '../../models/post_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/verified_tick.dart';
 import '../../utils/date_format.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
@@ -47,6 +49,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   // the "Church admin dashboard" entry so it's reachable WITHOUT hunting for
   // the approval notification.
   List<ChurchAdminRole> _adminRoles = const [];
+  // The viewer is a verified account (church admin or the super-admin
+  // founder) — shows the gold tick on their own profile.
+  bool _isVerified = false;
   int _tabIndex = 0;
 
   @override
@@ -62,6 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
     _bootstrap();
     _loadAdminRoles();
+    _loadVerified();
   }
 
   @override
@@ -79,6 +85,25 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (mounted) setState(() => _adminRoles = roles);
     } catch (_) {
       // ignore — entry stays hidden.
+    }
+  }
+
+  /// Whether the viewer is a verified account (church admin / super-admin
+  /// founder), so we can show the gold tick on their own profile.
+  Future<void> _loadVerified() async {
+    final id = AuthService.currentUser?.id;
+    if (id == null) return;
+    try {
+      final row = await Supabase.instance.client
+          .from('profiles')
+          .select('is_verified, is_verified_admin')
+          .eq('id', id)
+          .maybeSingle();
+      final v =
+          row?['is_verified'] == true || row?['is_verified_admin'] == true;
+      if (mounted) setState(() => _isVerified = v);
+    } catch (_) {
+      // ignore — tick stays hidden.
     }
   }
 
@@ -1182,13 +1207,22 @@ class _ProfileScreenState extends State<ProfileScreen>
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Column(
         children: [
-          Text(
-            _displayName(),
-            textAlign: TextAlign.center,
-            style: AppTextStyles.headlineLarge.copyWith(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  _displayName(),
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.headlineLarge.copyWith(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (_isVerified) const VerifiedTick(size: 20, leftGap: 6),
+            ],
           ),
           const SizedBox(height: 4),
           Row(

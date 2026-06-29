@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/church_model.dart';
 import '../../models/post_model.dart';
 import '../../services/auth_service.dart';
+import '../../utils/date_format.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
@@ -222,6 +223,13 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   String _email() {
     return AuthService.currentUser?.email ?? '';
+  }
+
+  /// The date this account joined, from the Supabase auth user's created_at.
+  DateTime? _joinedAt() {
+    final raw = AuthService.currentUser?.createdAt;
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
   }
 
   /// Parses the user's date of birth from metadata (stored as an ISO
@@ -1204,6 +1212,26 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ],
           ),
+          if (_joinedAt() != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.calendar_today_outlined,
+                    size: 13, color: context.palette.textMuted),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    'Joined Advent Connect ZW · ${formatJoinDate(_joinedAt()!)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: context.palette.textMuted),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (_age() != null) ...[
             const SizedBox(height: 8),
             Row(

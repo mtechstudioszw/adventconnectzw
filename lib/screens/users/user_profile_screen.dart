@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/friendship_model.dart';
 import '../../models/post_model.dart';
+import '../../utils/date_format.dart';
 import '../../services/auth_service.dart';
 import '../../services/block_service.dart';
 import '../../services/feed_service.dart';
@@ -545,7 +546,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       const SizedBox(height: 14),
       if ((_profile!.city ?? '').isNotEmpty ||
           (_profile!.province ?? '').isNotEmpty ||
-          (_profile!.churchName ?? '').isNotEmpty)
+          (_profile!.churchName ?? '').isNotEmpty ||
+          _profile!.joinedAt != null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Wrap(
@@ -564,6 +566,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   label: [_profile!.city, _profile!.province]
                       .where((s) => (s ?? '').isNotEmpty)
                       .join(', '),
+                ),
+              if (_profile!.joinedAt != null)
+                _InfoChip(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Joined ${formatJoinDate(_profile!.joinedAt!)}',
                 ),
             ],
           ),

@@ -7,6 +7,8 @@ import '../../services/youtube_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../services/ads/interstitial_ad_manager.dart';
+import '../../widgets/ads/native_ad_card.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../widgets/main_bottom_nav.dart';
@@ -46,6 +48,12 @@ class _WatchScreenState extends State<WatchScreen> {
     super.initState();
     _scroll.addListener(_onScroll);
     _bootstrap();
+    // Interstitial on entering Watch — best-effort + globally capped (2-min
+    // gap) so re-entering the tab doesn't spam. The player itself stays
+    // ad-free.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      InterstitialAdManager.maybeShow();
+    });
   }
 
   @override
@@ -189,12 +197,16 @@ class _WatchScreenState extends State<WatchScreen> {
                           ),
                         ),
                       ),
-                    ..._feed.map((v) => YoutubeVideoCard(
-                          video: v,
-                          onTap: () => _open(v),
-                          saved: _saved.contains(v.videoId),
-                          onSaveToggle: () => _toggleSave(v),
-                        )),
+                    for (int i = 0; i < _feed.length; i++) ...[
+                      YoutubeVideoCard(
+                        video: _feed[i],
+                        onTap: () => _open(_feed[i]),
+                        saved: _saved.contains(_feed[i].videoId),
+                        onSaveToggle: () => _toggleSave(_feed[i]),
+                      ),
+                      // Native ad every ~8 videos in the browse feed.
+                      if ((i + 1) % 8 == 0) const NativeAdCard(),
+                    ],
                     if (_loadingMore)
                       const Padding(
                         padding: EdgeInsets.all(18),

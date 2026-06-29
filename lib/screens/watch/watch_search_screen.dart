@@ -8,6 +8,7 @@ import '../../services/youtube_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 
 /// Search the Watch library (titles, descriptions, channels) — fast,
@@ -138,6 +139,7 @@ class _WatchSearchScreenState extends State<WatchSearchScreen> {
                     ],
                   ),
       ),
+      bottomNavigationBar: const SafeArea(top: false, child: AdBanner()),
     );
   }
 

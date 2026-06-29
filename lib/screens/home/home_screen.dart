@@ -56,7 +56,11 @@ import '../../widgets/job_card.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
+import '../../widgets/home/live_banner.dart';
 import '../../widgets/verified_tick.dart';
+import '../../widgets/youtube/youtube_video_card.dart';
+import '../../models/youtube_video.dart';
+import '../../services/youtube_service.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/chat_contact_sheet.dart';
@@ -91,6 +95,10 @@ class _HomeScreenState extends State<HomeScreen>
   Set<String> _viewedStoryIds = const {};
   List<Product> _products = const [];
   List<Job> _jobs = const [];
+  // Watch (YouTube): the current live stream for the LIVE banner + a page
+  // of recent videos interleaved into the feed as individual cards.
+  YoutubeVideo? _liveVideo;
+  List<YoutubeVideo> _homeVideos = const [];
   // userId -> friendship row (if any) so the suggestion cards know
   // whether to show "Add friend" / "Pending" / "Friends".
   Map<String, Friendship> _friendshipsByUser = <String, Friendship>{};
@@ -128,6 +136,9 @@ class _HomeScreenState extends State<HomeScreen>
     DevotionService.fetchToday().then((d) {
       if (mounted && d != null) setState(() => _devotion = d);
     });
+    // Watch content — live stream + recent videos. Independent of the main
+    // bootstrap so a slow YouTube read never delays the rest of Home.
+    _loadWatch();
     _msgActivitySub = MessagingService.streamInboxActivity().listen(
       (_) {
         _unreadRefreshDebounce?.cancel();
@@ -273,6 +284,8 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _bootstrap() async {
+    // Refresh Watch content (live banner + feed videos) on pull-to-refresh.
+    unawaited(_loadWatch());
     // Always hydrate from cache first so the screen paints real
     // content immediately, before the network call resolves.
     // Facebook-style: see something instantly, then silently refresh.
@@ -759,6 +772,24 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Future<void> _loadWatch() async {
+    final results = await Future.wait<Object?>([
+      YoutubeService.fetchCurrentLive(),
+      YoutubeService.fetchFeed(limit: 8),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _liveVideo = results[0] as YoutubeVideo?;
+      _homeVideos = results[1] as List<YoutubeVideo>;
+    });
+  }
+
+  void _openVideo(YoutubeVideo v) => context.pushNamed(
+        'watch_video',
+        pathParameters: {'id': v.videoId},
+        extra: v,
+      );
+
   Widget _buildScrollableContent() {
     return RefreshIndicator(
       color: AppColors.primaryBlue,
@@ -778,6 +809,8 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
+                // LIVE now — collapses to nothing when no channel is live.
+                LiveBanner(live: _liveVideo, onTap: _openVideo),
                 if (_banner != null &&
                     !_dismissedBannerIds.contains(_banner!.id)) ...[
                   const SizedBox(height: 16),
@@ -1353,6 +1386,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
     var cardIdx = 0;
     var adsInserted = 0;
+    var videoIdx = 0;
     for (var i = 0; i < _posts.length; i++) {
       final post = _posts[i];
       children.add(PostCard(
@@ -1376,6 +1410,12 @@ class _HomeScreenState extends State<HomeScreen>
           cardIdx < discoveryCards.length) {
         children.add(discoveryCards[cardIdx++]);
       }
+      // Individual YouTube video cards from Watch, interleaved into the
+      // feed (one at a time, paced) — tap opens the in-app player.
+      if ((i + 1) % _videoEveryNPosts == 0 && videoIdx < _homeVideos.length) {
+        final v = _homeVideos[videoIdx++];
+        children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
+      }
       // Sponsored native ad after every _adEveryNPosts posts, capped at
       // _maxFeedAds per render so we don't fire dozens of ad requests on
       // a long scroll. The card self-hides until/unless an ad loads.
@@ -1387,6 +1427,12 @@ class _HomeScreenState extends State<HomeScreen>
     while (cardIdx < discoveryCards.length) {
       children.add(discoveryCards[cardIdx++]);
     }
+    // Append any remaining videos so they still surface when the post
+    // backlog is short.
+    while (videoIdx < _homeVideos.length) {
+      final v = _homeVideos[videoIdx++];
+      children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
+    }
     return Column(children: children);
   }
 
@@ -1395,6 +1441,9 @@ class _HomeScreenState extends State<HomeScreen>
   // continuous. 3 lands close to what Instagram does for sponsored
   // breakers.
   static const _discoveryEveryNPosts = 3;
+
+  // Cadence for individual YouTube video cards interleaved into the feed.
+  static const _videoEveryNPosts = 4;
 
   // Sponsored native-ad cadence in the home feed. First ad after ~6 posts,
   // then every 6, capped per render so a long scroll doesn't spawn dozens

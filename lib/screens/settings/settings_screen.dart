@@ -8,6 +8,7 @@ import '../../services/notification_preferences_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/youtube_prefs.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -32,6 +33,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _sabbathEnabled = SabbathService.isEnabled();
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
   ThemeMode _themeMode = ThemeService.current;
+  // Watch (YouTube) preferences — synchronous reads from local prefs.
+  bool _ytAutoplayNext = YoutubePrefs.autoplayNext;
+  PreviewMode _ytPreviewMode = YoutubePrefs.previewMode;
   bool _isSuperAdmin = false;
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
@@ -392,6 +396,58 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  String _previewLabel(PreviewMode m) {
+    switch (m) {
+      case PreviewMode.always:
+        return 'Always';
+      case PreviewMode.never:
+        return 'Never';
+      case PreviewMode.wifiOnly:
+        return 'Wi-Fi only';
+    }
+  }
+
+  Future<void> _pickPreviewMode() async {
+    final picked = await showModalBottomSheet<PreviewMode>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            Text('Autoplay video previews',
+                style: AppTextStyles.titleMedium
+                    .copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            for (final m in PreviewMode.values)
+              ListTile(
+                leading: Icon(
+                  _ytPreviewMode == m
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: AppColors.primaryBlue,
+                ),
+                title: Text(_previewLabel(m)),
+                subtitle: m == PreviewMode.wifiOnly
+                    ? const Text('Recommended — saves mobile data')
+                    : null,
+                onTap: () => Navigator.pop(ctx, m),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) {
+      await YoutubePrefs.setPreviewMode(picked);
+      if (mounted) setState(() => _ytPreviewMode = picked);
+    }
+  }
+
   Future<void> _pickSabbathProvince() async {
     final picked = await showModalBottomSheet<String>(
       context: context,
@@ -589,6 +645,28 @@ class _SettingsScreenState extends State<SettingsScreen>
                             onTap: _pickSabbathProvince,
                           ),
                         ],
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    _Section(
+                      title: 'Watch',
+                      children: [
+                        _ToggleRow(
+                          icon: Icons.smart_display_outlined,
+                          label: 'Autoplay next video',
+                          value: _ytAutoplayNext,
+                          onChanged: (v) async {
+                            await YoutubePrefs.setAutoplayNext(v);
+                            if (mounted) setState(() => _ytAutoplayNext = v);
+                          },
+                        ),
+                        const _Divider(),
+                        _NavRow(
+                          icon: Icons.play_circle_outline,
+                          label: 'Autoplay previews',
+                          trailing: _previewLabel(_ytPreviewMode),
+                          onTap: _pickPreviewMode,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 18),

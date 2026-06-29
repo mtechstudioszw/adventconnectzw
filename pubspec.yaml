@@ -130,6 +130,12 @@ dependencies:
   # or prayer screens. Pinned exact (min Dart 3.10; we're on 3.11).
   google_mobile_ads: 9.0.0
 
+  # Watch — official YouTube IFrame player for compliant in-app playback.
+  # Video is embedded/streamed by YouTube only; we never download, proxy,
+  # or re-host. Pinned exact per project policy. REQUIRES `flutter pub get`
+  # (CI handles it on build).
+  youtube_player_iframe: 6.0.2
+
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale
 # hasPermission signature, which breaks compilation even for Android builds.

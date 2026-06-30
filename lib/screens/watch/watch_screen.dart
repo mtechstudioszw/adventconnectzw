@@ -65,10 +65,11 @@ class _WatchScreenState extends State<WatchScreen> {
     // Cache-first: paint the cached feed instantly (no shimmer on a warm
     // cache / slow network), then refresh in the background.
     if (_category == null && _feed.isEmpty) {
+      _live ??= YoutubeService.cachedLive();
       final cached = YoutubeService.cachedFeed();
       if (cached.isNotEmpty) {
         _feed.addAll(cached);
-        _hero = cached.first;
+        _hero = _live ?? cached.first;
         _loading = false;
       }
     }

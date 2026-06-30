@@ -136,6 +136,8 @@ class _HomeScreenState extends State<HomeScreen>
     DevotionService.fetchToday().then((d) {
       if (mounted && d != null) setState(() => _devotion = d);
     });
+    // Paint the cached LIVE banner instantly (no late pop-in), then refresh.
+    _liveVideo = YoutubeService.cachedLive();
     // Watch content — live stream + recent videos. Independent of the main
     // bootstrap so a slow YouTube read never delays the rest of Home.
     _loadWatch();

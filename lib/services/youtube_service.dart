@@ -61,6 +61,7 @@ class YoutubeService {
   static const _feedKey = 'yt_feed_v1';
   static const _channelsKey = 'yt_channels_v1';
   static const _playlistsKey = 'yt_playlists_v1';
+  static const _liveKey = 'yt_live_v1';
 
   // ----------------------------- Feed --------------------------------
   /// Newest videos for the infinite Watch / Home feed. Excludes scheduled
@@ -173,12 +174,29 @@ class YoutubeService {
 
   // ----------------------------- Live --------------------------------
   /// The single currently-live video (for the Home LIVE banner), or null.
+  /// Cached so the banner paints instantly on open instead of popping in
+  /// late after the network call; the fresh result corrects it immediately.
   static Future<YoutubeVideo?> fetchCurrentLive() async {
     try {
       final rows = await _c.rpc('youtube_current_live');
       final list = rows as List;
-      if (list.isEmpty) return null;
-      return YoutubeVideo.fromJson(list.first as Map<String, dynamic>);
+      final v = list.isEmpty
+          ? null
+          : YoutubeVideo.fromJson(list.first as Map<String, dynamic>);
+      await CacheService.writeString(
+          _liveKey, v == null ? '' : jsonEncode(v.toJson()));
+      return v;
+    } catch (_) {
+      return cachedLive();
+    }
+  }
+
+  /// Last-known live video, read synchronously for an instant banner paint.
+  static YoutubeVideo? cachedLive() {
+    final raw = CacheService.readStringStale(_liveKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return YoutubeVideo.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } catch (_) {
       return null;
     }

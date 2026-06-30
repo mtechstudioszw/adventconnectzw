@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/app_bootstrap.dart';
 import 'messaging_service.dart';
 import 'notification_service.dart';
 
@@ -23,6 +24,7 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   if (message.notification != null) return;
   final refType = '${message.data['reference_type'] ?? ''}';
   if (refType != 'conversation') return;
+  final refId = '${message.data['reference_id'] ?? ''}';
   try {
     final plugin = FlutterLocalNotificationsPlugin();
     await plugin.initialize(
@@ -38,6 +40,19 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
     await _renderIncomingChat(message, plugin);
   } catch (_) {
     // Best-effort — never crash the background isolate.
+  }
+  // Mark the message DELIVERED the instant this device receives the push in
+  // the background, so the sender's tick goes ✓✓ even though the recipient
+  // hasn't opened the app. Runs AFTER the notification render and is fully
+  // guarded — Supabase init/network failures never break the push.
+  if (refId.isNotEmpty) {
+    try {
+      await AppBootstrap.startSupabaseInit();
+      await AppBootstrap.awaitSupabaseReady();
+      await MessagingService.markConversationDelivered(refId);
+    } catch (_) {
+      // Falls back to marking on next app foreground, as before.
+    }
   }
 }
 

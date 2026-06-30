@@ -95,6 +95,11 @@ class YoutubeService {
 
   static DateTime? get feedCachedAt => CacheService.cachedAt(_feedKey);
 
+  /// Synchronously-read cached feed (page 0) so the Watch tab can paint
+  /// instantly on open, then refresh in the background — no spinner on a
+  /// warm cache, no long shimmer on a slow network.
+  static List<YoutubeVideo> cachedFeed() => _cachedList(_feedKey);
+
   static List<YoutubeVideo> _cachedList(String key) {
     final raw = CacheService.readStringStale(key);
     if (raw == null || raw.isEmpty) return const [];

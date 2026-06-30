@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../models/youtube_playlist.dart';
 import '../../models/youtube_video.dart';
 import '../../services/youtube_service.dart';
 import '../../theme/app_colors.dart';
@@ -32,7 +31,6 @@ class _WatchScreenState extends State<WatchScreen> {
   YoutubeVideo? _hero;
   List<ResumeItem> _continue = [];
   List<YoutubeVideo> _upcoming = [];
-  List<YoutubePlaylist> _categories = [];
   Set<String> _saved = {};
 
   final List<YoutubeVideo> _feed = [];
@@ -65,24 +63,33 @@ class _WatchScreenState extends State<WatchScreen> {
   }
 
   Future<void> _bootstrap() async {
-    setState(() => _loading = true);
+    // Cache-first: paint the cached feed instantly (no shimmer on a warm
+    // cache / slow network), then refresh in the background.
+    if (_category == null && _feed.isEmpty) {
+      final cached = YoutubeService.cachedFeed();
+      if (cached.isNotEmpty) {
+        _feed.addAll(cached);
+        _hero = cached.first;
+        _loading = false;
+      }
+    }
+    if (mounted) setState(() => _loading = _feed.isEmpty);
+
     final results = await Future.wait<Object?>([
       YoutubeService.fetchCurrentLive(),
       YoutubeService.fetchContinueWatching(),
       YoutubeService.fetchUpcoming(),
-      YoutubeService.fetchPlaylists(),
       YoutubeService.fetchBookmarkIds(),
     ]);
     _live = results[0] as YoutubeVideo?;
     _continue = results[1] as List<ResumeItem>;
     _upcoming = results[2] as List<YoutubeVideo>;
-    _categories = results[3] as List<YoutubePlaylist>;
-    _saved = results[4] as Set<String>;
+    _saved = results[3] as Set<String>;
     _feed.clear();
     _offset = 0;
     _hasMore = true;
     await _loadMore(reset: true);
-    _hero = _live ?? (_feed.isNotEmpty ? _feed.first : null);
+    _hero = _live ?? (_feed.isNotEmpty ? _feed.first : _hero);
     if (mounted) setState(() => _loading = false);
   }
 
@@ -94,8 +101,8 @@ class _WatchScreenState extends State<WatchScreen> {
     if (cat == 'saved') {
       rows = _offset == 0 ? await YoutubeService.fetchBookmarks() : const [];
     } else if (cat != null) {
-      rows = await YoutubeService.fetchByPlaylist(cat,
-          limit: _page, offset: _offset);
+      // SDA category chips filter the library by keyword (zero new tables).
+      rows = await YoutubeService.search(cat, limit: _page, offset: _offset);
     } else {
       rows = await YoutubeService.fetchFeed(limit: _page, offset: _offset);
     }
@@ -397,13 +404,17 @@ class _WatchScreenState extends State<WatchScreen> {
   }
 
   // ----------------------------- Category chips ----------------------
+  // Five fixed SDA-themed filters (keyword-backed via youtube_search).
+  static const _chips = <_Chip>[
+    _Chip(label: 'All', value: null),
+    _Chip(label: 'Sermons', value: 'sermon'),
+    _Chip(label: 'Bible Study', value: 'bible study'),
+    _Chip(label: 'Music', value: 'music'),
+    _Chip(label: 'Prophecy', value: 'prophecy'),
+  ];
+
   Widget _categoryChips(AppPalette palette) {
-    final chips = <_Chip>[
-      const _Chip(label: 'All', value: null),
-      ..._categories
-          .map((c) => _Chip(label: c.title, value: c.playlistId)),
-      const _Chip(label: 'Saved', value: 'saved'),
-    ];
+    const chips = _chips;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
       child: SingleChildScrollView(

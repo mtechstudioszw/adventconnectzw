@@ -275,75 +275,68 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       // between tapping and the player booting.
       return Scaffold(
         backgroundColor: AppColors.darkNavy,
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Stack(
-                children: [
-                  AspectRatio(aspectRatio: 16 / 9, child: _loadingOverlay()),
-                  Positioned(
-                    left: 4,
-                    top: 4,
-                    child: Material(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      shape: const CircleBorder(),
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back,
-                            color: AppColors.white),
-                        onPressed: () => Navigator.of(context).maybePop(),
-                      ),
+        body: Column(
+          children: [
+            Stack(
+              children: [
+                AspectRatio(aspectRatio: 16 / 9, child: _loadingOverlay()),
+                Positioned(
+                  left: 4,
+                  top: MediaQuery.of(context).padding.top + 4,
+                  child: Material(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: AppColors.white),
+                      onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+          ],
         ),
       );
     }
     // YoutubePlayer handles fullscreen internally (via OverlayPortal) in
     // 6.x, so no YoutubePlayerScaffold wrapper is needed.
     return Scaffold(
-          backgroundColor: palette.scaffoldBg,
-          body: SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                // Pinned player with a back affordance over it.
-                Stack(
-                  children: [
-                    YoutubePlayer(
-                      controller: _controller!,
-                      aspectRatio: 16 / 9,
-                    ),
-                    if (!_playerStarted)
-                      Positioned.fill(child: _loadingOverlay()),
-                    Positioned(
-                      left: 4,
-                      top: 4,
-                      child: Material(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        shape: const CircleBorder(),
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back,
-                              color: AppColors.white),
-                          onPressed: () => Navigator.of(context).maybePop(),
-                        ),
-                      ),
-                    ),
-                  ],
+      backgroundColor: palette.scaffoldBg,
+      // No top SafeArea — the player runs full-bleed under the status bar
+      // (YouTube-style) so it isn't "cut" by a navy strip. The back button
+      // respects the status-bar inset.
+      body: Column(
+        children: [
+          Stack(
+            children: [
+              YoutubePlayer(
+                controller: _controller!,
+                aspectRatio: 16 / 9,
+              ),
+              if (!_playerStarted) Positioned.fill(child: _loadingOverlay()),
+              Positioned(
+                left: 4,
+                top: MediaQuery.of(context).padding.top + 4,
+                child: Material(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: AppColors.white),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
                 ),
-                if (_video?.isLive ?? false) _chatToggle(palette),
-                Expanded(
-                  child: (_showChat && (_video?.isLive ?? false))
-                      ? LiveChatPanel(videoId: _videoId)
-                      : _details(palette),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
+          if (_video?.isLive ?? false) _chatToggle(palette),
+          Expanded(
+            child: (_showChat && (_video?.isLive ?? false))
+                ? LiveChatPanel(videoId: _videoId)
+                : _details(palette),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _chatToggle(AppPalette palette) {

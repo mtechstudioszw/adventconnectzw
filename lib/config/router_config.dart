@@ -27,7 +27,7 @@ import '../screens/home/post_notice_screen.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/library/library_screen.dart';
 import '../screens/watch/watch_screen.dart';
-import '../screens/watch/watch_search_screen.dart';
+import '../screens/watch/saved_videos_screen.dart';
 import '../screens/watch/video_player_screen.dart';
 import '../models/youtube_video.dart';
 import '../screens/quiz/quiz_home_screen.dart';
@@ -579,12 +579,11 @@ final GoRouter appRouter = GoRouter(
       name: 'watch',
       builder: (context, state) => const WatchScreen(),
       routes: [
-        // Static 'search' must precede ':id' so /watch/search isn't
-        // swallowed by the video-id param route.
+        // Static 'saved' must precede ':id' so it isn't captured as a video id.
         GoRoute(
-          path: 'search',
-          name: 'watch_search',
-          builder: (context, state) => const WatchSearchScreen(),
+          path: 'saved',
+          name: 'watch_saved',
+          builder: (context, state) => const SavedVideosScreen(),
         ),
         GoRoute(
           path: ':id',

@@ -157,12 +157,14 @@ class _WatchScreenState extends State<WatchScreen> {
           IconButton(
             tooltip: 'Search',
             icon: const Icon(Icons.search),
-            onPressed: () => context.pushNamed('watch_search'),
+            // Reuse the premium global search (it now includes a Videos
+            // section), instead of a separate bespoke search screen.
+            onPressed: () => context.pushNamed('search'),
           ),
           IconButton(
             tooltip: 'Saved',
             icon: const Icon(Icons.bookmark_border),
-            onPressed: () => _selectCategory('saved'),
+            onPressed: () => context.pushNamed('watch_saved'),
           ),
           PopupMenuButton<String>(
             onSelected: (v) {

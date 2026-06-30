@@ -43,7 +43,7 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-enum _Filter { all, people, posts, churches, events, marketplace, jobs }
+enum _Filter { all, people, posts, churches, events, marketplace, jobs, videos }
 
 class _SearchScreenState extends State<SearchScreen> {
   static const _recentKey = 'recent_searches_v1';
@@ -465,6 +465,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildFilterChips() {
     final chips = <_FilterDef>[
       const _FilterDef(_Filter.all, 'All'),
+      const _FilterDef(_Filter.videos, 'Videos'),
       const _FilterDef(_Filter.people, 'People'),
       const _FilterDef(_Filter.posts, 'Posts'),
       const _FilterDef(_Filter.churches, 'Churches'),
@@ -823,7 +824,9 @@ class _SearchScreenState extends State<SearchScreen> {
     final showJobs =
         (_filter == _Filter.all || _filter == _Filter.jobs) &&
             _jobs.isNotEmpty;
-    final showVideos = _filter == _Filter.all && _videos.isNotEmpty;
+    final showVideos =
+        (_filter == _Filter.all || _filter == _Filter.videos) &&
+            _videos.isNotEmpty;
 
     final anyForFilter = showPeople ||
         showPosts ||
@@ -992,6 +995,8 @@ class _SearchScreenState extends State<SearchScreen> {
         return 'products';
       case _Filter.jobs:
         return 'jobs';
+      case _Filter.videos:
+        return 'videos';
     }
   }
 }

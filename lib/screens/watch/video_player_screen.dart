@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -66,6 +67,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     super.initState();
     _video = widget.initialVideo;
     _scroll.addListener(_onScroll);
+    // The app is locked to portrait globally; allow landscape WHILE the
+    // player is open so the YouTube fullscreen button can rotate. Restored
+    // to portrait-only in dispose.
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _init();
   }
 
@@ -248,6 +258,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _sub?.cancel();
     _controller?.close();
     _scroll.dispose();
+    // Restore the app's portrait-only lock when leaving the player.
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
     super.dispose();
   }
 

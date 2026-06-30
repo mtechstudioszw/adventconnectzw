@@ -202,6 +202,23 @@ class YoutubeService {
     }
   }
 
+  /// ALL currently-live videos (one per live channel) — for the "Live now"
+  /// rail when more than one channel is streaming at once.
+  static Future<List<YoutubeVideo>> fetchLiveNow() async {
+    try {
+      final rows = await _c
+          .from('youtube_videos')
+          .select()
+          .eq('live_status', 'live')
+          .order('actual_start_at', ascending: false);
+      return (rows as List)
+          .map((e) => YoutubeVideo.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Scheduled-but-not-started broadcasts (Upcoming rail).
   static Future<List<YoutubeVideo>> fetchUpcoming({int limit = 10}) async {
     try {

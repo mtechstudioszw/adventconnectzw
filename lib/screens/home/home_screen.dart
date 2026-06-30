@@ -777,12 +777,16 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadWatch() async {
     final results = await Future.wait<Object?>([
       YoutubeService.fetchCurrentLive(),
-      YoutubeService.fetchFeed(limit: 8),
+      YoutubeService.fetchFeed(limit: 30),
     ]);
     if (!mounted) return;
+    // Rotate the home video sample on each refresh so it doesn't look stale:
+    // pull the latest ~30 and shuffle a fresh handful in.
+    final pool = List<YoutubeVideo>.from(results[1] as List<YoutubeVideo>);
+    pool.shuffle();
     setState(() {
       _liveVideo = results[0] as YoutubeVideo?;
-      _homeVideos = results[1] as List<YoutubeVideo>;
+      _homeVideos = pool.take(8).toList();
     });
   }
 

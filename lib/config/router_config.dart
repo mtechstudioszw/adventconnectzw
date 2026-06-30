@@ -28,7 +28,10 @@ import '../screens/home/search_screen.dart';
 import '../screens/library/library_screen.dart';
 import '../screens/watch/watch_screen.dart';
 import '../screens/watch/saved_videos_screen.dart';
+import '../screens/watch/channels_screen.dart';
+import '../screens/watch/channel_screen.dart';
 import '../screens/watch/video_player_screen.dart';
+import '../models/youtube_channel.dart';
 import '../models/youtube_video.dart';
 import '../screens/quiz/quiz_home_screen.dart';
 import '../screens/profile/blocked_users_screen.dart';
@@ -579,11 +582,27 @@ final GoRouter appRouter = GoRouter(
       name: 'watch',
       builder: (context, state) => const WatchScreen(),
       routes: [
-        // Static 'saved' must precede ':id' so it isn't captured as a video id.
+        // Static segments must precede ':id' so they aren't captured as ids.
         GoRoute(
           path: 'saved',
           name: 'watch_saved',
           builder: (context, state) => const SavedVideosScreen(),
+        ),
+        GoRoute(
+          path: 'channels',
+          name: 'watch_channels',
+          builder: (context, state) => const ChannelsScreen(),
+        ),
+        GoRoute(
+          path: 'channel/:channelId',
+          name: 'watch_channel',
+          builder: (context, state) {
+            final id = state.pathParameters['channelId'] ?? '';
+            final initial = state.extra is YoutubeChannel
+                ? state.extra as YoutubeChannel
+                : null;
+            return ChannelScreen(channelId: id, initial: initial);
+          },
         ),
         GoRoute(
           path: ':id',

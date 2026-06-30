@@ -28,6 +28,7 @@ class _WatchScreenState extends State<WatchScreen> {
 
   YoutubeVideo? _live;
   YoutubeVideo? _hero;
+  List<YoutubeVideo> _liveNow = const []; // all currently-live (multi-live rail)
   List<ResumeItem> _continue = [];
   List<YoutubeVideo> _upcoming = [];
   Set<String> _saved = {};
@@ -76,12 +77,13 @@ class _WatchScreenState extends State<WatchScreen> {
     if (mounted) setState(() => _loading = _feed.isEmpty);
 
     final results = await Future.wait<Object?>([
-      YoutubeService.fetchCurrentLive(),
+      YoutubeService.fetchLiveNow(),
       YoutubeService.fetchContinueWatching(),
       YoutubeService.fetchUpcoming(),
       YoutubeService.fetchBookmarkIds(),
     ]);
-    _live = results[0] as YoutubeVideo?;
+    _liveNow = results[0] as List<YoutubeVideo>;
+    _live = _liveNow.isNotEmpty ? _liveNow.first : null;
     _continue = results[1] as List<ResumeItem>;
     _upcoming = results[2] as List<YoutubeVideo>;
     _saved = results[3] as Set<String>;
@@ -162,6 +164,11 @@ class _WatchScreenState extends State<WatchScreen> {
             onPressed: () => context.pushNamed('search'),
           ),
           IconButton(
+            tooltip: 'Channels',
+            icon: const Icon(Icons.subscriptions_outlined),
+            onPressed: () => context.pushNamed('watch_channels'),
+          ),
+          IconButton(
             tooltip: 'Saved',
             icon: const Icon(Icons.bookmark_border),
             onPressed: () => context.pushNamed('watch_saved'),
@@ -169,8 +176,10 @@ class _WatchScreenState extends State<WatchScreen> {
           PopupMenuButton<String>(
             onSelected: (v) {
               if (v == 'submit') _openSubmitSheet();
+              if (v == 'channels') context.pushNamed('watch_channels');
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'channels', child: Text('Browse channels')),
               PopupMenuItem(
                 value: 'submit',
                 child: Text('Submit your channel'),
@@ -191,6 +200,9 @@ class _WatchScreenState extends State<WatchScreen> {
                   padding: const EdgeInsets.only(bottom: 28),
                   children: [
                     if (_hero != null) _heroCard(_hero!, palette),
+                    // When several channels are live at once, a "Live now"
+                    // rail lists them all (hero shows the first).
+                    if (_liveNow.length > 1) _liveNowRail(palette),
                     if (_continue.isNotEmpty) _continueRail(palette),
                     if (_upcoming.isNotEmpty) _upcomingRail(palette),
                     _categoryChips(palette),
@@ -377,6 +389,28 @@ class _WatchScreenState extends State<WatchScreen> {
                 onTap: () => _open(r.video),
               );
             },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _liveNowRail(AppPalette palette) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _railHeader('Live now', palette),
+        SizedBox(
+          height: 168,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _liveNow.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (_, i) => YoutubeRailCard(
+              video: _liveNow[i],
+              onTap: () => _open(_liveNow[i]),
+            ),
           ),
         ),
       ],

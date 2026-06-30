@@ -29,16 +29,16 @@ class AdConfig {
   // ----- YOUR REAL AD-UNIT IDS — paste between the quotes -------------
   // Android
   static const String _realAndroidBanner =
-      'ca-app-pub-9393348961586729/1133541271';
+      'ca-app-pub-2916679989954369/6190972001';
   static const String _realAndroidNative =
-      'ca-app-pub-9393348961586729/3244699296';
+      'ca-app-pub-2916679989954369/8998501118';
   static const String _realAndroidAppOpen =
-      'ca-app-pub-9393348961586729/1250191425';
+      'ca-app-pub-2916679989954369/5334588274';
   static const String _realAndroidInterstitial =
-      'ca-app-pub-9393348961586729/5924923285';
+      'ca-app-pub-2916679989954369/8625563652';
   // Rewarded — opt-in "watch an ad for a bonus" (Bible Quiz hints).
   static const String _realAndroidRewarded =
-      'ca-app-pub-9393348961586729/3788100138';
+      'ca-app-pub-2916679989954369/7507923106';
   // iOS (only needed once you publish an iOS build)
   static const String _realIosBanner = '';
   static const String _realIosNative = '';

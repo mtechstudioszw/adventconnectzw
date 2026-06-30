@@ -112,7 +112,7 @@
              earning (until then AdConfig serves Google test units). -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-9393348961586729~4087273606" />
+            android:value="ca-app-pub-2916679989954369~1736721670" />
         <!-- just_audio_background: the media-session service + media-button
              receiver that power background playback and the lock-screen /
              notification controls for the Library Music player. -->

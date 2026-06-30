@@ -136,6 +136,15 @@ dependencies:
   # (CI handles it on build).
   youtube_player_iframe: 6.0.2
 
+  # Watch — in-feed muted auto-preview needs viewport visibility detection
+  # (only the centered card previews). Pinned exact.
+  visibility_detector: 0.4.0+2
+
+  # Watch — embedded YouTube LIVE CHAT panel for live streams (official
+  # live_chat embed in a WebView). Pinned exact. Requires Android minSdk 24
+  # (bumped in android/app/build.gradle.kts) + `flutter pub get`.
+  webview_flutter: 4.14.0
+
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale
 # hasPermission signature, which breaks compilation even for Android builds.

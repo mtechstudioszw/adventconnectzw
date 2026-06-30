@@ -20,11 +20,16 @@ class ConnectivityService {
   // ignore: unused_field
   static StreamSubscription<List<ConnectivityResult>>? _sub;
   static bool _lastOnline = true;
+  static bool _lastWifi = false;
   static bool _initialized = false;
 
   /// Latest cached online value. Defaults to true so the UI doesn't
   /// flash an offline banner during cold start.
   static bool get isOnline => _lastOnline;
+
+  /// Whether the device is on Wi-Fi (vs cellular). Drives the Watch
+  /// "Wi-Fi only" auto-preview setting so previews never burn mobile data.
+  static bool get isWifi => _lastWifi;
 
   /// Broadcast stream of online/offline transitions. Late subscribers
   /// see the next transition — call `isOnline` for the current value.
@@ -35,8 +40,10 @@ class ConnectivityService {
     _initialized = true;
     try {
       final initial = await _connectivity.checkConnectivity();
+      _lastWifi = initial.contains(ConnectivityResult.wifi);
       _emit(_resultsToOnline(initial));
       _sub = _connectivity.onConnectivityChanged.listen((results) {
+        _lastWifi = results.contains(ConnectivityResult.wifi);
         _emit(_resultsToOnline(results));
       });
     } catch (_) {

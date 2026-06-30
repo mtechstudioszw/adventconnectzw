@@ -11,6 +11,7 @@ import '../../services/ads/interstitial_ad_manager.dart';
 import '../../widgets/ads/native_ad_card.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/shimmer_loaders.dart';
+import '../../widgets/youtube/previewable_video_card.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../widgets/main_bottom_nav.dart';
 
@@ -198,7 +199,7 @@ class _WatchScreenState extends State<WatchScreen> {
                         ),
                       ),
                     for (int i = 0; i < _feed.length; i++) ...[
-                      YoutubeVideoCard(
+                      PreviewableVideoCard(
                         video: _feed[i],
                         onTap: () => _open(_feed[i]),
                         saved: _saved.contains(_feed[i].videoId),

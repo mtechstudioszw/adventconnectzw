@@ -49,9 +49,9 @@ android {
         applicationId = "io.supabase.adventconnectzw.advent_connect_zw"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // google_mobile_ads (Google Mobile Ads SDK 23+) requires API 23, so
-        // floor minSdk at 23 even if Flutter's default is lower.
-        minSdk = maxOf(23, flutter.minSdkVersion)
+        // Floor minSdk at 24 (Android 7.0): google_mobile_ads needs 23 and
+        // webview_flutter 4.14 (embedded YouTube live chat) needs 24.
+        minSdk = maxOf(24, flutter.minSdkVersion)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

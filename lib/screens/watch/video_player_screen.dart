@@ -49,6 +49,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _showChat = false; // live-chat vs up-next toggle (live videos only)
   bool _playerStarted = false; // player webview has come alive
   bool _loadTimedOut = false; // slow/no network — show retry
+  bool _isFullscreen = false; // player is in fullscreen (landscape)
   Timer? _loadTimer;
   // Scripture references detected in the title/description (tap-a-verse).
   List<VerseRef> _verses = const [];
@@ -142,6 +143,28 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       }
     } else if (s == PlayerState.playing) {
       _ended = false;
+    }
+    // Force landscape + immersive when the player enters fullscreen (the
+    // bare YoutubePlayer overlay doesn't rotate on its own with the app's
+    // portrait lock); restore on exit.
+    final fs = value.fullScreenOption.enabled;
+    if (fs != _isFullscreen) {
+      _isFullscreen = fs;
+      if (fs) {
+        SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      } else {
+        SystemChrome.setPreferredOrientations(const [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      }
     }
   }
 
@@ -258,11 +281,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _sub?.cancel();
     _controller?.close();
     _scroll.dispose();
-    // Restore the app's portrait-only lock when leaving the player.
+    // Restore the app's portrait-only lock + normal system UI on exit.
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 

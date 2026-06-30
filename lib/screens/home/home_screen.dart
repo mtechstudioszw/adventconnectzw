@@ -858,6 +858,8 @@ class _HomeScreenState extends State<HomeScreen>
                   onAuthorTapped: (_, list) => _openStoryViewer(list),
                   viewedStoryIds: _allViewedIds,
                 ),
+                // Devotion CARD depends on the network fetch — only show it
+                // when we have it.
                 if (_devotion != null) ...[
                   const SizedBox(height: 16),
                   Padding(
@@ -867,12 +869,16 @@ class _HomeScreenState extends State<HomeScreen>
                       onOpenLibrary: () => context.pushNamed('library'),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: _LibraryChips(),
-                  ),
                 ],
+                // Library chips (Bible / Hymnal / EGW / Music) are static
+                // navigation — ALWAYS show them, even on poor network when
+                // the devotion fetch fails (previously they were nested in
+                // the devotion block and vanished with it).
+                const SizedBox(height: 12),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: _LibraryChips(),
+                ),
                 // Official church-posted events, featured prominently with the
                 // church's name + gold tick. Self-hides when there are none.
                 const SizedBox(height: 16),

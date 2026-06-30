@@ -220,11 +220,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         ),
       );
     }
-    return YoutubePlayerScaffold(
-      controller: _controller!,
-      aspectRatio: 16 / 9,
-      builder: (context, player) {
-        return Scaffold(
+    // YoutubePlayer handles fullscreen internally (via OverlayPortal) in
+    // 6.x, so no YoutubePlayerScaffold wrapper is needed.
+    return Scaffold(
           backgroundColor: palette.scaffoldBg,
           body: SafeArea(
             bottom: false,
@@ -233,7 +231,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 // Pinned player with a back affordance over it.
                 Stack(
                   children: [
-                    player,
+                    YoutubePlayer(
+                      controller: _controller!,
+                      aspectRatio: 16 / 9,
+                    ),
                     Positioned(
                       left: 4,
                       top: 4,
@@ -259,8 +260,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ),
         );
-      },
-    );
   }
 
   Widget _chatToggle(AppPalette palette) {
@@ -718,7 +717,7 @@ class _NotesSheetState extends State<_NotesSheet> {
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: _notes.length,
-                separatorBuilder: (_, __) => Divider(color: palette.divider),
+                separatorBuilder: (_, _) => Divider(color: palette.divider),
                 itemBuilder: (_, i) {
                   final n = _notes[i];
                   return ListTile(

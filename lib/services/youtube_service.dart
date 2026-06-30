@@ -247,9 +247,7 @@ class YoutubeService {
           .select()
           .eq('video_id', videoId)
           .maybeSingle();
-      return row == null
-          ? null
-          : YoutubeVideo.fromJson(row as Map<String, dynamic>);
+      return row == null ? null : YoutubeVideo.fromJson(row);
     } catch (_) {
       return null;
     }
@@ -408,7 +406,7 @@ class YoutubeService {
           .eq('video_id', videoId)
           .maybeSingle();
       if (row == null) return 0;
-      final m = row as Map<String, dynamic>;
+      final m = row;
       if (m['completed'] == true) return 0;
       return (m['position_seconds'] as num?)?.toInt() ?? 0;
     } catch (_) {

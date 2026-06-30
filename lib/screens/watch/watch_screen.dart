@@ -359,7 +359,7 @@ class _WatchScreenState extends State<WatchScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _continue.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (_, i) {
               final r = _continue[i];
               return YoutubeRailCard(
@@ -385,7 +385,7 @@ class _WatchScreenState extends State<WatchScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _upcoming.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (_, i) => YoutubeRailCard(
               video: _upcoming[i],
               onTap: () => _open(_upcoming[i]),

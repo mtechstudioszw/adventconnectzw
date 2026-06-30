@@ -20,7 +20,7 @@
 // @ts-nocheck
 import {
   sbAdmin, ytApi, resolveChannel, upsertChannel, fetchAndUpsertVideos,
-  upsertPlaylists, mapPlaylistItems, websub,
+  upsertPlaylists, mapPlaylistItems, websub, refreshAndPrune,
 } from "../_shared/youtube.ts";
 
 const API_KEY = Deno.env.get("YOUTUBE_API_KEY")!;
@@ -203,6 +203,22 @@ async function reconcile(sb): Promise<string[]> {
     } catch (e) {
       log.push(`reconcile ${c.channel_id}: ${(e as Error).message}`);
     }
+  }
+  // 30-day refresh + prune: re-fetch the stalest metadata and drop videos
+  // YouTube no longer returns (deleted/private). Bounded per run.
+  try {
+    const cutoff = new Date(Date.now() - 25 * 86400_000).toISOString();
+    const { data: stale } = await sb
+      .from("youtube_videos").select("video_id")
+      .lt("fetched_at", cutoff)
+      .order("fetched_at", { ascending: true }).limit(100);
+    const sids = (stale ?? []).map((v: any) => v.video_id);
+    if (sids.length) {
+      const res = await refreshAndPrune(sb, API_KEY, sids);
+      log.push(`refresh: ${res.refreshed} refreshed, ${res.deleted} pruned`);
+    }
+  } catch (e) {
+    log.push(`refresh: ${(e as Error).message}`);
   }
   return log;
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
@@ -8,6 +9,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../models/youtube_video.dart';
 import '../../services/youtube_prefs.dart';
 import '../../services/youtube_service.dart';
+import '../../services/verse_ref_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -41,6 +43,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _saved = false;
   bool _descExpanded = false;
   bool _ended = false;
+  // Scripture references detected in the title/description (tap-a-verse).
+  List<VerseRef> _verses = const [];
 
   final List<YoutubeVideo> _upNext = [];
   final ScrollController _scroll = ScrollController();
@@ -86,6 +90,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _ready = true;
     });
     _loadUpNext();
+    _parseVerses();
+  }
+
+  Future<void> _parseVerses() async {
+    final v = _video;
+    if (v == null) return;
+    final refs =
+        await VerseRefService.parse('${v.title}\n${v.description ?? ''}');
+    if (mounted) setState(() => _verses = refs);
   }
 
   void _onValue(YoutubePlayerValue value) {
@@ -145,11 +158,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _upNext.clear();
       _offset = 0;
       _hasMore = true;
+      _verses = const [];
     });
     await _controller?.loadVideoById(videoId: next.videoId);
     final saved = await YoutubeService.fetchBookmarkIds();
     if (mounted) setState(() => _saved = saved.contains(next.videoId));
     _loadUpNext();
+    _parseVerses();
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
@@ -283,6 +298,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           ),
           const SizedBox(height: 12),
           _actionBar(palette),
+          if (_verses.isNotEmpty) _scriptureChips(palette),
           if ((v.description ?? '').trim().isNotEmpty) _description(v, palette),
           const Divider(height: 28),
         ],
@@ -386,6 +402,110 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  // --------------------------- Tap-a-verse ---------------------------
+  Widget _scriptureChips(AppPalette palette) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final ref in _verses)
+            ActionChip(
+              avatar: const Icon(Icons.menu_book_outlined,
+                  size: 16, color: AppColors.primaryBlue),
+              label: Text(ref.display),
+              labelStyle: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.primaryBlue, fontWeight: FontWeight.w700),
+              backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.10),
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              onPressed: () => _openPassage(ref),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openPassage(VerseRef ref) async {
+    final lines = await VerseRefService.passage(ref);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final palette = ctx.palette;
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.5,
+          minChildSize: 0.3,
+          maxChildSize: 0.85,
+          builder: (c, scroll) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.menu_book, color: AppColors.primaryBlue),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(ref.display,
+                          style: AppTextStyles.titleMedium.copyWith(
+                              fontWeight: FontWeight.w800, color: palette.text)),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        context.pushNamed('library');
+                      },
+                      child: const Text('Open Bible'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: lines.isEmpty
+                      ? Center(
+                          child: Text('Passage unavailable.',
+                              style: AppTextStyles.bodyMedium
+                                  .copyWith(color: palette.textMuted)))
+                      : ListView.builder(
+                          controller: scroll,
+                          itemCount: lines.length,
+                          itemBuilder: (_, i) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 5),
+                            child: RichText(
+                              text: TextSpan(children: [
+                                TextSpan(
+                                  text: '${lines[i].number} ',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                      color: AppColors.primaryBlue,
+                                      fontWeight: FontWeight.w800),
+                                ),
+                                TextSpan(
+                                  text: lines[i].text,
+                                  style: AppTextStyles.bodyLarge.copyWith(
+                                      color: palette.text, height: 1.5),
+                                ),
+                              ]),
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

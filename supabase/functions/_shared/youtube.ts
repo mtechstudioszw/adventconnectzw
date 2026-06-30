@@ -150,6 +150,37 @@ export async function fetchAndUpsertVideos(
   return n;
 }
 
+// Re-fetch a set of videos and PRUNE any that YouTube no longer returns
+// (deleted / made private) — the YouTube ToS data-refresh/30-day rule.
+// videos.list silently omits ids that no longer exist, so anything we
+// asked for but didn't get back is removed from our copy.
+export async function refreshAndPrune(
+  sb: SupabaseClient, apiKey: string, ids: string[],
+): Promise<{ refreshed: number; deleted: number }> {
+  if (!ids.length) return { refreshed: 0, deleted: 0 };
+  const found = new Set<string>();
+  let refreshed = 0;
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50).filter(Boolean);
+    if (!chunk.length) continue;
+    const r = await ytApi("videos", {
+      part: "snippet,contentDetails,liveStreamingDetails,statistics",
+      id: chunk.join(","), maxResults: "50",
+    }, apiKey);
+    const rows = (r.items ?? []).map((it: any) => videoRow(it)).filter((x) => x.channel_id);
+    for (const it of r.items ?? []) found.add(it.id);
+    if (rows.length) {
+      await sb.from("youtube_videos").upsert(rows, { onConflict: "video_id" });
+      refreshed += rows.length;
+    }
+  }
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length) {
+    await sb.from("youtube_videos").delete().in("video_id", missing);
+  }
+  return { refreshed, deleted: missing.length };
+}
+
 // Pull this channel's playlists (used as Watch-tab categories).
 export async function upsertPlaylists(sb: SupabaseClient, apiKey: string, channelId: string) {
   let pageToken = "";

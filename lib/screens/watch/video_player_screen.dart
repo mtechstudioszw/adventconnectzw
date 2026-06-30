@@ -13,6 +13,7 @@ import '../../services/verse_ref_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/youtube/live_chat_panel.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 
 /// Full in-app player for a YouTube video. Official IFrame player (the only
@@ -43,6 +44,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _saved = false;
   bool _descExpanded = false;
   bool _ended = false;
+  bool _showChat = false; // live-chat vs up-next toggle (live videos only)
   // Scripture references detected in the title/description (tap-a-verse).
   List<VerseRef> _verses = const [];
 
@@ -247,12 +249,62 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     ),
                   ],
                 ),
-                Expanded(child: _details(palette)),
+                if (_video?.isLive ?? false) _chatToggle(palette),
+                Expanded(
+                  child: (_showChat && (_video?.isLive ?? false))
+                      ? LiveChatPanel(videoId: _videoId)
+                      : _details(palette),
+                ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _chatToggle(AppPalette palette) {
+    Widget seg(String label, IconData icon, bool selected, VoidCallback onTap) {
+      return Expanded(
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: selected ? AppColors.primaryBlue : Colors.transparent,
+                  width: 2.5,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon,
+                    size: 17,
+                    color: selected ? AppColors.primaryBlue : palette.textMuted),
+                const SizedBox(width: 6),
+                Text(label,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color:
+                          selected ? AppColors.primaryBlue : palette.textMuted,
+                      fontWeight: FontWeight.w700,
+                    )),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        seg('Up next', Icons.video_library_outlined, !_showChat,
+            () => setState(() => _showChat = false)),
+        seg('Live chat', Icons.forum_outlined, _showChat,
+            () => setState(() => _showChat = true)),
+      ],
     );
   }
 

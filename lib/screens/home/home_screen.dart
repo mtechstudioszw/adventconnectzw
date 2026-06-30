@@ -58,7 +58,7 @@ import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/live_banner.dart';
 import '../../widgets/verified_tick.dart';
-import '../../widgets/youtube/previewable_video_card.dart';
+import '../../widgets/youtube/youtube_video_card.dart';
 import '../../models/youtube_video.dart';
 import '../../services/youtube_service.dart';
 import '../../widgets/last_updated_strip.dart';
@@ -1408,7 +1408,7 @@ class _HomeScreenState extends State<HomeScreen>
       // feed (one at a time, paced) — tap opens the in-app player.
       if ((i + 1) % _videoEveryNPosts == 0 && videoIdx < _homeVideos.length) {
         final v = _homeVideos[videoIdx++];
-        children.add(PreviewableVideoCard(video: v, onTap: () => _openVideo(v)));
+        children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
       }
       // Sponsored native ad after every _adEveryNPosts posts, capped at
       // _maxFeedAds per render so we don't fire dozens of ad requests on
@@ -1425,7 +1425,7 @@ class _HomeScreenState extends State<HomeScreen>
     // backlog is short.
     while (videoIdx < _homeVideos.length) {
       final v = _homeVideos[videoIdx++];
-      children.add(PreviewableVideoCard(video: v, onTap: () => _openVideo(v)));
+      children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
     }
     return Column(children: children);
   }

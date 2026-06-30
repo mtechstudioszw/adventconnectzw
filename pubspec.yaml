@@ -136,10 +136,6 @@ dependencies:
   # (CI handles it on build).
   youtube_player_iframe: 6.0.2
 
-  # Watch — in-feed muted auto-preview needs viewport visibility detection
-  # (only the centered card previews). Pinned exact.
-  visibility_detector: 0.4.0+2
-
   # Watch — embedded YouTube LIVE CHAT panel for live streams (official
   # live_chat embed in a WebView). Pinned exact. Requires Android minSdk 24
   # (bumped in android/app/build.gradle.kts) + `flutter pub get`.

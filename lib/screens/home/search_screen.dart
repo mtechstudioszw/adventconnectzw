@@ -81,6 +81,7 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Event> _suggEvents = const [];
   List<Product> _suggProducts = const [];
   List<Job> _suggJobs = const [];
+  List<YoutubeVideo> _suggVideos = const [];
   bool _seeAllSuggestions = false;
 
   @override
@@ -108,6 +109,7 @@ class _SearchScreenState extends State<SearchScreen> {
       safe(() => EventService.fetchEvents(upcomingOnly: true)),
       safe(() => MarketplaceService.fetchProducts()),
       safe(() => JobService.fetchJobs()),
+      safe(() => YoutubeService.fetchFeed(limit: 6)),
     ]);
     if (!mounted) return;
     setState(() {
@@ -116,6 +118,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _suggEvents = (results[2] as List<Event>).take(6).toList();
       _suggProducts = (results[3] as List<Product>).take(6).toList();
       _suggJobs = (results[4] as List<Job>).take(6).toList();
+      _suggVideos = (results[5] as List<YoutubeVideo>).take(6).toList();
     });
   }
 
@@ -629,6 +632,21 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
       ]));
+    }
+
+    if (_suggVideos.isNotEmpty) {
+      sections.add(_landingHeader(
+        'Videos to watch',
+        actionLabel: 'See all',
+        onAction: () => context.goNamed('watch'),
+      ));
+      for (final v in _suggVideos) {
+        sections.add(YoutubeVideoCard(
+          video: v,
+          onTap: () => context.pushNamed('watch_video',
+              pathParameters: {'id': v.videoId}, extra: v),
+        ));
+      }
     }
 
     if (_suggProducts.isNotEmpty) {

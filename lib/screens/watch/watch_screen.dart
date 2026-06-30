@@ -10,6 +10,7 @@ import '../../theme/app_text_styles.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
 import '../../widgets/ads/native_ad_card.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/shimmer_loaders.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../widgets/main_bottom_nav.dart';
 
@@ -171,8 +172,7 @@ class _WatchScreenState extends State<WatchScreen> {
       body: SafeArea(
         top: false,
         child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue))
+            ? ShimmerLoaders.watchList()
             : RefreshIndicator(
                 color: AppColors.primaryBlue,
                 onRefresh: _bootstrap,

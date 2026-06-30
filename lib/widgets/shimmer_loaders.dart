@@ -34,6 +34,18 @@ class ShimmerLoaders {
     );
   }
 
+  /// Watch tab — a 16:9 hero followed by a few video-card skeletons.
+  static Widget watchList({int count = 4}) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _VideoSkeleton(hero: true),
+        const SizedBox(height: 16),
+        for (var i = 0; i < count; i++) _VideoSkeleton(),
+      ],
+    );
+  }
+
   /// Two-column product grid skeleton.
   static Widget productGrid({int count = 6}) {
     return GridView.builder(
@@ -61,6 +73,56 @@ class _CardSkeleton extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.palette.card,
           borderRadius: BorderRadius.circular(18),
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoSkeleton extends StatelessWidget {
+  const _VideoSkeleton({this.hero = false});
+  final bool hero;
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: ShimmerLoaders.baseColor(context),
+      highlightColor: ShimmerLoaders.highlightColor(context),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: hero ? 0 : 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  borderRadius: BorderRadius.circular(hero ? 20 : 16),
+                ),
+              ),
+            ),
+            if (!hero) ...[
+              const SizedBox(height: 10),
+              Container(
+                height: 12,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              const SizedBox(height: 7),
+              Container(
+                height: 12,
+                width: 140,
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

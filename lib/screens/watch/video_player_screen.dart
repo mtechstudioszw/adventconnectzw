@@ -13,6 +13,7 @@ import '../../services/verse_ref_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/cached_image.dart';
 import '../../widgets/youtube/live_chat_panel.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 
@@ -45,6 +46,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _descExpanded = false;
   bool _ended = false;
   bool _showChat = false; // live-chat vs up-next toggle (live videos only)
+  bool _playerStarted = false; // player webview has come alive
+  bool _loadTimedOut = false; // slow/no network — show retry
+  Timer? _loadTimer;
   // Scripture references detected in the title/description (tap-a-verse).
   List<VerseRef> _verses = const [];
 
@@ -84,6 +88,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _sub = controller.stream.listen(_onValue);
     _progressTimer =
         Timer.periodic(const Duration(seconds: 10), (_) => _saveProgress());
+    _armLoadWatchdog();
 
     if (!mounted) return;
     setState(() {
@@ -104,15 +109,50 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _onValue(YoutubePlayerValue value) {
-    if (value.playerState == PlayerState.ended && !_ended) {
+    final s = value.playerState;
+    // The player has "come alive" once it reaches any real state — until
+    // then we keep a thumbnail + spinner over it so a slow webview boot /
+    // poor network reads as "loading", not a broken black box.
+    if (!_playerStarted &&
+        (s == PlayerState.playing ||
+            s == PlayerState.paused ||
+            s == PlayerState.buffering ||
+            s == PlayerState.cued)) {
+      _loadTimer?.cancel();
+      setState(() {
+        _playerStarted = true;
+        _loadTimedOut = false;
+      });
+    }
+    if (s == PlayerState.ended && !_ended) {
       _ended = true;
       _saveProgress(completed: true);
       if (YoutubePrefs.autoplayNext && _upNext.isNotEmpty) {
         _switchTo(_upNext.first);
       }
-    } else if (value.playerState == PlayerState.playing) {
+    } else if (s == PlayerState.playing) {
       _ended = false;
     }
+  }
+
+  /// Start (or restart) the "still loading?" watchdog — if the player hasn't
+  /// come alive in ~12s it's almost certainly the network, so we surface a
+  /// friendly retry instead of an endless spinner.
+  void _armLoadWatchdog() {
+    _loadTimer?.cancel();
+    _playerStarted = false;
+    _loadTimedOut = false;
+    _loadTimer = Timer(const Duration(seconds: 12), () {
+      if (mounted && !_playerStarted) setState(() => _loadTimedOut = true);
+    });
+  }
+
+  void _retryLoad() {
+    final v = _video;
+    if (v == null) return;
+    _armLoadWatchdog();
+    setState(() {});
+    _controller?.loadVideoById(videoId: v.videoId);
   }
 
   Future<void> _saveProgress({bool completed = false}) async {
@@ -162,6 +202,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _hasMore = true;
       _verses = const [];
     });
+    _armLoadWatchdog();
     await _controller?.loadVideoById(videoId: next.videoId);
     final saved = await YoutubeService.fetchBookmarkIds();
     if (mounted) setState(() => _saved = saved.contains(next.videoId));
@@ -202,6 +243,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void dispose() {
     _saveProgress();
+    _loadTimer?.cancel();
     _progressTimer?.cancel();
     _sub?.cancel();
     _controller?.close();
@@ -235,6 +277,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       controller: _controller!,
                       aspectRatio: 16 / 9,
                     ),
+                    if (!_playerStarted)
+                      Positioned.fill(child: _loadingOverlay()),
                     Positioned(
                       left: 4,
                       top: 4,
@@ -304,6 +348,64 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         seg('Live chat', Icons.forum_outlined, _showChat,
             () => setState(() => _showChat = true)),
       ],
+    );
+  }
+
+  /// Thumbnail + spinner over the player while the webview boots / buffers,
+  /// switching to a friendly retry if the network is too slow. Stops the
+  /// "click a video → black glitch" feeling on poor connections.
+  Widget _loadingOverlay() {
+    final v = _video;
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: AppColors.darkNavy),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (v?.thumbnailUrl != null)
+            CachedImage(v!.thumbnailUrl!, fit: BoxFit.cover),
+          DecoratedBox(
+            decoration:
+                BoxDecoration(color: Colors.black.withValues(alpha: 0.5)),
+          ),
+          Center(
+            child: _loadTimedOut
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.wifi_off_rounded,
+                          color: AppColors.white, size: 34),
+                      const SizedBox(height: 10),
+                      Text('Slow connection',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      Text('Check your network and try again.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.white.withValues(alpha: 0.8))),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primaryBlue),
+                        onPressed: _retryLoad,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(
+                          color: AppColors.white, strokeWidth: 2.5),
+                      const SizedBox(height: 12),
+                      Text('Loading…',
+                          style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.white.withValues(alpha: 0.85))),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 

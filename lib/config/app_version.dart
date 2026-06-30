@@ -1,6 +1,9 @@
 /// The app's LOGICAL build number for the force-update gate
-/// (ForceUpdateService). Kept in sync with the `+N` in pubspec.yaml
-/// (currently 1.1.0+8). Bump this every release.
+/// (ForceUpdateService). This is a monotonic counter bumped once per
+/// release — it is deliberately NOT the pubspec `+N` (which CI rewrites to
+/// 1000+run_number). Older installs that shipped before this release all
+/// report 8, so setting `app_config.latest_build_android = 9` AFTER the
+/// 1.2.0 build is live on Play nudges them to update. Bump this every release.
 ///
 /// NOTE: this is intentionally DECOUPLED from the Play Store `versionCode`.
 /// The AAB CI workflow overrides the Play Store versionCode to
@@ -9,7 +12,7 @@
 /// `min_build_android`. So when you want to nudge older installs after a
 /// release, set `latest_build_android` to THIS value (8), NOT the Play Store
 /// versionCode.
-const int kAppBuildNumber = 8;
+const int kAppBuildNumber = 9;
 
 /// Play Store listing id (Android applicationId) — used to deep-link to
 /// the store from the "Update required" screen.

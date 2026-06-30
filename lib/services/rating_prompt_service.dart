@@ -27,8 +27,8 @@ class RatingPromptService {
   static const _kLastShown = 'rate_prompt_last_shown_v1';
   static const _kRequests = 'rate_prompt_requests_v1';
 
-  static const int _minDaysSinceInstall = 7;
-  static const int _minOpens = 4;
+  static const int _minDaysSinceInstall = 3;
+  static const int _minOpens = 3;
   static const int _reAskDays = 14;
   static const int _maxRequests = 3;
 

@@ -71,9 +71,11 @@ class PreviewableVideoCard extends StatefulWidget {
 
 class _PreviewableVideoCardState extends State<PreviewableVideoCard> {
   YoutubePlayerController? _controller;
+  StreamSubscription<YoutubePlayerValue>? _previewSub;
   Timer? _restartTimer;
   Timer? _activateDebounce;
   bool _previewing = false;
+  bool _playing = false; // player has actually started → fade it in
 
   String get _id => widget.video.videoId;
 
@@ -97,9 +99,10 @@ class _PreviewableVideoCardState extends State<PreviewableVideoCard> {
   void _onActiveChanged() {
     final isActive = PreviewController.instance.active.value == _id;
     if (isActive && _allowed && !widget.video.isLive) {
-      // Debounce so fast scrolling doesn't spin up a webview per card.
+      // Longer dwell so fast scrolling never spins up a webview per card —
+      // only a card you actually settle on previews.
       _activateDebounce?.cancel();
-      _activateDebounce = Timer(const Duration(milliseconds: 350), () {
+      _activateDebounce = Timer(const Duration(milliseconds: 650), () {
         if (mounted && PreviewController.instance.active.value == _id) {
           _startPreview();
         }
@@ -125,6 +128,13 @@ class _PreviewableVideoCardState extends State<PreviewableVideoCard> {
         strictRelatedVideos: true,
       ),
     );
+    // Fade the player in only once it's actually playing, so the thumbnail
+    // shows underneath until then — no blank/flicker while the webview boots.
+    _previewSub = _controller!.stream.listen((v) {
+      if (v.playerState == PlayerState.playing && !_playing && mounted) {
+        setState(() => _playing = true);
+      }
+    });
     // Loop the first 5 seconds as a teaser.
     _restartTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _controller?.seekTo(seconds: 0, allowSeekAhead: true);
@@ -135,6 +145,9 @@ class _PreviewableVideoCardState extends State<PreviewableVideoCard> {
   void _stopPreview() {
     if (!_previewing && _controller == null) return;
     _previewing = false;
+    _playing = false;
+    _previewSub?.cancel();
+    _previewSub = null;
     _restartTimer?.cancel();
     _restartTimer = null;
     _controller?.close();
@@ -147,6 +160,7 @@ class _PreviewableVideoCardState extends State<PreviewableVideoCard> {
     PreviewController.instance.active.removeListener(_onActiveChanged);
     PreviewController.instance.remove(_id);
     _activateDebounce?.cancel();
+    _previewSub?.cancel();
     _restartTimer?.cancel();
     _controller?.close();
     super.dispose();
@@ -165,14 +179,25 @@ class _PreviewableVideoCardState extends State<PreviewableVideoCard> {
         onTap: widget.onTap,
         saved: widget.saved,
         onSaveToggle: widget.onSaveToggle,
-        // When previewing, overlay the muted player; IgnorePointer lets the
-        // card's tap fall through to open the full player.
+        // When previewing, keep the thumbnail underneath and fade the muted
+        // player in only once it's actually playing (no flicker). IgnorePointer
+        // lets the card's tap fall through to open the full player.
         thumbnailOverlay: (_previewing && _controller != null)
-            ? IgnorePointer(
-                child: YoutubePlayer(
-                  controller: _controller!,
-                  aspectRatio: 16 / 9,
-                ),
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  YoutubeThumbnail(video: widget.video, radius: 0),
+                  AnimatedOpacity(
+                    opacity: _playing ? 1 : 0,
+                    duration: const Duration(milliseconds: 280),
+                    child: IgnorePointer(
+                      child: YoutubePlayer(
+                        controller: _controller!,
+                        aspectRatio: 16 / 9,
+                      ),
+                    ),
+                  ),
+                ],
               )
             : null,
       ),

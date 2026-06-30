@@ -867,20 +867,14 @@ class _HomeScreenState extends State<HomeScreen>
                     child: _LibraryChips(),
                   ),
                 ],
-                if (_topNews.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _AdventNewsHero(items: _topNews),
-                  ),
-                ],
                 // Official church-posted events, featured prominently with the
                 // church's name + gold tick. Self-hides when there are none.
                 const SizedBox(height: 16),
                 const FeaturedChurchEvents(),
-                const SizedBox(height: 16),
-                const _HomeMusicStrip(),
                 const SizedBox(height: 6),
+                // Advent News + Music now live INSIDE the shuffled discovery
+                // feed (see _buildDiscoveryCards) so their position varies
+                // per user instead of being pinned to the same spot here.
                 // _buildFeedList() is now a Facebook-style mixed feed:
                 // posts intercalated with discovery cards (suggested
                 // people, events, prayer prompt, churches, invite
@@ -1481,6 +1475,18 @@ class _HomeScreenState extends State<HomeScreen>
   /// the interspersed slots where it has the most impact.
   List<Widget> _buildDiscoveryCards() {
     final discoverable = <_DiscoverySlot>[];
+    // Advent News + Music live in the shuffled pool so their position
+    // varies per user (no longer pinned to a fixed spot up top).
+    if (_topNews.isNotEmpty) {
+      discoverable.add(_DiscoverySlot(
+        key: 'news',
+        widget: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: _AdventNewsHero(items: _topNews),
+        ),
+      ));
+    }
+    discoverable.add(const _DiscoverySlot(key: 'music', widget: _HomeMusicStrip()));
     if (_hasNonFriendSuggestions) {
       discoverable.add(_DiscoverySlot(
         key: 'people',

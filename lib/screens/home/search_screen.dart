@@ -14,6 +14,9 @@ import '../../services/church_service.dart';
 import '../../services/directory_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/youtube_service.dart';
+import '../../models/youtube_video.dart';
+import '../../widgets/youtube/youtube_video_card.dart';
 import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/secure_storage_service.dart';
@@ -60,6 +63,7 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Job> _jobs = const [];
   List<MemberDirectoryEntry> _people = const [];
   List<Post> _posts = const [];
+  List<YoutubeVideo> _videos = const [];
 
   // Fallback list — surfaced when the query has no matches. Loaded
   // lazily the first time we hit an empty-result state.
@@ -213,6 +217,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _jobs = const [];
         _people = const [];
         _posts = const [];
+        _videos = const [];
       });
       return;
     }
@@ -241,6 +246,7 @@ class _SearchScreenState extends State<SearchScreen> {
       safe(() => MarketplaceService.fetchProducts(search: query)),
       safe(() => JobService.fetchJobs(search: query)),
       safe(() => FeedService.searchPosts(query)),
+      safe(() => YoutubeService.search(query, limit: 12)),
     ]);
     if (!mounted) return;
     final people = (results[0] as List<MemberDirectoryEntry>).take(12).toList();
@@ -249,6 +255,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final products = (results[3] as List<Product>).take(12).toList();
     final jobs = (results[4] as List<Job>).take(12).toList();
     final posts = (results[5] as List<Post>).take(12).toList();
+    final videos = (results[6] as List<YoutubeVideo>).take(12).toList();
     setState(() {
       _people = people;
       _churches = churches;
@@ -256,6 +263,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _products = products;
       _jobs = jobs;
       _posts = posts;
+      _videos = videos;
       _searching = false;
     });
     final hasAny = people.isNotEmpty ||
@@ -263,7 +271,8 @@ class _SearchScreenState extends State<SearchScreen> {
         events.isNotEmpty ||
         products.isNotEmpty ||
         jobs.isNotEmpty ||
-        posts.isNotEmpty;
+        posts.isNotEmpty ||
+        videos.isNotEmpty;
     if (!hasAny) {
       _loadFallback();
     }
@@ -814,13 +823,15 @@ class _SearchScreenState extends State<SearchScreen> {
     final showJobs =
         (_filter == _Filter.all || _filter == _Filter.jobs) &&
             _jobs.isNotEmpty;
+    final showVideos = _filter == _Filter.all && _videos.isNotEmpty;
 
     final anyForFilter = showPeople ||
         showPosts ||
         showChurches ||
         showEvents ||
         showProducts ||
-        showJobs;
+        showJobs ||
+        showVideos;
 
     if (!anyForFilter) {
       return Padding(
@@ -836,6 +847,22 @@ class _SearchScreenState extends State<SearchScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
+        if (showVideos)
+          _Section(
+            label: 'VIDEOS',
+            count: _videos.length,
+            children: [
+              for (final v in _videos)
+                YoutubeVideoCard(
+                  video: v,
+                  onTap: () => _openResult(
+                    _lastQuery,
+                    () => context.pushNamed('watch_video',
+                        pathParameters: {'id': v.videoId}, extra: v),
+                  ),
+                ),
+            ],
+          ),
         if (showPeople)
           _Section(
             label: 'PEOPLE',

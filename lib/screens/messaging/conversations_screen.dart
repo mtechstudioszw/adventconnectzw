@@ -21,6 +21,10 @@ import '../../widgets/full_image_viewer.dart';
 import '../../widgets/verified_tick.dart';
 import 'chat_search_delegate.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/shimmer_loaders.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key, this.initialTab});
@@ -38,12 +42,7 @@ enum _ConversationsTab { chats, groups, status }
 /// WhatsApp-style quick filter chips on the Chats tab.
 enum _ChatFilter { all, unread, groups }
 
-class _ConversationsScreenState extends State<ConversationsScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
+class _ConversationsScreenState extends State<ConversationsScreen> {
   List<Conversation> _conversations = [];
   Map<String, ConversationState> _convStates = const {};
   List<Story> _stories = const [];
@@ -53,9 +52,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   String? _error;
   _ConversationsTab _tab = _ConversationsTab.chats;
   _ChatFilter _chatFilter = _ChatFilter.all;
+
   /// Requests aren't a tab anymore — they open from a banner on the Chats
   /// tab into an inline requests view. This flag drives that view.
   bool _showRequests = false;
+
   /// Once we've auto-jumped to the Requests tab on first load (because
   /// inbox was empty but friend requests existed), we stop doing it so
   /// the user can navigate freely afterwards.
@@ -145,14 +146,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       // heuristic in _bootstrap override that choice.
       _autoTabResolved = true;
     }
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
     _bootstrap();
     _startActivityWatcher();
     // Local inbox changes (delete-for-me preview floor) emit no realtime
@@ -170,7 +163,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     _refreshDebounce?.cancel();
     _activitySub?.cancel();
     MessagingService.inboxLocalRevision.removeListener(_onLocalInboxChange);
-    _entrance.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -214,9 +206,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         final me = _currentUserId;
         if (me.isNotEmpty) {
           final undelivered = rows
-              .where((r) =>
-                  r['sender_id']?.toString() != me &&
-                  r['delivered_at'] == null)
+              .where(
+                (r) =>
+                    r['sender_id']?.toString() != me &&
+                    r['delivered_at'] == null,
+              )
               .map((r) => r['id'].toString())
               .where((id) => id.isNotEmpty)
               .toList();
@@ -225,12 +219,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           }
         }
         _refreshDebounce?.cancel();
-        _refreshDebounce = Timer(
-          const Duration(milliseconds: 600),
-          () {
-            if (mounted) _refreshFromRealtime();
-          },
-        );
+        _refreshDebounce = Timer(const Duration(milliseconds: 600), () {
+          if (mounted) _refreshFromRealtime();
+        });
       },
       onError: (_) {
         // Realtime hiccups should never blank the inbox.
@@ -294,10 +285,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           final inboxHasContent = _conversations.any(
             (c) => !c.isIncomingRequestFor(_currentUserId),
           );
-          final hasRequests = _friendRequests.isNotEmpty ||
-              _conversations.any(
-                (c) => c.isIncomingRequestFor(_currentUserId),
-              );
+          final hasRequests =
+              _friendRequests.isNotEmpty ||
+              _conversations.any((c) => c.isIncomingRequestFor(_currentUserId));
           if (!inboxHasContent && hasRequests) {
             _showRequests = true;
           }
@@ -387,9 +377,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
     // Fallback for media/system previews (no matchable text): compare instants
     // in UTC so a local-vs-UTC parse can't leave the deleted message showing.
-    return c.lastMessageAt
-        .toUtc()
-        .isBefore(floor.toUtc().add(const Duration(seconds: 2)));
+    return c.lastMessageAt.toUtc().isBefore(
+      floor.toUtc().add(const Duration(seconds: 2)),
+    );
   }
 
   /// Pinned conversations float to the top, preserving their existing
@@ -405,28 +395,30 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     // style — pinned to the very top). The church MEMBERS group and all
     // user-created groups live in the Groups tab, not here.
     final filtered = _conversations
-        .where((c) =>
-            (!c.isGroup || c.isChurchChannel) &&
-            !c.isIncomingRequestFor(_currentUserId) &&
-            !_isArchived(c))
+        .where(
+          (c) =>
+              (!c.isGroup || c.isChurchChannel) &&
+              !c.isIncomingRequestFor(_currentUserId) &&
+              !_isArchived(c),
+        )
         .toList();
     final selfChats = filtered.where((c) => c.isSelfChat).toList();
-    final others = _pinnedFirst(
-        filtered.where((c) => !c.isSelfChat).toList());
+    final others = _pinnedFirst(filtered.where((c) => !c.isSelfChat).toList());
     return [...selfChats, ...others];
   }
 
   /// Group chats: user-created groups + the church MEMBERS group (pinned
   /// to the top, can't be unpinned). The announcements channel is NOT
   /// here — it sits in the Chats tab. Archived ones move to Archived.
-  List<Conversation> get _groups => _pinnedFirst(_conversations
-      .where((c) => c.isGroup && !c.isChurchChannel && !_isArchived(c))
-      .toList());
+  List<Conversation> get _groups => _pinnedFirst(
+    _conversations
+        .where((c) => c.isGroup && !c.isChurchChannel && !_isArchived(c))
+        .toList(),
+  );
 
   /// Everything (1:1 or group) the viewer has archived.
   List<Conversation> get _archived => _conversations
-      .where((c) =>
-          !c.isIncomingRequestFor(_currentUserId) && _isArchived(c))
+      .where((c) => !c.isIncomingRequestFor(_currentUserId) && _isArchived(c))
       .toList();
 
   List<Conversation> get _requests => _conversations
@@ -439,8 +431,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       if (!mounted) return;
       setState(() {
         _conversations = _conversations
-            .map((x) =>
-                x.id == c.id ? x.copyWith(requestStatus: 'accepted') : x)
+            .map(
+              (x) => x.id == c.id ? x.copyWith(requestStatus: 'accepted') : x,
+            )
             .toList();
         // Accepting the last request returns to the Chats list.
         if (_requests.isEmpty) _showRequests = false;
@@ -561,11 +554,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         }).toList();
       });
     }
-    await context.pushNamed(
-      'chat',
-      pathParameters: {'id': c.id},
-      extra: c,
-    );
+    await context.pushNamed('chat', pathParameters: {'id': c.id}, extra: c);
     if (mounted) _bootstrap();
   }
 
@@ -575,7 +564,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       builder: (ctx) => AlertDialog(
         title: Text(
           'Decline message request?',
-          style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
+          style: AppTextStyles.titleMedium.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
         content: Text(
           'You won\'t see this conversation again. ${c.otherUserName} won\'t be notified.',
@@ -606,8 +597,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       await MessagingService.declineRequest(c.id);
       if (!mounted) return;
       setState(() {
-        _conversations =
-            _conversations.where((x) => x.id != c.id).toList();
+        _conversations = _conversations.where((x) => x.id != c.id).toList();
       });
     } catch (_) {
       if (!mounted) return;
@@ -655,8 +645,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ),
               title: Text(
                 'New group',
-                style:
-                    AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               onTap: () => Navigator.pop(ctx, 'group'),
             ),
@@ -667,8 +658,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ),
               title: Text(
                 'New chat',
-                style:
-                    AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               onTap: () => Navigator.pop(ctx, 'chat'),
             ),
@@ -679,8 +671,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               ),
               title: Text(
                 'Join group with link',
-                style:
-                    AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               onTap: () => Navigator.pop(ctx, 'join'),
             ),
@@ -721,7 +714,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+            ),
             onPressed: () => Navigator.pop(dctx, controller.text.trim()),
             child: const Text('Join'),
           ),
@@ -780,9 +775,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         onPressed: _tab == _ConversationsTab.status
             ? _openStoryComposer
             : _openNewChatSheet,
-        child: Icon(_tab == _ConversationsTab.status
-            ? Icons.add_a_photo_outlined
-            : Icons.edit_square),
+        child: Icon(
+          _tab == _ConversationsTab.status
+              ? Icons.add_a_photo_outlined
+              : Icons.edit_square,
+        ),
       ),
       body: Column(
         children: [
@@ -792,17 +789,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             child: BrandedRefreshIndicator(
               color: AppColors.primaryBlue,
               onRefresh: _bootstrap,
-              child: AnimatedBuilder(
-                animation: _entrance,
-                builder: (context, child) => Opacity(
-                  opacity: _fade.value,
-                  child: Transform.translate(
-                    offset: Offset(0, _slide.value),
-                    child: child,
-                  ),
-                ),
-                child: _buildTabPager(),
-              ),
+              // Entrance now happens per-tile (StaggeredReveal in
+              // _conversationListView) instead of one block fade.
+              child: _buildTabPager(),
             ),
           ),
         ],
@@ -860,9 +849,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             children: [
               _CircleIconButton(
                 icon: Icons.arrow_back,
-                onTap: () => context.canPop()
-                    ? context.pop()
-                    : context.goNamed('home'),
+                onTap: () =>
+                    context.canPop() ? context.pop() : context.goNamed('home'),
               ),
               const SizedBox(width: 6),
               Text(
@@ -874,10 +862,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
               ),
               const Spacer(),
-              _CircleIconButton(
-                icon: Icons.search,
-                onTap: _openChatSearch,
-              ),
+              _CircleIconButton(icon: Icons.search, onTap: _openChatSearch),
               const SizedBox(width: 6),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, color: AppColors.white),
@@ -976,11 +961,16 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 
   Widget _buildTabPager() {
-    if (_loading && _conversations.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
-    }
+    // Chat-shaped shimmer instead of a bare spinner, crossfading into
+    // the inbox when it lands.
+    return ContentReveal(
+      loading: _loading && _conversations.isEmpty,
+      skeleton: ShimmerLoaders.cardList(count: 7),
+      child: _buildTabPagerContent(),
+    );
+  }
+
+  Widget _buildTabPagerContent() {
     if (_error != null && _conversations.isEmpty) {
       return _buildErrorState();
     }
@@ -989,13 +979,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     // animated transition (order matches _ConversationsTab).
     return PageView(
       controller: _pageController,
-      onPageChanged: (i) =>
-          setState(() => _tab = _ConversationsTab.values[i]),
-      children: [
-        _buildChatsTab(),
-        _buildGroupsTab(),
-        _buildStatusTab(),
-      ],
+      onPageChanged: (i) => setState(() => _tab = _ConversationsTab.values[i]),
+      children: [_buildChatsTab(), _buildGroupsTab(), _buildStatusTab()],
     );
   }
 
@@ -1028,18 +1013,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
               child: Row(
                 children: [
-                  Text('Archived',
-                      style: AppTextStyles.titleMedium
-                          .copyWith(fontWeight: FontWeight.w800)),
+                  Text(
+                    'Archived',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ],
               ),
             ),
             Expanded(
               child: _archived.isEmpty
                   ? Center(
-                      child: Text('No archived chats',
-                          style: AppTextStyles.bodyMedium
-                              .copyWith(color: ctx.palette.textMuted)))
+                      child: Text(
+                        'No archived chats',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: ctx.palette.textMuted,
+                        ),
+                      ),
+                    )
                   : ListView(
                       controller: controller,
                       children: [
@@ -1091,7 +1083,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         list = all;
     }
     final headers = <Widget>[
-      _buildChatFilterChips(unreadCount: all.where((c) => c.unreadCount > 0).length),
+      _buildChatFilterChips(
+        unreadCount: all.where((c) => c.unreadCount > 0).length,
+      ),
       if (requestCount > 0)
         _RequestsBanner(
           count: requestCount,
@@ -1100,12 +1094,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       if (_archived.isNotEmpty)
         ListTile(
           onTap: _openArchivedSheet,
-          leading: Icon(Icons.archive_outlined,
-              color: context.palette.textMuted),
+          leading: Icon(
+            Icons.archive_outlined,
+            color: context.palette.textMuted,
+          ),
           title: const Text('Archived'),
-          trailing: Text('${_archived.length}',
-              style: AppTextStyles.labelMedium
-                  .copyWith(color: context.palette.textMuted)),
+          trailing: Text(
+            '${_archived.length}',
+            style: AppTextStyles.labelMedium.copyWith(
+              color: context.palette.textMuted,
+            ),
+          ),
         ),
       // Filter found nothing (but the inbox isn't empty) — let the user know
       // instead of a blank screen under the chips.
@@ -1118,16 +1117,14 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   ? 'No unread chats — you\'re all caught up.'
                   : 'No groups here yet.',
               textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: context.palette.textMuted),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: context.palette.textMuted,
+              ),
             ),
           ),
         ),
     ];
-    return _conversationListView(
-      list,
-      banner: Column(children: headers),
-    );
+    return _conversationListView(list, banner: Column(children: headers));
   }
 
   /// WhatsApp-style quick filter chips (All · Unread · Groups) above the
@@ -1144,8 +1141,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             borderRadius: BorderRadius.circular(20),
             onTap: () => setState(() => _chatFilter = f),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1161,7 +1157,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: selected
                             ? AppColors.white.withValues(alpha: 0.25)
@@ -1204,7 +1202,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (list.isEmpty) {
       return _buildEmptyState(
         title: 'No groups yet',
-        body: 'Create a group from the pencil button to chat with several '
+        body:
+            'Create a group from the pencil button to chat with several '
             'people at once.',
       );
     }
@@ -1224,8 +1223,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           viewerPhotoUrl: _viewerPhotoUrl(),
           onAddStory: _openStoryComposer,
           onAuthorTapped: (_, list) => _openStoryViewer(list),
-          viewedStoryIds:
-              _viewedStoryIds.union(FeedService.viewedStoryIdsCached()),
+          viewedStoryIds: _viewedStoryIds.union(
+            FeedService.viewedStoryIdsCached(),
+          ),
         ),
         if (_stories.isEmpty)
           Padding(
@@ -1248,8 +1248,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     // Don't show the same person twice: if they already appear under
     // Friend requests, drop their message request from this view.
     final friendIds = _friendRequests.map((r) => r.requesterId).toSet();
-    final list =
-        _requests.where((c) => !friendIds.contains(c.otherUserId)).toList();
+    final list = _requests
+        .where((c) => !friendIds.contains(c.otherUserId))
+        .toList();
     final hasFriendRequests = _friendRequests.isNotEmpty;
     final hasMessageRequests = list.isNotEmpty;
     return ListView(
@@ -1262,9 +1263,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             onPressed: () => setState(() => _showRequests = false),
             icon: const Icon(Icons.arrow_back, size: 18),
             label: const Text('Back to chats'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.primaryBlue,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primaryBlue),
           ),
         ),
         if (!hasFriendRequests && !hasMessageRequests)
@@ -1272,7 +1271,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             padding: const EdgeInsets.only(top: 40),
             child: _buildEmptyState(
               title: 'No requests',
-              body: 'Friend requests and messages from people you haven\'t '
+              body:
+                  'Friend requests and messages from people you haven\'t '
                   'chatted with yet land here.',
             ),
           ),
@@ -1297,10 +1297,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           const SizedBox(height: 8),
         ],
         if (hasMessageRequests) ...[
-          _RequestsSectionHeader(
-            label: 'Message requests',
-            count: list.length,
-          ),
+          _RequestsSectionHeader(label: 'Message requests', count: list.length),
           const SizedBox(height: 10),
           for (final c in list) ...[
             _RequestTile(
@@ -1331,16 +1328,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           itemBuilder: (context, i) {
             if (banner != null && i == 0) return banner;
             final c = list[i - (banner == null ? 0 : 1)];
-            return _ConversationTile(
+            // First screenful cascades in; tiles further down mount
+            // plainly so fast scrolling never feels laggy.
+            final revealIndex = i < 9 ? i : -1;
+            final tile = _ConversationTile(
               key: ValueKey(c.id),
               conversation: c,
               isLastFromMe: c.lastSenderId == _currentUserId,
               pinned: _isPinned(c),
               muted: _isMuted(c),
               selected: _chatSelect && _selectedChats.contains(c.id),
-              onTap: _chatSelect
-                  ? () => _toggleChat(c)
-                  : () => _openChat(c),
+              onTap: _chatSelect ? () => _toggleChat(c) : () => _openChat(c),
               onLongPress: _chatSelect
                   ? null
                   : () => _openConversationActions(c),
@@ -1349,10 +1347,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               onAvatarTap: _chatSelect
                   ? () => _toggleChat(c)
                   : (c.otherUserPhotoUrl ?? '').isNotEmpty
-                      ? () => FullImageViewer.show(context, c.otherUserPhotoUrl)
-                      : () => _openChat(c),
+                  ? () => FullImageViewer.show(context, c.otherUserPhotoUrl)
+                  : () => _openChat(c),
               previewCleared: _isPreviewCleared(c),
             );
+            if (revealIndex < 0) return tile;
+            return StaggeredReveal(index: revealIndex, rise: 18, child: tile);
           },
         );
       },
@@ -1418,15 +1418,19 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.mark_email_read_outlined,
-                    color: AppColors.primaryBlue),
+                leading: const Icon(
+                  Icons.mark_email_read_outlined,
+                  color: AppColors.primaryBlue,
+                ),
                 title: const Text('Mark as read'),
                 onTap: () => Navigator.of(sheetCtx).pop('read'),
               ),
               if (!c.isChurchGroup)
                 ListTile(
-                  leading: const Icon(Icons.checklist_rtl,
-                      color: AppColors.primaryBlue),
+                  leading: const Icon(
+                    Icons.checklist_rtl,
+                    color: AppColors.primaryBlue,
+                  ),
                   title: const Text('Select'),
                   onTap: () => Navigator.of(sheetCtx).pop('select'),
                 ),
@@ -1436,8 +1440,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ListTile(
                   leading: Transform.rotate(
                     angle: 0.785398,
-                    child: const Icon(Icons.push_pin_outlined,
-                        color: AppColors.primaryBlue),
+                    child: const Icon(
+                      Icons.push_pin_outlined,
+                      color: AppColors.primaryBlue,
+                    ),
                   ),
                   title: Text(_isPinned(c) ? 'Unpin' : 'Pin to top'),
                   onTap: () => Navigator.of(sheetCtx).pop('pin'),
@@ -1468,8 +1474,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               // been removed (the in-chat "Delete conversation" button).
               if (!c.isGroup)
                 ListTile(
-                  leading: const Icon(Icons.delete_outline,
-                      color: AppColors.red),
+                  leading: const Icon(
+                    Icons.delete_outline,
+                    color: AppColors.red,
+                  ),
                   title: const Text(
                     'Delete conversation',
                     style: TextStyle(color: AppColors.red),
@@ -1545,7 +1553,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               backgroundColor: AppColors.red,
               content: Text(
                 'Could not delete. Try again.',
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.white,
+                ),
               ),
             ),
           );
@@ -1649,37 +1659,39 @@ class _TabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            margin: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              gradient: selected ? AppColors.primaryGradient : null,
-              color: selected ? null : Colors.transparent,
-              borderRadius: BorderRadius.circular(11),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                  : null,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.titleMedium.copyWith(
-                color: selected ? AppColors.white : context.palette.text,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
+    return PressEffect(
+      child: Expanded(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              margin: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                gradient: selected ? AppColors.primaryGradient : null,
+                color: selected ? null : Colors.transparent,
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : null,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: selected ? AppColors.white : context.palette.text,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -1718,238 +1730,253 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unread = conversation.unreadCount > 0 && !isLastFromMe;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            // Strong, obvious tint + border when multi-selected so it's
-            // clear which chats are picked.
-            color: selected
-                ? Color.alphaBlend(
-                    AppColors.primaryBlue.withValues(alpha: 0.16),
-                    context.palette.card)
-                : context.palette.card,
-            border: selected
-                ? Border.all(color: AppColors.primaryBlue, width: 1.6)
-                : null,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: onAvatarTap,
-                child: Stack(
-                children: [
-                  conversation.isChurchGroup
-                      ? ChurchGroupAvatar(
-                          photoUrl: conversation.otherUserPhotoUrl,
-                          size: 52,
-                        )
-                      : _Avatar(
-                          name: conversation.otherUserName,
-                          photoUrl: conversation.otherUserPhotoUrl,
-                          isSelfChat: conversation.isSelfChat,
-                          isGroup: conversation.isGroup,
-                        ),
-                  // Multi-select check badge over the avatar.
-                  if (selected)
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryBlue,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                              color: context.palette.card, width: 2),
-                        ),
-                        child: const Icon(Icons.check,
-                            size: 14, color: AppColors.white),
-                      ),
-                    ),
-                  // Small green dot on the avatar's bottom-right when
-                  // the other user is currently online (WhatsApp-style).
-                  // Hidden for self-chats and pending requests.
-                  if (!conversation.isSelfChat &&
-                      conversation.requestStatus == 'accepted' &&
-                      PresenceService.isOnline(conversation.otherUserId))
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: AppColors.successGreen,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: context.palette.card,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            conversation.otherUserName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              // Strong, obvious tint + border when multi-selected so it's
+              // clear which chats are picked.
+              color: selected
+                  ? Color.alphaBlend(
+                      AppColors.primaryBlue.withValues(alpha: 0.16),
+                      context.palette.card,
+                    )
+                  : context.palette.card,
+              border: selected
+                  ? Border.all(color: AppColors.primaryBlue, width: 1.6)
+                  : null,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: onAvatarTap,
+                  child: Stack(
+                    children: [
+                      conversation.isChurchGroup
+                          ? ChurchGroupAvatar(
+                              photoUrl: conversation.otherUserPhotoUrl,
+                              size: 52,
+                            )
+                          : _Avatar(
+                              name: conversation.otherUserName,
+                              photoUrl: conversation.otherUserPhotoUrl,
+                              isSelfChat: conversation.isSelfChat,
+                              isGroup: conversation.isGroup,
                             ),
-                          ),
-                        ),
-                        if (conversation.otherUserIsVerified)
-                          const VerifiedTick(size: 15),
-                        if (conversation.isBusiness) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
-                            ),
+                      // Multi-select check badge over the avatar.
+                      if (selected)
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
                             decoration: BoxDecoration(
-                              color: AppColors.primaryBlue
-                                  .withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(8),
+                              color: AppColors.primaryBlue,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: context.palette.card,
+                                width: 2,
+                              ),
                             ),
-                            child: Text(
-                              'BUSINESS',
-                              style: AppTextStyles.labelSmall.copyWith(
-                                color: AppColors.primaryBlue,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.6,
+                            child: const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: AppColors.white,
+                            ),
+                          ),
+                        ),
+                      // Small green dot on the avatar's bottom-right when
+                      // the other user is currently online (WhatsApp-style).
+                      // Hidden for self-chats and pending requests.
+                      if (!conversation.isSelfChat &&
+                          conversation.requestStatus == 'accepted' &&
+                          PresenceService.isOnline(conversation.otherUserId))
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: AppColors.successGreen,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: context.palette.card,
+                                width: 2,
                               ),
                             ),
                           ),
-                        ],
-                        if (muted) ...[
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.volume_off_outlined,
-                            size: 14,
-                            color: context.palette.textMuted,
-                          ),
-                        ],
-                        const SizedBox(width: 6),
-                        Text(
-                          _shortTime(conversation.lastMessageAt),
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: unread
-                                ? AppColors.primaryBlue
-                                : context.palette.textMuted,
-                            fontSize: 11,
-                            fontWeight: unread
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        // Tick on the last message, but ONLY when the
-                        // viewer sent it (patch_075 surfaces its real
-                        // delivered/read state): ✓ sent, ✓✓ delivered,
-                        // ✓✓ blue read (blue only in 1:1, like in-chat).
-                        if (isLastFromMe && !conversation.isSelfChat) ...[
-                          Icon(
-                            (conversation.lastDelivered || conversation.lastRead)
-                                ? Icons.done_all
-                                : Icons.done,
-                            size: 14,
-                            color:
-                                (conversation.lastRead && !conversation.isGroup)
-                                    ? AppColors.primaryBlue
-                                    : context.palette.textMuted,
-                          ),
-                          const SizedBox(width: 4),
-                        ],
-                        Expanded(
-                          child: Text(
-                            (previewCleared || conversation.lastMessage.isEmpty)
-                                ? (conversation.isChurchChannel
-                                    ? 'Church announcements appear here'
-                                    : 'Say hello')
-                                : (isLastFromMe
-                                    ? _selfSystemLabel(conversation.lastMessage)
-                                    : conversation.lastMessage),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: unread
-                                  ? context.palette.text
-                                  : context.palette.textMuted,
-                              fontSize: 13,
-                              fontWeight:
-                                  unread ? FontWeight.w600 : FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                        if (unread) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: AppColors.primaryGradient,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
                             child: Text(
-                              '${conversation.unreadCount}',
-                              style: AppTextStyles.labelSmall.copyWith(
-                                color: AppColors.white,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
+                              conversation.otherUserName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
                               ),
                             ),
                           ),
-                        ],
-                        if (pinned) ...[
-                          const SizedBox(width: 6),
-                          Transform.rotate(
-                            angle: 0.785398, // 45° — WhatsApp pin look
-                            child: Icon(
-                              Icons.push_pin,
+                          if (conversation.otherUserIsVerified)
+                            const VerifiedTick(size: 15),
+                          if (conversation.isBusiness) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryBlue.withValues(
+                                  alpha: 0.10,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'BUSINESS',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.primaryBlue,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (muted) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.volume_off_outlined,
                               size: 14,
                               color: context.palette.textMuted,
                             ),
+                          ],
+                          const SizedBox(width: 6),
+                          Text(
+                            _shortTime(conversation.lastMessageAt),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: unread
+                                  ? AppColors.primaryBlue
+                                  : context.palette.textMuted,
+                              fontSize: 11,
+                              fontWeight: unread
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
                           ),
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          // Tick on the last message, but ONLY when the
+                          // viewer sent it (patch_075 surfaces its real
+                          // delivered/read state): ✓ sent, ✓✓ delivered,
+                          // ✓✓ blue read (blue only in 1:1, like in-chat).
+                          if (isLastFromMe && !conversation.isSelfChat) ...[
+                            Icon(
+                              (conversation.lastDelivered ||
+                                      conversation.lastRead)
+                                  ? Icons.done_all
+                                  : Icons.done,
+                              size: 14,
+                              color:
+                                  (conversation.lastRead &&
+                                      !conversation.isGroup)
+                                  ? AppColors.primaryBlue
+                                  : context.palette.textMuted,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Expanded(
+                            child: Text(
+                              (previewCleared ||
+                                      conversation.lastMessage.isEmpty)
+                                  ? (conversation.isChurchChannel
+                                        ? 'Church announcements appear here'
+                                        : 'Say hello')
+                                  : (isLastFromMe
+                                        ? _selfSystemLabel(
+                                            conversation.lastMessage,
+                                          )
+                                        : conversation.lastMessage),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: unread
+                                    ? context.palette.text
+                                    : context.palette.textMuted,
+                                fontSize: 13,
+                                fontWeight: unread
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                          if (unread) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: AppColors.primaryGradient,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${conversation.unreadCount}',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (pinned) ...[
+                            const SizedBox(width: 6),
+                            Transform.rotate(
+                              angle: 0.785398, // 45° — WhatsApp pin look
+                              child: Icon(
+                                Icons.push_pin,
+                                size: 14,
+                                color: context.palette.textMuted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2028,96 +2055,98 @@ class _FriendRequestTile extends StatelessWidget {
         request.requesterChurchName!.trim(),
       _relativeTime(request.createdAt),
     ].join('  ·  ');
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onOpenProfile,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.primaryBlue.withValues(alpha: 0.20),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onOpenProfile,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: context.palette.card,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.primaryBlue.withValues(alpha: 0.20),
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  _Avatar(
-                    name: request.requesterName,
-                    photoUrl: request.requesterPhotoUrl,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          request.requesterName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleSmall.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Sent you a friend request',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: context.palette.textMuted,
-                          ),
-                        ),
-                        if (subtitle.trim().isNotEmpty) ...[
-                          const SizedBox(height: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _Avatar(
+                      name: request.requesterName,
+                      photoUrl: request.requesterPhotoUrl,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            subtitle,
+                            request.requesterName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: context.palette.textMuted,
-                              fontSize: 11,
+                            style: AppTextStyles.titleSmall.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Sent you a friend request',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.palette.textMuted,
+                            ),
+                          ),
+                          if (subtitle.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: context.palette.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ActionButton(
-                      label: 'Accept',
-                      filled: true,
-                      onTap: onAccept,
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ActionButton(
+                        label: 'Accept',
+                        filled: true,
+                        onTap: onAccept,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _ActionButton(
-                      label: 'Decline',
-                      filled: false,
-                      onTap: onDecline,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ActionButton(
+                        label: 'Decline',
+                        filled: false,
+                        onTap: onDecline,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2165,29 +2194,29 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: filled ? AppColors.primaryBlue : context.palette.card,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
+    return PressEffect(
+      child: Material(
+        color: filled ? AppColors.primaryBlue : context.palette.card,
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: filled
-                ? null
-                : Border.all(
-                    color: context.palette.divider,
-                  ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: AppTextStyles.buttonText.copyWith(
-              color: filled ? AppColors.white : context.palette.text,
-              fontWeight: FontWeight.w700,
-              fontSize: 13.5,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: filled
+                  ? null
+                  : Border.all(color: context.palette.divider),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: AppTextStyles.buttonText.copyWith(
+                color: filled ? AppColors.white : context.palette.text,
+                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
+              ),
             ),
           ),
         ),
@@ -2211,157 +2240,160 @@ class _RequestTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPreview,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.primaryBlue.withValues(alpha: 0.12),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPreview,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: context.palette.card,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.primaryBlue.withValues(alpha: 0.12),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  _Avatar(
-                    name: conversation.otherUserName,
-                    photoUrl: conversation.otherUserPhotoUrl,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                conversation.otherUserName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.titleMedium.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    _Avatar(
+                      name: conversation.otherUserName,
+                      photoUrl: conversation.otherUserPhotoUrl,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  conversation.otherUserName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.titleMedium.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (conversation.otherUserIsVerified)
-                              const VerifiedTick(size: 15),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryBlue
-                                    .withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'NEW REQUEST',
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.primaryBlue,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.6,
+                              if (conversation.otherUserIsVerified)
+                                const VerifiedTick(size: 15),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryBlue.withValues(
+                                    alpha: 0.10,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'NEW REQUEST',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.primaryBlue,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.6,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          conversation.lastMessage.isEmpty
-                              ? 'Sent you a message request.'
-                              : conversation.lastMessage,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: context.palette.textMuted,
-                            fontSize: 13,
-                            height: 1.4,
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: onDecline,
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: AppColors.red.withValues(alpha: 0.35),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 11),
-                      ),
-                      child: Text(
-                        'Decline',
-                        style: AppTextStyles.buttonText.copyWith(
-                          color: AppColors.red,
-                          fontSize: 13.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryBlue
-                                .withValues(alpha: 0.30),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                          const SizedBox(height: 4),
+                          Text(
+                            conversation.lastMessage.isEmpty
+                                ? 'Sent you a message request.'
+                                : conversation.lastMessage,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.palette.textMuted,
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
                           ),
                         ],
                       ),
-                      child: TextButton(
-                        onPressed: onAccept,
-                        style: TextButton.styleFrom(
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: onDecline,
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: AppColors.red.withValues(alpha: 0.35),
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
                         ),
                         child: Text(
-                          'Accept',
+                          'Decline',
                           style: AppTextStyles.buttonText.copyWith(
-                            color: AppColors.white,
+                            color: AppColors.red,
                             fontSize: 13.5,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primaryBlue.withValues(
+                                alpha: 0.30,
+                              ),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: TextButton(
+                          onPressed: onAccept,
+                          style: TextButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            'Accept',
+                            style: AppTextStyles.buttonText.copyWith(
+                              color: AppColors.white,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2394,14 +2426,17 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     final initials = parts.isEmpty
         ? '?'
         : parts.length == 1
-            ? parts.first.substring(0, 1).toUpperCase()
-            : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-                .toUpperCase();
+        ? parts.first.substring(0, 1).toUpperCase()
+        : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+              .toUpperCase();
     final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
     return Container(
       width: 50,
@@ -2421,29 +2456,25 @@ class _Avatar extends StatelessWidget {
         ],
       ),
       child: isSelfChat
-          ? const Icon(
-              Icons.bookmark,
-              color: AppColors.white,
-              size: 22,
-            )
+          ? const Icon(Icons.bookmark, color: AppColors.white, size: 22)
           : (isGroup && !hasPhoto)
-              ? const Icon(Icons.groups, color: AppColors.white, size: 26)
+          ? const Icon(Icons.groups, color: AppColors.white, size: 26)
           : hasPhoto
-              ? CachedImage(
-                  photoUrl!,
-                  fit: BoxFit.cover,
-                  width: 50,
-                  height: 50,
-                  errorBuilder: (context, error, stackTrace) => Text(
-                    initials,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                )
-              : Text(
+          ? CachedImage(
+              photoUrl!,
+              fit: BoxFit.cover,
+              width: 50,
+              height: 50,
+              errorBuilder: (context, error, stackTrace) => Text(
+                initials,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+            )
+          : Text(
               initials,
               style: AppTextStyles.titleMedium.copyWith(
                 color: AppColors.white,
@@ -2463,38 +2494,43 @@ class _RequestsBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.primaryBlue.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.primaryBlue.withValues(alpha: 0.20),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.primaryBlue.withValues(alpha: 0.20),
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.person_add_alt_1,
-                  color: AppColors.primaryBlue, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  count == 1
-                      ? '1 message / friend request'
-                      : '$count message / friend requests',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w700,
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.person_add_alt_1,
+                  color: AppColors.primaryBlue,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    count == 1
+                        ? '1 message / friend request'
+                        : '$count message / friend requests',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.primaryBlue),
-            ],
+                const Icon(Icons.chevron_right, color: AppColors.primaryBlue),
+              ],
+            ),
           ),
         ),
       ),
@@ -2509,22 +2545,25 @@ class _CircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.10),
+              ),
+            ),
+            child: Icon(icon, color: AppColors.white, size: 18),
           ),
-          child: Icon(icon, color: AppColors.white, size: 18),
         ),
       ),
     );
   }
 }
-

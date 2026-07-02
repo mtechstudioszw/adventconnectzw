@@ -63,6 +63,17 @@ class ShimmerLoaders {
     );
   }
 
+  /// People rows — avatar circle + name/subtitle bars. Used by the
+  /// find-friends picker and member lists.
+  static Widget peopleList({int count = 8}) {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      itemCount: count,
+      separatorBuilder: (context, index) => const SizedBox(height: 14),
+      itemBuilder: (context, index) => _PersonSkeleton(),
+    );
+  }
+
   /// Two-column product grid skeleton.
   static Widget productGrid({int count = 6}) {
     return GridView.builder(
@@ -184,6 +195,51 @@ class _PostSkeleton extends StatelessWidget {
               color: context.palette.card,
               borderRadius: BorderRadius.circular(18),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PersonSkeleton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: ShimmerLoaders.baseColor(context),
+      highlightColor: ShimmerLoaders.highlightColor(context),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: context.palette.card,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 12,
+                width: 150,
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              const SizedBox(height: 7),
+              Container(
+                height: 10,
+                width: 96,
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+            ],
           ),
         ],
       ),

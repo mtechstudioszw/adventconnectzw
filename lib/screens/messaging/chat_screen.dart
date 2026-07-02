@@ -27,9 +27,13 @@ import '../../widgets/home/story_viewer.dart';
 import '../../widgets/linkified_text.dart';
 import '../../widgets/verified_tick.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/church_group_avatar.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/chat_contact_sheet.dart';
@@ -142,9 +146,11 @@ class _ChatScreenState extends State<ChatScreen>
   void _applyServerMessages(List<Message> list) {
     final floor = _floor;
     list = list
-        .where((m) =>
-            (floor == null || m.createdAt.isAfter(floor)) &&
-            !_hiddenIds.contains(m.id))
+        .where(
+          (m) =>
+              (floor == null || m.createdAt.isAfter(floor)) &&
+              !_hiddenIds.contains(m.id),
+        )
         .toList();
     _serverMessages = list;
     final serverIds = list.map((m) => m.id).toSet();
@@ -156,9 +162,11 @@ class _ChatScreenState extends State<ChatScreen>
         .map((m) => m.clientId)
         .whereType<String>()
         .toSet();
-    _pending.removeWhere((p) =>
-        serverIds.contains(p.id) ||
-        (p.clientId != null && serverClientIds.contains(p.clientId)));
+    _pending.removeWhere(
+      (p) =>
+          serverIds.contains(p.id) ||
+          (p.clientId != null && serverClientIds.contains(p.clientId)),
+    );
   }
 
   /// Called after sendMessage returns the canonical row. Swaps the
@@ -211,8 +219,9 @@ class _ChatScreenState extends State<ChatScreen>
     if (ids.isEmpty) return;
     // Capture the actual messages BEFORE _applyServerMessages filters them
     // out of _serverMessages — the preview floor needs their text/time.
-    final hiddenMsgs =
-        _serverMessages.where((m) => ids.contains(m.id)).toList();
+    final hiddenMsgs = _serverMessages
+        .where((m) => ids.contains(m.id))
+        .toList();
     setState(() {
       _hiddenIds.addAll(ids);
       _applyServerMessages(_serverMessages);
@@ -246,14 +255,16 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
     if (newest != null) {
-      unawaited(MessagingService.setInboxPreviewFloor(
-        widget.conversationId,
-        newest,
-        // The shared last_message column still holds this text; matching on
-        // it lets the inbox suppress the stale preview without relying on a
-        // fragile timestamp comparison.
-        hiddenText: newestText,
-      ));
+      unawaited(
+        MessagingService.setInboxPreviewFloor(
+          widget.conversationId,
+          newest,
+          // The shared last_message column still holds this text; matching on
+          // it lets the inbox suppress the stale preview without relying on a
+          // fragile timestamp comparison.
+          hiddenText: newestText,
+        ),
+      );
     }
   }
 
@@ -302,19 +313,20 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _forwardSelected() async {
-    final selected = _messages
-        .where((m) => _selectedMsgIds.contains(m.id) && !m.isDeleted)
-        .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final selected =
+        _messages
+            .where((m) => _selectedMsgIds.contains(m.id) && !m.isDeleted)
+            .toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     if (selected.isEmpty) return;
-    final textMsgs =
-        selected.where((m) => m.messageType == 'text').toList();
-    final mediaMsgs =
-        selected.where((m) => m.messageType != 'text').toList();
+    final textMsgs = selected.where((m) => m.messageType == 'text').toList();
+    final mediaMsgs = selected.where((m) => m.messageType != 'text').toList();
     // WhatsApp parity: can't mix text + photos/audio into one forward.
     if (textMsgs.isNotEmpty && mediaMsgs.isNotEmpty) {
-      _toast("Can't forward text, photos and audio together — "
-          'forward text only, then photos only.');
+      _toast(
+        "Can't forward text, photos and audio together — "
+        'forward text only, then photos only.',
+      );
       return;
     }
     final target = await _pickForwardTarget();
@@ -377,9 +389,13 @@ class _ChatScreenState extends State<ChatScreen>
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
             child: ListTile(
               leading: const Icon(Icons.delete_outline, color: AppColors.red),
-              title: Text('Delete',
-                  style: AppTextStyles.bodyLarge.copyWith(
-                      color: AppColors.red, fontWeight: FontWeight.w600)),
+              title: Text(
+                'Delete',
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: AppColors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               onTap: () => Navigator.pop(ctx, true),
             ),
           ),
@@ -398,11 +414,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
       return;
     }
-    final isImage =
-        m.messageType == 'image' && (m.mediaUrl ?? '').isNotEmpty;
-    final hasText = m.content.trim().isNotEmpty &&
-        m.messageType != 'voice' &&
-        !isImage;
+    final isImage = m.messageType == 'image' && (m.mediaUrl ?? '').isNotEmpty;
+    final hasText =
+        m.content.trim().isNotEmpty && m.messageType != 'voice' && !isImage;
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: context.palette.sheet,
@@ -414,153 +428,205 @@ class _ChatScreenState extends State<ChatScreen>
       ),
       builder: (ctx) => SafeArea(
         child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 44,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  color: ctx.palette.divider,
-                  borderRadius: BorderRadius.circular(2),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 44,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: ctx.palette.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              // Quick-reaction row.
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  for (final e in _reactionEmojis)
-                    GestureDetector(
-                      onTap: () => Navigator.pop(ctx, 'react:$e'),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Text(e, style: const TextStyle(fontSize: 26)),
+                // Quick-reaction row.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    for (final e in _reactionEmojis)
+                      GestureDetector(
+                        onTap: () => Navigator.pop(ctx, 'react:$e'),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Text(e, style: const TextStyle(fontSize: 26)),
+                        ),
+                      ),
+                  ],
+                ),
+                const Divider(height: 14),
+                ListTile(
+                  leading: const Icon(
+                    Icons.reply,
+                    color: AppColors.primaryBlue,
+                  ),
+                  title: Text(
+                    'Reply',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(ctx, 'reply'),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.shortcut,
+                    color: AppColors.primaryBlue,
+                  ),
+                  title: Text(
+                    'Forward',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(ctx, 'forward'),
+                ),
+                if (hasText)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.copy_outlined,
+                      color: AppColors.primaryBlue,
+                    ),
+                    title: Text(
+                      'Copy',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                ],
-              ),
-              const Divider(height: 14),
-              ListTile(
-                leading: const Icon(Icons.reply, color: AppColors.primaryBlue),
-                title: Text('Reply',
-                    style: AppTextStyles.bodyLarge
-                        .copyWith(fontWeight: FontWeight.w600)),
-                onTap: () => Navigator.pop(ctx, 'reply'),
-              ),
-              ListTile(
-                leading:
-                    const Icon(Icons.shortcut, color: AppColors.primaryBlue),
-                title: Text('Forward',
-                    style: AppTextStyles.bodyLarge
-                        .copyWith(fontWeight: FontWeight.w600)),
-                onTap: () => Navigator.pop(ctx, 'forward'),
-              ),
-              if (hasText)
+                    onTap: () => Navigator.pop(ctx, 'copy'),
+                  ),
                 ListTile(
-                  leading: const Icon(Icons.copy_outlined,
-                      color: AppColors.primaryBlue),
-                  title: Text('Copy',
-                      style: AppTextStyles.bodyLarge
-                          .copyWith(fontWeight: FontWeight.w600)),
-                  onTap: () => Navigator.pop(ctx, 'copy'),
-                ),
-              ListTile(
-                leading: Icon(
-                  _starredIds.contains(m.id) ? Icons.star : Icons.star_border,
-                  color: AppColors.goldAccent,
-                ),
-                title: Text(
-                  _starredIds.contains(m.id) ? 'Unstar' : 'Star',
-                  style: AppTextStyles.bodyLarge
-                      .copyWith(fontWeight: FontWeight.w600),
-                ),
-                onTap: () => Navigator.pop(ctx, 'star'),
-              ),
-              ListTile(
-                leading: Icon(
-                  _pinnedId == m.id
-                      ? Icons.push_pin
-                      : Icons.push_pin_outlined,
-                  color: AppColors.primaryBlue,
-                ),
-                title: Text(
-                  _pinnedId == m.id ? 'Unpin' : 'Pin',
-                  style: AppTextStyles.bodyLarge
-                      .copyWith(fontWeight: FontWeight.w600),
-                ),
-                onTap: () => Navigator.pop(ctx, 'pin'),
-              ),
-              if (isImage)
-                ListTile(
-                  leading: const Icon(Icons.download_outlined,
-                      color: AppColors.primaryBlue),
-                  title: Text('Save to gallery',
-                      style: AppTextStyles.bodyLarge
-                          .copyWith(fontWeight: FontWeight.w600)),
-                  onTap: () => Navigator.pop(ctx, 'save'),
-                ),
-              // Edit only before the other person has read it (WhatsApp).
-              if (isMine && hasText && !m.read)
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined,
-                      color: AppColors.primaryBlue),
-                  title: Text('Edit',
-                      style: AppTextStyles.bodyLarge
-                          .copyWith(fontWeight: FontWeight.w600)),
-                  onTap: () => Navigator.pop(ctx, 'edit'),
-                ),
-              ListTile(
-                leading: const Icon(Icons.checklist_rtl,
-                    color: AppColors.primaryBlue),
-                title: Text('Select',
-                    style: AppTextStyles.bodyLarge
-                        .copyWith(fontWeight: FontWeight.w600)),
-                onTap: () => Navigator.pop(ctx, 'select'),
-              ),
-              if (!isMine)
-                ListTile(
-                  leading: const Icon(Icons.flag_outlined, color: AppColors.red),
-                  title: Text('Report',
-                      style: AppTextStyles.bodyLarge.copyWith(
-                          color: AppColors.red, fontWeight: FontWeight.w600)),
-                  onTap: () => Navigator.pop(ctx, 'report'),
-                ),
-              // Delete for me — available on ANY message (hides it for you).
-              ListTile(
-                leading: const Icon(Icons.visibility_off_outlined,
-                    color: AppColors.red),
-                title: Text('Delete for me',
+                  leading: Icon(
+                    _starredIds.contains(m.id) ? Icons.star : Icons.star_border,
+                    color: AppColors.goldAccent,
+                  ),
+                  title: Text(
+                    _starredIds.contains(m.id) ? 'Unstar' : 'Star',
                     style: AppTextStyles.bodyLarge.copyWith(
-                        color: AppColors.red, fontWeight: FontWeight.w600)),
-                subtitle: Text(
-                  'Removed from your chat only.',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: ctx.palette.textMuted),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(ctx, 'star'),
                 ),
-                onTap: () => Navigator.pop(ctx, 'delete_me'),
-              ),
-              if (isMine)
                 ListTile(
-                  leading:
-                      const Icon(Icons.delete_outline, color: AppColors.red),
-                  title: Text('Delete for everyone',
+                  leading: Icon(
+                    _pinnedId == m.id
+                        ? Icons.push_pin
+                        : Icons.push_pin_outlined,
+                    color: AppColors.primaryBlue,
+                  ),
+                  title: Text(
+                    _pinnedId == m.id ? 'Unpin' : 'Pin',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(ctx, 'pin'),
+                ),
+                if (isImage)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.download_outlined,
+                      color: AppColors.primaryBlue,
+                    ),
+                    title: Text(
+                      'Save to gallery',
                       style: AppTextStyles.bodyLarge.copyWith(
-                          color: AppColors.red,
-                          fontWeight: FontWeight.w600)),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(ctx, 'save'),
+                  ),
+                // Edit only before the other person has read it (WhatsApp).
+                if (isMine && hasText && !m.read)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.edit_outlined,
+                      color: AppColors.primaryBlue,
+                    ),
+                    title: Text(
+                      'Edit',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(ctx, 'edit'),
+                  ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.checklist_rtl,
+                    color: AppColors.primaryBlue,
+                  ),
+                  title: Text(
+                    'Select',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => Navigator.pop(ctx, 'select'),
+                ),
+                if (!isMine)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.flag_outlined,
+                      color: AppColors.red,
+                    ),
+                    title: Text(
+                      'Report',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: AppColors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(ctx, 'report'),
+                  ),
+                // Delete for me — available on ANY message (hides it for you).
+                ListTile(
+                  leading: const Icon(
+                    Icons.visibility_off_outlined,
+                    color: AppColors.red,
+                  ),
+                  title: Text(
+                    'Delete for me',
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      color: AppColors.red,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   subtitle: Text(
-                    "Both of you will see \"This message was deleted\".",
+                    'Removed from your chat only.',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: ctx.palette.textMuted,
                     ),
                   ),
-                  onTap: () => Navigator.pop(ctx, 'delete'),
+                  onTap: () => Navigator.pop(ctx, 'delete_me'),
                 ),
-            ],
+                if (isMine)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.red,
+                    ),
+                    title: Text(
+                      'Delete for everyone',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: AppColors.red,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      "Both of you will see \"This message was deleted\".",
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: ctx.palette.textMuted,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(ctx, 'delete'),
+                  ),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -614,7 +680,8 @@ class _ChatScreenState extends State<ChatScreen>
           _pending.removeWhere((x) => x.id == m.id);
         });
         unawaited(
-            MessagingService.addHiddenIdsCached(widget.conversationId, [m.id]));
+          MessagingService.addHiddenIdsCached(widget.conversationId, [m.id]),
+        );
         try {
           await MessagingService.hideMessages([m.id]);
         } catch (_) {}
@@ -625,8 +692,10 @@ class _ChatScreenState extends State<ChatScreen>
         // it to the other party).
         setState(() {
           _serverMessages = _serverMessages
-              .map((x) =>
-                  x.id == m.id ? x.copyWith(isDeleted: true, content: '') : x)
+              .map(
+                (x) =>
+                    x.id == m.id ? x.copyWith(isDeleted: true, content: '') : x,
+              )
               .toList();
           _pending.removeWhere((x) => x.id == m.id);
         });
@@ -639,8 +708,9 @@ class _ChatScreenState extends State<ChatScreen>
               backgroundColor: AppColors.red,
               content: Text(
                 'Could not delete. Please try again.',
-                style:
-                    AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.white,
+                ),
               ),
             ),
           );
@@ -679,8 +749,7 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _typingExpiry;
   Timer? _typingThrottle;
   bool _otherTyping = false;
-  DateTime _lastTypingBroadcast =
-      DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastTypingBroadcast = DateTime.fromMillisecondsSinceEpoch(0);
 
   // Presence (other-user online / last-seen) state.
   DateTime? _otherLastSeen;
@@ -741,7 +810,14 @@ class _ChatScreenState extends State<ChatScreen>
   // True when this is a group the viewer has left / been removed from —
   // the composer is replaced with a locked banner.
   bool _notAMember = false;
-  static const List<String> _reactionEmojis = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  static const List<String> _reactionEmojis = [
+    '👍',
+    '❤️',
+    '😂',
+    '😮',
+    '😢',
+    '🙏',
+  ];
 
   // #17: product preview shown above the composer when the chat was
   // opened from a marketplace product. Dismissible; cleared once the
@@ -751,24 +827,12 @@ class _ChatScreenState extends State<ChatScreen>
   String? _productPreviewTitle;
   String? _productPreviewPrice;
 
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
   @override
   void initState() {
     super.initState();
     // Seed the "you left / were removed" lock from cache so the composer is
     // blocked on the FIRST frame (the async member fetch confirms/clears it).
     _notAMember = MessagingService.isGroupBlockedCached(widget.conversationId);
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
     _conversation = widget.initialConversation;
     // #17: consume the product-launch handoff — prefill the composer
     // with an editable draft and show the product preview chip.
@@ -823,8 +887,9 @@ class _ChatScreenState extends State<ChatScreen>
   /// THEN wire presence (which needs the other-user id).
   Future<void> _resolveConversation() async {
     if (_conversation == null) {
-      final fetched =
-          await MessagingService.fetchConversation(widget.conversationId);
+      final fetched = await MessagingService.fetchConversation(
+        widget.conversationId,
+      );
       if (!mounted) return;
       if (fetched != null) {
         setState(() => _conversation = fetched);
@@ -878,8 +943,10 @@ class _ChatScreenState extends State<ChatScreen>
   /// connectivity check so they tell the user instead of failing silently.
   bool _ensureOnline(String action) {
     if (ConnectivityService.isOnline) return true;
-    _toast("You're offline — can't $action right now. "
-        'Try again when you reconnect.');
+    _toast(
+      "You're offline — can't $action right now. "
+      'Try again when you reconnect.',
+    );
     return false;
   }
 
@@ -902,7 +969,9 @@ class _ChatScreenState extends State<ChatScreen>
     setState(() => _pinnedId = wasPinned ? null : m.id);
     try {
       await MessagingService.setPinnedMessage(
-          widget.conversationId, wasPinned ? null : m.id);
+        widget.conversationId,
+        wasPinned ? null : m.id,
+      );
     } catch (_) {
       if (mounted) {
         setState(() => _pinnedId = wasPinned ? m.id : null);
@@ -975,8 +1044,9 @@ class _ChatScreenState extends State<ChatScreen>
               padding: const EdgeInsets.all(16),
               child: Text(
                 'Forward to…',
-                style: AppTextStyles.titleMedium
-                    .copyWith(fontWeight: FontWeight.w800),
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             Expanded(
@@ -991,8 +1061,11 @@ class _ChatScreenState extends State<ChatScreen>
                       size: 40,
                       photoUrl: c.otherUserPhotoUrl,
                     ),
-                    title: Text(c.otherUserName,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    title: Text(
+                      c.otherUserName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     onTap: () => Navigator.pop(ctx, c.id),
                   );
                 },
@@ -1040,8 +1113,8 @@ class _ChatScreenState extends State<ChatScreen>
     final idx = _messages.indexWhere((x) => x.id == messageId);
     if (idx < 0 || !_scrollController.hasClients) return;
     // Approximate offset; good enough to bring it into view.
-    final target = (idx / _messages.length) *
-        _scrollController.position.maxScrollExtent;
+    final target =
+        (idx / _messages.length) * _scrollController.position.maxScrollExtent;
     _scrollController.animateTo(
       target.clamp(0.0, _scrollController.position.maxScrollExtent),
       duration: const Duration(milliseconds: 300),
@@ -1064,15 +1137,17 @@ class _ChatScreenState extends State<ChatScreen>
     if (_isChurchGroup) {
       if (_isChurchChannel) {
         final canPost = await MessagingService.canPostToChurchChannel(
-            widget.conversationId);
+          widget.conversationId,
+        );
         if (mounted) setState(() => _channelCanPost = canPost);
       }
       // Resolve church member names so message senders show their real
       // name instead of "Member" (church groups have implicit membership
       // so there are no conversation_members rows to read).
       try {
-        final members =
-            await GroupService.fetchChurchMembers(widget.conversationId);
+        final members = await GroupService.fetchChurchMembers(
+          widget.conversationId,
+        );
         if (mounted) {
           setState(() {
             _groupMembers = members;
@@ -1089,13 +1164,18 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       final myId = AuthService.currentUser?.id;
       // No longer a member (left or removed) — lock the composer.
-      final notMember = members.isNotEmpty &&
+      final notMember =
+          members.isNotEmpty &&
           myId != null &&
           !members.any((m) => m.userId == myId);
       // Persist so re-opening locks the composer on the first frame (no 2s
       // window where the text box is still editable).
-      unawaited(MessagingService.setGroupBlockedCached(
-          widget.conversationId, notMember));
+      unawaited(
+        MessagingService.setGroupBlockedCached(
+          widget.conversationId,
+          notMember,
+        ),
+      );
       setState(() {
         _groupMembers = members;
         _memberById
@@ -1117,15 +1197,12 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_refreshLastSeen(otherId));
     unawaited(_refreshBlockedState(otherId));
     unawaited(_refreshFriendship(otherId));
-    _lastSeenRefreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) {
-        unawaited(_refreshLastSeen(otherId));
-        // Keep the friendship banner fresh — so a request that arrives
-        // while you're already in the chat flips it to "Accept".
-        unawaited(_refreshFriendship(otherId));
-      },
-    );
+    _lastSeenRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      unawaited(_refreshLastSeen(otherId));
+      // Keep the friendship banner fresh — so a request that arrives
+      // while you're already in the chat flips it to "Accept".
+      unawaited(_refreshFriendship(otherId));
+    });
     _presenceListener = () {
       if (mounted) setState(() {});
     };
@@ -1179,8 +1256,7 @@ class _ChatScreenState extends State<ChatScreen>
           backgroundColor: AppColors.red,
           content: Text(
             'Could not send friend request. Try again.',
-            style:
-                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
       );
@@ -1212,8 +1288,7 @@ class _ChatScreenState extends State<ChatScreen>
           backgroundColor: AppColors.red,
           content: Text(
             'Could not accept. Try again.',
-            style:
-                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
       );
@@ -1258,7 +1333,6 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _inputController.dispose();
     _scrollController.dispose();
-    _entrance.dispose();
     super.dispose();
   }
 
@@ -1267,12 +1341,13 @@ class _ChatScreenState extends State<ChatScreen>
     // cached paint below already filters them — otherwise a just-deleted
     // message flashed back for ~1s on reopen until the server hidden-ids
     // arrived.
-    _hiddenIds.addAll(MessagingService.readHiddenIdsCached(widget.conversationId));
+    _hiddenIds.addAll(
+      MessagingService.readHiddenIdsCached(widget.conversationId),
+    );
     // Paint cached messages INSTANTLY (synchronous Hive read, no await) so
     // opening a chat never shows a blank/loading screen — it doesn't
     // "reload every time".
-    final cached =
-        MessagingService.readCachedMessages(widget.conversationId);
+    final cached = MessagingService.readCachedMessages(widget.conversationId);
     if (cached.isNotEmpty) {
       setState(() {
         _applyServerMessages(cached);
@@ -1296,8 +1371,7 @@ class _ChatScreenState extends State<ChatScreen>
       setState(() => _applyServerMessages(_serverMessages));
     }
     try {
-      final list =
-          await MessagingService.fetchMessages(widget.conversationId);
+      final list = await MessagingService.fetchMessages(widget.conversationId);
       if (!mounted) return;
       setState(() {
         _applyServerMessages(list);
@@ -1318,8 +1392,9 @@ class _ChatScreenState extends State<ChatScreen>
       // refresh sees the new state instead of the pre-read snapshot —
       // that race was the "open chat, go back, badge still red" bug.
       await MessagingService.markConversationRead(widget.conversationId);
-      _stream =
-          MessagingService.streamMessages(widget.conversationId).listen((list) {
+      _stream = MessagingService.streamMessages(widget.conversationId).listen((
+        list,
+      ) {
         if (!mounted) return;
         // Stream is authoritative. Merge into the unified pipeline —
         // _applyServerMessages drops any optimistic rows the server
@@ -1352,9 +1427,7 @@ class _ChatScreenState extends State<ChatScreen>
               .map((m) => m.id)
               .toList();
           if (undelivered.isNotEmpty) {
-            unawaited(
-              MessagingService.markMessagesDelivered(undelivered),
-            );
+            unawaited(MessagingService.markMessagesDelivered(undelivered));
           }
           if (list.any((m) => m.senderId != me && !m.read)) {
             unawaited(
@@ -1452,8 +1525,7 @@ class _ChatScreenState extends State<ChatScreen>
         _recordingElapsed = Duration.zero;
         _recordWarned = false;
       });
-      _recordingTimer =
-          Timer.periodic(const Duration(milliseconds: 200), (_) {
+      _recordingTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
         if (!mounted || _recordingStartedAt == null) return;
         final elapsed = DateTime.now().difference(_recordingStartedAt!);
         setState(() => _recordingElapsed = elapsed);
@@ -1578,7 +1650,8 @@ class _ChatScreenState extends State<ChatScreen>
       // Silent block parity for voice notes too — RLS rejection keeps
       // the optimistic bubble in place, no toast.
       if (!mounted) return;
-      final isRlsBlock = e.code == '42501' ||
+      final isRlsBlock =
+          e.code == '42501' ||
           e.message.toLowerCase().contains('row-level security');
       if (isRlsBlock) {
         setState(() => _localSentIds.add(tempId));
@@ -1717,7 +1790,8 @@ class _ChatScreenState extends State<ChatScreen>
     // the listing — instead of folding it into plain text (which dropped
     // the image).
     final outgoing = text;
-    final hasProduct = (_productPreviewTitle ?? '').isNotEmpty ||
+    final hasProduct =
+        (_productPreviewTitle ?? '').isNotEmpty ||
         (_productPreviewImage ?? '').isNotEmpty;
     final Map<String, dynamic>? productMeta = hasProduct
         ? {
@@ -1804,7 +1878,8 @@ class _ChatScreenState extends State<ChatScreen>
       // back, it's gone, which is consistent with "delivery is
       // taking a while".
       if (!mounted) return;
-      final isRlsBlock = e.code == '42501' ||
+      final isRlsBlock =
+          e.code == '42501' ||
           (e.message).toLowerCase().contains('row-level security');
       if (isRlsBlock) {
         // Bubble stays as a single grey ✓ (sent), never delivers, no toast.
@@ -1888,14 +1963,12 @@ class _ChatScreenState extends State<ChatScreen>
     final preview = msg == null
         ? 'Tap to view'
         : msg.isDeleted
-            ? 'This message was deleted'
-            : msg.messageType == 'voice'
-                ? '🎤 Voice note'
-                : msg.messageType == 'image'
-                    ? '📷 Photo'
-                    : (msg.content.trim().isEmpty
-                        ? 'Message'
-                        : msg.content.trim());
+        ? 'This message was deleted'
+        : msg.messageType == 'voice'
+        ? '🎤 Voice note'
+        : msg.messageType == 'image'
+        ? '📷 Photo'
+        : (msg.content.trim().isEmpty ? 'Message' : msg.content.trim());
     return Material(
       color: context.palette.card,
       child: InkWell(
@@ -1910,30 +1983,42 @@ class _ChatScreenState extends State<ChatScreen>
           padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
           child: Row(
             children: [
-              const Icon(Icons.push_pin, size: 15, color: AppColors.primaryBlue),
+              const Icon(
+                Icons.push_pin,
+                size: 15,
+                color: AppColors.primaryBlue,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Pinned message',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.w700,
-                        )),
-                    Text(preview,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: context.palette.textMuted)),
+                    Text(
+                      'Pinned message',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.textMuted,
+                      ),
+                    ),
                   ],
                 ),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: Icon(Icons.close,
-                    size: 18, color: context.palette.textMuted),
+                icon: Icon(
+                  Icons.close,
+                  size: 18,
+                  color: context.palette.textMuted,
+                ),
                 onPressed: _unpin,
               ),
             ],
@@ -2037,9 +2122,7 @@ class _ChatScreenState extends State<ChatScreen>
       decoration: BoxDecoration(
         color: AppColors.goldAccent.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.goldAccent.withValues(alpha: 0.35),
-        ),
+        border: Border.all(color: AppColors.goldAccent.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2072,10 +2155,7 @@ class _ChatScreenState extends State<ChatScreen>
               fontSize: 12,
             ),
           ),
-          if (action != null) ...[
-            const SizedBox(height: 10),
-            action,
-          ],
+          if (action != null) ...[const SizedBox(height: 10), action],
         ],
       ),
     );
@@ -2108,7 +2188,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _groupSenderLabel(Message m) {
     final member = _memberById[m.senderId];
-    final name = member?.fullName ??
+    final name =
+        member?.fullName ??
         (m.senderName.trim().isEmpty ? 'Member' : m.senderName);
     final color =
         _senderColors[m.senderId.hashCode.abs() % _senderColors.length];
@@ -2119,38 +2200,38 @@ class _ChatScreenState extends State<ChatScreen>
         onTap: () => _openUserChat(m.senderId, name),
         behavior: HitTestBehavior.opaque,
         child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _Avatar(name: name, size: 20, photoUrl: member?.photoUrl),
-          const SizedBox(width: 6),
-          Text(
-            name,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 11.5,
-            ),
-          ),
-          if (isAdmin) ...[
-            const SizedBox(width: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Avatar(name: name, size: 20, photoUrl: member?.photoUrl),
+            const SizedBox(width: 6),
+            Text(
+              name,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 11.5,
               ),
-              child: Text(
-                'admin',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.primaryBlue,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
+            ),
+            if (isAdmin) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'admin',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -2168,10 +2249,10 @@ class _ChatScreenState extends State<ChatScreen>
     final who = original == null
         ? 'Message'
         : (original.senderId == me
-            ? 'You'
-            : _memberById[original.senderId]?.fullName ??
-                _conversation?.otherUserName ??
-                'Message');
+              ? 'You'
+              : _memberById[original.senderId]?.fullName ??
+                    _conversation?.otherUserName ??
+                    'Message');
     return GestureDetector(
       onTap: m.replyToId == null ? null : () => _scrollToMessage(m.replyToId!),
       child: Container(
@@ -2229,8 +2310,7 @@ class _ChatScreenState extends State<ChatScreen>
             GestureDetector(
               onTap: () => _react(m, e.key),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: data.containsKey('_mine_${e.key}')
                       ? AppColors.primaryBlue.withValues(alpha: 0.15)
@@ -2279,7 +2359,10 @@ class _ChatScreenState extends State<ChatScreen>
                   onPressed: count == 0 ? null : _forwardSelected,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, color: AppColors.white),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: AppColors.white,
+                  ),
                   tooltip: 'Delete',
                   onPressed: count == 0 ? null : _confirmDeleteSelected,
                 ),
@@ -2293,8 +2376,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _confirmDeleteSelected() async {
     final me = AuthService.currentUser?.id;
-    final selected =
-        _messages.where((m) => _selectedMsgIds.contains(m.id)).toList();
+    final selected = _messages
+        .where((m) => _selectedMsgIds.contains(m.id))
+        .toList();
     // "Delete for everyone" is only offered when EVERY selected message is
     // your own (you can't delete someone else's message for everyone).
     final allMine =
@@ -2315,15 +2399,18 @@ class _ChatScreenState extends State<ChatScreen>
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
               child: Text(
                 'Delete $count message${count == 1 ? '' : 's'}?',
-                style: AppTextStyles.titleMedium
-                    .copyWith(fontWeight: FontWeight.w800),
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             if (allMine)
               ListTile(
                 leading: const Icon(Icons.delete_forever, color: AppColors.red),
-                title: const Text('Delete for everyone',
-                    style: TextStyle(color: AppColors.red)),
+                title: const Text(
+                  'Delete for everyone',
+                  style: TextStyle(color: AppColors.red),
+                ),
                 onTap: () => Navigator.pop(ctx, 'everyone'),
               ),
             ListTile(
@@ -2333,8 +2420,10 @@ class _ChatScreenState extends State<ChatScreen>
             ),
             ListTile(
               title: Center(
-                child: Text('Cancel',
-                    style: TextStyle(color: context.palette.textMuted)),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: context.palette.textMuted),
+                ),
               ),
               onTap: () => Navigator.pop(ctx),
             ),
@@ -2372,14 +2461,15 @@ class _ChatScreenState extends State<ChatScreen>
     final name = convo?.otherUserName ?? 'Conversation';
     final photoUrl = convo?.otherUserPhotoUrl;
     final otherUserId = convo?.otherUserId;
-    final canOpenProfile = !isGroup &&
+    final canOpenProfile =
+        !isGroup &&
         otherUserId != null &&
         otherUserId.isNotEmpty &&
         !(convo?.isSelfChat ?? false);
     void openGroupInfo() => context.pushNamed(
-          'group_info',
-          pathParameters: {'id': widget.conversationId},
-        );
+      'group_info',
+      pathParameters: {'id': widget.conversationId},
+    );
     return ClipPath(
       clipper: _HeaderClipper(),
       child: Container(
@@ -2415,31 +2505,32 @@ class _ChatScreenState extends State<ChatScreen>
                     onTap: isGroup
                         ? openGroupInfo
                         : canOpenProfile
-                            ? () async {
-                                final r = await showChatContactSheet(
-                                  context,
-                                  userId: otherUserId,
-                                  fallbackName: name,
-                                  fallbackPhotoUrl: photoUrl,
-                                  conversationId: widget.conversationId,
-                                );
-                                if (!mounted) return;
-                                // Reflect mini-profile actions in the open
-                                // chat immediately (no leave + return).
-                                if (r == 'blocked' || r == 'unblocked') {
-                                  await _refreshBlockedState(otherUserId);
-                                } else if (r == 'cleared') {
-                                  _floor = await MessagingService.messageFloor(
-                                      widget.conversationId);
-                                  if (mounted) {
-                                    setState(() {
-                                      _serverMessages = const [];
-                                      _pending.clear();
-                                    });
-                                  }
-                                }
+                        ? () async {
+                            final r = await showChatContactSheet(
+                              context,
+                              userId: otherUserId,
+                              fallbackName: name,
+                              fallbackPhotoUrl: photoUrl,
+                              conversationId: widget.conversationId,
+                            );
+                            if (!mounted) return;
+                            // Reflect mini-profile actions in the open
+                            // chat immediately (no leave + return).
+                            if (r == 'blocked' || r == 'unblocked') {
+                              await _refreshBlockedState(otherUserId);
+                            } else if (r == 'cleared') {
+                              _floor = await MessagingService.messageFloor(
+                                widget.conversationId,
+                              );
+                              if (mounted) {
+                                setState(() {
+                                  _serverMessages = const [];
+                                  _pending.clear();
+                                });
                               }
-                            : null,
+                            }
+                          }
+                        : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
@@ -2447,7 +2538,10 @@ class _ChatScreenState extends State<ChatScreen>
                           _isChurchGroup
                               ? ChurchGroupAvatar(photoUrl: photoUrl, size: 40)
                               : _Avatar(
-                                  name: name, size: 40, photoUrl: photoUrl),
+                                  name: name,
+                                  size: 40,
+                                  photoUrl: photoUrl,
+                                ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -2462,12 +2556,12 @@ class _ChatScreenState extends State<ChatScreen>
                                         name,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style:
-                                            AppTextStyles.titleLarge.copyWith(
-                                          color: AppColors.white,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 16,
-                                        ),
+                                        style: AppTextStyles.titleLarge
+                                            .copyWith(
+                                              color: AppColors.white,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 16,
+                                            ),
                                       ),
                                     ),
                                     if (!isGroup &&
@@ -2477,24 +2571,23 @@ class _ChatScreenState extends State<ChatScreen>
                                 ),
                                 const SizedBox(height: 2),
                                 AnimatedSwitcher(
-                                  duration:
-                                      const Duration(milliseconds: 220),
+                                  duration: const Duration(milliseconds: 220),
                                   child: isGroup
                                       ? Text(
                                           _isChurchChannel
                                               ? 'Church announcements'
                                               : _isChurchGroup
-                                                  ? 'Church group'
-                                                  : _groupMembers.isEmpty
-                                                      ? 'Tap for group info'
-                                                      : '${_groupMembers.length} members',
+                                              ? 'Church group'
+                                              : _groupMembers.isEmpty
+                                              ? 'Tap for group info'
+                                              : '${_groupMembers.length} members',
                                           key: const ValueKey('group-sub'),
-                                          style:
-                                              AppTextStyles.labelSmall.copyWith(
-                                            color: AppColors.white
-                                                .withValues(alpha: 0.75),
-                                            fontSize: 11,
-                                          ),
+                                          style: AppTextStyles.labelSmall
+                                              .copyWith(
+                                                color: AppColors.white
+                                                    .withValues(alpha: 0.75),
+                                                fontSize: 11,
+                                              ),
                                         )
                                       : _buildPresenceSubtitle(),
                                 ),
@@ -2525,9 +2618,7 @@ class _ChatScreenState extends State<ChatScreen>
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: AppColors.white),
       color: context.palette.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onSelected: (action) async {
         switch (action) {
           case 'profile':
@@ -2578,10 +2669,7 @@ class _ChatScreenState extends State<ChatScreen>
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.block, color: AppColors.red),
-              title: Text(
-                'Block',
-                style: TextStyle(color: AppColors.red),
-              ),
+              title: Text('Block', style: TextStyle(color: AppColors.red)),
             ),
           ),
         if (canOpenProfile && _isBlocked)
@@ -2613,8 +2701,10 @@ class _ChatScreenState extends State<ChatScreen>
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.flag_outlined, color: AppColors.red),
-              title: Text('Report group',
-                  style: TextStyle(color: AppColors.red)),
+              title: Text(
+                'Report group',
+                style: TextStyle(color: AppColors.red),
+              ),
             ),
           ),
         if (!_isChurchGroup)
@@ -2850,7 +2940,7 @@ class _ChatScreenState extends State<ChatScreen>
               Text(
                 _isChurchChannel
                     ? 'Announcements from your church admins will appear '
-                        'here. You can\'t send messages in this channel.'
+                          'here. You can\'t send messages in this channel.'
                     : 'Start the conversation with a friendly greeting.',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyMedium.copyWith(
@@ -2864,62 +2954,61 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
     final currentUserId = AuthService.currentUser?.id ?? '';
-    return AnimatedBuilder(
-      animation: _entrance,
-      builder: (context, child) => Opacity(
-        opacity: _fade.value,
-        child: Transform.translate(
-          offset: Offset(0, _slide.value),
-          child: child,
-        ),
-      ),
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
-        itemCount: _messages.length,
-        itemBuilder: (context, i) {
-          final m = _messages[i];
-          // System events (joined / left / removed / admin changes) render
-          // as a centred pill, not a chat bubble.
-          if (m.messageType == 'system') {
-            final prevSys = i > 0 ? _messages[i - 1] : null;
-            final showSep = prevSys == null ||
-                !_sameLocalDay(prevSys.createdAt, m.createdAt);
-            final sysText =
-                _systemEventText(m, AuthService.currentUser?.id ?? '');
-            return Column(
-              children: [
-                if (showSep) _DateSeparator(label: _dayLabel(m.createdAt)),
-                _SystemMessage(text: sysText),
-              ],
-            );
-          }
-          final isMine = m.senderId == currentUserId;
-          // Per user request: every message gets its own timestamp,
-          // not just the last one in a sender-grouped cluster. This
-          // matches how WhatsApp actually renders — each bubble has
-          // its own time underneath, not a single trailing stamp.
-          final showStamp = true;
-          // WhatsApp-style day separator: shown above the first message
-          // of each calendar day (Today / Yesterday / "Mon 8 Jun").
-          final prev = i > 0 ? _messages[i - 1] : null;
-          final showDateSeparator = prev == null ||
-              !_sameLocalDay(prev.createdAt, m.createdAt);
-          return _SelectableMessage(
-            // Key by message id so deletes/inserts in the middle of the
-            // thread don't make Flutter recycle bubbles by index (which
-            // flashed the wrong message into a slot for a frame).
-            key: ValueKey('msg-${m.id}'),
-            selectMode: _selectMode,
-            selected: _selectedMsgIds.contains(m.id),
-            onToggle: () => _toggleSelect(m),
-            child: Padding(
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
+      itemCount: _messages.length,
+      itemBuilder: (context, i) {
+        final m = _messages[i];
+        // System events (joined / left / removed / admin changes) render
+        // as a centred pill, not a chat bubble.
+        if (m.messageType == 'system') {
+          final prevSys = i > 0 ? _messages[i - 1] : null;
+          final showSep =
+              prevSys == null || !_sameLocalDay(prevSys.createdAt, m.createdAt);
+          final sysText = _systemEventText(
+            m,
+            AuthService.currentUser?.id ?? '',
+          );
+          return Column(
+            children: [
+              if (showSep) _DateSeparator(label: _dayLabel(m.createdAt)),
+              _SystemMessage(text: sysText),
+            ],
+          );
+        }
+        final isMine = m.senderId == currentUserId;
+        // Per user request: every message gets its own timestamp,
+        // not just the last one in a sender-grouped cluster. This
+        // matches how WhatsApp actually renders — each bubble has
+        // its own time underneath, not a single trailing stamp.
+        final showStamp = true;
+        // WhatsApp-style day separator: shown above the first message
+        // of each calendar day (Today / Yesterday / "Mon 8 Jun").
+        final prev = i > 0 ? _messages[i - 1] : null;
+        final showDateSeparator =
+            prev == null || !_sameLocalDay(prev.createdAt, m.createdAt);
+        // Fresh arrivals (sent or just received) rise+fade in;
+        // history renders statically so opening a chat stays instant.
+        final isFresh =
+            DateTime.now().difference(m.createdAt).inSeconds.abs() < 15;
+        final item = _SelectableMessage(
+          // Key by message id so deletes/inserts in the middle of the
+          // thread don't make Flutter recycle bubbles by index (which
+          // flashed the wrong message into a slot for a frame).
+          key: ValueKey('msg-${m.id}'),
+          selectMode: _selectMode,
+          selected: _selectedMsgIds.contains(m.id),
+          onToggle: () => _toggleSelect(m),
+          child: Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Column(
-              crossAxisAlignment:
-                  isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
-                if (showDateSeparator) _DateSeparator(label: _dayLabel(m.createdAt)),
+                if (showDateSeparator)
+                  _DateSeparator(label: _dayLabel(m.createdAt)),
                 if (_isGroup && !isMine) _groupSenderLabel(m),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
@@ -2934,28 +3023,30 @@ class _ChatScreenState extends State<ChatScreen>
                     border: _highlightedMessageId == m.id
                         ? Border.all(
                             color: AppColors.primaryBlue.withValues(alpha: 0.6),
-                            width: 1.5)
+                            width: 1.5,
+                          )
                         : null,
                   ),
                   child: _SwipeToReply(
-                  onReply: () => _startReply(m),
-                  child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onLongPress: () => _showMessageActions(m, isMine),
-                  child: Column(
-                    crossAxisAlignment: isMine
-                        ? CrossAxisAlignment.end
-                        : CrossAxisAlignment.start,
-                    children: [
-                      if (m.replyToId != null) _buildQuotedPreview(m, isMine),
-                      _MessageBubble(
-                        message: m,
-                        isMine: isMine,
-                        uploadProgress: _uploadProgress[m.id],
+                    onReply: () => _startReply(m),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress: () => _showMessageActions(m, isMine),
+                      child: Column(
+                        crossAxisAlignment: isMine
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
+                        children: [
+                          if (m.replyToId != null)
+                            _buildQuotedPreview(m, isMine),
+                          _MessageBubble(
+                            message: m,
+                            isMine: isMine,
+                            uploadProgress: _uploadProgress[m.id],
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  ),
+                    ),
                   ),
                 ),
                 if ((_reactions[m.id] ?? const {}).isNotEmpty)
@@ -2974,8 +3065,11 @@ class _ChatScreenState extends State<ChatScreen>
                         // Starred indicator (WhatsApp shows a small star on
                         // the bubble for messages you've starred).
                         if (_starredIds.contains(m.id)) ...[
-                          Icon(Icons.star,
-                              size: 11, color: context.palette.textMuted),
+                          Icon(
+                            Icons.star,
+                            size: 11,
+                            color: context.palette.textMuted,
+                          ),
                           const SizedBox(width: 3),
                         ],
                         Text(
@@ -3002,8 +3096,8 @@ class _ChatScreenState extends State<ChatScreen>
                                     !_localSentIds.contains(m.id))
                                 ? Icons.access_time
                                 : (m.deliveredAt != null || m.read
-                                    ? Icons.done_all
-                                    : Icons.done),
+                                      ? Icons.done_all
+                                      : Icons.done),
                             size: 13,
                             // Blue only when read_at is set — a recipient
                             // who turned read receipts OFF reports read=true
@@ -3019,10 +3113,15 @@ class _ChatScreenState extends State<ChatScreen>
                   ),
               ],
             ),
-            ),
-          );
-        },
-      ),
+          ),
+        );
+        if (!isFresh) return item;
+        return StaggeredReveal(
+          rise: 12,
+          duration: AppMotion.standard,
+          child: item,
+        );
+      },
     );
   }
 
@@ -3043,8 +3142,18 @@ class _ChatScreenState extends State<ChatScreen>
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final dow = days[local.weekday - 1];
@@ -3066,8 +3175,11 @@ class _ChatScreenState extends State<ChatScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.campaign_outlined,
-                    size: 16, color: context.palette.textMuted),
+                Icon(
+                  Icons.campaign_outlined,
+                  size: 16,
+                  color: context.palette.textMuted,
+                ),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -3101,16 +3213,19 @@ class _ChatScreenState extends State<ChatScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.info_outline,
-                        size: 16, color: context.palette.textMuted),
+                    Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: context.palette.textMuted,
+                    ),
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
                         deletedGroup
                             ? 'This group was deleted. You can still read it '
-                                'or delete the conversation.'
+                                  'or delete the conversation.'
                             : "You can't send messages to this group because "
-                                "you're no longer a member.",
+                                  "you're no longer a member.",
                         textAlign: TextAlign.center,
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: context.palette.textMuted,
@@ -3125,10 +3240,15 @@ class _ChatScreenState extends State<ChatScreen>
                 // delete the conversation, which removes it from your list.
                 TextButton.icon(
                   onPressed: _deleteLeftGroupConversation,
-                  icon: const Icon(Icons.delete_outline,
-                      size: 18, color: AppColors.red),
-                  label: const Text('Delete conversation',
-                      style: TextStyle(color: AppColors.red)),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: AppColors.red,
+                  ),
+                  label: const Text(
+                    'Delete conversation',
+                    style: TextStyle(color: AppColors.red),
+                  ),
                 ),
               ],
             ),
@@ -3147,8 +3267,7 @@ class _ChatScreenState extends State<ChatScreen>
           child: InkWell(
             onTap: () => _confirmUnblock(_conversation?.otherUserId),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisSize.max == MainAxisSize.max
                     ? MainAxisAlignment.center
@@ -3334,8 +3453,8 @@ class _ChatScreenState extends State<ChatScreen>
     final who = editing
         ? 'Editing message'
         : (m.senderId == me
-            ? 'Replying to yourself'
-            : 'Replying to ${_memberById[m.senderId]?.fullName ?? _conversation?.otherUserName ?? 'message'}');
+              ? 'Replying to yourself'
+              : 'Replying to ${_memberById[m.senderId]?.fullName ?? _conversation?.otherUserName ?? 'message'}');
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
@@ -3348,8 +3467,11 @@ class _ChatScreenState extends State<ChatScreen>
       ),
       child: Row(
         children: [
-          Icon(editing ? Icons.edit_outlined : Icons.reply,
-              size: 16, color: AppColors.primaryBlue),
+          Icon(
+            editing ? Icons.edit_outlined : Icons.reply,
+            size: 16,
+            color: AppColors.primaryBlue,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -3394,46 +3516,46 @@ class _ChatScreenState extends State<ChatScreen>
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-        _AttachButton(onTap: _sending ? null : _openAttachmentSheet),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: context.palette.inputFill,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: context.palette.divider),
-            ),
-            child: TextField(
-              controller: _inputController,
-              minLines: 1,
-              maxLines: 5,
-              textCapitalization: TextCapitalization.sentences,
-              style: AppTextStyles.bodyMedium.copyWith(
-                fontSize: 14.5,
-                color: context.palette.text,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Write a message',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(
-                  color: context.palette.textMuted,
-                  fontSize: 14.5,
+            _AttachButton(onTap: _sending ? null : _openAttachmentSheet),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: context.palette.inputFill,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: context.palette.divider),
                 ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                child: TextField(
+                  controller: _inputController,
+                  minLines: 1,
+                  maxLines: 5,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: 14.5,
+                    color: context.palette.text,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Write a message',
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: context.palette.textMuted,
+                      fontSize: 14.5,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  onChanged: _onInputChanged,
+                  onSubmitted: (_) => _send(),
                 ),
               ),
-              onChanged: _onInputChanged,
-              onSubmitted: (_) => _send(),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        if (_hasText)
-          _SendButton(busy: _sending, onTap: _send)
-        else
-          _MicButton(busy: _sending, onTap: _startRecording),
+            const SizedBox(width: 8),
+            if (_hasText)
+              _SendButton(busy: _sending, onTap: _send)
+            else
+              _MicButton(busy: _sending, onTap: _startRecording),
           ],
         ),
       ],
@@ -3471,8 +3593,11 @@ class _ChatScreenState extends State<ChatScreen>
                 color: AppColors.primaryBlue.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.shopping_bag_outlined,
-                  color: AppColors.primaryBlue, size: 20),
+              child: const Icon(
+                Icons.shopping_bag_outlined,
+                color: AppColors.primaryBlue,
+                size: 20,
+              ),
             ),
           const SizedBox(width: 10),
           Expanded(
@@ -3535,9 +3660,7 @@ class _ChatScreenState extends State<ChatScreen>
             decoration: BoxDecoration(
               color: AppColors.red.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: AppColors.red.withValues(alpha: 0.25),
-              ),
+              border: Border.all(color: AppColors.red.withValues(alpha: 0.25)),
             ),
             child: Row(
               children: [
@@ -3778,16 +3901,14 @@ class _MessageBubble extends StatelessWidget {
         ),
       );
     }
-    if (message.messageType == 'voice' &&
-        (message.mediaUrl ?? '').isNotEmpty) {
+    if (message.messageType == 'voice' && (message.mediaUrl ?? '').isNotEmpty) {
       return _VoiceBubble(
         message: message,
         isMine: isMine,
         uploadProgress: uploadProgress,
       );
     }
-    if (message.messageType == 'image' &&
-        (message.mediaUrl ?? '').isNotEmpty) {
+    if (message.messageType == 'image' && (message.mediaUrl ?? '').isNotEmpty) {
       return _ImageBubble(
         message: message,
         isMine: isMine,
@@ -3834,17 +3955,18 @@ class _MessageBubble extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.shortcut,
-                        size: 13,
-                        color: (isMine ? AppColors.white : context.palette.text)
-                            .withValues(alpha: 0.6)),
+                    Icon(
+                      Icons.shortcut,
+                      size: 13,
+                      color: (isMine ? AppColors.white : context.palette.text)
+                          .withValues(alpha: 0.6),
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Forwarded',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color:
-                            (isMine ? AppColors.white : context.palette.text)
-                                .withValues(alpha: 0.6),
+                        color: (isMine ? AppColors.white : context.palette.text)
+                            .withValues(alpha: 0.6),
                         fontStyle: FontStyle.italic,
                         fontSize: 10.5,
                       ),
@@ -3855,8 +3977,7 @@ class _MessageBubble extends StatelessWidget {
             LinkifiedText(
               text: message.content,
               onTapLink: (url) => openMessageLink(context, url),
-              linkColor:
-                  isMine ? AppColors.white : AppColors.primaryBlue,
+              linkColor: isMine ? AppColors.white : AppColors.primaryBlue,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: isMine ? AppColors.white : context.palette.text,
                 fontSize: 14.5,
@@ -3913,12 +4034,14 @@ class _VoiceBubble extends StatelessWidget {
       if (!isMine) {
         unawaited(MessagingService.markVoicePlayed(message.id));
       }
-      await VoicePlayerService.instance.toggle(VoiceNote(
-        messageId: message.id,
-        storagePath: message.mediaUrl!,
-        durationSeconds: message.mediaDurationSeconds,
-        conversationId: message.conversationId,
-      ));
+      await VoicePlayerService.instance.toggle(
+        VoiceNote(
+          messageId: message.id,
+          storagePath: message.mediaUrl!,
+          durationSeconds: message.mediaDurationSeconds,
+          conversationId: message.conversationId,
+        ),
+      );
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3986,13 +4109,13 @@ class _VoiceBubble extends StatelessWidget {
                           uploadProgress != null
                               ? 'Sending… ${(uploadProgress! * 100).round()}%'
                               : 'Sending voice note…',
-                          style:
-                              AppTextStyles.bodySmall.copyWith(color: muted),
+                          style: AppTextStyles.bodySmall.copyWith(color: muted),
                         ),
                       ),
-                      Text(_fmt(declared),
-                          style: AppTextStyles.labelSmall
-                              .copyWith(color: muted)),
+                      Text(
+                        _fmt(declared),
+                        style: AppTextStyles.labelSmall.copyWith(color: muted),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -4008,153 +4131,166 @@ class _VoiceBubble extends StatelessWidget {
                 ],
               )
             : AnimatedBuilder(
-          animation: Listenable.merge([
-            svc.activeId,
-            svc.loadingId,
-            svc.downloadProgress,
-            svc.playing,
-            svc.position,
-            svc.duration,
-            svc.speed,
-          ]),
-          builder: (context, _) {
-            final isActive = svc.activeId.value == message.id;
-            final isLoading = svc.loadingId.value == message.id;
-            final isPlaying = isActive && svc.playing.value;
-            final total = (isActive && svc.duration.value > Duration.zero)
-                ? svc.duration.value
-                : declared;
-            final pos = isActive ? svc.position.value : Duration.zero;
-            final progress = total.inMilliseconds == 0
-                ? 0.0
-                : (pos.inMilliseconds / total.inMilliseconds)
-                    .clamp(0.0, 1.0)
-                    .toDouble();
-            final timeLabel = isActive && (isPlaying || pos > Duration.zero)
-                ? _fmt(pos)
-                : _fmt(total);
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InkWell(
-                  onTap: () => _onPlay(context),
-                  customBorder: const CircleBorder(),
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: isMine
-                          ? AppColors.white.withValues(alpha: 0.20)
-                          : AppColors.primaryBlue.withValues(alpha: 0.10),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      isLoading
-                          ? Icons.arrow_downward_rounded
-                          : isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                      color: accent,
-                      size: 22,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                animation: Listenable.merge([
+                  svc.activeId,
+                  svc.loadingId,
+                  svc.downloadProgress,
+                  svc.playing,
+                  svc.position,
+                  svc.duration,
+                  svc.speed,
+                ]),
+                builder: (context, _) {
+                  final isActive = svc.activeId.value == message.id;
+                  final isLoading = svc.loadingId.value == message.id;
+                  final isPlaying = isActive && svc.playing.value;
+                  final total = (isActive && svc.duration.value > Duration.zero)
+                      ? svc.duration.value
+                      : declared;
+                  final pos = isActive ? svc.position.value : Duration.zero;
+                  final progress = total.inMilliseconds == 0
+                      ? 0.0
+                      : (pos.inMilliseconds / total.inMilliseconds)
+                            .clamp(0.0, 1.0)
+                            .toDouble();
+                  final timeLabel =
+                      isActive && (isPlaying || pos > Duration.zero)
+                      ? _fmt(pos)
+                      : _fmt(total);
+                  return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // While downloading, show a progress BAR in place of
-                      // the waveform (WhatsApp-style, no ring).
-                      if (isLoading)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(3),
-                            child: LinearProgressIndicator(
-                              value: svc.downloadProgress.value,
-                              minHeight: 5,
-                              backgroundColor: trackBg,
-                              valueColor: AlwaysStoppedAnimation<Color>(fg),
-                            ),
+                      InkWell(
+                        onTap: () => _onPlay(context),
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: isMine
+                                ? AppColors.white.withValues(alpha: 0.20)
+                                : AppColors.primaryBlue.withValues(alpha: 0.10),
+                            shape: BoxShape.circle,
                           ),
-                        )
-                      else
-                        _Waveform(
-                          messageId: message.id,
-                          progress: progress,
-                          playedColor: fg,
-                          trackColor: trackBg,
-                          onSeek: isActive ? svc.seekFraction : null,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            isLoading
+                                ? Icons.arrow_downward_rounded
+                                : isPlaying
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            color: accent,
+                            size: 22,
+                          ),
                         ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                timeLabel,
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: muted,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              // Play receipt on YOUR sent notes: gold mic once
-                              // the recipient has played it, muted before
-                              // (WhatsApp blue-mic parity).
-                              if (isMine) ...[
-                                const SizedBox(width: 6),
-                                Icon(
-                                  Icons.mic,
-                                  size: 13,
-                                  color: message.isVoicePlayed
-                                      ? AppColors.goldAccent
-                                      : muted,
-                                ),
-                              ],
-                            ],
-                          ),
-                          if (isActive)
-                            GestureDetector(
-                              onTap: svc.cycleSpeed,
-                              child: Container(
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // While downloading, show a progress BAR in place of
+                            // the waveform (WhatsApp-style, no ring).
+                            if (isLoading)
+                              Padding(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
+                                  vertical: 9,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: isMine
-                                      ? AppColors.white.withValues(alpha: 0.18)
-                                      : AppColors.primaryBlue
-                                          .withValues(alpha: 0.10),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  _speedLabel(svc.speed.value),
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: accent,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(3),
+                                  child: LinearProgressIndicator(
+                                    value: svc.downloadProgress.value,
+                                    minHeight: 5,
+                                    backgroundColor: trackBg,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      fg,
+                                    ),
                                   ),
                                 ),
+                              )
+                            else
+                              _Waveform(
+                                messageId: message.id,
+                                progress: progress,
+                                playedColor: fg,
+                                trackColor: trackBg,
+                                onSeek: isActive ? svc.seekFraction : null,
                               ),
-                            )
-                          else
-                            Icon(Icons.mic_rounded, size: 14, color: muted),
-                        ],
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      timeLabel,
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: muted,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    // Play receipt on YOUR sent notes: gold mic once
+                                    // the recipient has played it, muted before
+                                    // (WhatsApp blue-mic parity).
+                                    if (isMine) ...[
+                                      const SizedBox(width: 6),
+                                      Icon(
+                                        Icons.mic,
+                                        size: 13,
+                                        color: message.isVoicePlayed
+                                            ? AppColors.goldAccent
+                                            : muted,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                if (isActive)
+                                  GestureDetector(
+                                    onTap: svc.cycleSpeed,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isMine
+                                            ? AppColors.white.withValues(
+                                                alpha: 0.18,
+                                              )
+                                            : AppColors.primaryBlue.withValues(
+                                                alpha: 0.10,
+                                              ),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        _speedLabel(svc.speed.value),
+                                        style: AppTextStyles.labelSmall
+                                            .copyWith(
+                                              color: accent,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Icon(
+                                    Icons.mic_rounded,
+                                    size: 14,
+                                    color: muted,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+                  );
+                },
+              ),
       ),
     );
   }
@@ -4183,8 +4319,10 @@ class _Waveform extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rnd = Random(messageId.hashCode);
-    final heights =
-        List.generate(_barCount, (_) => 0.28 + rnd.nextDouble() * 0.72);
+    final heights = List.generate(
+      _barCount,
+      (_) => 0.28 + rnd.nextDouble() * 0.72,
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -4196,10 +4334,10 @@ class _Waveform extends StatelessWidget {
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTapDown:
-              onSeek == null ? null : (d) => seekAt(d.localPosition.dx),
-          onHorizontalDragUpdate:
-              onSeek == null ? null : (d) => seekAt(d.localPosition.dx),
+          onTapDown: onSeek == null ? null : (d) => seekAt(d.localPosition.dx),
+          onHorizontalDragUpdate: onSeek == null
+              ? null
+              : (d) => seekAt(d.localPosition.dx),
           child: SizedBox(
             height: 26,
             width: double.infinity,
@@ -4239,26 +4377,28 @@ class _AttachButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.cardMuted,
-        shape: BoxShape.circle,
-        border: Border.all(color: context.palette.divider),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: SizedBox(
-            width: 46,
-            height: 46,
-            child: Icon(
-              Icons.add_rounded,
-              color: onTap == null
-                  ? context.palette.textMuted
-                  : AppColors.primaryBlue,
-              size: 24,
+    return PressEffect(
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.palette.cardMuted,
+          shape: BoxShape.circle,
+          border: Border.all(color: context.palette.divider),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: 46,
+              height: 46,
+              child: Icon(
+                Icons.add_rounded,
+                color: onTap == null
+                    ? context.palette.textMuted
+                    : AppColors.primaryBlue,
+                size: 24,
+              ),
             ),
           ),
         ),
@@ -4282,32 +4422,34 @@ class _AttachOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        width: 72,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+    return PressEffect(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          width: 72,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 26),
               ),
-              child: Icon(icon, color: color, size: 26),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: context.palette.text,
-                fontWeight: FontWeight.w600,
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: context.palette.text,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -4349,9 +4491,7 @@ class _SelectableMessage extends StatelessWidget {
             Icon(
               selected ? Icons.check_circle : Icons.radio_button_unchecked,
               size: 20,
-              color: selected
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
+              color: selected ? AppColors.primaryBlue : context.palette.divider,
             ),
             const SizedBox(width: 6),
             Expanded(child: AbsorbPointer(child: child)),
@@ -4420,10 +4560,7 @@ class _SwipeToReplyState extends State<_SwipeToReply> {
                 ),
               ),
             ),
-          Transform.translate(
-            offset: Offset(_dx, 0),
-            child: widget.child,
-          ),
+          Transform.translate(offset: Offset(_dx, 0), child: widget.child),
         ],
       ),
     );
@@ -4479,20 +4616,25 @@ class _ProductBubble extends StatelessWidget {
               onTap: id.isEmpty
                   ? null
                   : () async {
-                      final product =
-                          await MarketplaceService.fetchProductById(id);
+                      final product = await MarketplaceService.fetchProductById(
+                        id,
+                      );
                       if (!context.mounted) return;
                       if (product == null) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content:
-                                Text('This product is no longer available.'),
+                            content: Text(
+                              'This product is no longer available.',
+                            ),
                           ),
                         );
                         return;
                       }
-                      context.pushNamed('product_details',
-                          pathParameters: {'id': id}, extra: product);
+                      context.pushNamed(
+                        'product_details',
+                        pathParameters: {'id': id},
+                        extra: product,
+                      );
                     },
               child: Container(
                 decoration: BoxDecoration(
@@ -4508,15 +4650,19 @@ class _ProductBubble extends StatelessWidget {
                       child: image.isEmpty
                           ? Container(
                               color: context.palette.cardMuted,
-                              child: Icon(Icons.shopping_bag_outlined,
-                                  color: context.palette.textMuted),
+                              child: Icon(
+                                Icons.shopping_bag_outlined,
+                                color: context.palette.textMuted,
+                              ),
                             )
                           : CachedImage(image, fit: BoxFit.cover),
                     ),
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
@@ -4547,8 +4693,11 @@ class _ProductBubble extends StatelessWidget {
                     ),
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: Icon(Icons.chevron_right,
-                          size: 18, color: context.palette.textMuted),
+                      child: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: context.palette.textMuted,
+                      ),
                     ),
                   ],
                 ),
@@ -4780,8 +4929,9 @@ class _ImageBubbleState extends State<_ImageBubble> {
                       value: widget.uploadProgress, // null → indeterminate
                       minHeight: 4,
                       backgroundColor: Colors.white.withValues(alpha: 0.30),
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(Colors.white),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.white,
+                      ),
                     ),
                   ),
                 ],
@@ -4838,24 +4988,26 @@ class _MicButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.cardMuted,
-        shape: BoxShape.circle,
-        border: Border.all(color: context.palette.divider),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: busy ? null : onTap,
-          customBorder: const CircleBorder(),
-          child: SizedBox(
-            width: 46,
-            height: 46,
-            child: Icon(
-              Icons.mic_rounded,
-              color: busy ? context.palette.textMuted : AppColors.primaryBlue,
-              size: 22,
+    return PressEffect(
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.palette.cardMuted,
+          shape: BoxShape.circle,
+          border: Border.all(color: context.palette.divider),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: busy ? null : onTap,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: 46,
+              height: 46,
+              child: Icon(
+                Icons.mic_rounded,
+                color: busy ? context.palette.textMuted : AppColors.primaryBlue,
+                size: 22,
+              ),
             ),
           ),
         ),
@@ -4870,23 +5022,25 @@ class _CancelRecordingButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 42,
-          height: 42,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.red.withValues(alpha: 0.10),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.close_rounded,
-            color: AppColors.red,
-            size: 20,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.red.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.close_rounded,
+              color: AppColors.red,
+              size: 20,
+            ),
           ),
         ),
       ),
@@ -4940,41 +5094,51 @@ class _SendButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.30),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: busy ? null : onTap,
-          customBorder: const CircleBorder(),
-          child: SizedBox(
-            width: 46,
-            height: 46,
-            child: Center(
-              child: busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        color: AppColors.white,
-                        strokeWidth: 2.2,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.send_rounded,
-                      color: AppColors.white,
-                      size: 20,
-                    ),
+    return PressEffect(
+      pressedScale: 0.90,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withValues(alpha: 0.30),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: busy ? null : onTap,
+            customBorder: const CircleBorder(),
+            child: SizedBox(
+              width: 46,
+              height: 46,
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: AppMotion.maybe(context, AppMotion.quick),
+                  switchInCurve: AppMotion.spring,
+                  switchOutCurve: AppMotion.easeIn,
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: busy
+                      ? const BrandSpinner(
+                          key: ValueKey('busy'),
+                          size: 20,
+                          color: AppColors.white,
+                        )
+                      : const Icon(
+                          Icons.send_rounded,
+                          key: ValueKey('send'),
+                          color: AppColors.white,
+                          size: 20,
+                        ),
+                ),
+              ),
             ),
           ),
         ),
@@ -4991,14 +5155,17 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     final initials = parts.isEmpty
         ? '?'
         : parts.length == 1
-            ? parts.first.substring(0, 1).toUpperCase()
-            : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-                .toUpperCase();
+        ? parts.first.substring(0, 1).toUpperCase()
+        : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+              .toUpperCase();
     final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
     return Container(
       width: size,
@@ -5064,19 +5231,23 @@ class _CircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.10),
+              ),
+            ),
+            child: Icon(icon, color: AppColors.white, size: 18),
           ),
-          child: Icon(icon, color: AppColors.white, size: 18),
         ),
       ),
     );

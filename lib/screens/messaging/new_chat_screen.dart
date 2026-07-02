@@ -7,9 +7,14 @@ import '../../models/member_directory_model.dart';
 import '../../services/directory_service.dart';
 import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/shimmer_loaders.dart';
 
 /// "New chat" people picker — search any member and tap to open a 1:1
 /// chat. Replaces the opt-in member directory as the New-chat target so
@@ -81,8 +86,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
       if (!mounted || !_explore) return;
       final friendIds = _friends.map((f) => f.userId).toSet();
       setState(() {
-        _results =
-            all.where((m) => !friendIds.contains(m.userId)).toList();
+        _results = all.where((m) => !friendIds.contains(m.userId)).toList();
         _loading = false;
       });
     } catch (_) {
@@ -98,9 +102,12 @@ class _NewChatScreenState extends State<NewChatScreen> {
         _results = query.isEmpty
             ? _friends
             : _friends
-                .where((m) =>
-                    (m.fullName ?? '').toLowerCase().contains(query.toLowerCase()))
-                .toList();
+                  .where(
+                    (m) => (m.fullName ?? '').toLowerCase().contains(
+                      query.toLowerCase(),
+                    ),
+                  )
+                  .toList();
       });
       return;
     }
@@ -128,7 +135,9 @@ class _NewChatScreenState extends State<NewChatScreen> {
   /// Tapping a person no longer jumps straight into a chat. Ask first:
   /// message them, or view their profile (tester request).
   Future<void> _onTapUser(MemberDirectoryEntry m) async {
-    final name = (m.fullName ?? '').trim().isEmpty ? 'Member' : m.fullName!.trim();
+    final name = (m.fullName ?? '').trim().isEmpty
+        ? 'Member'
+        : m.fullName!.trim();
     final choice = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: context.palette.sheet,
@@ -147,24 +156,31 @@ class _NewChatScreenState extends State<NewChatScreen> {
                   _Avatar(name: name, photoUrl: m.profilePhotoUrl),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleSmall
-                            .copyWith(fontWeight: FontWeight.w700)),
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.chat_bubble_outline, color: AppColors.primaryBlue),
+              leading: const Icon(
+                Icons.chat_bubble_outline,
+                color: AppColors.primaryBlue,
+              ),
               title: const Text('Message'),
               onTap: () => Navigator.pop(ctx, 'chat'),
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.person_outline, color: AppColors.primaryBlue),
+              leading: const Icon(
+                Icons.person_outline,
+                color: AppColors.primaryBlue,
+              ),
               title: const Text('View profile'),
               onTap: () => Navigator.pop(ctx, 'profile'),
             ),
@@ -200,8 +216,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
           SnackBar(
             content: Text(
               'Could not start the chat. Try again.',
-              style:
-                  AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
             ),
           ),
         );
@@ -224,10 +239,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: _ModeToggle(
-                explore: _explore,
-                onChanged: _setExplore,
-              ),
+              child: _ModeToggle(explore: _explore, onChanged: _setExplore),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
@@ -235,8 +247,9 @@ class _NewChatScreenState extends State<NewChatScreen> {
                 controller: _searchController,
                 onChanged: _onSearch,
                 decoration: InputDecoration(
-                  hintText:
-                      _explore ? 'Search everyone on Advent' : 'Search friends',
+                  hintText: _explore
+                      ? 'Search everyone on Advent'
+                      : 'Search friends',
                   prefixIcon: const Icon(Icons.search),
                   filled: true,
                   fillColor: context.palette.inputFill,
@@ -249,45 +262,32 @@ class _NewChatScreenState extends State<NewChatScreen> {
               ),
             ),
             Expanded(
-              child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primaryBlue,
-                      ),
-                    )
-                  : _results.isEmpty
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(28),
-                            child: Text(
-                              _explore
-                                  ? 'No people found. Try a different name.'
-                                  : _searchController.text.trim().isEmpty
-                                      ? 'No friends yet. Tap “Find people” to '
-                                          'discover members on Advent.'
-                                      : 'No friends match that name. Tap '
-                                          '“Find people” to search everyone.',
-                              textAlign: TextAlign.center,
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: context.palette.textMuted,
-                              ),
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: _results.length,
-                          itemBuilder: (context, i) {
-                            final m = _results[i];
-                            final name = (m.fullName ?? '').trim().isEmpty
-                                ? 'Member'
-                                : m.fullName!.trim();
-                            return ListTile(
+              // People-shaped shimmer that crossfades into the results;
+              // the first screenful of rows cascades in.
+              child: ContentReveal(
+                loading: _loading,
+                skeleton: ShimmerLoaders.peopleList(),
+                child: _results.isEmpty
+                    ? _buildEmptyState(context)
+                    : ListView.builder(
+                        itemCount: _results.length,
+                        itemBuilder: (context, i) {
+                          final m = _results[i];
+                          final name = (m.fullName ?? '').trim().isEmpty
+                              ? 'Member'
+                              : m.fullName!.trim();
+                          final tile = PressEffect(
+                            pressedScale: 0.97,
+                            child: ListTile(
                               leading: _Avatar(
-                                  name: name, photoUrl: m.profilePhotoUrl),
+                                name: name,
+                                photoUrl: m.profilePhotoUrl,
+                              ),
                               title: Text(
                                 name,
-                                style: AppTextStyles.bodyMedium
-                                    .copyWith(fontWeight: FontWeight.w600),
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               subtitle: (m.churchName ?? '').trim().isEmpty
                                   ? null
@@ -300,9 +300,57 @@ class _NewChatScreenState extends State<NewChatScreen> {
                                       ),
                                     ),
                               onTap: () => _onTapUser(m),
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                          if (i >= 10) return tile;
+                          return StaggeredReveal(
+                            index: i,
+                            rise: 16,
+                            child: tile,
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    final message = _explore
+        ? 'No people found. Try a different name.'
+        : _searchController.text.trim().isEmpty
+        ? 'No friends yet. Tap “Find people” to discover members on Advent.'
+        : 'No friends match that name. Tap “Find people” to search everyone.';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _explore ? Icons.person_search_rounded : Icons.diversity_3,
+                size: 34,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: context.palette.textMuted,
+                height: 1.5,
+              ),
             ),
           ],
         ),
@@ -312,6 +360,8 @@ class _NewChatScreenState extends State<NewChatScreen> {
 }
 
 /// Segmented "My friends" / "Find people" switch at the top of New chat.
+/// A single blue thumb SLIDES between the two segments (with a gentle
+/// spring) instead of each side snapping its own background colour.
 class _ModeToggle extends StatelessWidget {
   const _ModeToggle({required this.explore, required this.onChanged});
   final bool explore;
@@ -325,47 +375,85 @@ class _ModeToggle extends StatelessWidget {
         color: context.palette.inputFill,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
-        children: [
-          _seg(context, label: 'My friends', icon: Icons.people_alt_rounded,
-              selected: !explore, onTap: () => onChanged(false)),
-          _seg(context, label: 'Find people', icon: Icons.public_rounded,
-              selected: explore, onTap: () => onChanged(true)),
-        ],
+      child: SizedBox(
+        height: 38,
+        child: Stack(
+          children: [
+            AnimatedAlign(
+              duration: AppMotion.maybe(context, AppMotion.standard),
+              curve: AppMotion.spring,
+              alignment: explore ? Alignment.centerRight : Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: 0.5,
+                heightFactor: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(11),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                _seg(
+                  context,
+                  label: 'My friends',
+                  icon: Icons.people_alt_rounded,
+                  selected: !explore,
+                  onTap: () => onChanged(false),
+                ),
+                _seg(
+                  context,
+                  label: 'Find people',
+                  icon: Icons.public_rounded,
+                  selected: explore,
+                  onTap: () => onChanged(true),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _seg(BuildContext context,
-      {required String label,
-      required IconData icon,
-      required bool selected,
-      required VoidCallback onTap}) {
+  Widget _seg(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primaryBlue : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
-          ),
+        child: Center(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
-                  size: 16,
-                  color: selected ? AppColors.white : context.palette.textMuted),
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? AppColors.white : context.palette.textMuted,
+              ),
               const SizedBox(width: 6),
-              Text(
-                label,
+              AnimatedDefaultTextStyle(
+                duration: AppMotion.maybe(context, AppMotion.quick),
                 style: AppTextStyles.labelMedium.copyWith(
                   color: selected ? AppColors.white : context.palette.textMuted,
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
+                child: Text(label),
               ),
             ],
           ),

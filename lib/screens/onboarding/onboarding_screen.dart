@@ -59,7 +59,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.initState();
     _film = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 24),
+      duration: const Duration(seconds: 28),
     )..addListener(_onFilmTick);
     _ambient = AnimationController(
       vsync: this,
@@ -239,7 +239,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           if (live(FilmTimeline.s1)) SceneChurch(t: t),
           if (live(FilmTimeline.s2)) ScenePrayer(t: t),
           if (live(FilmTimeline.s3)) SceneChatMarket(t: t),
-          if (t > FilmTimeline.s4.$1 - 0.01) SceneSabbathFinale(t: t),
+          if (live(FilmTimeline.s4)) SceneWatch(t: t),
+          if (t > FilmTimeline.s5.$1 - 0.01) SceneSabbathFinale(t: t),
         ],
       ),
     );

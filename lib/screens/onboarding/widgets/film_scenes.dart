@@ -38,14 +38,15 @@ double pulse(double t, double a, double b) {
 class FilmTimeline {
   FilmTimeline._();
 
-  static const s0 = (0.000, 0.165); // brand open
-  static const s1 = (0.140, 0.380); // churches
-  static const s2 = (0.355, 0.590); // prayer
-  static const s3 = (0.565, 0.800); // chat + marketplace
-  static const s4 = (0.775, 1.000); // sabbath finale + CTA
+  static const s0 = (0.000, 0.145); // brand open
+  static const s1 = (0.125, 0.330); // churches
+  static const s2 = (0.310, 0.510); // prayer
+  static const s3 = (0.490, 0.690); // chat + marketplace
+  static const s4 = (0.670, 0.860); // watch (video + live)
+  static const s5 = (0.835, 1.000); // sabbath finale + CTA
 
   /// Tap-to-skip-ahead targets.
-  static const boundaries = <double>[0.165, 0.380, 0.590, 0.800, 1.0];
+  static const boundaries = <double>[0.145, 0.330, 0.510, 0.690, 0.860, 1.0];
 
   /// Which progress segment (0..4) the value falls in — for the top bars.
   static int sceneIndex(double t) {
@@ -317,7 +318,7 @@ class SceneBrandOpen extends StatelessWidget {
     final (a, b) = FilmTimeline.s0;
     final logoIn = seg(t, a, a + 0.045, Curves.easeOutCubic);
     final ringSweep = seg(t, a + 0.035, a + 0.095, Curves.easeInOutCubic);
-    final lineIn = seg(t, a + 0.075, a + 0.125, Curves.easeOutCubic);
+    final lineIn = seg(t, a + 0.065, a + 0.110, Curves.easeOutCubic);
     final exit = seg(t, b - 0.022, b, Curves.easeInCubic);
 
     // On exit the whole composition glides up and shrinks; the ring
@@ -398,8 +399,8 @@ class SceneChurch extends StatelessWidget {
     final barsIn = seg(t, a + 0.03, a + 0.09, Curves.easeOutCubic);
     final pinDrop = seg(t, a + 0.06, a + 0.10, Curves.bounceOut);
     final tickPop = seg(t, a + 0.045, a + 0.075, Curves.easeOutBack);
-    final followFill = seg(t, a + 0.11, a + 0.15, Curves.easeInOutCubic);
-    final countT = seg(t, a + 0.11, a + 0.20);
+    final followFill = seg(t, a + 0.10, a + 0.14, Curves.easeInOutCubic);
+    final countT = seg(t, a + 0.10, a + 0.175);
     final lineIn = seg(t, a + 0.05, a + 0.10, Curves.easeOutCubic);
     final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
 
@@ -563,11 +564,11 @@ class ScenePrayer extends StatelessWidget {
     final (a, b) = FilmTimeline.s2;
     final cardIn = seg(t, a, a + 0.05, Curves.easeOutBack);
     final barsIn = seg(t, a + 0.03, a + 0.09, Curves.easeOutCubic);
-    final countT = seg(t, a + 0.07, a + 0.19);
+    final countT = seg(t, a + 0.06, a + 0.165);
     // Linear 0→1 flight progress for each "+1" chip; opacity is a sine
     // of the progress so they rise steadily while fading in-then-out.
-    final chip1 = seg(t, a + 0.075, a + 0.135);
-    final chip2 = seg(t, a + 0.125, a + 0.185);
+    final chip1 = seg(t, a + 0.065, a + 0.12);
+    final chip2 = seg(t, a + 0.11, a + 0.165);
     final lineIn = seg(t, a + 0.05, a + 0.10, Curves.easeOutCubic);
     final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
 
@@ -576,7 +577,7 @@ class ScenePrayer extends StatelessWidget {
     final beat =
         1 +
         0.10 *
-            pulse(t, a + 0.07, a + 0.19) *
+            pulse(t, a + 0.06, a + 0.165) *
             (0.5 + 0.5 * math.sin(countT * math.pi * 6));
 
     if (cardIn == 0) return const SizedBox.shrink();
@@ -719,13 +720,13 @@ class SceneChatMarket extends StatelessWidget {
     final typing = pulse(
       t,
       a + 0.01,
-      a + 0.075,
+      a + 0.065,
     ); // typing bubble lives then goes
-    final bubble1 = seg(t, a + 0.065, a + 0.095, Curves.easeOutBack);
-    final ticksBlue = seg(t, a + 0.105, a + 0.125);
-    final bubble2 = seg(t, a + 0.115, a + 0.145, Curves.easeOutBack);
-    final productIn = seg(t, a + 0.145, a + 0.185, Curves.easeOutBack);
-    final lineIn = seg(t, a + 0.05, a + 0.10, Curves.easeOutCubic);
+    final bubble1 = seg(t, a + 0.055, a + 0.085, Curves.easeOutBack);
+    final ticksBlue = seg(t, a + 0.09, a + 0.11);
+    final bubble2 = seg(t, a + 0.10, a + 0.13, Curves.easeOutBack);
+    final productIn = seg(t, a + 0.125, a + 0.16, Curves.easeOutBack);
+    final lineIn = seg(t, a + 0.045, a + 0.09, Curves.easeOutCubic);
     final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
 
     if (stageIn == 0) return const SizedBox.shrink();
@@ -950,7 +951,211 @@ class _ChatBubble extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Scene 4 — sabbath finale (ring returns, then hands off to the CTA)
+// Scene 4 — watch (sermons, music & live services)
+// ---------------------------------------------------------------------------
+
+class SceneWatch extends StatelessWidget {
+  const SceneWatch({super.key, required this.t});
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    final (a, b) = FilmTimeline.s4;
+    final cardIn = seg(t, a, a + 0.045, Curves.easeOutBack);
+    final playPop = seg(t, a + 0.04, a + 0.07, Curves.easeOutBack);
+    final liveIn = seg(t, a + 0.055, a + 0.08, Curves.easeOutBack);
+    final playing = seg(t, a + 0.085, a + 0.10); // play btn hands off
+    final progressT = seg(t, a + 0.095, a + 0.165, Curves.easeInOutCubic);
+    final barsIn = seg(t, a + 0.03, a + 0.08, Curves.easeOutCubic);
+    final lineIn = seg(t, a + 0.045, a + 0.09, Curves.easeOutCubic);
+    final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
+
+    if (cardIn == 0) return const SizedBox.shrink();
+
+    // LIVE dot blinks on a local clock while the scene is on stage.
+    final blink = 0.55 + 0.45 * math.sin((t - a) * 260);
+
+    return Opacity(
+      opacity: (cardIn * (1 - exit)).clamp(0.0, 1.0),
+      child: Transform.translate(
+        offset: Offset(0, 70 * (1 - cardIn) - 60 * exit),
+        child: Transform.scale(
+          scale: (0.94 + 0.06 * cardIn) * (1 - 0.16 * exit),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 280,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.darkNavy.withValues(alpha: 0.12),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: AppColors.appBarGradient,
+                            ),
+                            child: SizedBox.expand(),
+                          ),
+                          // Play button pops in, then recedes as the
+                          // "video" starts and the progress bar takes over.
+                          Transform.scale(
+                            scale: playPop * (1 - 0.35 * playing),
+                            child: Opacity(
+                              opacity: (playPop * (1 - playing)).clamp(
+                                0.0,
+                                1.0,
+                              ),
+                              child: Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: AppColors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.darkNavy.withValues(
+                                        alpha: 0.25,
+                                      ),
+                                      blurRadius: 16,
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: AppColors.primaryBlue,
+                                  size: 32,
+                                ),
+                              ),
+                            ),
+                          ),
+                          // LIVE badge — red is reserved for urgent/live.
+                          Positioned(
+                            top: 10,
+                            left: 10,
+                            child: Transform.scale(
+                              scale: liveIn,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.red,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Opacity(
+                                      opacity: blink.clamp(0.0, 1.0),
+                                      child: Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.white,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      'LIVE',
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: AppColors.white,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Playback progress sweeps along the bottom.
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              height: 4,
+                              color: AppColors.white.withValues(alpha: 0.25),
+                              alignment: Alignment.centerLeft,
+                              child: FractionallySizedBox(
+                                widthFactor: progressT,
+                                child: Container(color: AppColors.goldAccent),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 30,
+                            height: 30,
+                            decoration: const BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.church,
+                              color: AppColors.white,
+                              size: 15,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _TextBar(grow: barsIn, width: 150, height: 9),
+                                const SizedBox(height: 6),
+                                _TextBar(grow: barsIn, width: 92, height: 7),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+              SceneLine(
+                text: 'Watch sermons, music\n& live services.',
+                enter: lineIn,
+                exit: exit,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scene 5 — sabbath finale (ring returns, then hands off to the CTA)
 // ---------------------------------------------------------------------------
 
 class SceneSabbathFinale extends StatelessWidget {
@@ -959,10 +1164,10 @@ class SceneSabbathFinale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (a, b) = FilmTimeline.s4;
+    final (a, b) = FilmTimeline.s5;
     final ringIn = seg(t, a, a + 0.04, Curves.easeOutCubic);
-    final sweep = seg(t, a + 0.02, a + 0.12, Curves.easeInOutCubic);
-    final lineIn = seg(t, a + 0.06, a + 0.11, Curves.easeOutCubic);
+    final sweep = seg(t, a + 0.02, a + 0.085, Curves.easeInOutCubic);
+    final lineIn = seg(t, a + 0.05, a + 0.095, Curves.easeOutCubic);
     // The ring's send-off: shrinks + sinks toward the CTA button.
     final handoff = seg(t, b - 0.075, b - 0.02, Curves.easeInOutCubic);
 

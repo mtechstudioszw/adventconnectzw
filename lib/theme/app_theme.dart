@@ -1,8 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../widgets/motion/page_transitions.dart';
 import 'app_colors.dart';
 import 'app_palette.dart';
 import 'app_text_styles.dart';
+
+/// App-wide route transition: custom brand fade-through on Android (and
+/// desktop), native Cupertino slide on iOS/macOS so the edge-swipe back
+/// gesture keeps working. Every GoRoute builds a MaterialPage, which
+/// reads this — so ALL routes animate consistently with zero per-route
+/// wiring.
+const PageTransitionsTheme _brandPageTransitions = PageTransitionsTheme(
+  builders: <TargetPlatform, PageTransitionsBuilder>{
+    TargetPlatform.android: BrandFadeThroughTransitionsBuilder(),
+    TargetPlatform.fuchsia: BrandFadeThroughTransitionsBuilder(),
+    TargetPlatform.linux: BrandFadeThroughTransitionsBuilder(),
+    TargetPlatform.windows: BrandFadeThroughTransitionsBuilder(),
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+  },
+);
 
 /// Builder for `showDatePicker` / `showTimePicker` / `showDateRangePicker`
 /// that keeps the brand-blue accent but follows the ACTIVE brightness — so
@@ -36,6 +53,7 @@ class AppTheme {
 
   static ThemeData get light => ThemeData(
         useMaterial3: true,
+        pageTransitionsTheme: _brandPageTransitions,
         extensions: const <ThemeExtension<dynamic>>[AppPalette.light],
         colorScheme: const ColorScheme.light(
           primary: AppColors.primaryBlue,
@@ -192,6 +210,7 @@ class AppTheme {
   static ThemeData get dark => ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
+        pageTransitionsTheme: _brandPageTransitions,
         extensions: const <ThemeExtension<dynamic>>[AppPalette.dark],
         colorScheme: const ColorScheme.dark(
           primary: AppColors.primaryBlue,

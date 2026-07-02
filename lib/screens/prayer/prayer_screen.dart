@@ -9,6 +9,10 @@ import '../../widgets/prayer_card.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/post_form_widgets.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/shimmer_loaders.dart';
 
 class PrayerScreen extends StatefulWidget {
   const PrayerScreen({super.key});
@@ -17,16 +21,12 @@ class PrayerScreen extends StatefulWidget {
   State<PrayerScreen> createState() => _PrayerScreenState();
 }
 
-class _PrayerScreenState extends State<PrayerScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
+class _PrayerScreenState extends State<PrayerScreen> {
   List<Prayer> _prayers = [];
   Set<String> _prayedIds = <String>{};
   Set<String> _busyIds = <String>{};
   bool _loading = true;
+
   /// null = "All" chip. Otherwise a PrayerCategory whose .code is
   /// passed to fetchPrayers() to narrow the server-side query.
   PrayerCategory? _activeCategory;
@@ -34,21 +34,7 @@ class _PrayerScreenState extends State<PrayerScreen>
   @override
   void initState() {
     super.initState();
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
     _bootstrap();
-  }
-
-  @override
-  void dispose() {
-    _entrance.dispose();
-    super.dispose();
   }
 
   Future<void> _bootstrap() async {
@@ -96,8 +82,9 @@ class _PrayerScreenState extends State<PrayerScreen>
           _prayedIds = {..._prayedIds, prayer.id};
         }
         _prayers = _prayers
-            .map((p) =>
-                p.id == prayer.id ? p.copyWith(prayerCount: newCount) : p)
+            .map(
+              (p) => p.id == prayer.id ? p.copyWith(prayerCount: newCount) : p,
+            )
             .toList();
       });
     } catch (_) {
@@ -113,7 +100,8 @@ class _PrayerScreenState extends State<PrayerScreen>
     } finally {
       if (mounted) {
         setState(
-            () => _busyIds = _busyIds.where((id) => id != prayer.id).toSet());
+          () => _busyIds = _busyIds.where((id) => id != prayer.id).toSet(),
+        );
       }
     }
   }
@@ -127,9 +115,7 @@ class _PrayerScreenState extends State<PrayerScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text('Delete this prayer?', style: AppTextStyles.headlineSmall),
         content: Text(
           'Your request and every "I\'m praying" reaction will be removed. '
@@ -144,8 +130,9 @@ class _PrayerScreenState extends State<PrayerScreen>
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style:
-                  AppTextStyles.labelMedium.copyWith(color: context.palette.text),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: context.palette.text,
+              ),
             ),
           ),
           FilledButton(
@@ -162,7 +149,9 @@ class _PrayerScreenState extends State<PrayerScreen>
       if (!mounted) return;
       // Drop the row locally so the list updates without a full
       // reload roundtrip; _bootstrap on next refresh corrects drift.
-      setState(() => _prayers = _prayers.where((p) => p.id != prayer.id).toList());
+      setState(
+        () => _prayers = _prayers.where((p) => p.id != prayer.id).toList(),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.successGreen,
@@ -209,9 +198,12 @@ class _PrayerScreenState extends State<PrayerScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel',
-                style: AppTextStyles.labelMedium
-                    .copyWith(color: context.palette.text)),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: context.palette.text,
+              ),
+            ),
           ),
           FilledButton(
             onPressed: () {
@@ -239,9 +231,10 @@ class _PrayerScreenState extends State<PrayerScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.successGreen,
-          content: Text('Prayer updated.',
-              style:
-                  AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+          content: Text(
+            'Prayer updated.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
         ),
       );
     } catch (_) {
@@ -249,9 +242,10 @@ class _PrayerScreenState extends State<PrayerScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.red,
-          content: Text('Could not update. Try again.',
-              style:
-                  AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+          content: Text(
+            'Could not update. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
         ),
       );
     }
@@ -279,17 +273,8 @@ class _PrayerScreenState extends State<PrayerScreen>
             child: BrandedRefreshIndicator(
               color: AppColors.primaryBlue,
               onRefresh: _bootstrap,
-              child: AnimatedBuilder(
-                animation: _entrance,
-                builder: (context, child) => Opacity(
-                  opacity: _fade.value,
-                  child: Transform.translate(
-                    offset: Offset(0, _slide.value),
-                    child: child,
-                  ),
-                ),
-                child: _buildList(),
-              ),
+              // Entrance now happens per-card (StaggeredReveal below).
+              child: _buildList(),
             ),
           ),
         ],
@@ -326,11 +311,14 @@ class _PrayerScreenState extends State<PrayerScreen>
   }
 
   Widget _buildList() {
-    if (_loading && _prayers.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
-    }
+    return ContentReveal(
+      loading: _loading && _prayers.isEmpty,
+      skeleton: ShimmerLoaders.cardList(count: 6),
+      child: _buildListContent(),
+    );
+  }
+
+  Widget _buildListContent() {
     if (_prayers.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -394,7 +382,7 @@ class _PrayerScreenState extends State<PrayerScreen>
         // Ownership is computed server-side BEFORE the anonymous mask, so the
         // poster can still manage a prayer they posted anonymously.
         final isMine = p.isMine;
-        return PrayerCard(
+        final card = PrayerCard(
           prayer: p,
           isPraying: _prayedIds.contains(p.id),
           busy: _busyIds.contains(p.id),
@@ -409,13 +397,15 @@ class _PrayerScreenState extends State<PrayerScreen>
           },
           onAuthorTap: canViewAuthor
               ? () => context.pushNamed(
-                    'user_profile',
-                    pathParameters: {'userId': p.authorId},
-                  )
+                  'user_profile',
+                  pathParameters: {'userId': p.authorId},
+                )
               : null,
           onEdit: isMine ? () => _editPrayer(p) : null,
           onDelete: isMine ? () => _confirmDelete(p) : null,
         );
+        if (i >= 8) return card;
+        return StaggeredReveal(index: i, rise: 18, child: card);
       },
     );
   }
@@ -434,28 +424,28 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.primaryBlue : context.palette.card,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
+    return PressEffect(
+      child: Material(
+        color: selected ? AppColors.primaryBlue : context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? AppColors.primaryBlue
-                  : AppColors.divider,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected ? AppColors.primaryBlue : AppColors.divider,
+              ),
             ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: selected ? AppColors.white : context.palette.text,
-              fontWeight: FontWeight.w600,
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: selected ? AppColors.white : context.palette.text,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -465,42 +455,41 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _GradientButton extends StatelessWidget {
-  const _GradientButton({
-    required this.label,
-    required this.onTap,
-  });
+  const _GradientButton({required this.label, required this.onTap});
   final String label;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: onTap == null ? 0.6 : 1,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryBlue.withValues(alpha: 0.30),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
+    return PressEffect(
+      child: Opacity(
+        opacity: onTap == null ? 0.6 : 1,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
             borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    fontSize: 15,
-                    letterSpacing: 0.4,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text(
+                    label,
+                    style: AppTextStyles.buttonText.copyWith(
+                      fontSize: 15,
+                      letterSpacing: 0.4,
+                    ),
                   ),
                 ),
               ),

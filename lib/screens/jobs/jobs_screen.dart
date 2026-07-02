@@ -17,6 +17,10 @@ import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/shimmer_loaders.dart';
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -25,17 +29,13 @@ class JobsScreen extends StatefulWidget {
   State<JobsScreen> createState() => _JobsScreenState();
 }
 
-class _JobsScreenState extends State<JobsScreen>
-    with SingleTickerProviderStateMixin {
+class _JobsScreenState extends State<JobsScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
 
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
   List<Job> _jobs = [];
   String _selectedCategory = 'all';
+
   /// patch_039: 'all' | 'entry' | 'mid' | 'senior'. Second-row filter
   /// strip under categories so applicants can self-select tier.
   String _selectedLevel = 'all';
@@ -45,14 +45,6 @@ class _JobsScreenState extends State<JobsScreen>
   @override
   void initState() {
     super.initState();
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
     _hydrateFromCache();
     _loadJobs();
   }
@@ -86,7 +78,6 @@ class _JobsScreenState extends State<JobsScreen>
   @override
   void dispose() {
     _debounce?.cancel();
-    _entrance.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -144,10 +135,7 @@ class _JobsScreenState extends State<JobsScreen>
       backgroundColor: context.palette.scaffoldBg,
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
-        children: const [
-          AdBanner(),
-          MainBottomNav(currentIndex: 3),
-        ],
+        children: const [AdBanner(), MainBottomNav(currentIndex: 3)],
       ),
       floatingActionButton: const PostFab(
         routeName: 'post_job',
@@ -167,17 +155,8 @@ class _JobsScreenState extends State<JobsScreen>
               child: BrandedRefreshIndicator(
                 color: AppColors.primaryBlue,
                 onRefresh: _loadJobs,
-                child: AnimatedBuilder(
-                  animation: _entrance,
-                  builder: (context, child) => Opacity(
-                    opacity: _fade.value,
-                    child: Transform.translate(
-                      offset: Offset(0, _slide.value),
-                      child: child,
-                    ),
-                  ),
-                  child: _buildList(),
-                ),
+                // Entrance now happens per-card (StaggeredReveal below).
+                child: _buildList(),
               ),
             ),
           ],
@@ -259,10 +238,7 @@ class _JobsScreenState extends State<JobsScreen>
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
-                  icon:  Icon(
-                    Icons.close,
-                    color: AppColors.textMuted,
-                  ),
+                  icon: Icon(Icons.close, color: AppColors.textMuted),
                   onPressed: () {
                     _searchController.clear();
                     _loadJobs();
@@ -328,11 +304,14 @@ class _JobsScreenState extends State<JobsScreen>
   }
 
   Widget _buildList() {
-    if (_loading && _jobs.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
-    }
+    return ContentReveal(
+      loading: _loading && _jobs.isEmpty,
+      skeleton: ShimmerLoaders.cardList(count: 6),
+      child: _buildJobsListContent(),
+    );
+  }
+
+  Widget _buildJobsListContent() {
     if (_error != null && _jobs.isEmpty) {
       final isOffline = !ConnectivityService.isOnline;
       if (isOffline) {
@@ -365,7 +344,7 @@ class _JobsScreenState extends State<JobsScreen>
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
                 children: [
-                   Icon(
+                  Icon(
                     Icons.cloud_off_outlined,
                     size: 56,
                     color: AppColors.textMuted,
@@ -451,7 +430,7 @@ class _JobsScreenState extends State<JobsScreen>
         }
         final i = cachedAt != null ? rawIndex - 1 : rawIndex;
         final j = _jobs[i];
-        return JobCard(
+        final card = JobCard(
           job: j,
           onTap: () => context.pushNamed(
             'job_details',
@@ -459,6 +438,8 @@ class _JobsScreenState extends State<JobsScreen>
             extra: j,
           ),
         );
+        if (i >= 8) return card;
+        return StaggeredReveal(index: i, rise: 18, child: card);
       },
     );
   }
@@ -491,19 +472,23 @@ class _CircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.10),
+              ),
+            ),
+            child: Icon(icon, color: AppColors.white, size: 18),
           ),
-          child: Icon(icon, color: AppColors.white, size: 18),
         ),
       ),
     );
@@ -567,51 +552,49 @@ class _SegmentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: selected ? AppColors.primaryGradient : null,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                  : [],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: selected
-                      ? AppColors.white
-                      : AppColors.textMuted,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: selected
-                        ? AppColors.white
-                        : AppColors.textMuted,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
+    return PressEffect(
+      child: Expanded(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: selected ? AppColors.primaryGradient : null,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : [],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: selected ? AppColors.white : AppColors.textMuted,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: selected ? AppColors.white : AppColors.textMuted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -633,40 +616,40 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: selected ? AppColors.primaryGradient : null,
-            color: selected ? null : context.palette.card,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? AppColors.primaryBlue
-                  : AppColors.divider,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: selected ? AppColors.primaryGradient : null,
+              color: selected ? null : context.palette.card,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected ? AppColors.primaryBlue : AppColors.divider,
+              ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : [],
             ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : [],
-          ),
-          child: Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: selected ? AppColors.white : AppColors.text,
-              fontWeight: FontWeight.w700,
-              fontSize: 12.5,
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: selected ? AppColors.white : AppColors.text,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
             ),
           ),
         ),

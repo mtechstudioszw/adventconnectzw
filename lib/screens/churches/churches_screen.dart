@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -17,6 +17,10 @@ import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/shimmer_loaders.dart';
 
 class ChurchesScreen extends StatefulWidget {
   const ChurchesScreen({super.key});
@@ -179,7 +183,9 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     final anyCoords = _churches.any((c) => c.latitude != null);
     if (!anyCoords) {
       final city = nearestZimbabweCity(
-          result.position!.latitude, result.position!.longitude);
+        result.position!.latitude,
+        result.position!.longitude,
+      );
       if (city != null) setState(() => _cityFilter = city);
     }
   }
@@ -189,8 +195,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     final cities = <String>{
       for (final c in _churches)
         if (c.city.trim().isNotEmpty) c.city.trim(),
-    }.toList()
-      ..sort();
+    }.toList()..sort();
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -243,8 +248,10 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         onPressed: _nearMe,
         backgroundColor: AppColors.primaryBlue,
         icon: const Icon(Icons.my_location, color: AppColors.white),
-        label: Text('Near me',
-            style: AppTextStyles.buttonText.copyWith(color: AppColors.white)),
+        label: Text(
+          'Near me',
+          style: AppTextStyles.buttonText.copyWith(color: AppColors.white),
+        ),
       ),
       body: Column(
         children: [
@@ -302,10 +309,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         style: AppTextStyles.bodyLarge,
         decoration: InputDecoration(
           hintText: 'Search by name or city',
-          prefixIcon: const Icon(
-            Icons.search,
-            color: AppColors.primaryBlue,
-          ),
+          prefixIcon: const Icon(Icons.search, color: AppColors.primaryBlue),
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
@@ -328,16 +332,18 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     // deniedForever â†’ Settings (the OS won't show the prompt again).
     // servicesDisabled â†’ Location toggle. Everything else â†’ just a
     // dismiss button since "try again" reopens the picker via the FAB.
-    final (String? actionLabel, VoidCallback? action) = switch (
-        _locationFailure) {
+    final (
+      String? actionLabel,
+      VoidCallback? action,
+    ) = switch (_locationFailure) {
       LocationFailure.permissionDeniedForever => (
-          'Open Settings',
-          () => LocationService.openAppSettings(),
-        ),
+        'Open Settings',
+        () => LocationService.openAppSettings(),
+      ),
       LocationFailure.servicesDisabled => (
-          'Turn On Location',
-          () => LocationService.openLocationSettings(),
-        ),
+        'Turn On Location',
+        () => LocationService.openLocationSettings(),
+      ),
       _ => (null, null),
     };
     return Padding(
@@ -354,11 +360,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
           children: [
             Row(
               children: [
-                const Icon(
-                  Icons.error_outline,
-                  color: AppColors.red,
-                  size: 18,
-                ),
+                const Icon(Icons.error_outline, color: AppColors.red, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -373,11 +375,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
-                  icon: const Icon(
-                    Icons.close,
-                    size: 18,
-                    color: AppColors.red,
-                  ),
+                  icon: const Icon(Icons.close, size: 18, color: AppColors.red),
                   onPressed: () => setState(() {
                     _locationError = null;
                     _locationFailure = null;
@@ -453,7 +451,8 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
               icon: Icons.location_city,
               selected: _cityFilter == city,
               onTap: () => setState(
-                  () => _cityFilter = _cityFilter == city ? null : city),
+                () => _cityFilter = _cityFilter == city ? null : city,
+              ),
             ),
           ],
           const SizedBox(width: 8),
@@ -472,17 +471,16 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _bootstrap,
-      child: _buildListContent(),
+      // Card-shaped shimmer crossfades into the directory.
+      child: ContentReveal(
+        loading: _loading && _churches.isEmpty,
+        skeleton: ShimmerLoaders.cardList(count: 7),
+        child: _buildListContent(),
+      ),
     );
   }
 
   Widget _buildListContent() {
-    if (_loading && _churches.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
-    }
-
     if (_error != null && _churches.isEmpty) {
       final isOffline = !ConnectivityService.isOnline;
       if (isOffline) {
@@ -515,7 +513,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                   Icon(
+                  Icon(
                     Icons.cloud_off_outlined,
                     size: 56,
                     color: AppColors.textMuted,
@@ -546,7 +544,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                   Icon(
+                  Icon(
                     Icons.church_outlined,
                     size: 56,
                     color: AppColors.textMuted,
@@ -594,7 +592,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         }
         final i = cachedAt != null ? rawIndex - 1 : rawIndex;
         final c = list[i];
-        return ChurchCard(
+        final card = ChurchCard(
           church: c,
           onTap: () => context.pushNamed(
             'church_details',
@@ -602,6 +600,9 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
             extra: c,
           ),
         );
+        // First screenful cascades in; the rest mount plainly.
+        if (i >= 8) return card;
+        return StaggeredReveal(index: i, rise: 18, child: card);
       },
     );
   }
@@ -668,8 +669,10 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
               controller: controller,
               itemCount: filtered.length,
               itemBuilder: (_, i) => ListTile(
-                leading: const Icon(Icons.location_city,
-                    color: AppColors.primaryBlue),
+                leading: const Icon(
+                  Icons.location_city,
+                  color: AppColors.primaryBlue,
+                ),
                 title: Text(filtered[i]),
                 onTap: () => Navigator.pop(context, filtered[i]),
               ),
@@ -697,35 +700,35 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = selected ? AppColors.white : AppColors.text;
-    return Material(
-      color: selected ? AppColors.primaryBlue : context.palette.card,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
+    return PressEffect(
+      child: Material(
+        color: selected ? AppColors.primaryBlue : context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? AppColors.primaryBlue
-                  : AppColors.divider,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: fg),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: fg,
-                  fontWeight: FontWeight.w600,
-                ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected ? AppColors.primaryBlue : AppColors.divider,
               ),
-            ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 15, color: fg),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: fg,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

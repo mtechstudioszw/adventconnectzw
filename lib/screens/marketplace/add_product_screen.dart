@@ -93,9 +93,10 @@ class _AddProductScreenState extends State<AddProductScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _loadSeller();
     // Pre-fill form when editing an existing product
     final p = widget.initialProduct;
@@ -429,14 +430,16 @@ class _AddProductScreenState extends State<AddProductScreen>
                     hint: 'USD',
                     value: _currency,
                     items: _currencies
-                        .map((c) => DropdownMenuItem(
-                              value: c,
-                              child: Text(
-                                c,
-                                overflow: TextOverflow.fade,
-                                softWrap: false,
-                              ),
-                            ))
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(
+                              c,
+                              overflow: TextOverflow.fade,
+                              softWrap: false,
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (v) => setState(() => _currency = v ?? 'USD'),
                   ),
@@ -483,8 +486,9 @@ class _AddProductScreenState extends State<AddProductScreen>
               hint: 'Choose a category',
               value: _category,
               items: _categories.entries
-                  .map((e) =>
-                      DropdownMenuItem(value: e.key, child: Text(e.value)))
+                  .map(
+                    (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => _category = v ?? 'other'),
             ),
@@ -510,8 +514,9 @@ class _AddProductScreenState extends State<AddProductScreen>
               hint: 'Choose condition',
               value: _condition,
               items: _conditions.entries
-                  .map((e) =>
-                      DropdownMenuItem(value: e.key, child: Text(e.value)))
+                  .map(
+                    (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => _condition = v ?? 'new'),
             ),
@@ -524,7 +529,10 @@ class _AddProductScreenState extends State<AddProductScreen>
               hint: 'Choose a province',
               value: _province,
               items: [
-                const DropdownMenuItem(value: null, child: Text('Not specified')),
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text('Not specified'),
+                ),
                 for (final p in _provinces)
                   DropdownMenuItem(value: p, child: Text(p)),
               ],
@@ -672,10 +680,7 @@ class _Dropdown<T> extends StatelessWidget {
     return DropdownButtonFormField<T>(
       initialValue: value,
       isExpanded: true,
-      icon: Icon(
-        Icons.expand_more,
-        color: context.palette.textMuted,
-      ),
+      icon: Icon(Icons.expand_more, color: context.palette.textMuted),
       style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
       decoration: postFormFilledDecoration(icon: icon, hint: hint),
       hint: Text(
@@ -700,45 +705,48 @@ class _SellerGate extends StatelessWidget {
     final pending = seller != null && seller!.isPending;
     final rejected = seller != null && seller!.isRejected;
 
-    final (String kicker, String title, String body, String cta, IconData icon) =
-        pending
-            ? (
-                'AWAITING APPROVAL',
-                'Your store is in review',
-                'Our team is reviewing your seller application. You\'ll be '
-                    'able to list products as soon as it\'s approved — '
-                    'usually within a day or two.',
-                'View seller dashboard',
-                Icons.hourglass_top_rounded,
-              )
-            : rejected
-                ? (
-                    'NEEDS ATTENTION',
-                    'Your application was declined',
-                    seller!.rejectionReason?.trim().isNotEmpty == true
-                        ? seller!.rejectionReason!.trim()
-                        : 'Please review your details and reapply.',
-                    'Update & reapply',
-                    Icons.error_outline_rounded,
-                  )
-                : (
-                    'SELLER ACCOUNT REQUIRED',
-                    'Set up your store first',
-                    'Only verified sellers can list products on Advent '
-                        'Connect. Set up a free store profile to start '
-                        'selling within the trusted SDA community.',
-                    'Set up my store',
-                    Icons.storefront_rounded,
-                  );
+    final (
+      String kicker,
+      String title,
+      String body,
+      String cta,
+      IconData icon,
+    ) = pending
+        ? (
+            'AWAITING APPROVAL',
+            'Your store is in review',
+            'Our team is reviewing your seller application. You\'ll be '
+                'able to list products as soon as it\'s approved — '
+                'usually within a day or two.',
+            'View seller dashboard',
+            Icons.hourglass_top_rounded,
+          )
+        : rejected
+        ? (
+            'NEEDS ATTENTION',
+            'Your application was declined',
+            seller!.rejectionReason?.trim().isNotEmpty == true
+                ? seller!.rejectionReason!.trim()
+                : 'Please review your details and reapply.',
+            'Update & reapply',
+            Icons.error_outline_rounded,
+          )
+        : (
+            'SELLER ACCOUNT REQUIRED',
+            'Set up your store first',
+            'Only verified sellers can list products on Advent '
+                'Connect. Set up a free store profile to start '
+                'selling within the trusted SDA community.',
+            'Set up my store',
+            Icons.storefront_rounded,
+          );
 
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
       decoration: BoxDecoration(
         color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: context.palette.divider,
-        ),
+        border: Border.all(color: context.palette.divider),
         boxShadow: const [
           BoxShadow(
             color: Color.fromRGBO(13, 27, 62, 0.06),
@@ -869,4 +877,3 @@ class _SellerGate extends StatelessWidget {
     );
   }
 }
-

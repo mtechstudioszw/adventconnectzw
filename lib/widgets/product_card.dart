@@ -7,10 +7,21 @@ import 'cached_image.dart';
 import 'motion/pressable.dart';
 
 class ProductCard extends StatelessWidget {
-  const ProductCard({super.key, required this.product, required this.onTap});
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.onTap,
+    this.heroTag,
+  });
 
   final Product product;
   final VoidCallback onTap;
+
+  /// When set, the product image flies into the details screen's hero
+  /// image (grid -> detail). Leave null where the same product could
+  /// appear twice on one screen (e.g. Home rails) — duplicate hero tags
+  /// throw in debug.
+  final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +57,13 @@ class ProductCard extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        _ProductImage(url: product.firstImage),
+                        if (heroTag != null)
+                          Hero(
+                            tag: heroTag!,
+                            child: _ProductImage(url: product.firstImage),
+                          )
+                        else
+                          _ProductImage(url: product.firstImage),
                         Positioned(
                           top: 8,
                           left: 8,

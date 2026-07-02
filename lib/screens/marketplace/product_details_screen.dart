@@ -14,6 +14,9 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
+import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({
@@ -29,44 +32,32 @@ class ProductDetailsScreen extends StatefulWidget {
   State<ProductDetailsScreen> createState() => _ProductDetailsScreenState();
 }
 
-class _ProductDetailsScreenState extends State<ProductDetailsScreen>
-    with SingleTickerProviderStateMixin {
+class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Product? _product;
   bool _loading = true;
   String? _error;
   int _currentImage = 0;
   final _pageController = PageController();
 
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
   @override
   void initState() {
     super.initState();
     _product = widget.initialProduct;
     _loading = widget.initialProduct == null;
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
     _bootstrap();
   }
 
   @override
   void dispose() {
-    _entrance.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
   Future<void> _bootstrap() async {
     try {
-      final fetched = await MarketplaceService.fetchProductById(widget.productId);
+      final fetched = await MarketplaceService.fetchProductById(
+        widget.productId,
+      );
       if (!mounted) return;
       setState(() {
         _product = fetched ?? _product;
@@ -87,7 +78,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
     final product = _product;
     if (product == null) return;
     final shareUrl = productShareUrl(product.id);
-    final text = '${product.title}\n\n'
+    final text =
+        '${product.title}\n\n'
         'For sale on Advent Connect ZW marketplace:\n$shareUrl';
     try {
       await Share.share(text, subject: product.title);
@@ -180,11 +172,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
         productPrice: product.formatPrice(),
       );
       if (!mounted) return;
-      context.pushNamed(
-        'chat',
-        pathParameters: {'id': convo.id},
-        extra: convo,
-      );
+      context.pushNamed('chat', pathParameters: {'id': convo.id}, extra: convo);
     } catch (_) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -209,9 +197,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
 
   Widget _buildBody() {
     if (_loading && _product == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 34));
     }
     if (_error != null && _product == null) {
       return Center(
@@ -220,8 +206,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 48, color: AppColors.red),
+              const Icon(Icons.error_outline, size: 48, color: AppColors.red),
               const SizedBox(height: 12),
               Text(_error!, style: AppTextStyles.bodyMedium),
               const SizedBox(height: 16),
@@ -236,9 +221,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 12),
+                    horizontal: 28,
+                    vertical: 12,
+                  ),
                 ),
                 child: const Text('Retry'),
               ),
@@ -252,36 +240,35 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
       slivers: [
         SliverToBoxAdapter(child: _buildCarousel(product)),
         SliverToBoxAdapter(
-          child: AnimatedBuilder(
-            animation: _entrance,
-            builder: (context, child) => Opacity(
-              opacity: _fade.value,
-              child: Transform.translate(
-                offset: Offset(0, _slide.value),
-                child: child,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildHeader(product),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Sections cascade in under the hero image.
+                StaggeredReveal(index: 0, child: _buildHeader(product)),
+                const SizedBox(height: 16),
+                StaggeredReveal(index: 1, child: _buildSellerCard(product)),
+                const SizedBox(height: 16),
+                StaggeredReveal(
+                  index: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildContactButton(),
+                      const SizedBox(height: 10),
+                      _buildInAppChatButton(),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                if (product.description != null &&
+                    product.description!.isNotEmpty) ...[
+                  StaggeredReveal(index: 3, child: _buildDescription(product)),
                   const SizedBox(height: 16),
-                  _buildSellerCard(product),
-                  const SizedBox(height: 16),
-                  _buildContactButton(),
-                  const SizedBox(height: 10),
-                  _buildInAppChatButton(),
-                  const SizedBox(height: 20),
-                  if (product.description != null &&
-                      product.description!.isNotEmpty) ...[
-                    _buildDescription(product),
-                    const SizedBox(height: 16),
-                  ],
-                  _buildSafetyCard(),
                 ],
-              ),
+                StaggeredReveal(index: 4, child: _buildSafetyCard()),
+              ],
             ),
           ),
         ),
@@ -299,7 +286,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
             controller: _pageController,
             itemCount: images.length,
             onPageChanged: (i) => setState(() => _currentImage = i),
-            itemBuilder: (context, i) => _CarouselImage(url: images[i]),
+            // First image is the Hero landing pad for the grid card's
+            // image, so list -> detail feels like the photo expands.
+            itemBuilder: (context, i) => i == 0
+                ? Hero(
+                    tag: 'product_image_${product.id}',
+                    child: _CarouselImage(url: images[i]),
+                  )
+                : _CarouselImage(url: images[i]),
           ),
         ),
         SafeArea(
@@ -338,8 +332,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                   width: active ? 22 : 6,
                   height: 6,
                   decoration: BoxDecoration(
-                    color:
-                        active ? AppColors.white : AppColors.white.withValues(alpha: 0.5),
+                    color: active
+                        ? AppColors.white
+                        : AppColors.white.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -410,8 +405,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
               const Spacer(),
               if (!product.isAvailable)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.red.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(8),
@@ -441,9 +438,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
         onTap: product.sellerId.isEmpty
             ? null
             : () => context.pushNamed(
-                  'seller_profile',
-                  pathParameters: {'userId': product.sellerId},
-                ),
+                'seller_profile',
+                pathParameters: {'userId': product.sellerId},
+              ),
         borderRadius: BorderRadius.circular(20),
         child: Ink(
           decoration: BoxDecoration(
@@ -525,10 +522,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right,
-                  color: context.palette.textMuted,
-                ),
+                Icon(Icons.chevron_right, color: context.palette.textMuted),
               ],
             ),
           ),
@@ -665,9 +659,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen>
       decoration: BoxDecoration(
         color: AppColors.darkNavy.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.darkNavy.withValues(alpha: 0.12),
-        ),
+        border: Border.all(color: AppColors.darkNavy.withValues(alpha: 0.12)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -719,18 +711,20 @@ class _CircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: const BoxDecoration(
-            color: Color.fromRGBO(0, 0, 0, 0.35),
-            shape: BoxShape.circle,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: const BoxDecoration(
+              color: Color.fromRGBO(0, 0, 0, 0.35),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.white, size: 20),
           ),
-          child: Icon(icon, color: AppColors.white, size: 20),
         ),
       ),
     );

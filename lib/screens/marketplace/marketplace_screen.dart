@@ -19,6 +19,10 @@ import '../../widgets/product_card.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/shimmer_loaders.dart';
+import '../../widgets/motion/pressable.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -27,14 +31,9 @@ class MarketplaceScreen extends StatefulWidget {
   State<MarketplaceScreen> createState() => _MarketplaceScreenState();
 }
 
-class _MarketplaceScreenState extends State<MarketplaceScreen>
-    with SingleTickerProviderStateMixin {
+class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
-
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
 
   List<Product> _products = [];
   String _selectedCategory = 'all';
@@ -45,14 +44,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   @override
   void initState() {
     super.initState();
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
     _hydrateFromCache();
     _loadProducts();
     _loadMySeller();
@@ -94,7 +85,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   @override
   void dispose() {
     _debounce?.cancel();
-    _entrance.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -142,10 +132,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
       backgroundColor: context.palette.scaffoldBg,
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
-        children: const [
-          AdBanner(),
-          MainBottomNav(currentIndex: 3),
-        ],
+        children: const [AdBanner(), MainBottomNav(currentIndex: 3)],
       ),
       floatingActionButton: const PostFab(
         routeName: 'add_product',
@@ -166,17 +153,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                 child: BrandedRefreshIndicator(
                   color: AppColors.primaryBlue,
                   onRefresh: _loadProducts,
-                  child: AnimatedBuilder(
-                    animation: _entrance,
-                    builder: (context, child) => Opacity(
-                      opacity: _fade.value,
-                      child: Transform.translate(
-                        offset: Offset(0, _slide.value),
-                        child: child,
-                      ),
-                    ),
-                    child: _buildGrid(),
-                  ),
+                  // Entrance now happens per-card (StaggeredReveal in the
+                  // grid) instead of one block fade.
+                  child: _buildGrid(),
                 ),
               ),
             ],
@@ -263,10 +242,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
-                  icon: Icon(
-                    Icons.close,
-                    color: context.palette.textMuted,
-                  ),
+                  icon: Icon(Icons.close, color: context.palette.textMuted),
                   onPressed: () {
                     _searchController.clear();
                     _loadProducts();
@@ -303,11 +279,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   }
 
   Widget _buildGrid() {
-    if (_loading && _products.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
-    }
+    // Product-shaped shimmer grid crossfading into the real grid.
+    return ContentReveal(
+      loading: _loading && _products.isEmpty,
+      skeleton: ShimmerLoaders.productGrid(),
+      child: _buildGridContent(),
+    );
+  }
+
+  Widget _buildGridContent() {
     if (_error != null && _products.isEmpty) {
       final isOffline = !ConnectivityService.isOnline;
       if (isOffline) {
@@ -416,8 +396,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primaryBlue
-                                  .withValues(alpha: 0.30),
+                              color: AppColors.primaryBlue.withValues(
+                                alpha: 0.30,
+                              ),
                               blurRadius: 14,
                               offset: const Offset(0, 6),
                             ),
@@ -475,20 +456,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               crossAxisSpacing: 14,
               childAspectRatio: 0.72,
             ),
-            delegate: SliverChildBuilderDelegate(
-              (context, i) {
-                final p = _products[i];
-                return ProductCard(
-                  product: p,
-                  onTap: () => context.pushNamed(
-                    'product_details',
-                    pathParameters: {'id': p.id},
-                    extra: p,
-                  ),
-                );
-              },
-              childCount: _products.length,
-            ),
+            delegate: SliverChildBuilderDelegate((context, i) {
+              final p = _products[i];
+              final card = ProductCard(
+                product: p,
+                heroTag: 'product_image_${p.id}',
+                onTap: () => context.pushNamed(
+                  'product_details',
+                  pathParameters: {'id': p.id},
+                  extra: p,
+                ),
+              );
+              // First two grid rows cascade in.
+              if (i >= 6) return card;
+              return StaggeredReveal(index: i, rise: 20, child: card);
+            }, childCount: _products.length),
           ),
         ),
       ],
@@ -595,60 +577,57 @@ class _SellerChoiceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: context.palette.cardMuted,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: context.palette.divider,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: context.palette.cardMuted,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.palette.divider),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: AppColors.white, size: 22),
                 ),
-                child: Icon(icon, color: AppColors.white, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.palette.textMuted,
-                        fontSize: 12.5,
-                        height: 1.35,
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.palette.textMuted,
+                          fontSize: 12.5,
+                          height: 1.35,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const Icon(
-                Icons.chevron_right,
-                color: AppColors.primaryBlue,
-              ),
-            ],
+                const Icon(Icons.chevron_right, color: AppColors.primaryBlue),
+              ],
+            ),
           ),
         ),
       ),
@@ -667,8 +646,12 @@ class _SellerStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (IconData icon, Color tint, String label, String hint) = seller
-            .isApproved
+    final (
+      IconData icon,
+      Color tint,
+      String label,
+      String hint,
+    ) = seller.isApproved
         ? (
             Icons.storefront_rounded,
             AppColors.successGreen,
@@ -676,78 +659,80 @@ class _SellerStatusBanner extends StatelessWidget {
             'Tap to open your seller dashboard.',
           )
         : seller.isPending
-            ? (
-                Icons.hourglass_top_rounded,
-                AppColors.goldAccent,
-                'Store under review',
-                'Tap to check approval status.',
-              )
-            : (
-                Icons.error_outline_rounded,
-                AppColors.red,
-                'Application needs attention',
-                'Tap to review and resubmit.',
-              );
+        ? (
+            Icons.hourglass_top_rounded,
+            AppColors.goldAccent,
+            'Store under review',
+            'Tap to check approval status.',
+          )
+        : (
+            Icons.error_outline_rounded,
+            AppColors.red,
+            'Application needs attention',
+            'Tap to review and resubmit.',
+          );
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.pushNamed('seller_dashboard'),
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            decoration: BoxDecoration(
-              color: tint.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: tint.withValues(alpha: 0.30)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: tint.withValues(alpha: 0.18),
-                    shape: BoxShape.circle,
+    return PressEffect(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => context.pushNamed('seller_dashboard'),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: tint.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: tint.withValues(alpha: 0.30)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: tint.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: tint, size: 18),
                   ),
-                  child: Icon(icon, color: tint, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        label,
-                        style: AppTextStyles.titleSmall.copyWith(
-                          color: tint,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13.5,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          style: AppTextStyles.titleSmall.copyWith(
+                            color: tint,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13.5,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        hint,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.palette.textMuted,
-                          fontSize: 11.5,
+                        const SizedBox(height: 2),
+                        Text(
+                          hint,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: context.palette.textMuted,
+                            fontSize: 11.5,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: tint.withValues(alpha: 0.7),
-                  size: 20,
-                ),
-              ],
+                  Icon(
+                    Icons.chevron_right,
+                    color: tint.withValues(alpha: 0.7),
+                    size: 20,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -783,19 +768,23 @@ class _CircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.10),
+              ),
+            ),
+            child: Icon(icon, color: AppColors.white, size: 18),
           ),
-          child: Icon(icon, color: AppColors.white, size: 18),
         ),
       ),
     );
@@ -859,51 +848,53 @@ class _SegmentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: selected ? AppColors.primaryGradient : null,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                  : [],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: selected
-                      ? AppColors.white
-                      : context.palette.textMuted,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: AppTextStyles.labelMedium.copyWith(
+    return PressEffect(
+      child: Expanded(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: selected ? AppColors.primaryGradient : null,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : [],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
                     color: selected
                         ? AppColors.white
                         : context.palette.textMuted,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: selected
+                          ? AppColors.white
+                          : context.palette.textMuted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -927,48 +918,50 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: selected ? AppColors.primaryGradient : null,
-            color: selected ? null : context.palette.card,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : [],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(icon, style: const TextStyle(fontSize: 14)),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: selected ? AppColors.white : context.palette.text,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12.5,
-                ),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: selected ? AppColors.primaryGradient : null,
+              color: selected ? null : context.palette.card,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected
+                    ? AppColors.primaryBlue
+                    : context.palette.divider,
               ),
-            ],
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : [],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(icon, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: selected ? AppColors.white : context.palette.text,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

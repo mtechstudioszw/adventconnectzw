@@ -2891,9 +2891,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null) {
       return Center(

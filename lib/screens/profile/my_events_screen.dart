@@ -8,6 +8,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Lists events the current user has RSVP'd to OR posted, split by
 /// tab. Tap a row → event_details. Cancel RSVP swipes the row off
@@ -55,26 +56,22 @@ class _MyEventsScreenState extends State<MyEventsScreen> {
       if (ids.isNotEmpty) {
         final all = await EventService.fetchEvents(upcomingOnly: true);
         final pastAll = await EventService.fetchEvents(upcomingOnly: false);
-        final mine =
-            [...all, ...pastAll].where((e) => ids.contains(e.id)).toList();
-        rsvpUpcoming = mine
-            .where((e) => !e.eventDate.isBefore(today))
-            .toList()
+        final mine = [
+          ...all,
+          ...pastAll,
+        ].where((e) => ids.contains(e.id)).toList();
+        rsvpUpcoming = mine.where((e) => !e.eventDate.isBefore(today)).toList()
           ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
-        rsvpPast = mine
-            .where((e) => e.eventDate.isBefore(today))
-            .toList()
+        rsvpPast = mine.where((e) => e.eventDate.isBefore(today)).toList()
           ..sort((a, b) => b.eventDate.compareTo(a.eventDate));
       }
 
-      final postedUpcoming = posted
-          .where((e) => !e.eventDate.isBefore(today))
-          .toList()
-        ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
-      final postedPast = posted
-          .where((e) => e.eventDate.isBefore(today))
-          .toList()
-        ..sort((a, b) => b.eventDate.compareTo(a.eventDate));
+      final postedUpcoming =
+          posted.where((e) => !e.eventDate.isBefore(today)).toList()
+            ..sort((a, b) => a.eventDate.compareTo(b.eventDate));
+      final postedPast =
+          posted.where((e) => e.eventDate.isBefore(today)).toList()
+            ..sort((a, b) => b.eventDate.compareTo(a.eventDate));
 
       if (!mounted) return;
       setState(() {
@@ -153,9 +150,7 @@ class _MyEventsScreenState extends State<MyEventsScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) {
@@ -311,8 +306,7 @@ class _TabPill extends StatelessWidget {
               boxShadow: selected
                   ? [
                       BoxShadow(
-                        color:
-                            AppColors.primaryBlue.withValues(alpha: 0.25),
+                        color: AppColors.primaryBlue.withValues(alpha: 0.25),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -417,8 +411,20 @@ class _EventRow extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback? onCancel;
 
-  String _monthShort(int m) =>
-      const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1];
+  String _monthShort(int m) => const [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][m - 1];
 
   @override
   Widget build(BuildContext context) {
@@ -436,9 +442,7 @@ class _EventRow extends StatelessWidget {
                 height: 70,
                 decoration: BoxDecoration(
                   gradient: isPast ? null : AppColors.primaryGradient,
-                  color: isPast
-                      ? context.palette.cardMuted
-                      : null,
+                  color: isPast ? context.palette.cardMuted : null,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(
@@ -495,7 +499,8 @@ class _EventRow extends StatelessWidget {
                             color: context.palette.textMuted,
                           ),
                         ),
-                        if (event.location != null && event.location!.isNotEmpty) ...[
+                        if (event.location != null &&
+                            event.location!.isNotEmpty) ...[
                           const SizedBox(width: 8),
                           Icon(
                             Icons.place_outlined,

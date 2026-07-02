@@ -9,6 +9,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Browse all monitored channels — tap one to see its videos.
 class ChannelsScreen extends StatefulWidget {
@@ -60,69 +61,86 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       body: SafeArea(
         top: false,
         child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue))
+            ? const Center(child: BrandSpinner(size: 30))
             : _channels.isEmpty
-                ? Center(
-                    child: Text('No channels yet.',
-                        style: AppTextStyles.bodyMedium
-                            .copyWith(color: palette.textMuted)))
-                : BrandedRefreshIndicator(
-                    color: AppColors.primaryBlue,
-                    onRefresh: _load,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _channels.length,
-                      separatorBuilder: (_, _) =>
-                          Divider(color: palette.divider, height: 1),
-                      itemBuilder: (_, i) {
-                        final c = _channels[i];
-                        return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 6),
-                          leading: ClipOval(
-                            child: SizedBox(
-                              width: 48,
-                              height: 48,
-                              child: c.thumbnailUrl != null
-                                  ? CachedImage(c.thumbnailUrl!,
-                                      fit: BoxFit.cover)
-                                  : Container(
-                                      color: palette.cardMuted,
-                                      child: Icon(Icons.tv_rounded,
-                                          color: palette.textMuted)),
+            ? Center(
+                child: Text(
+                  'No channels yet.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: palette.textMuted,
+                  ),
+                ),
+              )
+            : BrandedRefreshIndicator(
+                color: AppColors.primaryBlue,
+                onRefresh: _load,
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _channels.length,
+                  separatorBuilder: (_, _) =>
+                      Divider(color: palette.divider, height: 1),
+                  itemBuilder: (_, i) {
+                    final c = _channels[i];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      leading: ClipOval(
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: c.thumbnailUrl != null
+                              ? CachedImage(c.thumbnailUrl!, fit: BoxFit.cover)
+                              : Container(
+                                  color: palette.cardMuted,
+                                  child: Icon(
+                                    Icons.tv_rounded,
+                                    color: palette.textMuted,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      title: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              c.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: palette.text,
+                              ),
                             ),
                           ),
-                          title: Row(
-                            children: [
-                              Flexible(
-                                child: Text(c.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.titleMedium.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        color: palette.text)),
+                          if (c.isLive) ...[
+                            const SizedBox(width: 8),
+                            const LivePill(compact: true),
+                          ],
+                        ],
+                      ),
+                      subtitle: _subs(c.subscriberCount).isEmpty
+                          ? null
+                          : Text(
+                              _subs(c.subscriberCount),
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: palette.textMuted,
                               ),
-                              if (c.isLive) ...[
-                                const SizedBox(width: 8),
-                                const LivePill(compact: true),
-                              ],
-                            ],
-                          ),
-                          subtitle: _subs(c.subscriberCount).isEmpty
-                              ? null
-                              : Text(_subs(c.subscriberCount),
-                                  style: AppTextStyles.bodySmall
-                                      .copyWith(color: palette.textMuted)),
-                          trailing: Icon(Icons.chevron_right,
-                              color: palette.textMuted),
-                          onTap: () => context.pushNamed('watch_channel',
-                              pathParameters: {'channelId': c.channelId},
-                              extra: c),
-                        );
-                      },
-                    ),
-                  ),
+                            ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        color: palette.textMuted,
+                      ),
+                      onTap: () => context.pushNamed(
+                        'watch_channel',
+                        pathParameters: {'channelId': c.channelId},
+                        extra: c,
+                      ),
+                    );
+                  },
+                ),
+              ),
       ),
     );
   }

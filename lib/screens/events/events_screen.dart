@@ -17,6 +17,7 @@ import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/post_form_widgets.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -52,9 +53,10 @@ class _EventsScreenState extends State<EventsScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _hydrateUpcomingFromCache();
     _bootstrap();
   }
@@ -105,10 +107,7 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Future<void> _bootstrap() async {
-    await Future.wait([
-      _loadUpcoming(),
-      _refreshRsvps(),
-    ]);
+    await Future.wait([_loadUpcoming(), _refreshRsvps()]);
   }
 
   Future<void> _refreshRsvps() async {
@@ -256,9 +255,7 @@ class _EventsScreenState extends State<EventsScreen>
         decoration: BoxDecoration(
           color: context.palette.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppColors.divider,
-          ),
+          border: Border.all(color: AppColors.divider),
         ),
         child: TabBar(
           controller: _tabController,
@@ -306,10 +303,7 @@ class _EventsScreenState extends State<EventsScreen>
         style: AppTextStyles.bodyLarge,
         decoration: InputDecoration(
           hintText: 'Search events',
-          prefixIcon: const Icon(
-            Icons.search,
-            color: AppColors.primaryBlue,
-          ),
+          prefixIcon: const Icon(Icons.search, color: AppColors.primaryBlue),
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
@@ -396,8 +390,11 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  Widget _buildList(List<Event> events, bool loading,
-      {required bool isUpcoming}) {
+  Widget _buildList(
+    List<Event> events,
+    bool loading, {
+    required bool isUpcoming,
+  }) {
     return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _refreshActive,
@@ -405,12 +402,13 @@ class _EventsScreenState extends State<EventsScreen>
     );
   }
 
-  Widget _buildListContent(List<Event> events, bool loading,
-      {required bool isUpcoming}) {
+  Widget _buildListContent(
+    List<Event> events,
+    bool loading, {
+    required bool isUpcoming,
+  }) {
     if (loading && events.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 30));
     }
 
     // Soft inline notice instead of a full-screen blocker when the
@@ -489,9 +487,7 @@ class _EventsScreenState extends State<EventsScreen>
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    isUpcoming
-                        ? 'No upcoming events'
-                        : 'No past events',
+                    isUpcoming ? 'No upcoming events' : 'No past events',
                     style: AppTextStyles.titleMedium.copyWith(
                       color: context.palette.textMuted,
                     ),
@@ -507,8 +503,7 @@ class _EventsScreenState extends State<EventsScreen>
     // Inject the "Updated X ago" strip above the upcoming list — only
     // for the upcoming tab where we cache.
     final showFreshness = isUpcoming;
-    final cachedAt =
-        showFreshness ? CacheService.cachedAt(_cacheKey) : null;
+    final cachedAt = showFreshness ? CacheService.cachedAt(_cacheKey) : null;
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       physics: const AlwaysScrollableScrollPhysics(),
@@ -545,8 +540,18 @@ class _EventsScreenState extends State<EventsScreen>
 
   String _formatRangeDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day} ${months[d.month - 1]}';
   }

@@ -13,6 +13,10 @@ import '../../widgets/shimmer_loaders.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 
 /// The Watch tab — a faith-safe media home. Hero (live/featured) + contextual
 /// rails (Continue watching, Upcoming) + playlist category chips + an endless
@@ -29,7 +33,8 @@ class _WatchScreenState extends State<WatchScreen> {
 
   YoutubeVideo? _live;
   YoutubeVideo? _hero;
-  List<YoutubeVideo> _liveNow = const []; // all currently-live (multi-live rail)
+  List<YoutubeVideo> _liveNow =
+      const []; // all currently-live (multi-live rail)
   List<ResumeItem> _continue = [];
   List<YoutubeVideo> _upcoming = [];
   Set<String> _saved = {};
@@ -135,8 +140,11 @@ class _WatchScreenState extends State<WatchScreen> {
     _loadMore(reset: true);
   }
 
-  void _open(YoutubeVideo v) =>
-      context.pushNamed('watch_video', pathParameters: {'id': v.videoId}, extra: v);
+  void _open(YoutubeVideo v) => context.pushNamed(
+    'watch_video',
+    pathParameters: {'id': v.videoId},
+    extra: v,
+  );
 
   Future<void> _toggleSave(YoutubeVideo v) async {
     final saved = !_saved.contains(v.videoId);
@@ -191,55 +199,69 @@ class _WatchScreenState extends State<WatchScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: _loading
-            ? ShimmerLoaders.watchList()
-            : BrandedRefreshIndicator(
-                color: AppColors.primaryBlue,
-                onRefresh: _bootstrap,
-                child: ListView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.only(bottom: 28),
-                  children: [
-                    if (_hero != null) _heroCard(_hero!, palette),
-                    // When several channels are live at once, a "Live now"
-                    // rail lists them all (hero shows the first).
-                    if (_liveNow.length > 1) _liveNowRail(palette),
-                    if (_continue.isNotEmpty) _continueRail(palette),
-                    if (_upcoming.isNotEmpty) _upcomingRail(palette),
-                    _categoryChips(palette),
-                    if (_feed.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(40),
-                        child: Center(
-                          child: Text(
-                            _category == 'saved'
-                                ? 'Nothing saved yet.'
-                                : 'No videos yet.',
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: palette.textMuted),
-                          ),
+        // Video-shaped shimmer crossfades into the feed.
+        child: ContentReveal(
+          loading: _loading,
+          skeleton: ShimmerLoaders.watchList(),
+          child: BrandedRefreshIndicator(
+            color: AppColors.primaryBlue,
+            onRefresh: _bootstrap,
+            child: ListView(
+              controller: _scroll,
+              padding: const EdgeInsets.only(bottom: 28),
+              children: [
+                if (_hero != null) _heroCard(_hero!, palette),
+                // When several channels are live at once, a "Live now"
+                // rail lists them all (hero shows the first).
+                if (_liveNow.length > 1) _liveNowRail(palette),
+                if (_continue.isNotEmpty) _continueRail(palette),
+                if (_upcoming.isNotEmpty) _upcomingRail(palette),
+                _categoryChips(palette),
+                if (_feed.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Center(
+                      child: Text(
+                        _category == 'saved'
+                            ? 'Nothing saved yet.'
+                            : 'No videos yet.',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: palette.textMuted,
                         ),
                       ),
-                    for (int i = 0; i < _feed.length; i++) ...[
-                      YoutubeVideoCard(
+                    ),
+                  ),
+                for (int i = 0; i < _feed.length; i++) ...[
+                  if (i < 5)
+                    StaggeredReveal(
+                      index: i,
+                      rise: 18,
+                      child: YoutubeVideoCard(
                         video: _feed[i],
                         onTap: () => _open(_feed[i]),
                         saved: _saved.contains(_feed[i].videoId),
                         onSaveToggle: () => _toggleSave(_feed[i]),
                       ),
-                      // Native ad every ~8 videos in the browse feed.
-                      if ((i + 1) % 8 == 0) const NativeAdCard(),
-                    ],
-                    if (_loadingMore)
-                      const Padding(
-                        padding: EdgeInsets.all(18),
-                        child: Center(
-                            child: CircularProgressIndicator(
-                                color: AppColors.primaryBlue)),
-                      ),
-                  ],
-                ),
-              ),
+                    )
+                  else
+                    YoutubeVideoCard(
+                      video: _feed[i],
+                      onTap: () => _open(_feed[i]),
+                      saved: _saved.contains(_feed[i].videoId),
+                      onSaveToggle: () => _toggleSave(_feed[i]),
+                    ),
+                  // Native ad every ~8 videos in the browse feed.
+                  if ((i + 1) % 8 == 0) const NativeAdCard(),
+                ],
+                if (_loadingMore)
+                  const Padding(
+                    padding: EdgeInsets.all(18),
+                    child: Center(child: BrandSpinner(size: 28)),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
       bottomNavigationBar: const MainBottomNav(currentIndex: 1),
     );
@@ -247,123 +269,148 @@ class _WatchScreenState extends State<WatchScreen> {
 
   // ------------------------------- Hero ------------------------------
   Widget _heroCard(YoutubeVideo v, AppPalette palette) {
-    return GestureDetector(
-      onTap: () => _open(v),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
-        child: Stack(
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: v.thumbnailUrl != null
-                  ? CachedImage(v.thumbnailUrl!, fit: BoxFit.cover)
-                  : Container(color: palette.cardMuted),
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      AppColors.darkNavy.withValues(alpha: 0.88),
-                    ],
+    return PressEffect(
+      child: GestureDetector(
+        onTap: () => _open(v),
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
+          child: Stack(
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: v.thumbnailUrl != null
+                    ? CachedImage(v.thumbnailUrl!, fit: BoxFit.cover)
+                    : Container(color: palette.cardMuted),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        AppColors.darkNavy.withValues(alpha: 0.88),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: 14,
-              right: 14,
-              bottom: 14,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (v.isLive)
-                    const LivePill()
-                  else
-                    Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.goldAccent,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text('FEATURED',
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 14,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (v.isLive)
+                      const LivePill()
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.goldAccent,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'FEATURED',
                           style: AppTextStyles.labelSmall.copyWith(
                             color: AppColors.darkNavy,
                             fontWeight: FontWeight.w800,
                             fontSize: 10,
                             letterSpacing: 0.6,
-                          )),
-                    ),
-                  const SizedBox(height: 8),
-                  Text(
-                    v.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.play_arrow_rounded,
-                                color: AppColors.white, size: 20),
-                            const SizedBox(width: 4),
-                            Text(v.isLive ? 'Watch live' : 'Watch now',
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.w700)),
-                          ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      v.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.play_arrow_rounded,
+                                color: AppColors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                v.isLive ? 'Watch live' : 'Watch now',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   // ------------------------------- Rails -----------------------------
-  Widget _railHeader(String title, AppPalette palette, {VoidCallback? onAction}) {
+  Widget _railHeader(
+    String title,
+    AppPalette palette, {
+    VoidCallback? onAction,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Row(
         children: [
           Expanded(
-            child: Text(title,
-                style: AppTextStyles.titleMedium.copyWith(
-                    fontWeight: FontWeight.w800, color: palette.text)),
+            child: Text(
+              title,
+              style: AppTextStyles.titleMedium.copyWith(
+                fontWeight: FontWeight.w800,
+                color: palette.text,
+              ),
+            ),
           ),
           if (onAction != null)
             GestureDetector(
               onTap: onAction,
-              child: Text('See all',
-                  style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w700)),
+              child: Text(
+                'See all',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
         ],
       ),
@@ -474,7 +521,8 @@ class _WatchScreenState extends State<WatchScreen> {
                 selectedColor: AppColors.primaryBlue,
                 side: BorderSide(color: palette.divider),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
             );
           }).toList(),
@@ -548,9 +596,9 @@ class _SubmitChannelSheetState extends State<_SubmitChannelSheet> {
       );
       if (!mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Thanks! Your channel is under review.'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thanks! Your channel is under review.')),
+      );
     } catch (e) {
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
@@ -563,16 +611,15 @@ class _SubmitChannelSheetState extends State<_SubmitChannelSheet> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     InputDecoration deco(String hint) => InputDecoration(
-          hintText: hint,
-          filled: true,
-          fillColor: palette.inputFill,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: palette.divider),
-          ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        );
+      hintText: hint,
+      filled: true,
+      fillColor: palette.inputFill,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: palette.divider),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    );
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
@@ -584,34 +631,47 @@ class _SubmitChannelSheetState extends State<_SubmitChannelSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Submit your channel',
-              style: AppTextStyles.titleMedium
-                  .copyWith(fontWeight: FontWeight.w800, color: palette.text)),
+          Text(
+            'Submit your channel',
+            style: AppTextStyles.titleMedium.copyWith(
+              fontWeight: FontWeight.w800,
+              color: palette.text,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             'Adventist creator? Send your channel for review. Approved channels '
             'appear in Watch.',
-            style:
-                AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+            style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
           ),
           const SizedBox(height: 14),
-          TextField(controller: _link, decoration: deco('YouTube channel link or @handle')),
-          const SizedBox(height: 10),
-          TextField(controller: _name, decoration: deco('Your name (optional)')),
+          TextField(
+            controller: _link,
+            decoration: deco('YouTube channel link or @handle'),
+          ),
           const SizedBox(height: 10),
           TextField(
-              controller: _contact,
-              decoration: deco('WhatsApp / email (so we can verify)')),
+            controller: _name,
+            decoration: deco('Your name (optional)'),
+          ),
           const SizedBox(height: 10),
           TextField(
-              controller: _note,
-              minLines: 2,
-              maxLines: 4,
-              decoration: deco('A short note (optional)')),
+            controller: _contact,
+            decoration: deco('WhatsApp / email (so we can verify)'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _note,
+            minLines: 2,
+            maxLines: 4,
+            decoration: deco('A short note (optional)'),
+          ),
           if (_error != null) ...[
             const SizedBox(height: 10),
-            Text(_error!,
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.red)),
+            Text(
+              _error!,
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.red),
+            ),
           ],
           const SizedBox(height: 16),
           SizedBox(
@@ -621,7 +681,8 @@ class _SubmitChannelSheetState extends State<_SubmitChannelSheet> {
                 backgroundColor: AppColors.primaryBlue,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               onPressed: _sending ? null : _submit,
               child: _sending
@@ -629,7 +690,10 @@ class _SubmitChannelSheetState extends State<_SubmitChannelSheet> {
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.white))
+                        strokeWidth: 2,
+                        color: AppColors.white,
+                      ),
+                    )
                   : const Text('Submit for review'),
             ),
           ),

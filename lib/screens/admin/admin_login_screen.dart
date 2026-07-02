@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Gate into the church-admin dashboard. Checks for an approved row in
 /// `church_admins` against the current user and routes them on. This
@@ -100,9 +101,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     if (_checking || !_loaded) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 80),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) {
@@ -132,10 +131,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               padding: const EdgeInsets.only(bottom: 12),
               child: _RoleCard(
                 role: r,
-                onTap: () => context.pushNamed(
-                  'admin_dashboard',
-                  extra: r,
-                ),
+                onTap: () => context.pushNamed('admin_dashboard', extra: r),
               ),
             ),
         ],
@@ -254,10 +250,7 @@ class _RoleCard extends StatelessWidget {
                 ),
               ),
               if (approved)
-                 Icon(
-                  Icons.chevron_right,
-                  color: AppColors.textMuted,
-                ),
+                Icon(Icons.chevron_right, color: AppColors.textMuted),
             ],
           ),
         ),

@@ -19,6 +19,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/verified_tick.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Group info / management. Members + admin badges, add/remove/promote,
 /// invite link share, leave/delete. Admin-only actions are gated in the
@@ -52,8 +53,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   Future<void> _load() async {
     try {
-      final convo =
-          await MessagingService.fetchConversation(widget.conversationId);
+      final convo = await MessagingService.fetchConversation(
+        widget.conversationId,
+      );
       // Church groups have implicit membership (patch_078) — fetch from
       // profiles.church_id, not conversation_members. The announcements
       // channel shows only the count, so skip the list there.
@@ -91,8 +93,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       'Hello, I would like to be verified to post announcements for '
       '"$churchName" on Advent Connect ZW. My name is $myName.',
     );
-    final uri =
-        Uri.parse('https://wa.me/$_announcementsWhatsApp?text=$text');
+    final uri = Uri.parse('https://wa.me/$_announcementsWhatsApp?text=$text');
     final ok = await _confirm(
       'Request to post announcements',
       'To post announcements you must be verified by the Advent Connect '
@@ -122,7 +123,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   Future<void> _shareInvite() async {
     try {
       final token = await GroupService.inviteToken(widget.conversationId);
-      final link = 'https://mtechstudioszw.github.io/adventconnect-legal/'
+      final link =
+          'https://mtechstudioszw.github.io/adventconnect-legal/'
           'join.html?g=$token';
       if (!mounted) return;
       await showModalBottomSheet<void>(
@@ -141,14 +143,16 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               children: [
                 Text(
                   'Invite link',
-                  style: AppTextStyles.titleMedium
-                      .copyWith(fontWeight: FontWeight.w800),
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Anyone with this link can join the group.',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: ctx.palette.textMuted),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: ctx.palette.textMuted,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -159,8 +163,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   ),
                   child: Text(
                     link,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: ctx.palette.text),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: ctx.palette.text,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -260,14 +265,18 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           children: [
             const SizedBox(height: 12),
             ListTile(
-              leading: const Icon(Icons.chat_bubble_outline,
-                  color: AppColors.primaryBlue),
+              leading: const Icon(
+                Icons.chat_bubble_outline,
+                color: AppColors.primaryBlue,
+              ),
               title: Text('Message $firstName'),
               onTap: () => Navigator.pop(ctx, 'message'),
             ),
             ListTile(
-              leading: const Icon(Icons.person_outline,
-                  color: AppColors.primaryBlue),
+              leading: const Icon(
+                Icons.person_outline,
+                color: AppColors.primaryBlue,
+              ),
               title: const Text('View profile'),
               onTap: () => Navigator.pop(ctx, 'profile'),
             ),
@@ -304,8 +313,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         if (!mounted) return;
         context.pushNamed('chat', pathParameters: {'id': convo.id});
       } else if (action == 'profile') {
-        context.pushNamed('user_profile',
-            pathParameters: {'userId': m.userId});
+        context.pushNamed('user_profile', pathParameters: {'userId': m.userId});
       } else if (action == 'role') {
         await GroupService.setAdmin(
           widget.conversationId,
@@ -333,7 +341,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       await GroupService.leaveGroup(widget.conversationId);
       // Lock the composer instantly if the chat is re-opened.
       unawaited(
-          MessagingService.setGroupBlockedCached(widget.conversationId, true));
+        MessagingService.setGroupBlockedCached(widget.conversationId, true),
+      );
       if (!mounted) return;
       context.goNamed('messages');
     } catch (_) {
@@ -397,8 +406,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 
   Future<void> _editGroup() async {
-    final nameController =
-        TextEditingController(text: _group?.otherUserName ?? '');
+    final nameController = TextEditingController(
+      text: _group?.otherUserName ?? '',
+    );
     String? newPhotoUrl;
     final saved = await showDialog<bool>(
       context: context,
@@ -415,8 +425,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               const SizedBox(height: 12),
               TextButton.icon(
                 onPressed: () async {
-                  final url =
-                      await StorageService.pickAndUploadProfilePhoto();
+                  final url = await StorageService.pickAndUploadProfilePhoto();
                   if (url != null) setLocal(() => newPhotoUrl = url);
                 },
                 icon: const Icon(Icons.image_outlined),
@@ -430,8 +439,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style:
-                  FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+              ),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Save'),
             ),
@@ -460,23 +470,20 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.darkNavy,
         foregroundColor: AppColors.white,
-        title: Text(_isChannel
-            ? 'Channel info'
-            : _isChurch
-                ? 'Group info'
-                : 'Group info'),
+        title: Text(
+          _isChannel
+              ? 'Channel info'
+              : _isChurch
+              ? 'Group info'
+              : 'Group info',
+        ),
         actions: [
           if (_amAdmin)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: _editGroup,
-            ),
+            IconButton(icon: const Icon(Icons.edit), onPressed: _editGroup),
         ],
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryBlue),
-            )
+          ? const Center(child: BrandSpinner(size: 30))
           : ListView(
               children: [
                 const SizedBox(height: 16),
@@ -494,8 +501,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 Center(
                   child: Text(
                     group?.otherUserName ?? 'Group',
-                    style: AppTextStyles.titleLarge
-                        .copyWith(fontWeight: FontWeight.w800),
+                    style: AppTextStyles.titleLarge.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -504,8 +512,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     _isChannel
                         ? '${_members.length} members · Channel'
                         : '${_members.length} members',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: context.palette.textMuted),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.textMuted,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -521,8 +530,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                       'Official announcements channel. Only approved church '
                       'admins can post here; everyone in the church receives '
                       'the announcements.',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: context.palette.textMuted),
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: context.palette.textMuted,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -533,7 +543,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   ),
                   const SizedBox(height: 24),
                 ]
-
                 // ---- CHURCH MEMBERS GROUP -----------------------------
                 // WhatsApp-group style: show the member list. No admins,
                 // no leave/delete/invite (membership is automatic).
@@ -557,7 +566,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     ),
                   const SizedBox(height: 32),
                 ]
-
                 // ---- NORMAL USER-CREATED GROUP ------------------------
                 else ...[
                   // Only members can invite — hidden once you leave the group.
@@ -697,8 +705,9 @@ class _MemberTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasPhoto = (member.photoUrl ?? '').trim().isNotEmpty;
-    final initial =
-        member.fullName.trim().isEmpty ? '?' : member.fullName.trim()[0];
+    final initial = member.fullName.trim().isEmpty
+        ? '?'
+        : member.fullName.trim()[0];
     return ListTile(
       onTap: onTap,
       leading: Container(
@@ -714,8 +723,10 @@ class _MemberTile extends StatelessWidget {
             ? CachedImage(member.photoUrl!, fit: BoxFit.cover)
             : Text(
                 initial.toUpperCase(),
-                style: AppTextStyles.titleMedium
-                    .copyWith(color: AppColors.white, fontWeight: FontWeight.w700),
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
       ),
       title: Row(
@@ -725,8 +736,9 @@ class _MemberTile extends StatelessWidget {
               isSelf ? '${member.fullName} (You)' : member.fullName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style:
-                  AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           if (member.isVerified) const VerifiedTick(size: 14),
@@ -788,8 +800,9 @@ class _AddMembersSheetState extends State<_AddMembersSheet> {
     try {
       final list = await DirectoryService.fetchFriends();
       if (!mounted) return;
-      final filtered =
-          list.where((m) => !widget.excludeIds.contains(m.userId)).toList();
+      final filtered = list
+          .where((m) => !widget.excludeIds.contains(m.userId))
+          .toList();
       setState(() {
         _friends = filtered;
         _results = filtered;
@@ -807,8 +820,8 @@ class _AddMembersSheetState extends State<_AddMembersSheet> {
       _results = query.isEmpty
           ? _friends
           : _friends
-              .where((m) => (m.fullName ?? '').toLowerCase().contains(query))
-              .toList();
+                .where((m) => (m.fullName ?? '').toLowerCase().contains(query))
+                .toList();
     });
   }
 
@@ -850,10 +863,7 @@ class _AddMembersSheetState extends State<_AddMembersSheet> {
           ),
           Expanded(
             child: _loading
-                ? const Center(
-                    child:
-                        CircularProgressIndicator(color: AppColors.primaryBlue),
-                  )
+                ? const Center(child: BrandSpinner(size: 30))
                 : ListView.builder(
                     controller: controller,
                     itemCount: _results.length,

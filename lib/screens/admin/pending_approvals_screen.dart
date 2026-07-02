@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Approval queue for a church admin. Shows community events that
 /// reference this church and edit suggestions waiting on review.
@@ -137,9 +138,7 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) return ErrorBanner(message: _error!);
@@ -368,11 +367,7 @@ class _ActionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                color: filled ? AppColors.white : color,
-                size: 18,
-              ),
+              Icon(icon, color: filled ? AppColors.white : color, size: 18),
               const SizedBox(width: 6),
               Text(
                 label,

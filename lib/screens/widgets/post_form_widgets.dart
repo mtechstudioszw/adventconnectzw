@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/loading_button.dart';
 
 /// Shared building blocks for "post X" screens (post event, post job,
 /// add product, post prayer). Keeps the form/visual language identical
@@ -240,6 +242,10 @@ class PostFormErrorBanner extends StatelessWidget {
   }
 }
 
+/// Shared submit button for every post form (event / product / prayer /
+/// job / notice / news). While [busy] the gradient pill contracts into a
+/// circle around the branded spinner, then springs back — the
+/// LoadingButton morph from the motion kit.
 class PostFormSaveButton extends StatelessWidget {
   const PostFormSaveButton({
     super.key,
@@ -254,48 +260,15 @@ class PostFormSaveButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
+    return AnimatedOpacity(
+      duration: AppMotion.quick,
       opacity: onTap == null && !busy ? 0.6 : 1,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryBlue.withValues(alpha: 0.30),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              child: Center(
-                child: busy
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.4,
-                          color: AppColors.white,
-                        ),
-                      )
-                    : Text(
-                        label,
-                        style: AppTextStyles.buttonText.copyWith(
-                          fontSize: 15,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        ),
+      child: LoadingButton(
+        label: label,
+        loading: busy,
+        enabled: onTap != null,
+        onPressed: onTap,
+        height: 56,
       ),
     );
   }
@@ -319,11 +292,11 @@ InputDecoration postFormFilledDecoration({
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide:  BorderSide(color: AppColors.divider),
+      borderSide: BorderSide(color: AppColors.divider),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide:  BorderSide(color: AppColors.divider),
+      borderSide: BorderSide(color: AppColors.divider),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),

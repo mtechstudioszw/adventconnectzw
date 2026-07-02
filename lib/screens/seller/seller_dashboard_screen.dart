@@ -10,6 +10,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Entry point into the seller flow. Three states:
 ///   * no seller row → CTA to set up the store
@@ -41,9 +42,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _bootstrap();
   }
 
@@ -116,11 +118,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
     if (_loading) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 80),
-        child: Column(
-          children: const [
-            CircularProgressIndicator(color: AppColors.primaryBlue),
-          ],
-        ),
+        child: Column(children: const [BrandSpinner(size: 30)]),
       );
     }
     if (_error != null) {
@@ -276,8 +274,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
           message: seller.rejectionReason?.trim().isNotEmpty == true
               ? seller.rejectionReason!
               : 'Reach out via support if you\'d like more detail. Update your store details below and resubmit — '
-                  '${attemptsLeft == 1 ? 'this is your last chance' : '$attemptsLeft attempts remaining'} '
-                  'before marketplace access is closed.',
+                    '${attemptsLeft == 1 ? 'this is your last chance' : '$attemptsLeft attempts remaining'} '
+                    'before marketplace access is closed.',
         ),
         const SizedBox(height: 16),
         _StoreSummaryCard(seller: seller),
@@ -388,8 +386,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style:
-                  AppTextStyles.labelMedium.copyWith(color: ctx.palette.text),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: ctx.palette.text,
+              ),
             ),
           ),
           FilledButton(
@@ -445,17 +444,20 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
                     imageUrl: cover,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => const DecoratedBox(
-                      decoration:
-                          BoxDecoration(gradient: AppColors.appBarGradient),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.appBarGradient,
+                      ),
                     ),
                     errorWidget: (context, url, error) => const DecoratedBox(
-                      decoration:
-                          BoxDecoration(gradient: AppColors.appBarGradient),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.appBarGradient,
+                      ),
                     ),
                   )
                 : const DecoratedBox(
-                    decoration:
-                        BoxDecoration(gradient: AppColors.appBarGradient),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.appBarGradient,
+                    ),
                   ),
           ),
           // Dark overlay so text stays readable over bright photos
@@ -635,10 +637,7 @@ class _StatusBanner extends StatelessWidget {
 }
 
 class _StoreSummaryCard extends StatelessWidget {
-  const _StoreSummaryCard({
-    required this.seller,
-    this.showStatusChip = false,
-  });
+  const _StoreSummaryCard({required this.seller, this.showStatusChip = false});
 
   final Seller seller;
   final bool showStatusChip;
@@ -647,9 +646,10 @@ class _StoreSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final photo = seller.profilePhotoUrl;
     final hasPhoto = photo != null && photo.isNotEmpty;
-    final cityLine = [seller.city, seller.province]
-        .where((s) => s != null && s.isNotEmpty)
-        .join(', ');
+    final cityLine = [
+      seller.city,
+      seller.province,
+    ].where((s) => s != null && s.isNotEmpty).join(', ');
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -802,7 +802,9 @@ class _StatsRow extends StatelessWidget {
           _Stat(
             value: seller.rating > 0 ? seller.rating.toStringAsFixed(1) : '—',
             label: 'RATING',
-            sub: seller.ratingCount > 0 ? '${seller.ratingCount} ratings' : null,
+            sub: seller.ratingCount > 0
+                ? '${seller.ratingCount} ratings'
+                : null,
           ),
         ],
       ),
@@ -810,12 +812,9 @@ class _StatsRow extends StatelessWidget {
   }
 
   Widget _v() => Builder(
-        builder: (context) => Container(
-          width: 1,
-          height: 36,
-          color: context.palette.divider,
-        ),
-      );
+    builder: (context) =>
+        Container(width: 1, height: 36, color: context.palette.divider),
+  );
 }
 
 class _Stat extends StatelessWidget {
@@ -986,10 +985,7 @@ class _ActionRow extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                color: context.palette.textMuted,
-              ),
+              Icon(Icons.chevron_right, color: context.palette.textMuted),
             ],
           ),
         ),
@@ -1003,10 +999,7 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Divider(
-      height: 1,
-      color: context.palette.divider,
-    );
+    return Divider(height: 1, color: context.palette.divider);
   }
 }
 
@@ -1092,9 +1085,7 @@ class _RecentProductsSection extends StatelessWidget {
               ),
             )
           else
-            ...products.take(3).map(
-                  (p) => _ProductPreviewRow(product: p),
-                ),
+            ...products.take(3).map((p) => _ProductPreviewRow(product: p)),
         ],
       ),
     );
@@ -1208,11 +1199,7 @@ class _SabbathBadge extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.brightness_3,
-            color: AppColors.goldAccent,
-            size: 20,
-          ),
+          const Icon(Icons.brightness_3, color: AppColors.goldAccent, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1298,11 +1285,7 @@ class _ChecklistCard extends StatelessWidget {
 }
 
 class _GradientButton extends StatelessWidget {
-  const _GradientButton({
-    required this.label,
-    required this.onTap,
-    this.icon,
-  });
+  const _GradientButton({required this.label, required this.onTap, this.icon});
 
   final String label;
   final IconData? icon;

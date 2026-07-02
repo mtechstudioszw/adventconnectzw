@@ -6,6 +6,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Per-church notification level. Three levels: All, Urgent only, None.
 /// Pulls existing preferences from `notification_preferences` and lets
@@ -62,14 +63,16 @@ class _NotificationPreferencesScreenState
       if (!mounted) return;
       setState(() {
         _prefs = _prefs
-            .map((p) => p.churchId == pref.churchId
-                ? NotificationPreference(
-                    id: p.id,
-                    churchId: p.churchId,
-                    churchName: p.churchName,
-                    level: level,
-                  )
-                : p)
+            .map(
+              (p) => p.churchId == pref.churchId
+                  ? NotificationPreference(
+                      id: p.id,
+                      churchId: p.churchId,
+                      churchName: p.churchName,
+                      level: level,
+                    )
+                  : p,
+            )
             .toList();
       });
     } catch (_) {
@@ -121,9 +124,7 @@ class _NotificationPreferencesScreenState
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) return ErrorBanner(message: _error!);
@@ -205,10 +206,7 @@ class _PrefCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _Segmented(
-            level: pref.level,
-            onChange: onChange,
-          ),
+          _Segmented(level: pref.level, onChange: onChange),
         ],
       ),
     );
@@ -231,13 +229,21 @@ class _Segmented extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _Pill(label: 'All', active: level == 'all', onTap: () => onChange('all')),
+          _Pill(
+            label: 'All',
+            active: level == 'all',
+            onTap: () => onChange('all'),
+          ),
           _Pill(
             label: 'Urgent',
             active: level == 'urgent',
             onTap: () => onChange('urgent'),
           ),
-          _Pill(label: 'None', active: level == 'none', onTap: () => onChange('none')),
+          _Pill(
+            label: 'None',
+            active: level == 'none',
+            onTap: () => onChange('none'),
+          ),
         ],
       ),
     );
@@ -245,11 +251,7 @@ class _Segmented extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
+  const _Pill({required this.label, required this.active, required this.onTap});
 
   final String label;
   final bool active;
@@ -274,9 +276,7 @@ class _Pill extends StatelessWidget {
             child: Text(
               label,
               style: AppTextStyles.labelMedium.copyWith(
-                color: active
-                    ? AppColors.white
-                    : context.palette.text,
+                color: active ? AppColors.white : context.palette.text,
                 fontWeight: FontWeight.w700,
                 fontSize: 12.5,
               ),

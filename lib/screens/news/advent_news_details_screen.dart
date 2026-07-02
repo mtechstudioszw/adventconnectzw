@@ -12,6 +12,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Article view for a single Advent News piece. Arrives either with
 /// the full [initialItem] pre-loaded from the list screen, or just an
@@ -101,10 +102,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
     // The composer now returns a bool (true = saved). Re-fetch the fresh
     // row instead of relying on a returned object so the details view and
     // the list never show stale edits.
-    final changed = await context.pushNamed<bool>(
-      'post_news',
-      extra: item,
-    );
+    final changed = await context.pushNamed<bool>('post_news', extra: item);
     if (!mounted) return;
     if (changed == true) {
       _changed = true;
@@ -122,7 +120,9 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
           'Delete this story?',
-          style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
+          style: AppTextStyles.titleMedium.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
         content: Text(
           'It will be removed from the feed for everyone. This can\'t be undone.',
@@ -133,16 +133,16 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style: AppTextStyles.labelMedium
-                  .copyWith(color: ctx.palette.text),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: ctx.palette.text,
+              ),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
               'Delete',
-              style:
-                  AppTextStyles.labelMedium.copyWith(color: AppColors.red),
+              style: AppTextStyles.labelMedium.copyWith(color: AppColors.red),
             ),
           ),
         ],
@@ -203,11 +203,16 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.edit_outlined,
-                    color: AppColors.primaryBlue),
-                title: Text('Edit story',
-                    style: AppTextStyles.bodyLarge
-                        .copyWith(fontWeight: FontWeight.w600)),
+                leading: const Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.primaryBlue,
+                ),
+                title: Text(
+                  'Edit story',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _editStory();
@@ -215,9 +220,13 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: AppColors.red),
-                title: Text('Delete story',
-                    style: AppTextStyles.bodyLarge
-                        .copyWith(color: AppColors.red, fontWeight: FontWeight.w600)),
+                title: Text(
+                  'Delete story',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    color: AppColors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _confirmDelete();
@@ -253,9 +262,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
     if (item == null && _loading) {
       return Scaffold(
         backgroundColor: context.palette.scaffoldBg,
-        body: const Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        body: const Center(child: BrandSpinner(size: 30)),
       );
     }
     if (item == null) {
@@ -271,10 +278,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
           ),
         ),
         body: Center(
-          child: Text(
-            'Story not found.',
-            style: AppTextStyles.bodyMedium,
-          ),
+          child: Text('Story not found.', style: AppTextStyles.bodyMedium),
         ),
       );
     }
@@ -378,7 +382,8 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                                 content: Text(
                                   'Source link copied.',
                                   style: AppTextStyles.bodyMedium.copyWith(
-                                      color: AppColors.white),
+                                    color: AppColors.white,
+                                  ),
                                 ),
                               ),
                             );
@@ -410,9 +415,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                   child: CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover),
                 )
               : const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: AppColors.appBarGradient,
-                  ),
+                  decoration: BoxDecoration(gradient: AppColors.appBarGradient),
                   child: Center(
                     child: Icon(
                       Icons.newspaper,
@@ -459,10 +462,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                       onTap: _showOwnerMenu,
                     ),
                   ),
-                _CircleIconButton(
-                  icon: Icons.ios_share,
-                  onTap: _share,
-                ),
+                _CircleIconButton(icon: Icons.ios_share, onTap: _share),
               ],
             ),
           ),
@@ -675,8 +675,18 @@ String _relative(DateTime then) {
 
 String _absolute(DateTime t) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   final now = DateTime.now();
   final isSameDay =
@@ -684,7 +694,8 @@ String _absolute(DateTime t) {
   final time = _formatTime12(t);
   if (isSameDay) return 'Today $time';
   final yesterday = now.subtract(const Duration(days: 1));
-  final isYesterday = t.year == yesterday.year &&
+  final isYesterday =
+      t.year == yesterday.year &&
       t.month == yesterday.month &&
       t.day == yesterday.day;
   if (isYesterday) return 'Yesterday $time';

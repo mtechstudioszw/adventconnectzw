@@ -9,6 +9,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/church_map.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 class ChurchDetailsScreen extends StatefulWidget {
   const ChurchDetailsScreen({
@@ -52,8 +53,8 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     super.initState();
     _church = widget.initialChurch;
     _loading = widget.initialChurch == null;
-    _homeChurchId =
-        AuthService.currentUser?.userMetadata?['church_id']?.toString();
+    _homeChurchId = AuthService.currentUser?.userMetadata?['church_id']
+        ?.toString();
     _bootstrap();
   }
 
@@ -98,8 +99,10 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg,
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+        content: Text(
+          msg,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
       ),
     );
   }
@@ -112,15 +115,17 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     // from your profile, not by unfollowing here.
     if (_isFollowing && _isHomeChurch) {
       _churchToast(
-          'This is your home church. Change it from your profile — '
-          'you can switch once every 3 months.');
+        'This is your home church. Change it from your profile — '
+        'you can switch once every 3 months.',
+      );
       return;
     }
     // You can only be part of your home church — no following other churches.
     if (!_isFollowing && !_isHomeChurch) {
       _churchToast(
-          'You can only follow your home church. Set this as your home '
-          'church from your profile (Edit profile → Home church).');
+        'You can only follow your home church. Set this as your home '
+        'church from your profile (Edit profile → Home church).',
+      );
       return;
     }
 
@@ -140,9 +145,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         if (!mounted) return;
         setState(() {
           _isFollowing = true;
-          _church = church.copyWith(
-            membersCount: church.membersCount + 1,
-          );
+          _church = church.copyWith(membersCount: church.membersCount + 1);
         });
       }
       // Pull the authoritative follower_count back from the server
@@ -176,17 +179,13 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: SafeArea(
-        child: _buildBody(),
-      ),
+      body: SafeArea(child: _buildBody()),
     );
   }
 
   Widget _buildBody() {
     if (_loading && _church == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null && _church == null) {
       return Center(
@@ -195,8 +194,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 48, color: AppColors.red),
+              const Icon(Icons.error_outline, size: 48, color: AppColors.red),
               const SizedBox(height: 12),
               Text(_error!, style: AppTextStyles.bodyMedium),
               const SizedBox(height: 16),
@@ -211,9 +209,12 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 12),
+                    horizontal: 28,
+                    vertical: 12,
+                  ),
                 ),
                 child: const Text('Retry'),
               ),
@@ -248,11 +249,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                     gradient: AppColors.appBarGradient,
                   ),
                   child: const Center(
-                    child: Icon(
-                      Icons.church,
-                      size: 56,
-                      color: AppColors.white,
-                    ),
+                    child: Icon(Icons.church, size: 56, color: AppColors.white),
                   ),
                 )
               : GestureDetector(
@@ -285,8 +282,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                   : context.goNamed('churches'),
               child: const Padding(
                 padding: EdgeInsets.all(8),
-                child: Icon(Icons.arrow_back,
-                    color: AppColors.white, size: 22),
+                child: Icon(Icons.arrow_back, color: AppColors.white, size: 22),
               ),
             ),
           ),
@@ -315,11 +311,8 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         child: CachedImage(
           url,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Icon(
-            Icons.church,
-            color: context.palette.textMuted,
-            size: 26,
-          ),
+          errorBuilder: (context, error, stackTrace) =>
+              Icon(Icons.church, color: context.palette.textMuted, size: 26),
         ),
       ),
     );
@@ -475,11 +468,16 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                             : Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.add,
-                                      color: AppColors.white, size: 20),
+                                  const Icon(
+                                    Icons.add,
+                                    color: AppColors.white,
+                                    size: 20,
+                                  ),
                                   const SizedBox(width: 6),
-                                  Text('Follow',
-                                      style: AppTextStyles.buttonText),
+                                  Text(
+                                    'Follow',
+                                    style: AppTextStyles.buttonText,
+                                  ),
                                 ],
                               ),
                       ),
@@ -552,8 +550,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
             onPressed: () =>
                 context.pushNamed('admin_dashboard', extra: _myRole),
             icon: const Icon(Icons.dashboard_customize_outlined),
-            label: Text('Manage this church',
-                style: AppTextStyles.buttonText),
+            label: Text('Manage this church', style: AppTextStyles.buttonText),
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -581,8 +578,11 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.hourglass_top_rounded,
-                  color: AppColors.primaryBlue, size: 20),
+              const Icon(
+                Icons.hourglass_top_rounded,
+                color: AppColors.primaryBlue,
+                size: 20,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -605,10 +605,10 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         onPressed: church == null
             ? null
             : () => context.pushNamed(
-                  'claim_church',
-                  pathParameters: {'id': church.id},
-                  extra: church,
-                ),
+                'claim_church',
+                pathParameters: {'id': church.id},
+                extra: church,
+              ),
         icon: const Icon(
           Icons.verified_user_outlined,
           size: 16,
@@ -664,10 +664,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                         color: AppColors.primaryBlue,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        'Location',
-                        style: AppTextStyles.titleLarge,
-                      ),
+                      Text('Location', style: AppTextStyles.titleLarge),
                     ],
                   ),
                   if (addressLine.isNotEmpty) ...[
@@ -698,10 +695,8 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                           icon: Icons.directions_rounded,
                           label: 'Directions',
                           filled: true,
-                          onTap: () => _onOpenMaps(
-                            MapsLauncher.openDirections,
-                            church,
-                          ),
+                          onTap: () =>
+                              _onOpenMaps(MapsLauncher.openDirections, church),
                         ),
                       ),
                     ],
@@ -786,11 +781,13 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
       rows.add(_infoRow(Icons.email_outlined, 'Email', church.contactEmail!));
     }
     if (church.foundedYear != null) {
-      rows.add(_infoRow(
-        Icons.calendar_today_outlined,
-        'Founded',
-        '${church.foundedYear}',
-      ));
+      rows.add(
+        _infoRow(
+          Icons.calendar_today_outlined,
+          'Founded',
+          '${church.foundedYear}',
+        ),
+      );
     }
 
     if (rows.isEmpty) return const SizedBox.shrink();
@@ -810,10 +807,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                 if (i < rows.length - 1)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Divider(
-                      height: 1,
-                      color: context.palette.divider,
-                    ),
+                    child: Divider(height: 1, color: context.palette.divider),
                   ),
               ],
             ],
@@ -935,9 +929,7 @@ class _LocationActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: filled
             ? null
-            : Border.all(
-                color: AppColors.primaryBlue.withValues(alpha: 0.35),
-              ),
+            : Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.35)),
         boxShadow: filled
             ? [
                 BoxShadow(

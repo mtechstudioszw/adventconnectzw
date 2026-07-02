@@ -9,6 +9,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// One channel's videos (reached from the Channels list).
 class ChannelScreen extends StatefulWidget {
@@ -51,8 +52,11 @@ class _ChannelScreenState extends State<ChannelScreen> {
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
-    final rows = await YoutubeService.fetchByChannel(widget.channelId,
-        limit: _page, offset: _offset);
+    final rows = await YoutubeService.fetchByChannel(
+      widget.channelId,
+      limit: _page,
+      offset: _offset,
+    );
     if (!mounted) return;
     setState(() {
       _videos.addAll(rows);
@@ -80,8 +84,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
       body: SafeArea(
         top: false,
         child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue))
+            ? const Center(child: BrandSpinner(size: 30))
             : ListView(
                 controller: _scroll,
                 padding: const EdgeInsets.only(bottom: 28),
@@ -91,22 +94,31 @@ class _ChannelScreenState extends State<ChannelScreen> {
                     Padding(
                       padding: const EdgeInsets.all(40),
                       child: Center(
-                          child: Text('No videos yet.',
-                              style: AppTextStyles.bodyMedium
-                                  .copyWith(color: palette.textMuted))),
+                        child: Text(
+                          'No videos yet.',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                      ),
                     ),
                   for (final v in _videos)
                     YoutubeVideoCard(
                       video: v,
-                      onTap: () => context.pushNamed('watch_video',
-                          pathParameters: {'id': v.videoId}, extra: v),
+                      onTap: () => context.pushNamed(
+                        'watch_video',
+                        pathParameters: {'id': v.videoId},
+                        extra: v,
+                      ),
                     ),
                   if (_loadingMore)
                     const Padding(
                       padding: EdgeInsets.all(18),
                       child: Center(
-                          child: CircularProgressIndicator(
-                              color: AppColors.primaryBlue)),
+                        child: CircularProgressIndicator(
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -127,7 +139,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
                   ? CachedImage(c.thumbnailUrl!, fit: BoxFit.cover)
                   : Container(
                       color: palette.cardMuted,
-                      child: Icon(Icons.tv_rounded, color: palette.textMuted)),
+                      child: Icon(Icons.tv_rounded, color: palette.textMuted),
+                    ),
             ),
           ),
           const SizedBox(width: 12),
@@ -138,11 +151,15 @@ class _ChannelScreenState extends State<ChannelScreen> {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(c.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleLarge.copyWith(
-                              fontWeight: FontWeight.w800, color: palette.text)),
+                      child: Text(
+                        c.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleLarge.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: palette.text,
+                        ),
+                      ),
                     ),
                     if (c.isLive) ...[
                       const SizedBox(width: 8),
@@ -151,9 +168,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
                   ],
                 ),
                 if (c.subscriberCount != null)
-                  Text(_subs(c.subscriberCount!),
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: palette.textMuted)),
+                  Text(
+                    _subs(c.subscriberCount!),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
               ],
             ),
           ),

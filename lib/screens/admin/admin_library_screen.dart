@@ -7,6 +7,7 @@ import '../../services/library_admin_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Super-admin "Manage Library" console. Curate the structured Hymnal and
 /// upload Music + EGW-book PDFs that surface in the in-app Library. Gated by
@@ -35,8 +36,10 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        title: Text('Manage Library',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 19)),
+        title: Text(
+          'Manage Library',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -47,8 +50,9 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
           indicatorWeight: 3,
           labelColor: AppColors.white,
           unselectedLabelColor: AppColors.white.withValues(alpha: 0.6),
-          labelStyle:
-              AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w700),
+          labelStyle: AppTextStyles.labelMedium.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
           tabs: const [
             Tab(text: 'Hymns'),
             Tab(text: 'Audio Bible'),
@@ -155,8 +159,7 @@ class _HymnsAdminTabState extends State<_HymnsAdminTab> {
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue));
+            return const Center(child: BrandSpinner(size: 30));
           }
           if (snap.hasError) {
             return _ErrorState(message: '${snap.error}', onRetry: _reload);
@@ -192,23 +195,31 @@ class _HymnsAdminTabState extends State<_HymnsAdminTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(h.displayTitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.titleSmall
-                                      .copyWith(fontWeight: FontWeight.w700)),
+                              Text(
+                                h.displayTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.titleSmall.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                               const SizedBox(height: 2),
-                              Text(h.lyrics.replaceAll('\n', ' '),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.bodySmall
-                                      .copyWith(color: palette.textMuted)),
+                              Text(
+                                h.lyrics.replaceAll('\n', ' '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: palette.textMuted,
+                                ),
+                              ),
                             ],
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: AppColors.red),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: AppColors.red,
+                          ),
                           onPressed: () => _delete(h),
                         ),
                       ],
@@ -234,7 +245,8 @@ class _HymnEditorScreen extends StatefulWidget {
 
 class _HymnEditorScreenState extends State<_HymnEditorScreen> {
   late final _number = TextEditingController(
-      text: widget.hymn?.number?.toString() ?? '');
+    text: widget.hymn?.number?.toString() ?? '',
+  );
   late final _title = TextEditingController(text: widget.hymn?.title ?? '');
   late final _lyrics = TextEditingController(text: widget.hymn?.lyrics ?? '');
   late String _collection = HymnCollection.fromKey(widget.hymn?.collection).key;
@@ -281,8 +293,10 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        title: Text(widget.hymn == null ? 'New hymn' : 'Edit hymn',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 18)),
+        title: Text(
+          widget.hymn == null ? 'New hymn' : 'Edit hymn',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -294,11 +308,14 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // Which hymnal this hymn belongs to.
-            Text('HYMNAL',
-                style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2)),
+            Text(
+              'HYMNAL',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -321,14 +338,16 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
                                 : palette.divider,
                           ),
                         ),
-                        child: Text('${c.label} (${c.subtitle})',
-                            style: AppTextStyles.labelMedium.copyWith(
-                              color: _collection == c.key
-                                  ? AppColors.white
-                                  : palette.text,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12.5,
-                            )),
+                        child: Text(
+                          '${c.label} (${c.subtitle})',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: _collection == c.key
+                                ? AppColors.white
+                                : palette.text,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -340,20 +359,24 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
             const SizedBox(height: 12),
             SizedBox(
               width: 130,
-              child: _field(context,
-                  controller: _number,
-                  label: 'Number',
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
+              child: _field(
+                context,
+                controller: _number,
+                label: 'Number',
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
             ),
             const SizedBox(height: 12),
             _field(context, controller: _title, label: 'Title'),
             const SizedBox(height: 12),
-            _field(context,
-                controller: _lyrics,
-                label: 'Lyrics',
-                minLines: 8,
-                maxLines: 30),
+            _field(
+              context,
+              controller: _lyrics,
+              label: 'Lyrics',
+              minLines: 8,
+              maxLines: 30,
+            ),
             const SizedBox(height: 20),
             SizedBox(
               height: 52,
@@ -361,7 +384,8 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 onPressed: _saving ? null : _save,
                 icon: _saving
@@ -369,11 +393,17 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: AppColors.white))
+                          strokeWidth: 2.2,
+                          color: AppColors.white,
+                        ),
+                      )
                     : const Icon(Icons.check),
-                label: Text(_saving ? 'Saving…' : 'Save hymn',
-                    style: AppTextStyles.buttonText
-                        .copyWith(color: AppColors.white)),
+                label: Text(
+                  _saving ? 'Saving…' : 'Save hymn',
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: AppColors.white,
+                  ),
+                ),
               ),
             ),
           ],
@@ -437,14 +467,18 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
           children: [
             const SizedBox(height: 8),
             ListTile(
-              leading:
-                  const Icon(Icons.upload_file, color: AppColors.primaryBlue),
+              leading: const Icon(
+                Icons.upload_file,
+                color: AppColors.primaryBlue,
+              ),
               title: const Text('Add one (with title)'),
               onTap: () => Navigator.pop(ctx, 'one'),
             ),
             ListTile(
-              leading: const Icon(Icons.library_add_outlined,
-                  color: AppColors.primaryBlue),
+              leading: const Icon(
+                Icons.library_add_outlined,
+                color: AppColors.primaryBlue,
+              ),
               title: const Text('Add several files at once'),
               subtitle: const Text('Titles are taken from the file names'),
               onTap: () => Navigator.pop(ctx, 'bulk'),
@@ -480,8 +514,9 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
   /// showing live progress. Best-effort per file — one failure doesn't abort
   /// the batch.
   Future<void> _bulkAdd() async {
-    final files =
-        await LibraryAdminService.pickFiles(extensions: widget.extensions);
+    final files = await LibraryAdminService.pickFiles(
+      extensions: widget.extensions,
+    );
     if (files.isEmpty || !mounted) return;
 
     final progress = ValueNotifier<int>(0);
@@ -496,14 +531,19 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
           builder: (_, done, _) => Row(
             children: [
               const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2.4, color: AppColors.primaryBlue)),
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
               const SizedBox(width: 16),
               Expanded(
-                child: Text('Uploading $done of ${files.length}…',
-                    style: AppTextStyles.bodyMedium),
+                child: Text(
+                  'Uploading $done of ${files.length}…',
+                  style: AppTextStyles.bodyMedium,
+                ),
               ),
             ],
           ),
@@ -533,10 +573,9 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
     _reload();
     final ok = files.length - failed;
     _toast(
-        context,
-        failed == 0
-            ? 'Uploaded $ok file(s).'
-            : 'Uploaded $ok, $failed failed.');
+      context,
+      failed == 0 ? 'Uploaded $ok file(s).' : 'Uploaded $ok, $failed failed.',
+    );
   }
 
   Future<void> _delete(LibraryItem item) async {
@@ -566,15 +605,17 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue));
+            return const Center(child: BrandSpinner(size: 30));
           }
           if (snap.hasError) {
             return _ErrorState(message: '${snap.error}', onRetry: _reload);
           }
           final items = snap.data ?? const [];
           if (items.isEmpty) {
-            return _EmptyState(icon: widget.leadingIcon, text: widget.emptyText);
+            return _EmptyState(
+              icon: widget.leadingIcon,
+              text: widget.emptyText,
+            );
           }
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -600,34 +641,41 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
                           gradient: AppColors.primaryGradient,
                           shape: BoxShape.circle,
                         ),
-                        child:
-                            Icon(widget.leadingIcon, color: AppColors.white),
+                        child: Icon(widget.leadingIcon, color: AppColors.white),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.titleSmall
-                                    .copyWith(fontWeight: FontWeight.w700)),
+                            Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleSmall.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                             if (item.author != null &&
                                 item.author!.isNotEmpty) ...[
                               const SizedBox(height: 2),
-                              Text(item.author!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.bodySmall
-                                      .copyWith(color: palette.textMuted)),
+                              Text(
+                                item.author!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: palette.textMuted,
+                                ),
+                              ),
                             ],
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: AppColors.red),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: AppColors.red,
+                        ),
                         onPressed: () => _delete(item),
                       ),
                     ],
@@ -675,8 +723,9 @@ class _UploadSheetState extends State<_UploadSheet> {
 
   Future<void> _pick() async {
     try {
-      final res =
-          await LibraryAdminService.pickFile(extensions: widget.extensions);
+      final res = await LibraryAdminService.pickFile(
+        extensions: widget.extensions,
+      );
       if (res == null || !mounted) return;
       setState(() {
         _path = res.path;
@@ -752,12 +801,16 @@ class _UploadSheetState extends State<_UploadSheet> {
                 side: const BorderSide(color: AppColors.primaryBlue),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               onPressed: _saving ? null : _pick,
               icon: const Icon(Icons.attach_file),
-              label: Text(_fileName ?? widget.pickLabel,
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              label: Text(
+                _fileName ?? widget.pickLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             const SizedBox(height: 14),
             _field(context, controller: _title, label: 'Title'),
@@ -770,7 +823,8 @@ class _UploadSheetState extends State<_UploadSheet> {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 onPressed: _saving ? null : _save,
                 icon: _saving
@@ -778,11 +832,17 @@ class _UploadSheetState extends State<_UploadSheet> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: AppColors.white))
+                          strokeWidth: 2.2,
+                          color: AppColors.white,
+                        ),
+                      )
                     : const Icon(Icons.cloud_upload_outlined),
-                label: Text(_saving ? 'Uploading…' : 'Upload',
-                    style: AppTextStyles.buttonText
-                        .copyWith(color: AppColors.white)),
+                label: Text(
+                  _saving ? 'Uploading…' : 'Upload',
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: AppColors.white,
+                  ),
+                ),
               ),
             ),
           ],
@@ -841,11 +901,14 @@ Future<bool?> _confirmDelete(BuildContext context, String what) {
     context: context,
     builder: (ctx) => AlertDialog(
       backgroundColor: palette.card,
-      title: Text('Delete?',
-          style:
-              AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700)),
-      content: Text('Remove “$what” from the Library? This can’t be undone.',
-          style: AppTextStyles.bodyMedium.copyWith(color: palette.text)),
+      title: Text(
+        'Delete?',
+        style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
+      ),
+      content: Text(
+        'Remove “$what” from the Library? This can’t be undone.',
+        style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
@@ -865,8 +928,10 @@ void _toast(BuildContext context, String message) {
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      content: Text(message,
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+      content: Text(
+        message,
+        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+      ),
     ),
   );
 }
@@ -887,10 +952,13 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 60, color: palette.textMuted),
             const SizedBox(height: 16),
-            Text(text,
-                textAlign: TextAlign.center,
-                style:
-                    AppTextStyles.bodyMedium.copyWith(color: palette.textMuted)),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.textMuted,
+              ),
+            ),
           ],
         ),
       ),
@@ -914,14 +982,16 @@ class _ErrorState extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, size: 48, color: AppColors.red),
             const SizedBox(height: 12),
-            Text(message,
-                textAlign: TextAlign.center,
-                style:
-                    AppTextStyles.bodySmall.copyWith(color: palette.textMuted)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+            ),
             const SizedBox(height: 16),
             FilledButton(
-              style:
-                  FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+              ),
               onPressed: onRetry,
               child: const Text('Retry'),
             ),

@@ -7,6 +7,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Lists everyone the current user has blocked. Tap "Unblock" to undo.
 class BlockedUsersScreen extends StatefulWidget {
@@ -113,9 +114,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) return ErrorBanner(message: _error!);
@@ -156,8 +155,10 @@ class _UserRow extends StatelessWidget {
   final VoidCallback onUnblock;
 
   String _initials(String name) {
-    final parts =
-        name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = name
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))

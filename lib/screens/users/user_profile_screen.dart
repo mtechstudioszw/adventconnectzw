@@ -18,6 +18,7 @@ import '../../widgets/home/report_sheet.dart';
 import '../../services/messaging_service.dart';
 import '../../widgets/cached_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Viewing another user's profile (not the logged-in user — that's the
 /// regular ProfileScreen). Surfaces:
@@ -138,8 +139,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(
           wasAccepted ? 'Unfriend?' : 'Cancel friend request?',
-          style:
-              AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
         ),
         content: Text(
           wasAccepted
@@ -152,9 +152,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Keep',
-              style: AppTextStyles.buttonText.copyWith(
-                color: ctx.palette.text,
-              ),
+              style: AppTextStyles.buttonText.copyWith(color: ctx.palette.text),
             ),
           ),
           FilledButton(
@@ -230,11 +228,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         source: 'direct',
       ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      context.pushNamed(
-        'chat',
-        pathParameters: {'id': convo.id},
-        extra: convo,
-      );
+      context.pushNamed('chat', pathParameters: {'id': convo.id}, extra: convo);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -273,9 +267,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: context.palette.scaffoldBg,
-        body: const Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        body: const Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null || _profile == null) {
@@ -390,18 +382,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: GestureDetector(
-                  onTap: (_profile!.profilePhotoUrl != null &&
+                  onTap:
+                      (_profile!.profilePhotoUrl != null &&
                           _profile!.profilePhotoUrl!.isNotEmpty)
                       ? () => FullImageViewer.show(
-                          context, _profile!.profilePhotoUrl)
+                          context,
+                          _profile!.profilePhotoUrl,
+                        )
                       : null,
                   child: ClipOval(
-                    child: _profile!.profilePhotoUrl != null &&
+                    child:
+                        _profile!.profilePhotoUrl != null &&
                             _profile!.profilePhotoUrl!.isNotEmpty
                         ? CachedImage(
                             _profile!.profilePhotoUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => _initialAvatar(),
+                            errorBuilder: (context, error, stackTrace) =>
+                                _initialAvatar(),
                           )
                         : _initialAvatar(),
                   ),
@@ -453,8 +450,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
               if (_profile!.showsVerifiedTick) ...[
                 const SizedBox(width: 6),
-                const Icon(Icons.verified,
-                    color: AppColors.goldAccent, size: 20),
+                const Icon(
+                  Icons.verified,
+                  color: AppColors.goldAccent,
+                  size: 20,
+                ),
               ],
               if (_profile!.isBusiness) ...[
                 const SizedBox(width: 6),
@@ -563,9 +563,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               if ((_profile!.city ?? '').isNotEmpty)
                 _InfoChip(
                   icon: Icons.location_on_outlined,
-                  label: [_profile!.city, _profile!.province]
-                      .where((s) => (s ?? '').isNotEmpty)
-                      .join(', '),
+                  label: [
+                    _profile!.city,
+                    _profile!.province,
+                  ].where((s) => (s ?? '').isNotEmpty).join(', '),
                 ),
               if (_profile!.joinedAt != null)
                 _InfoChip(
@@ -632,9 +633,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final newCount = (post.likeCount + (newLiked ? 1 : -1)).clamp(0, 1 << 30);
     setState(() {
       _posts = _posts
-          .map((p) => p.id == post.id
-              ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
-              : p)
+          .map(
+            (p) => p.id == post.id
+                ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+                : p,
+          )
           .toList();
     });
     try {
@@ -647,12 +650,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (!mounted) return;
       setState(() {
         _posts = _posts
-            .map((p) => p.id == post.id
-                ? p.copyWith(
-                    viewerLiked: post.viewerLiked,
-                    likeCount: post.likeCount,
-                  )
-                : p)
+            .map(
+              (p) => p.id == post.id
+                  ? p.copyWith(
+                      viewerLiked: post.viewerLiked,
+                      likeCount: post.likeCount,
+                    )
+                  : p,
+            )
             .toList();
       });
     }
@@ -667,8 +672,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         if (!mounted) return;
         setState(() {
           _posts = _posts
-              .map((p) =>
-                  p.id == post.id ? p.copyWith(commentCount: newCount) : p)
+              .map(
+                (p) => p.id == post.id ? p.copyWith(commentCount: newCount) : p,
+              )
               .toList();
         });
       },
@@ -687,8 +693,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
         child: Column(
           children: [
-            const Icon(Icons.lock_outline,
-                color: AppColors.primaryBlue, size: 32),
+            const Icon(
+              Icons.lock_outline,
+              color: AppColors.primaryBlue,
+              size: 32,
+            ),
             const SizedBox(height: 10),
             Text(
               'This profile is private',

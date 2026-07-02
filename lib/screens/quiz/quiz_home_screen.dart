@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'quiz_play_screen.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Bible Quiz home — Daily Challenge (with streak) + Practice by category.
 class QuizHomeScreen extends StatefulWidget {
@@ -43,10 +44,12 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
       );
       return;
     }
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) =>
-          QuizPlayScreen(questions: qs, title: title, isDaily: isDaily),
-    ));
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            QuizPlayScreen(questions: qs, title: title, isDaily: isDaily),
+      ),
+    );
     if (mounted) setState(() {}); // refresh streak/rating/resume after a round
   }
 
@@ -54,7 +57,9 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
   Future<void> _resume(Map<String, dynamic> s) async {
     if (_busy) return;
     setState(() => _busy = true);
-    final ids = (s['ids'] as List? ?? const []).map((e) => e.toString()).toList();
+    final ids = (s['ids'] as List? ?? const [])
+        .map((e) => e.toString())
+        .toList();
     final qs = await QuizService.questionsByIds(ids);
     if (!mounted) return;
     setState(() => _busy = false);
@@ -64,14 +69,16 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
       if (mounted) setState(() {});
       return;
     }
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => QuizPlayScreen(
-        questions: qs,
-        title: s['title']?.toString() ?? 'Quiz',
-        startIndex: (s['index'] as num?)?.toInt() ?? 0,
-        startScore: (s['score'] as num?)?.toInt() ?? 0,
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => QuizPlayScreen(
+          questions: qs,
+          title: s['title']?.toString() ?? 'Quiz',
+          startIndex: (s['index'] as num?)?.toInt() ?? 0,
+          startScore: (s['score'] as num?)?.toInt() ?? 0,
+        ),
       ),
-    ));
+    );
     if (mounted) setState(() {});
   }
 
@@ -82,8 +89,10 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        title: Text('Bible Quiz',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 19)),
+        title: Text(
+          'Bible Quiz',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -122,11 +131,14 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
               stars: QuizService.ratingStars(),
             ),
             const SizedBox(height: 20),
-            Text('PRACTICE',
-                style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.4)),
+            Text(
+              'PRACTICE',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.4,
+              ),
+            ),
             const SizedBox(height: 10),
             _PracticeTile(
               icon: Icons.shuffle_rounded,
@@ -135,11 +147,14 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
               onTap: () => _play(title: 'Practice', isDaily: false),
             ),
             const SizedBox(height: 16),
-            Text('BY TOPIC',
-                style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.4)),
+            Text(
+              'BY TOPIC',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.4,
+              ),
+            ),
             const SizedBox(height: 10),
             FutureBuilder<List<String>>(
               future: _categories,
@@ -149,14 +164,19 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Center(
-                        child: CircularProgressIndicator(
-                            color: AppColors.primaryBlue)),
+                      child: CircularProgressIndicator(
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
                   );
                 }
                 if (cats.isEmpty) {
-                  return Text('No topics yet.',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: palette.textMuted));
+                  return Text(
+                    'No topics yet.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  );
                 }
                 return Wrap(
                   spacing: 8,
@@ -167,8 +187,9 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
                         label: Text(c),
                         backgroundColor: palette.card,
                         side: BorderSide(color: palette.divider),
-                        labelStyle: AppTextStyles.labelMedium
-                            .copyWith(color: palette.text),
+                        labelStyle: AppTextStyles.labelMedium.copyWith(
+                          color: palette.text,
+                        ),
                         onPressed: () =>
                             _play(title: c, isDaily: false, category: c),
                       ),
@@ -178,9 +199,7 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
             ),
             if (_busy) ...[
               const SizedBox(height: 20),
-              const Center(
-                  child:
-                      CircularProgressIndicator(color: AppColors.primaryBlue)),
+              const Center(child: BrandSpinner(size: 30)),
             ],
           ],
         ),
@@ -190,10 +209,11 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
 }
 
 class _DailyCard extends StatelessWidget {
-  const _DailyCard(
-      {required this.streak,
-      required this.playedToday,
-      required this.onPlay});
+  const _DailyCard({
+    required this.streak,
+    required this.playedToday,
+    required this.onPlay,
+  });
   final int streak;
   final bool playedToday;
   final VoidCallback onPlay;
@@ -220,20 +240,30 @@ class _DailyCard extends StatelessWidget {
             children: [
               const Icon(Icons.quiz_rounded, color: AppColors.white),
               const SizedBox(width: 8),
-              Text('Daily Challenge',
-                  style: AppTextStyles.titleLarge.copyWith(
-                      color: AppColors.white, fontWeight: FontWeight.w800)),
+              Text(
+                'Daily Challenge',
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const Spacer(),
               if (streak > 0)
                 Row(
                   children: [
-                    const Icon(Icons.local_fire_department,
-                        color: AppColors.goldAccent, size: 18),
+                    const Icon(
+                      Icons.local_fire_department,
+                      color: AppColors.goldAccent,
+                      size: 18,
+                    ),
                     const SizedBox(width: 4),
-                    Text('$streak',
-                        style: AppTextStyles.titleMedium.copyWith(
-                            color: AppColors.white,
-                            fontWeight: FontWeight.w800)),
+                    Text(
+                      '$streak',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ],
                 ),
             ],
@@ -243,8 +273,9 @@ class _DailyCard extends StatelessWidget {
             playedToday
                 ? 'You\'ve done today\'s quiz — come back tomorrow to keep your streak.'
                 : '5 questions on the Bible & Adventist beliefs. Keep your streak alive!',
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.white.withValues(alpha: 0.9)),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.white.withValues(alpha: 0.9),
+            ),
           ),
           const SizedBox(height: 14),
           SizedBox(
@@ -255,13 +286,17 @@ class _DailyCard extends StatelessWidget {
                 backgroundColor: AppColors.white,
                 foregroundColor: AppColors.primaryBlue,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               onPressed: onPlay,
-              child: Text(playedToday ? 'Play again' : 'Start',
-                  style: AppTextStyles.buttonText.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w800)),
+              child: Text(
+                playedToday ? 'Play again' : 'Start',
+                style: AppTextStyles.buttonText.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
         ],
@@ -303,34 +338,48 @@ class _ResumeCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Resume “$title”',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.titleSmall
-                        .copyWith(fontWeight: FontWeight.w800)),
+                Text(
+                  'Resume “$title”',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('You stopped at question ${index + 1} of $total',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: palette.textMuted)),
+                Text(
+                  'You stopped at question ${index + 1} of $total',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: palette.textMuted,
+                  ),
+                ),
               ],
             ),
           ),
           TextButton(
             onPressed: onDiscard,
-            child: Text('Discard',
-                style: AppTextStyles.labelMedium
-                    .copyWith(color: palette.textMuted)),
+            child: Text(
+              'Discard',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: palette.textMuted,
+              ),
+            ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: onResume,
-            child: Text('Resume',
-                style: AppTextStyles.labelMedium
-                    .copyWith(color: AppColors.white, fontWeight: FontWeight.w800)),
+            child: Text(
+              'Resume',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ],
       ),
@@ -371,8 +420,10 @@ class _RatingCard extends StatelessWidget {
               color: AppColors.primaryBlue.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.workspace_premium_outlined,
-                color: AppColors.primaryBlue),
+            child: const Icon(
+              Icons.workspace_premium_outlined,
+              color: AppColors.primaryBlue,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -381,33 +432,47 @@ class _RatingCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text('Your rating: ',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: palette.textMuted)),
-                    Text(label,
-                        style: AppTextStyles.titleSmall.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primaryBlue)),
+                    Text(
+                      'Your rating: ',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                    Text(
+                      label,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryBlue,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 if (answered == 0)
-                  Text('Play a round to start your rating.',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: palette.textMuted))
+                  Text(
+                    'Play a round to start your rating.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  )
                 else
                   Row(
                     children: [
                       for (var i = 0; i < 5; i++)
                         Icon(
-                          i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                          i < stars
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
                           size: 18,
                           color: AppColors.goldAccent,
                         ),
                       const SizedBox(width: 8),
-                      Text('$accuracy% · $answered answered',
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: palette.textMuted)),
+                      Text(
+                        '$accuracy% · $answered answered',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
                     ],
                   ),
               ],
@@ -420,11 +485,12 @@ class _RatingCard extends StatelessWidget {
 }
 
 class _PracticeTile extends StatelessWidget {
-  const _PracticeTile(
-      {required this.icon,
-      required this.title,
-      required this.subtitle,
-      required this.onTap});
+  const _PracticeTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
   final IconData icon;
   final String title;
   final String subtitle;
@@ -461,13 +527,19 @@ class _PracticeTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: AppTextStyles.titleSmall
-                            .copyWith(fontWeight: FontWeight.w700)),
+                    Text(
+                      title,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(subtitle,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: palette.textMuted)),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
                   ],
                 ),
               ),

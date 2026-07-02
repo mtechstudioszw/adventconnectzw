@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Post-approval edit screen. Pre-filled from the existing sellers row.
 /// Category is shown but not editable — switching category requires
@@ -67,9 +68,10 @@ class _EditStoreScreenState extends State<EditStoreScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _bootstrap();
   }
 
@@ -119,7 +121,8 @@ class _EditStoreScreenState extends State<EditStoreScreen>
       _paymentMethodsController.text = seller.paymentMethods ?? '';
       _deliveryAreaController.text = seller.deliveryArea ?? '';
       _deliveryFeeController.text = seller.deliveryFee ?? '';
-      _sabbathNoticeController.text = seller.sabbathNoticeText ??
+      _sabbathNoticeController.text =
+          seller.sabbathNoticeText ??
           '🕊️ This seller observes the Sabbath. Response times may be slower Friday sundown to Saturday sundown.';
       _selectedProvince = seller.province;
       _photoUrl = seller.profilePhotoUrl;
@@ -182,8 +185,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: ctx.palette.card,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Delete this store?', style: AppTextStyles.headlineSmall),
         content: Text(
           'Your store and every product you listed will be removed from the marketplace. This cannot be undone.',
@@ -195,9 +197,12 @@ class _EditStoreScreenState extends State<EditStoreScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: AppTextStyles.labelMedium
-                    .copyWith(color: ctx.palette.text)),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: ctx.palette.text,
+              ),
+            ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.red),
@@ -263,8 +268,9 @@ class _EditStoreScreenState extends State<EditStoreScreen>
         deliveryArea: _offersDelivery ? _deliveryAreaController.text : '',
         deliveryFee: _offersDelivery ? _deliveryFeeController.text : '',
         observesSabbath: _observesSabbath,
-        sabbathNoticeText:
-            _observesSabbath ? _sabbathNoticeController.text : '',
+        sabbathNoticeText: _observesSabbath
+            ? _sabbathNoticeController.text
+            : '',
         isActive: _isActive,
       );
 
@@ -295,8 +301,8 @@ class _EditStoreScreenState extends State<EditStoreScreen>
           content: Text(
             wasRejected
                 ? (isFinalReview
-                    ? 'Resubmitted — this is your final review.'
-                    : 'Resubmitted. An admin will review your details again.')
+                      ? 'Resubmitted — this is your final review.'
+                      : 'Resubmitted. An admin will review your details again.')
                 : 'Store updated.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
@@ -369,9 +375,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 80),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_seller == null) {
@@ -504,9 +508,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
                     keyboardType: TextInputType.phone,
                     validator: _validatePhone,
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'[0-9+\s\-]'),
-                      ),
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s\-]')),
                     ],
                   ),
                 ),
@@ -519,9 +521,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
                     icon: Icons.chat_bubble_outline,
                     keyboardType: TextInputType.phone,
                     inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'[0-9+\s\-]'),
-                      ),
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9+\s\-]')),
                     ],
                   ),
                 ),
@@ -721,12 +721,10 @@ class _EditStoreScreenState extends State<EditStoreScreen>
         padding: const EdgeInsets.only(left: 14, right: 10),
         child: Icon(icon, color: AppColors.primaryBlue, size: 20),
       ),
-      prefixIconConstraints:
-          const BoxConstraints(minWidth: 44, minHeight: 44),
+      prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 44),
       filled: true,
       fillColor: context.palette.inputFill,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(color: context.palette.divider),
@@ -737,8 +735,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide:
-            const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -762,11 +759,8 @@ class _CategoryReadonly extends StatelessWidget {
     final icon = SellerCategory.all
         .firstWhere(
           (c) => c.id == category,
-          orElse: () => const SellerCategory(
-            id: 'other',
-            label: 'Other',
-            icon: '✨',
-          ),
+          orElse: () =>
+              const SellerCategory(id: 'other', label: 'Other', icon: '✨'),
         )
         .icon;
     return Container(
@@ -819,11 +813,7 @@ class _CategoryReadonly extends StatelessWidget {
               ],
             ),
           ),
-          Icon(
-            Icons.lock_outline,
-            color: context.palette.textMuted,
-            size: 18,
-          ),
+          Icon(Icons.lock_outline, color: context.palette.textMuted, size: 18),
         ],
       ),
     );
@@ -928,11 +918,7 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.child,
-    this.helper,
-  });
+  const _LabeledField({required this.label, required this.child, this.helper});
 
   final String label;
   final Widget child;
@@ -1006,12 +992,16 @@ class _Input extends StatelessWidget {
           padding: const EdgeInsets.only(left: 14, right: 10),
           child: Icon(icon, color: AppColors.primaryBlue, size: 20),
         ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 44, minHeight: 44),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 44,
+          minHeight: 44,
+        ),
         filled: true,
         fillColor: context.palette.inputFill,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: context.palette.divider),
@@ -1022,8 +1012,10 @@ class _Input extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryBlue,
+            width: 1.5,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -1049,10 +1041,7 @@ class _ProvincePicker extends StatelessWidget {
     return DropdownButtonFormField<String?>(
       initialValue: selected,
       isExpanded: true,
-      icon: Icon(
-        Icons.expand_more,
-        color: context.palette.textMuted,
-      ),
+      icon: Icon(Icons.expand_more, color: context.palette.textMuted),
       style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
       decoration: InputDecoration(
         prefixIcon: const Padding(
@@ -1063,12 +1052,16 @@ class _ProvincePicker extends StatelessWidget {
             size: 20,
           ),
         ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 44, minHeight: 44),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 44,
+          minHeight: 44,
+        ),
         filled: true,
         fillColor: context.palette.inputFill,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: context.palette.divider),
@@ -1079,8 +1072,10 @@ class _ProvincePicker extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryBlue,
+            width: 1.5,
+          ),
         ),
       ),
       hint: Text(
@@ -1139,11 +1134,7 @@ class _PhotoTile extends StatelessWidget {
           ),
           child: hasPhoto
               ? null
-              : const Icon(
-                  Icons.storefront,
-                  color: AppColors.white,
-                  size: 32,
-                ),
+              : const Icon(Icons.storefront, color: AppColors.white, size: 32),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -1174,8 +1165,7 @@ class _PhotoTile extends StatelessWidget {
             onTap: uploading ? null : onTap,
             borderRadius: BorderRadius.circular(12),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
@@ -1235,12 +1225,12 @@ class _CoverPhotoTile extends StatelessWidget {
                 CachedNetworkImage(
                   imageUrl: coverUrl!,
                   fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: context.palette.cardMuted,
-                  ),
+                  placeholder: (context, url) =>
+                      Container(color: context.palette.cardMuted),
                   errorWidget: (context, url, error) => const DecoratedBox(
-                    decoration:
-                        BoxDecoration(gradient: AppColors.appBarGradient),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.appBarGradient,
+                    ),
                   ),
                 )
               else
@@ -1265,8 +1255,7 @@ class _CoverPhotoTile extends StatelessWidget {
               ),
               if (uploading)
                 const Center(
-                  child:
-                      CircularProgressIndicator(color: AppColors.white),
+                  child: CircularProgressIndicator(color: AppColors.white),
                 )
               else
                 Positioned(
@@ -1331,9 +1320,7 @@ class _DeleteStoreButton extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.red.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppColors.red.withValues(alpha: 0.35),
-              ),
+              border: Border.all(color: AppColors.red.withValues(alpha: 0.35)),
             ),
             child: Center(
               child: busy

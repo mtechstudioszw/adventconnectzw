@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Church-admin "Members" — every member following this church, by name
 /// (patch_139). Searchable. Tap a member to open their profile.
@@ -54,8 +55,10 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        title: Text('Members',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 19)),
+        title: Text(
+          'Members',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -67,9 +70,7 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child:
-                      CircularProgressIndicator(color: AppColors.primaryBlue));
+              return const Center(child: BrandSpinner(size: 30));
             }
             if (_all.isEmpty) {
               return Center(
@@ -78,13 +79,19 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.groups_outlined,
-                          size: 60, color: palette.textMuted),
+                      Icon(
+                        Icons.groups_outlined,
+                        size: 60,
+                        color: palette.textMuted,
+                      ),
                       const SizedBox(height: 16),
-                      Text('No members are following this church yet.',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodyMedium
-                              .copyWith(color: palette.textMuted)),
+                      Text(
+                        'No members are following this church yet.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -98,13 +105,13 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
                   child: TextField(
                     controller: _searchCtrl,
                     onChanged: (v) => setState(() => _query = v),
-                    style:
-                        AppTextStyles.bodyMedium.copyWith(color: palette.text),
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: palette.text,
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Search members…',
                       hintStyle: TextStyle(color: palette.textMuted),
-                      prefixIcon:
-                          Icon(Icons.search, color: palette.textMuted),
+                      prefixIcon: Icon(Icons.search, color: palette.textMuted),
                       filled: true,
                       fillColor: palette.inputFill,
                       border: OutlineInputBorder(
@@ -122,9 +129,12 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('${_all.length} member(s)',
-                        style: AppTextStyles.labelMedium
-                            .copyWith(color: palette.textMuted)),
+                    child: Text(
+                      '${_all.length} member(s)',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
                   ),
                 ),
                 Expanded(
@@ -139,8 +149,10 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
                         borderRadius: BorderRadius.circular(14),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(14),
-                          onTap: () => context.pushNamed('user_profile',
-                              pathParameters: {'userId': m.userId}),
+                          onTap: () => context.pushNamed(
+                            'user_profile',
+                            pathParameters: {'userId': m.userId},
+                          ),
                           child: Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
@@ -150,18 +162,24 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
                             child: Row(
                               children: [
                                 _Avatar(
-                                    name: m.fullName,
-                                    photoUrl: m.profilePhotoUrl),
+                                  name: m.fullName,
+                                  photoUrl: m.profilePhotoUrl,
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  child: Text(m.fullName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTextStyles.titleSmall.copyWith(
-                                          fontWeight: FontWeight.w600)),
+                                  child: Text(
+                                    m.fullName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.titleSmall.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
-                                Icon(Icons.chevron_right,
-                                    color: palette.textMuted),
+                                Icon(
+                                  Icons.chevron_right,
+                                  color: palette.textMuted,
+                                ),
                               ],
                             ),
                           ),
@@ -199,9 +217,13 @@ class _Avatar extends StatelessWidget {
       ),
       child: hasPhoto
           ? CachedImage(photoUrl!, fit: BoxFit.cover)
-          : Text(initial,
+          : Text(
+              initial,
               style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.white, fontWeight: FontWeight.w700)),
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
     );
   }
 }

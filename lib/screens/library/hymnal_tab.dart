@@ -10,6 +10,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Library → Hymnal tab. Structured hymns searchable by number / title /
 /// lyrics (modern hymnal style), with a favorites filter and an in-app
@@ -95,8 +96,7 @@ class _HymnalTabState extends State<HymnalTab>
     super.build(context);
     final palette = context.palette;
     if (_loading) {
-      return const Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue));
+      return const Center(child: BrandSpinner(size: 30));
     }
     if (_all.isEmpty) {
       return BrandedRefreshIndicator(
@@ -105,11 +105,12 @@ class _HymnalTabState extends State<HymnalTab>
         child: _empty(context),
       );
     }
-    final base = (_favOnly
-            ? _shown.where((h) => HymnPrefs.favorites().contains(h.id))
-            : _shown)
-        .where((h) => h.collection == _collection)
-        .toList();
+    final base =
+        (_favOnly
+                ? _shown.where((h) => HymnPrefs.favorites().contains(h.id))
+                : _shown)
+            .where((h) => h.collection == _collection)
+            .toList();
     return Column(
       children: [
         // Hymnal switcher: Kristu MuNzwiyo (Shona) ↔ SDA Hymnal (English).
@@ -139,21 +140,25 @@ class _HymnalTabState extends State<HymnalTab>
                         ),
                         child: Column(
                           children: [
-                            Text(c.label,
-                                style: AppTextStyles.labelMedium.copyWith(
-                                  color: _collection == c.key
-                                      ? AppColors.white
-                                      : palette.text,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                )),
-                            Text(c.subtitle,
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: _collection == c.key
-                                      ? AppColors.white.withValues(alpha: 0.85)
-                                      : palette.textMuted,
-                                  fontSize: 10.5,
-                                )),
+                            Text(
+                              c.label,
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: _collection == c.key
+                                    ? AppColors.white
+                                    : palette.text,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              c.subtitle,
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: _collection == c.key
+                                    ? AppColors.white.withValues(alpha: 0.85)
+                                    : palette.textMuted,
+                                fontSize: 10.5,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -201,9 +206,12 @@ class _HymnalTabState extends State<HymnalTab>
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              Text('${base.length} hymn(s)',
-                  style: AppTextStyles.labelMedium
-                      .copyWith(color: palette.textMuted)),
+              Text(
+                '${base.length} hymn(s)',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
               const Spacer(),
               IconButton(
                 tooltip: 'Refresh hymns',
@@ -223,7 +231,8 @@ class _HymnalTabState extends State<HymnalTab>
                 checkmarkColor: AppColors.primaryBlue,
                 backgroundColor: palette.card,
                 labelStyle: AppTextStyles.labelMedium.copyWith(
-                    color: _favOnly ? AppColors.primaryBlue : palette.text),
+                  color: _favOnly ? AppColors.primaryBlue : palette.text,
+                ),
                 side: BorderSide(color: palette.divider),
               ),
             ],
@@ -240,14 +249,16 @@ class _HymnalTabState extends State<HymnalTab>
                       const SizedBox(height: 80),
                       Center(
                         child: Text(
-                            _favOnly
-                                ? 'No favorites yet.'
-                                : _searchCtrl.text.trim().isEmpty
-                                    ? '${HymnCollection.fromKey(_collection).label} hymns will appear here once added.'
-                                    : 'No hymns match.',
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: palette.textMuted)),
+                          _favOnly
+                              ? 'No favorites yet.'
+                              : _searchCtrl.text.trim().isEmpty
+                              ? '${HymnCollection.fromKey(_collection).label} hymns will appear here once added.'
+                              : 'No hymns match.',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
                       ),
                     ],
                   )
@@ -273,10 +284,12 @@ class _HymnalTabState extends State<HymnalTab>
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) =>
-              _HymnReaderScreen(hymns: hymns, initialIndex: index),
-        )),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                _HymnReaderScreen(hymns: hymns, initialIndex: index),
+          ),
+        ),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -294,17 +307,24 @@ class _HymnalTabState extends State<HymnalTab>
                     gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text('${h.number}',
-                      style: AppTextStyles.labelMedium.copyWith(
-                          color: AppColors.white, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    '${h.number}',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               if (h.number != null) const SizedBox(width: 12),
               Expanded(
-                child: Text(h.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.titleSmall
-                        .copyWith(fontWeight: FontWeight.w600)),
+                child: Text(
+                  h.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               if (fav)
                 const Icon(Icons.favorite, color: AppColors.red, size: 18),
@@ -324,10 +344,11 @@ class _HymnalTabState extends State<HymnalTab>
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Text('Hymns will appear here once they\'re added.',
-              textAlign: TextAlign.center,
-              style:
-                  AppTextStyles.bodyMedium.copyWith(color: palette.textMuted)),
+          child: Text(
+            'Hymns will appear here once they\'re added.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),
+          ),
         ),
       ],
     );
@@ -394,8 +415,10 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        title: Text(h.number != null ? 'Hymn ${h.number}' : 'Hymn',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 18)),
+        title: Text(
+          h.number != null ? 'Hymn ${h.number}' : 'Hymn',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -426,7 +449,8 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
             tooltip: 'Share',
             icon: const Icon(Icons.share_outlined),
             onPressed: () => Share.share(
-                '${h.displayTitle}\n\n${h.lyrics}\n\nShared from Advent Connect ZW'),
+              '${h.displayTitle}\n\n${h.lyrics}\n\nShared from Advent Connect ZW',
+            ),
           ),
         ],
       ),
@@ -453,9 +477,12 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
                   icon: const Icon(Icons.chevron_left),
                 ),
               ),
-              Text('${_index + 1} of ${widget.hymns.length}',
-                  style: AppTextStyles.labelMedium
-                      .copyWith(color: palette.textMuted)),
+              Text(
+                '${_index + 1} of ${widget.hymns.length}',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
               Expanded(
                 child: IconButton(
                   tooltip: 'Next hymn',
@@ -480,16 +507,22 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(h.title,
-              style: AppTextStyles.headlineSmall.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22 * _scale,
-                  color: palette.text)),
+          Text(
+            h.title,
+            style: AppTextStyles.headlineSmall.copyWith(
+              fontWeight: FontWeight.w800,
+              fontSize: 22 * _scale,
+              color: palette.text,
+            ),
+          ),
           if (h.category != null && h.category!.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(h.category!,
-                style: AppTextStyles.labelMedium
-                    .copyWith(color: AppColors.primaryBlue)),
+            Text(
+              h.category!,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primaryBlue,
+              ),
+            ),
           ],
           const SizedBox(height: 18),
           SelectableText(

@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Settings → Permissions. Shows the current grant status for each
 /// runtime permission the app uses, lets the user grant any that
@@ -115,9 +116,7 @@ class _PermissionsScreenState extends State<PermissionsScreen>
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     return Container(
@@ -260,8 +259,9 @@ class _PermissionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (String chipText, Color chipColor, String actionLabel) =
-        _statusFor(status);
+    final (String chipText, Color chipColor, String actionLabel) = _statusFor(
+      status,
+    );
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -371,10 +371,7 @@ class _Divider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: Divider(
-        height: 1,
-        color: AppColors.divider,
-      ),
+      child: Divider(height: 1, color: AppColors.divider),
     );
   }
 }

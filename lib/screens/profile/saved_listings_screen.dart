@@ -8,6 +8,7 @@ import '../../theme/app_palette.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Grid of products the user saved via the heart icon on a listing.
 class SavedListingsScreen extends StatefulWidget {
@@ -91,9 +92,7 @@ class _SavedListingsScreenState extends State<SavedListingsScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) {
@@ -103,8 +102,7 @@ class _SavedListingsScreenState extends State<SavedListingsScreen> {
       return EmptyStateCard(
         icon: Icons.favorite_outline,
         title: 'No saved listings',
-        message:
-            'Tap the heart icon on any product to save it here for later.',
+        message: 'Tap the heart icon on any product to save it here for later.',
         action: PrimaryGradientButton(
           label: 'Browse marketplace',
           icon: Icons.shopping_bag_outlined,

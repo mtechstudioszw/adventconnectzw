@@ -10,6 +10,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Church-admin "Manage church info" editor. An approved admin can update
 /// the public church profile — logo, cover, about, address/location and
@@ -144,9 +145,12 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
       // a failed geocode just saves without coordinates.
       if ((lat == null || lng == null) && _address.text.trim().isNotEmpty) {
         final geo = await LocationService.geocodeAddress(
-          [_address.text, _suburb.text, _city.text, 'Zimbabwe']
-              .where((s) => s.trim().isNotEmpty)
-              .join(', '),
+          [
+            _address.text,
+            _suburb.text,
+            _city.text,
+            'Zimbabwe',
+          ].where((s) => s.trim().isNotEmpty).join(', '),
         );
         if (geo != null) {
           lat = geo.lat;
@@ -183,11 +187,15 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
 
   void _toast(String msg, Color bg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      backgroundColor: bg,
-      content: Text(msg,
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: bg,
+        content: Text(
+          msg,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
   }
 
   @override
@@ -203,12 +211,7 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
                   subtitle: 'Loading…',
                   fallbackRoute: 'churches',
                 ),
-                const Expanded(
-                  child: Center(
-                    child:
-                        CircularProgressIndicator(color: AppColors.primaryBlue),
-                  ),
-                ),
+                const Expanded(child: Center(child: BrandSpinner(size: 30))),
               ],
             )
           : SingleChildScrollView(
@@ -260,8 +263,10 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
             maxLines: 6,
             maxLength: 600,
             textCapitalization: TextCapitalization.sentences,
-            decoration: _dec(context,
-                hint: 'Tell members about your church, services, vision…'),
+            decoration: _dec(
+              context,
+              hint: 'Tell members about your church, services, vision…',
+            ),
           ),
           const SizedBox(height: 12),
           _Label('Street address'),
@@ -322,7 +327,9 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
                 child: TextFormField(
                   controller: _latitude,
                   keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true, signed: true),
+                    decimal: true,
+                    signed: true,
+                  ),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
                   ],
@@ -335,7 +342,9 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
                 child: TextFormField(
                   controller: _longitude,
                   keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true, signed: true),
+                    decimal: true,
+                    signed: true,
+                  ),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
                   ],
@@ -376,8 +385,10 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
             keyboardType: TextInputType.number,
             maxLength: 4,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration:
-                _dec(context, hint: 'e.g. 1985').copyWith(counterText: ''),
+            decoration: _dec(
+              context,
+              hint: 'e.g. 1985',
+            ).copyWith(counterText: ''),
             validator: (v) {
               final t = v?.trim() ?? '';
               if (t.isEmpty) return null;
@@ -413,16 +424,15 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
   InputDecoration _dec(BuildContext context, {required String hint}) {
     final p = context.palette;
     OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: c, width: w),
-        );
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: c, width: w),
+    );
     return InputDecoration(
       hintText: hint,
       hintStyle: AppTextStyles.bodyMedium.copyWith(color: p.textMuted),
       filled: true,
       fillColor: p.cardMuted,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: border(p.divider),
       enabledBorder: border(p.divider),
       focusedBorder: border(AppColors.primaryBlue, 1.5),
@@ -466,12 +476,18 @@ class _CoverPicker extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_photo_alternate_outlined,
-                            color: p.textMuted, size: 30),
+                        Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: p.textMuted,
+                          size: 30,
+                        ),
                         const SizedBox(height: 6),
-                        Text('Add a cover photo',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: p.textMuted)),
+                        Text(
+                          'Add a cover photo',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: p.textMuted,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -479,8 +495,7 @@ class _CoverPicker extends StatelessWidget {
                   Container(
                     color: const Color.fromRGBO(0, 0, 0, 0.35),
                     child: const Center(
-                      child:
-                          CircularProgressIndicator(color: AppColors.white),
+                      child: CircularProgressIndicator(color: AppColors.white),
                     ),
                   ),
                 if (!busy && url != null && url!.isNotEmpty)
@@ -522,10 +537,13 @@ class _LogoPicker extends StatelessWidget {
           child: busy
               ? const Center(
                   child: CircularProgressIndicator(
-                      strokeWidth: 2.4, color: AppColors.primaryBlue))
+                    strokeWidth: 2.4,
+                    color: AppColors.primaryBlue,
+                  ),
+                )
               : (url != null && url!.isNotEmpty)
-                  ? CachedImage(url!, fit: BoxFit.cover)
-                  : Icon(Icons.church, color: p.textMuted, size: 32),
+              ? CachedImage(url!, fit: BoxFit.cover)
+              : Icon(Icons.church, color: p.textMuted, size: 32),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -541,13 +559,15 @@ class _LogoPicker extends StatelessWidget {
                 onPressed: onTap,
                 icon: const Icon(Icons.upload_outlined, size: 18),
                 label: Text(
-                    url != null && url!.isNotEmpty ? 'Change logo' : 'Upload',
-                    style: AppTextStyles.labelMedium),
+                  url != null && url!.isNotEmpty ? 'Change logo' : 'Upload',
+                  style: AppTextStyles.labelMedium,
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primaryBlue,
                   side: const BorderSide(color: AppColors.primaryBlue),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ],
@@ -575,9 +595,13 @@ class _EditChip extends StatelessWidget {
         children: [
           const Icon(Icons.edit, size: 14, color: AppColors.white),
           const SizedBox(width: 5),
-          Text(label,
-              style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.white, fontWeight: FontWeight.w700)),
+          Text(
+            label,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

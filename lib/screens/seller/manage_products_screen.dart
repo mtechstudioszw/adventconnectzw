@@ -8,6 +8,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Owner view of a seller's full product list. Lets them toggle each
 /// listing between live/hidden, jump into product details, and delete
@@ -41,9 +42,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _load();
   }
 
@@ -118,13 +120,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: ctx.palette.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
-        title: Text(
-          'Delete this product?',
-          style: AppTextStyles.headlineSmall,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Delete this product?', style: AppTextStyles.headlineSmall),
         content: Text(
           '"${product.title}" will be removed from the marketplace permanently.',
           style: AppTextStyles.bodyMedium.copyWith(
@@ -233,9 +230,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
     if (_loading && _products.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 80),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null && _products.isEmpty) {
@@ -257,24 +252,23 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
         if (list.isEmpty)
           _buildEmptyFiltered()
         else
-          ...list.map((p) => _ProductRow(
-                product: p,
-                busy: _busyIds.contains(p.id),
-                onToggle: () => _toggle(p),
-                onDelete: () => _confirmDelete(p),
-                onEdit: () async {
-                  await context.pushNamed(
-                    'edit_product',
-                    extra: p,
-                  );
-                  if (mounted) _load();
-                },
-                onOpen: () => context.pushNamed(
-                  'product_details',
-                  pathParameters: {'id': p.id},
-                  extra: p,
-                ),
-              )),
+          ...list.map(
+            (p) => _ProductRow(
+              product: p,
+              busy: _busyIds.contains(p.id),
+              onToggle: () => _toggle(p),
+              onDelete: () => _confirmDelete(p),
+              onEdit: () async {
+                await context.pushNamed('edit_product', extra: p);
+                if (mounted) _load();
+              },
+              onOpen: () => context.pushNamed(
+                'product_details',
+                pathParameters: {'id': p.id},
+                extra: p,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -511,9 +505,7 @@ class _Chip extends StatelessWidget {
             color: active ? null : context.palette.card,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: active
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
+              color: active ? AppColors.primaryBlue : context.palette.divider,
             ),
           ),
           child: Row(
@@ -529,8 +521,7 @@ class _Chip extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: active
                       ? AppColors.white.withValues(alpha: 0.25)
@@ -616,10 +607,11 @@ class _ProductRow extends StatelessWidget {
                               ? CachedImage(
                                   firstImage,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) => Icon(
-                                    Icons.image_not_supported_outlined,
-                                    color: context.palette.textMuted,
-                                  ),
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Icon(
+                                        Icons.image_not_supported_outlined,
+                                        color: context.palette.textMuted,
+                                      ),
                                 )
                               : Icon(
                                   Icons.image_outlined,
@@ -706,13 +698,8 @@ class _RowMenu extends StatelessWidget {
     }
     return PopupMenuButton<String>(
       tooltip: 'Actions',
-      icon: Icon(
-        Icons.more_vert,
-        color: context.palette.textMuted,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
+      icon: Icon(Icons.more_vert, color: context.palette.textMuted),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (value) {
         switch (value) {
           case 'edit':
@@ -737,10 +724,7 @@ class _RowMenu extends StatelessWidget {
                 size: 18,
               ),
               const SizedBox(width: 10),
-              Text(
-                'Edit',
-                style: AppTextStyles.bodyMedium,
-              ),
+              Text('Edit', style: AppTextStyles.bodyMedium),
             ],
           ),
         ),
@@ -767,11 +751,7 @@ class _RowMenu extends StatelessWidget {
           value: 'delete',
           child: Row(
             children: [
-              const Icon(
-                Icons.delete_outline,
-                color: AppColors.red,
-                size: 18,
-              ),
+              const Icon(Icons.delete_outline, color: AppColors.red, size: 18),
               const SizedBox(width: 10),
               Text(
                 'Delete',

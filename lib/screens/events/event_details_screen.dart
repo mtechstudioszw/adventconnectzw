@@ -13,6 +13,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   const EventDetailsScreen({
@@ -54,9 +55,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(_updateTimeRemaining);
@@ -165,9 +167,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
 
   Widget _buildBody() {
     if (_loading && _event == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null && _event == null) {
       return Center(
@@ -176,8 +176,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 48, color: AppColors.red),
+              const Icon(Icons.error_outline, size: 48, color: AppColors.red),
               const SizedBox(height: 12),
               Text(_error!, style: AppTextStyles.bodyMedium),
               const SizedBox(height: 16),
@@ -192,9 +191,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 12),
+                    horizontal: 28,
+                    vertical: 12,
+                  ),
                 ),
                 child: const Text('Retry'),
               ),
@@ -400,11 +402,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   }
 
   Widget _verticalDivider() {
-    return Container(
-      width: 1,
-      height: 36,
-      color: context.palette.divider,
-    );
+    return Container(width: 1, height: 36, color: context.palette.divider);
   }
 
   Widget _buildCountdown(Event event) {
@@ -673,7 +671,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     // flyer as og:image. The function deep-links back into the app and
     // falls back to a download CTA.
     final shareUrl = eventShareUrl(event.id);
-    final text = '${event.title}\n\n'
+    final text =
+        '${event.title}\n\n'
         'Join me at this event on Advent Connect ZW:\n$shareUrl';
     await Share.share(text, subject: event.title);
   }
@@ -691,11 +690,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         source: 'direct',
       ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      context.pushNamed(
-        'chat',
-        pathParameters: {'id': convo.id},
-        extra: convo,
-      );
+      context.pushNamed('chat', pathParameters: {'id': convo.id}, extra: convo);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -833,8 +828,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primaryBlue
-                                    .withValues(alpha: 0.4),
+                                color: AppColors.primaryBlue.withValues(
+                                  alpha: 0.4,
+                                ),
                                 blurRadius: 16,
                                 offset: const Offset(0, 6),
                               ),
@@ -914,16 +910,36 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
 
   String _formatChip(DateTime date, String time) {
     const months = [
-      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
     ];
     return '${months[date.month - 1]} ${date.day}  •  ${_formatTime(time)}';
   }
 
   String _formatShortDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day} ${months[d.month - 1]}';
   }
@@ -940,8 +956,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
 
   String _formatPastAgo(DateTime then) {
     final diff = DateTime.now().difference(then);
-    if (diff.inDays >= 1) return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
-    if (diff.inHours >= 1) return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    if (diff.inDays >= 1)
+      return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+    if (diff.inHours >= 1)
+      return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
     return '${diff.inMinutes} minute${diff.inMinutes != 1 ? 's' : ''} ago';
   }
 }
@@ -1004,9 +1022,7 @@ class _CountdownUnit extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.white.withValues(alpha: 0.16),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.white.withValues(alpha: 0.18),
-            ),
+            border: Border.all(color: AppColors.white.withValues(alpha: 0.18)),
           ),
           child: Text(
             value.toString().padLeft(2, '0'),
@@ -1114,9 +1130,7 @@ class _SecondaryButton extends StatelessWidget {
           width: 1.5,
         ),
         padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       child: busy
           ? SizedBox(

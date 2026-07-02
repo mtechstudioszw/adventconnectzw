@@ -13,13 +13,10 @@ import '../../services/messaging_service.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 class JobDetailsScreen extends StatefulWidget {
-  const JobDetailsScreen({
-    super.key,
-    required this.jobId,
-    this.initialJob,
-  });
+  const JobDetailsScreen({super.key, required this.jobId, this.initialJob});
 
   final String jobId;
   final Job? initialJob;
@@ -52,9 +49,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _bootstrap();
   }
 
@@ -108,9 +106,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Cancel',
-              style: AppTextStyles.buttonText.copyWith(
-                color: ctx.palette.text,
-              ),
+              style: AppTextStyles.buttonText.copyWith(color: ctx.palette.text),
             ),
           ),
           FilledButton(
@@ -201,9 +197,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Cancel',
-              style: AppTextStyles.buttonText.copyWith(
-                color: ctx.palette.text,
-              ),
+              style: AppTextStyles.buttonText.copyWith(color: ctx.palette.text),
             ),
           ),
           FilledButton(
@@ -283,10 +277,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final title = expired
         ? 'This post has expired'
         : days == 0
-            ? 'Expires today'
-            : days == 1
-                ? 'Expires tomorrow'
-                : 'Expires in $days days';
+        ? 'Expires today'
+        : days == 1
+        ? 'Expires tomorrow'
+        : 'Expires in $days days';
     final body = expired
         ? 'It\'s hidden from applicants until you renew. One tap gives you another 30 days.'
         : 'Renew to give it another 30 days and re-arm the 5-days-out reminder.';
@@ -295,20 +289,14 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       decoration: BoxDecoration(
         color: AppColors.goldAccent.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.goldAccent.withValues(alpha: 0.40),
-        ),
+        border: Border.all(color: AppColors.goldAccent.withValues(alpha: 0.40)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.schedule,
-                size: 16,
-                color: AppColors.goldAccent,
-              ),
+              const Icon(Icons.schedule, size: 16, color: AppColors.goldAccent),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -377,8 +365,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           backgroundColor: AppColors.successGreen,
           content: Text(
             'Renewed — listed for another 30 days.',
-            style:
-                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
       );
@@ -390,8 +377,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           backgroundColor: AppColors.red,
           content: Text(
             'Could not renew. Try again.',
-            style:
-                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
       );
@@ -401,10 +387,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   Future<void> _editJob() async {
     final job = _job;
     if (job == null) return;
-    final changed = await context.pushNamed<bool>(
-      'edit_job',
-      extra: job,
-    );
+    final changed = await context.pushNamed<bool>('edit_job', extra: job);
     if (changed == true && mounted) {
       _bootstrap();
     }
@@ -432,9 +415,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Cancel',
-              style: AppTextStyles.buttonText.copyWith(
-                color: ctx.palette.text,
-              ),
+              style: AppTextStyles.buttonText.copyWith(color: ctx.palette.text),
             ),
           ),
           FilledButton(
@@ -460,8 +441,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           backgroundColor: AppColors.successGreen,
           content: Text(
             'Job deleted.',
-            style:
-                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
       );
@@ -478,8 +458,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           backgroundColor: AppColors.red,
           content: Text(
             'Could not delete. Try again.',
-            style:
-                AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
       );
@@ -498,11 +477,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         source: 'job',
       ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      context.pushNamed(
-        'chat',
-        pathParameters: {'id': convo.id},
-        extra: convo,
-      );
+      context.pushNamed('chat', pathParameters: {'id': convo.id}, extra: convo);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -524,7 +499,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final job = _job;
     if (job == null) return;
     final shareUrl = jobShareUrl(job.id);
-    final text = '${job.title}\n\n'
+    final text =
+        '${job.title}\n\n'
         'Job opportunity on Advent Connect ZW:\n$shareUrl';
     try {
       await Share.share(text, subject: job.title);
@@ -563,8 +539,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final digits = phone.replaceAll(RegExp(r'\D'), '');
     final waUri = Uri.parse('https://wa.me/$digits');
     try {
-      final launched =
-          await launchUrl(waUri, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(
+        waUri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!launched) throw Exception('launch returned false');
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: phone));
@@ -594,9 +572,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
 
   Widget _buildBody() {
     if (_loading && _job == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null && _job == null) {
       return Center(
@@ -605,8 +581,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 48, color: AppColors.red),
+              const Icon(Icons.error_outline, size: 48, color: AppColors.red),
               const SizedBox(height: 12),
               Text(_error!, style: AppTextStyles.bodyMedium),
               const SizedBox(height: 16),
@@ -648,7 +623,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                   const SizedBox(height: 16),
                   _buildApplyButton(),
                   const SizedBox(height: 20),
-                  if (job.description != null && job.description!.isNotEmpty) ...[
+                  if (job.description != null &&
+                      job.description!.isNotEmpty) ...[
                     _buildDescription(job),
                     const SizedBox(height: 16),
                   ],
@@ -713,7 +689,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                             color: AppColors.white.withValues(alpha: 0.2),
                           ),
                         ),
-                        child: job.companyLogoUrl != null &&
+                        child:
+                            job.companyLogoUrl != null &&
                                 job.companyLogoUrl!.isNotEmpty
                             ? CachedImage(
                                 job.companyLogoUrl!,
@@ -769,9 +746,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final initials = parts.isEmpty
         ? '?'
         : parts.length == 1
-            ? parts.first.substring(0, 1).toUpperCase()
-            : (parts.first.substring(0, 1) + parts[1].substring(0, 1))
-                .toUpperCase();
+        ? parts.first.substring(0, 1).toUpperCase()
+        : (parts.first.substring(0, 1) + parts[1].substring(0, 1))
+              .toUpperCase();
     return Container(
       decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
       alignment: Alignment.center,
@@ -817,8 +794,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           _SummaryTile(
             icon: Icons.place_outlined,
             label: 'Location',
-            value:
-                (job.location ?? '').isEmpty ? 'TBD' : job.location!,
+            value: (job.location ?? '').isEmpty ? 'TBD' : job.location!,
           ),
         ],
       ),
@@ -826,11 +802,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   }
 
   Widget _verticalDivider() {
-    return Container(
-      width: 1,
-      height: 40,
-      color: context.palette.divider,
-    );
+    return Container(width: 1, height: 40, color: context.palette.divider);
   }
 
   Widget _buildApplyButton() {
@@ -867,10 +839,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
               foreground: AppColors.successGreen,
             ),
             const SizedBox(height: 10),
-            _ReopenButton(
-              loading: _reopening,
-              onTap: _confirmReopen,
-            ),
+            _ReopenButton(loading: _reopening, onTap: _confirmReopen),
             ownerExtras,
           ],
         );
@@ -878,10 +847,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _MarkFilledButton(
-            loading: _markingFilled,
-            onTap: _confirmMarkFilled,
-          ),
+          _MarkFilledButton(loading: _markingFilled, onTap: _confirmMarkFilled),
           ownerExtras,
         ],
       );

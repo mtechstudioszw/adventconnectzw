@@ -9,6 +9,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/support_sheet.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Apply to manage a church. Two steps:
 ///   1. A showcase of what a church admin can do (the "power" pitch).
@@ -166,9 +167,13 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: ctx.palette.sheet,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Application sent 🙏', style: AppTextStyles.headlineSmall),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'Application sent 🙏',
+            style: AppTextStyles.headlineSmall,
+          ),
           content: Text(
             'Thanks! We\'ll reach out on WhatsApp to verify you, then approve '
             'your access to manage ${widget.church.name}.',
@@ -180,7 +185,8 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primaryBlue,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               child: Text('Got it', style: AppTextStyles.labelLarge),
             ),
@@ -223,10 +229,10 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
       body: _checking
           ? _buildChecking(context)
           : _block != null
-              ? _buildBlocked(context, _block!)
-              : _step == 0
-                  ? _buildShowcase(context)
-                  : _buildForm(context),
+          ? _buildBlocked(context, _block!)
+          : _step == 0
+          ? _buildShowcase(context)
+          : _buildForm(context),
     );
   }
 
@@ -239,11 +245,7 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
           subtitle: 'Checking availability…',
           fallbackRoute: 'churches',
         ),
-        const Expanded(
-          child: Center(
-            child: CircularProgressIndicator(color: AppColors.primaryBlue),
-          ),
-        ),
+        const Expanded(child: Center(child: BrandSpinner(size: 30))),
       ],
     );
   }
@@ -270,8 +272,11 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                     color: AppColors.primaryBlue.withValues(alpha: 0.10),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(block.icon,
-                      color: AppColors.primaryBlue, size: 34),
+                  child: Icon(
+                    block.icon,
+                    color: AppColors.primaryBlue,
+                    size: 34,
+                  ),
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -305,7 +310,8 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primaryBlue,
                         side: BorderSide(
-                            color: AppColors.primaryBlue.withValues(alpha: 0.4)),
+                          color: AppColors.primaryBlue.withValues(alpha: 0.4),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -328,8 +334,10 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: Text('Back to church',
-                        style: AppTextStyles.buttonText),
+                    child: Text(
+                      'Back to church',
+                      style: AppTextStyles.buttonText,
+                    ),
                   ),
                 ),
               ],
@@ -382,7 +390,8 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                 const _Capability(
                   icon: Icons.event_available_rounded,
                   title: 'Post events',
-                  body: 'Add services, programmes and special events to the '
+                  body:
+                      'Add services, programmes and special events to the '
                       'events feed.',
                 ),
                 const _Capability(
@@ -399,8 +408,11 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.verified_user_outlined,
-                          color: AppColors.primaryBlue, size: 20),
+                      const Icon(
+                        Icons.verified_user_outlined,
+                        color: AppColors.primaryBlue,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -427,8 +439,10 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: Text('Apply to manage this church',
-                        style: AppTextStyles.buttonText),
+                    child: Text(
+                      'Apply to manage this church',
+                      style: AppTextStyles.buttonText,
+                    ),
                   ),
                 ),
               ],
@@ -475,8 +489,9 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
                     ],
-                    decoration:
-                        const InputDecoration(hintText: 'e.g. +263 77 123 4567'),
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. +263 77 123 4567',
+                    ),
                     validator: (v) => (v == null || v.trim().length < 7)
                         ? 'Enter a reachable WhatsApp number'
                         : null,
@@ -486,16 +501,16 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                   TextFormField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
-                    decoration:
-                        const InputDecoration(hintText: 'you@example.com'),
+                    decoration: const InputDecoration(
+                      hintText: 'you@example.com',
+                    ),
                   ),
                   const SizedBox(height: 16),
                   _Label('Your role at the church'),
                   DropdownButtonFormField<String>(
                     initialValue: _role,
                     items: _roles
-                        .map((r) =>
-                            DropdownMenuItem(value: r, child: Text(r)))
+                        .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                         .toList(),
                     onChanged: (v) => setState(() => _role = v ?? _role),
                   ),
@@ -514,9 +529,12 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 8),
-                    Text(_error!,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: AppColors.red)),
+                    Text(
+                      _error!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.red,
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 20),
                   SizedBox(
@@ -535,18 +553,25 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2.4, color: AppColors.white),
+                                strokeWidth: 2.4,
+                                color: AppColors.white,
+                              ),
                             )
-                          : Text('Send application',
-                              style: AppTextStyles.buttonText),
+                          : Text(
+                              'Send application',
+                              style: AppTextStyles.buttonText,
+                            ),
                     ),
                   ),
                   const SizedBox(height: 10),
                   TextButton(
                     onPressed: _saving ? null : () => setState(() => _step = 0),
-                    child: Text('Back',
-                        style: AppTextStyles.labelMedium
-                            .copyWith(color: context.palette.textMuted)),
+                    child: Text(
+                      'Back',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: context.palette.textMuted,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -578,8 +603,11 @@ class _ClaimBlock {
 }
 
 class _Capability extends StatelessWidget {
-  const _Capability(
-      {required this.icon, required this.title, required this.body});
+  const _Capability({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
 
   final IconData icon;
   final String title;
@@ -606,17 +634,21 @@ class _Capability extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: context.palette.text,
-                    )),
+                Text(
+                  title,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: context.palette.text,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(body,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.textMuted,
-                      height: 1.4,
-                    )),
+                Text(
+                  body,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.textMuted,
+                    height: 1.4,
+                  ),
+                ),
               ],
             ),
           ),

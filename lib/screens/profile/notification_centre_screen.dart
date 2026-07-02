@@ -8,6 +8,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// In-app notification inbox. DB triggers populate `notifications` when
 /// people interact with the user's content (RSVPs, prayers, messages,
@@ -72,16 +73,18 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       if (!mounted) return;
       setState(() {
         _items = _items
-            .map((n) => AppNotification(
-                  id: n.id,
-                  title: n.title,
-                  body: n.body,
-                  type: n.type,
-                  referenceId: n.referenceId,
-                  referenceType: n.referenceType,
-                  isRead: true,
-                  createdAt: n.createdAt,
-                ))
+            .map(
+              (n) => AppNotification(
+                id: n.id,
+                title: n.title,
+                body: n.body,
+                type: n.type,
+                referenceId: n.referenceId,
+                referenceType: n.referenceType,
+                isRead: true,
+                createdAt: n.createdAt,
+              ),
+            )
             .toList();
       });
     } catch (_) {
@@ -95,18 +98,20 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       // Optimistic: flip in UI first, persist after.
       setState(() {
         _items = _items
-            .map((x) => x.id == n.id
-                ? AppNotification(
-                    id: x.id,
-                    title: x.title,
-                    body: x.body,
-                    type: x.type,
-                    referenceId: x.referenceId,
-                    referenceType: x.referenceType,
-                    isRead: true,
-                    createdAt: x.createdAt,
-                  )
-                : x)
+            .map(
+              (x) => x.id == n.id
+                  ? AppNotification(
+                      id: x.id,
+                      title: x.title,
+                      body: x.body,
+                      type: x.type,
+                      referenceId: x.referenceId,
+                      referenceType: x.referenceType,
+                      isRead: true,
+                      createdAt: x.createdAt,
+                    )
+                  : x,
+            )
             .toList();
       });
       // Fire-and-forget. The optimistic UI is already in place, so a
@@ -181,18 +186,11 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
         // Likes & comments all carry the post id — open the post's
         // discussion (the same comments sheet used in the feed).
         if (id.isNotEmpty) {
-          showCommentsSheet(
-            context,
-            postId: id,
-            onCommentCountChanged: (_) {},
-          );
+          showCommentsSheet(context, postId: id, onCommentCountChanged: (_) {});
         }
         break;
       case 'friend_request':
-        context.pushNamed(
-          'messages',
-          queryParameters: {'tab': 'requests'},
-        );
+        context.pushNamed('messages', queryParameters: {'tab': 'requests'});
         break;
       case 'seller':
         context.pushNamed('seller_dashboard');
@@ -211,8 +209,11 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     } catch (_) {
       if (!mounted) return;
       // Restore on failure so the user isn't lied to.
-      setState(() => _items = [..._items, removed]
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
+      setState(
+        () =>
+            _items = [..._items, removed]
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
+      );
       _toast('Could not dismiss. Try again.', isError: true);
     }
   }
@@ -270,9 +271,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) return ErrorBanner(message: _error!);
@@ -300,8 +299,9 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       _NotifCategory.engagement,
       _NotifCategory.activity,
     ];
-    final present =
-        order.where((c) => grouped[c]?.isNotEmpty ?? false).toList();
+    final present = order
+        .where((c) => grouped[c]?.isNotEmpty ?? false)
+        .toList();
     // Categories with at least one UNREAD notification — their chip shows
     // a dot.
     final unreadCats = <_NotifCategory>{
@@ -375,8 +375,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
             color: selected ? AppColors.primaryBlue : context.palette.chipBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color:
-                  selected ? AppColors.primaryBlue : context.palette.divider,
+              color: selected ? AppColors.primaryBlue : context.palette.divider,
             ),
           ),
           child: Row(
@@ -410,15 +409,11 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
 
   /// One category block: a header with an unread badge, up to four rows
   /// collapsed, and a See-more / Show-less toggle when there are more.
-  List<Widget> _buildSection(
-    _NotifCategory cat,
-    List<AppNotification> items,
-  ) {
+  List<Widget> _buildSection(_NotifCategory cat, List<AppNotification> items) {
     const collapsedCount = 4;
     final expanded = _expanded.contains(cat);
     final unreadInCat = items.where((n) => !n.isRead).length;
-    final visible =
-        expanded ? items : items.take(collapsedCount).toList();
+    final visible = expanded ? items : items.take(collapsedCount).toList();
     final hiddenCount = items.length - visible.length;
     return [
       Padding(
@@ -436,8 +431,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
             if (unreadInCat > 0) ...[
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.primaryBlue,
                   borderRadius: BorderRadius.circular(10),
@@ -468,10 +462,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
                 color: AppColors.red,
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: const Icon(
-                Icons.delete_outline,
-                color: AppColors.white,
-              ),
+              child: const Icon(Icons.delete_outline, color: AppColors.white),
             ),
             onDismissed: (_) => _dismiss(n),
             child: _NotificationRow(item: n, onTap: () => _open(n)),
@@ -688,8 +679,9 @@ class _NotificationRow extends StatelessWidget {
                             child: Text(
                               item.title,
                               style: AppTextStyles.titleSmall.copyWith(
-                                fontWeight:
-                                    unread ? FontWeight.w800 : FontWeight.w700,
+                                fontWeight: unread
+                                    ? FontWeight.w800
+                                    : FontWeight.w700,
                               ),
                             ),
                           ),

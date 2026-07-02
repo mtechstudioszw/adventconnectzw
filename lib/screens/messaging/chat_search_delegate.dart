@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// WhatsApp-style scoped search for Advent Chat. One search field, a row of
 /// scope chips (Friends · Messages · Groups · Archived · Status), and an
@@ -64,21 +65,21 @@ class ChatSearchDelegate extends SearchDelegate<void> {
 
   @override
   List<Widget> buildActions(BuildContext context) => [
-        if (query.isNotEmpty)
-          IconButton(
-            icon: const Icon(Icons.clear),
-            onPressed: () {
-              query = '';
-              showSuggestions(context);
-            },
-          ),
-      ];
+    if (query.isNotEmpty)
+      IconButton(
+        icon: const Icon(Icons.clear),
+        onPressed: () {
+          query = '';
+          showSuggestions(context);
+        },
+      ),
+  ];
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => close(context, null),
-      );
+    icon: const Icon(Icons.arrow_back),
+    onPressed: () => close(context, null),
+  );
 
   @override
   Widget buildResults(BuildContext context) => _content(context);
@@ -106,7 +107,10 @@ class ChatSearchDelegate extends SearchDelegate<void> {
     );
   }
 
-  Widget _scopeChips(BuildContext context, void Function(VoidCallback) setLocal) {
+  Widget _scopeChips(
+    BuildContext context,
+    void Function(VoidCallback) setLocal,
+  ) {
     Widget chip(String label, ChatSearchScope s) {
       final sel = _scope == s;
       return Padding(
@@ -173,9 +177,11 @@ class ChatSearchDelegate extends SearchDelegate<void> {
   List<Conversation> _filterConvos(List<Conversation> list, String q) {
     if (q.isEmpty) return list;
     return list
-        .where((c) =>
-            c.otherUserName.toLowerCase().contains(q) ||
-            c.lastMessage.toLowerCase().contains(q))
+        .where(
+          (c) =>
+              c.otherUserName.toLowerCase().contains(q) ||
+              c.lastMessage.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -191,8 +197,7 @@ class ChatSearchDelegate extends SearchDelegate<void> {
       future: MessagingService.searchMessages(q),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryBlue));
+          return const Center(child: BrandSpinner(size: 30));
         }
         final hits = snap.data ?? const <MessageSearchHit>[];
         if (hits.isEmpty) return _empty(context, 'No messages match.');
@@ -203,21 +208,22 @@ class ChatSearchDelegate extends SearchDelegate<void> {
             final convo = _convoById(h.conversationId);
             final title = convo?.otherUserName ?? 'Conversation';
             return ListTile(
-              leading: _Avatar(
-                  name: title, photoUrl: convo?.otherUserPhotoUrl),
+              leading: _Avatar(name: title, photoUrl: convo?.otherUserPhotoUrl),
               title: Text(
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.bodyMedium
-                    .copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               subtitle: Text(
                 h.content,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: context.palette.textMuted),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.palette.textMuted,
+                ),
               ),
               onTap: () {
                 close(context, null);
@@ -244,12 +250,17 @@ class ChatSearchDelegate extends SearchDelegate<void> {
       itemBuilder: (_, i) {
         final c = list[i];
         return ListTile(
-          leading: _Avatar(name: c.otherUserName, photoUrl: c.otherUserPhotoUrl),
+          leading: _Avatar(
+            name: c.otherUserName,
+            photoUrl: c.otherUserPhotoUrl,
+          ),
           title: Text(
             c.otherUserName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           subtitle: c.lastMessage.isEmpty
               ? null
@@ -257,8 +268,9 @@ class ChatSearchDelegate extends SearchDelegate<void> {
                   c.lastMessage,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: context.palette.textMuted),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.textMuted,
+                  ),
                 ),
           onTap: () {
             close(context, null);
@@ -294,11 +306,17 @@ class ChatSearchDelegate extends SearchDelegate<void> {
             a.authorName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+            style: AppTextStyles.bodyMedium.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           subtitle: Text(
-            reel.length == 1 ? '1 status update' : '${reel.length} status updates',
-            style: AppTextStyles.bodySmall.copyWith(color: context.palette.textMuted),
+            reel.length == 1
+                ? '1 status update'
+                : '${reel.length} status updates',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+            ),
           ),
           onTap: () {
             close(context, null);
@@ -321,9 +339,7 @@ class ChatSearchDelegate extends SearchDelegate<void> {
       future: future,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.primaryBlue),
-          );
+          return const Center(child: BrandSpinner(size: 30));
         }
         var people = snap.data ?? const <MemberDirectoryEntry>[];
         if (friendsOnly && q.isNotEmpty) {
@@ -342,16 +358,18 @@ class ChatSearchDelegate extends SearchDelegate<void> {
           itemCount: people.length,
           itemBuilder: (_, i) {
             final m = people[i];
-            final name =
-                (m.fullName ?? '').trim().isEmpty ? 'Member' : m.fullName!.trim();
+            final name = (m.fullName ?? '').trim().isEmpty
+                ? 'Member'
+                : m.fullName!.trim();
             return ListTile(
               leading: _Avatar(name: name, photoUrl: m.profilePhotoUrl),
               title: Text(
                 name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style:
-                    AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               subtitle: (m.churchName ?? '').trim().isEmpty
                   ? null
@@ -359,8 +377,9 @@ class ChatSearchDelegate extends SearchDelegate<void> {
                       m.churchName!.trim(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: context.palette.textMuted),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.textMuted,
+                      ),
                     ),
               onTap: () {
                 close(context, null);
@@ -374,16 +393,17 @@ class ChatSearchDelegate extends SearchDelegate<void> {
   }
 
   Widget _empty(BuildContext context, String msg) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Text(
-            msg,
-            textAlign: TextAlign.center,
-            style:
-                AppTextStyles.bodyMedium.copyWith(color: context.palette.textMuted),
-          ),
+    child: Padding(
+      padding: const EdgeInsets.all(28),
+      child: Text(
+        msg,
+        textAlign: TextAlign.center,
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: context.palette.textMuted,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _Avatar extends StatelessWidget {
@@ -408,8 +428,10 @@ class _Avatar extends StatelessWidget {
           ? CachedImage(photoUrl!, fit: BoxFit.cover)
           : Text(
               initial,
-              style: AppTextStyles.titleMedium
-                  .copyWith(color: AppColors.white, fontWeight: FontWeight.w700),
+              style: AppTextStyles.titleMedium.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
     );
   }

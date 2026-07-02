@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Super-admin queue of member-submitted Advent News awaiting review.
 /// Mirrors SellerApprovalsScreen — same RPC-backed approve/reject
@@ -110,11 +111,13 @@ class _NewsApprovalsScreenState extends State<NewsApprovalsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
-            style: TextButton.styleFrom(
-                foregroundColor: AppColors.primaryBlue),
-            child: Text('Cancel',
-                style: AppTextStyles.labelMedium
-                    .copyWith(color: AppColors.primaryBlue)),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primaryBlue),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primaryBlue,
+              ),
+            ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.red),
@@ -130,8 +133,10 @@ class _NewsApprovalsScreenState extends State<NewsApprovalsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: color,
-        content: Text(msg,
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
+        content: Text(
+          msg,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
       ),
     );
   }
@@ -163,19 +168,20 @@ class _NewsApprovalsScreenState extends State<NewsApprovalsScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 80),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 60),
         child: Center(
-          child: Text(_error!,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: context.palette.textMuted)),
+          child: Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: context.palette.textMuted,
+            ),
+          ),
         ),
       );
     }
@@ -185,12 +191,18 @@ class _NewsApprovalsScreenState extends State<NewsApprovalsScreen> {
         child: Center(
           child: Column(
             children: [
-              const Icon(Icons.inbox_outlined,
-                  size: 48, color: AppColors.successGreen),
+              const Icon(
+                Icons.inbox_outlined,
+                size: 48,
+                color: AppColors.successGreen,
+              ),
               const SizedBox(height: 12),
-              Text('No news awaiting review',
-                  style: AppTextStyles.titleMedium
-                      .copyWith(fontWeight: FontWeight.w700)),
+              Text(
+                'No news awaiting review',
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -238,20 +250,24 @@ class _NewsApprovalsScreenState extends State<NewsApprovalsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('SUPER ADMIN',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.goldAccent,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.8,
-                          )),
+                      Text(
+                        'SUPER ADMIN',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.goldAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.8,
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      Text('News approvals',
-                          style: AppTextStyles.displayMedium.copyWith(
-                            color: AppColors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w700,
-                          )),
+                      Text(
+                        'News approvals',
+                        style: AppTextStyles.displayMedium.copyWith(
+                          color: AppColors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         'Review member-submitted stories before they go '
@@ -317,7 +333,10 @@ class _PendingNewsCard extends StatelessWidget {
                 fit: BoxFit.cover,
                 errorWidget: (ctx, url, error) => const ColoredBox(
                   color: Color(0xFFE4E7EC),
-                  child: Icon(Icons.image_outlined, color: AppColors.primaryBlue),
+                  child: Icon(
+                    Icons.image_outlined,
+                    color: AppColors.primaryBlue,
+                  ),
                 ),
               ),
             ),
@@ -326,25 +345,38 @@ class _PendingNewsCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: AppTextStyles.titleMedium
-                        .copyWith(fontWeight: FontWeight.w800)),
+                Text(
+                  title,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text('${category.isNotEmpty ? '$category · ' : ''}by $author',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.primaryBlue, fontWeight: FontWeight.w600)),
+                Text(
+                  '${category.isNotEmpty ? '$category · ' : ''}by $author',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 if (summary.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(summary,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: context.palette.text, height: 1.5)),
+                  Text(
+                    summary,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.text,
+                      height: 1.5,
+                    ),
+                  ),
                 ],
                 if (body.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
                     body.length > 500 ? '${body.substring(0, 500)}…' : body,
                     style: AppTextStyles.bodySmall.copyWith(
-                        color: context.palette.textMuted, height: 1.5),
+                      color: context.palette.textMuted,
+                      height: 1.5,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 14),
@@ -360,7 +392,8 @@ class _PendingNewsCard extends StatelessWidget {
                           side: const BorderSide(color: AppColors.red),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -373,15 +406,21 @@ class _PendingNewsCard extends StatelessWidget {
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
-                                    color: AppColors.white, strokeWidth: 2.2))
+                                  color: AppColors.white,
+                                  strokeWidth: 2.2,
+                                ),
+                              )
                             : const Icon(Icons.check, size: 18),
-                        label: Text(busy ? 'Working' : 'Approve',
-                            style: AppTextStyles.labelLarge),
+                        label: Text(
+                          busy ? 'Working' : 'Approve',
+                          style: AppTextStyles.labelLarge,
+                        ),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.successGreen,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -402,7 +441,11 @@ class _HeroClipper extends CustomClipper<Path> {
     final path = Path();
     path.lineTo(0, size.height - 28);
     path.quadraticBezierTo(
-        size.width / 2, size.height, size.width, size.height - 28);
+      size.width / 2,
+      size.height,
+      size.width,
+      size.height - 28,
+    );
     path.lineTo(size.width, 0);
     path.close();
     return path;

@@ -14,6 +14,7 @@ import '../../widgets/screen_shell.dart';
 import '../../widgets/verified_tick.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Browse other community members who opted into the directory.
 class MemberDirectoryScreen extends StatefulWidget {
@@ -138,9 +139,7 @@ class _MemberDirectoryScreenState extends State<MemberDirectoryScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) return ErrorBanner(message: _error!);
@@ -196,18 +195,18 @@ class _SearchField extends StatelessWidget {
           ),
           prefixIcon: const Padding(
             padding: EdgeInsets.only(left: 14, right: 10),
-            child: Icon(
-              Icons.search,
-              color: AppColors.primaryBlue,
-              size: 20,
-            ),
+            child: Icon(Icons.search, color: AppColors.primaryBlue, size: 20),
           ),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 44, minHeight: 44),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 44,
+            minHeight: 44,
+          ),
           filled: true,
           fillColor: context.palette.inputFill,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
@@ -243,11 +242,7 @@ class _ProvinceFilter extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           for (final p in sellerProvinces) ...[
-            _Chip(
-              label: p,
-              active: selected == p,
-              onTap: () => onChanged(p),
-            ),
+            _Chip(label: p, active: selected == p, onTap: () => onChanged(p)),
             const SizedBox(width: 8),
           ],
         ],
@@ -257,11 +252,7 @@ class _ProvinceFilter extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
+  const _Chip({required this.label, required this.active, required this.onTap});
 
   final String label;
   final bool active;
@@ -282,9 +273,7 @@ class _Chip extends StatelessWidget {
             color: active ? null : context.palette.chipBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: active
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
+              color: active ? AppColors.primaryBlue : context.palette.divider,
             ),
           ),
           child: Text(
@@ -310,9 +299,10 @@ class _DirectoryRow extends StatelessWidget {
     final initials = _initials(entry.fullName ?? '');
     final photo = entry.profilePhotoUrl;
     final hasPhoto = photo != null && photo.isNotEmpty;
-    final location = [entry.city, entry.province]
-        .where((s) => s != null && s.isNotEmpty)
-        .join(', ');
+    final location = [
+      entry.city,
+      entry.province,
+    ].where((s) => s != null && s.isNotEmpty).join(', ');
     return ScreenCard(
       padding: const EdgeInsets.all(14),
       child: Row(
@@ -437,15 +427,16 @@ class _DirectoryRow extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => _MessageRequestSheet(
-        otherUserId: entry.userId,
-        otherUserName: name,
-      ),
+      builder: (sheetContext) =>
+          _MessageRequestSheet(otherUserId: entry.userId, otherUserName: name),
     );
   }
 
   String _initials(String name) {
-    final parts = name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = name
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
@@ -553,9 +544,7 @@ class _MessageRequestSheetState extends State<_MessageRequestSheet> {
               decoration: BoxDecoration(
                 color: context.palette.cardMuted,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: context.palette.divider,
-                ),
+                border: Border.all(color: context.palette.divider),
               ),
               child: TextField(
                 controller: _controller,
@@ -592,8 +581,9 @@ class _MessageRequestSheetState extends State<_MessageRequestSheet> {
               child: SizedBox(
                 width: double.infinity,
                 child: TextButton(
-                  onPressed:
-                      _sending || _controller.text.trim().isEmpty ? null : _send,
+                  onPressed: _sending || _controller.text.trim().isEmpty
+                      ? null
+                      : _send,
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(

@@ -10,6 +10,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/prayer_card.dart';
 import '../../widgets/verified_tick.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 class PrayerDetailsScreen extends StatefulWidget {
   const PrayerDetailsScreen({
@@ -57,9 +58,10 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _bootstrap();
   }
 
@@ -180,9 +182,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: ctx.palette.sheet,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: const Text('Delete comment?'),
         content: const Text(
           'This removes the comment for everyone. It can\'t be undone.',
@@ -209,14 +209,15 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
           .map((c) => c.id),
     };
     final prev = _comments;
-    final next =
-        _comments.where((c) => !removedIds.contains(c.id)).toList();
+    final next = _comments.where((c) => !removedIds.contains(c.id)).toList();
     setState(() {
       _comments = next;
       if (_prayer != null) {
         _prayer = _prayer!.copyWith(
-          commentCount:
-              (_prayer!.commentCount - removedIds.length).clamp(0, 1 << 30),
+          commentCount: (_prayer!.commentCount - removedIds.length).clamp(
+            0,
+            1 << 30,
+          ),
         );
       }
     });
@@ -241,9 +242,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text('Delete this prayer?', style: AppTextStyles.headlineSmall),
         content: Text(
           'Your request and every "I\'m praying" reaction will be removed. '
@@ -314,14 +313,10 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.white),
-          onPressed: () => context.canPop()
-              ? context.pop()
-              : context.goNamed('prayer'),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.goNamed('prayer'),
         ),
-        title: Text(
-          'Prayer request',
-          style: AppTextStyles.appBarTitle,
-        ),
+        title: Text('Prayer request', style: AppTextStyles.appBarTitle),
         actions: [
           if (_prayer != null && _isAuthor(_prayer!))
             IconButton(
@@ -337,18 +332,13 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
             ),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        child: _buildBody(),
-      ),
+      body: SafeArea(top: false, child: _buildBody()),
     );
   }
 
   Widget _buildBody() {
     if (_loading && _prayer == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null && _prayer == null) {
       return Center(
@@ -357,8 +347,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 48, color: AppColors.red),
+              const Icon(Icons.error_outline, size: 48, color: AppColors.red),
               const SizedBox(height: 12),
               Text(_error!, style: AppTextStyles.bodyMedium),
               const SizedBox(height: 16),
@@ -373,9 +362,12 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 12),
+                    horizontal: 28,
+                    vertical: 12,
+                  ),
                 ),
                 child: const Text('Retry'),
               ),
@@ -461,8 +453,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                           ),
                         ),
                       ),
-                      if (prayer.authorIsVerified)
-                        const VerifiedTick(size: 16),
+                      if (prayer.authorIsVerified) const VerifiedTick(size: 16),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -500,10 +491,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
       ),
       child: Text(
         prayer.content,
-        style: AppTextStyles.bodyLarge.copyWith(
-          fontSize: 15.5,
-          height: 1.6,
-        ),
+        style: AppTextStyles.bodyLarge.copyWith(fontSize: 15.5, height: 1.6),
       ),
     );
   }
@@ -558,7 +546,9 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                            color: context.palette.card, width: 2.5),
+                          color: context.palette.card,
+                          width: 2.5,
+                        ),
                       ),
                       child: PrayerAvatar(
                         name: visible[i].userName,
@@ -578,7 +568,9 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                         color: context.palette.cardMuted,
                         shape: BoxShape.circle,
                         border: Border.all(
-                            color: context.palette.card, width: 2.5),
+                          color: context.palette.card,
+                          width: 2.5,
+                        ),
                       ),
                       child: Text(
                         '+${_prayingUsers.length - visible.length}',
@@ -635,20 +627,19 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
             for (var i = 0; i < tree.length; i++) ...[
               _CommentTile(
                 comment: tree[i],
-                isOwner: tree[i].authorId.isNotEmpty &&
-                    tree[i].authorId == ownerId,
+                isOwner:
+                    tree[i].authorId.isNotEmpty && tree[i].authorId == ownerId,
                 canDelete: _canDeleteComment(tree[i], ownerId),
                 onDelete: () => _deleteComment(tree[i]),
-                onReply: () =>
-                    setState(() => _replyTo = tree[i]),
+                onReply: () => setState(() => _replyTo = tree[i]),
               ),
               for (final reply in tree[i].replies) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 36, top: 10),
                   child: _CommentTile(
                     comment: reply,
-                    isOwner: reply.authorId.isNotEmpty &&
-                        reply.authorId == ownerId,
+                    isOwner:
+                        reply.authorId.isNotEmpty && reply.authorId == ownerId,
                     canDelete: _canDeleteComment(reply, ownerId),
                     onDelete: () => _deleteComment(reply),
                     onReply: () => setState(() => _replyTo = tree[i]),
@@ -659,10 +650,7 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
               if (i < tree.length - 1)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Divider(
-                    height: 1,
-                    color: context.palette.divider,
-                  ),
+                  child: Divider(height: 1, color: context.palette.divider),
                 ),
             ],
         ],
@@ -727,47 +715,49 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                 ),
               ),
             Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _commentController,
-                minLines: 1,
-                maxLines: 4,
-                textCapitalization: TextCapitalization.sentences,
-                style: AppTextStyles.bodyMedium.copyWith(fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: _replyTo == null
-                      ? 'Write encouragement...'
-                      : 'Reply to ${_replyTo!.authorName}...',
-                  filled: true,
-                  fillColor: context.palette.inputFill,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: const BorderSide(
-                      color: AppColors.primaryBlue,
-                      width: 1.2,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentController,
+                    minLines: 1,
+                    maxLines: 4,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: AppTextStyles.bodyMedium.copyWith(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: _replyTo == null
+                          ? 'Write encouragement...'
+                          : 'Reply to ${_replyTo!.authorName}...',
+                      filled: true,
+                      fillColor: context.palette.inputFill,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(
+                          color: AppColors.primaryBlue,
+                          width: 1.2,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                _SendButton(
+                  busy: _commentBusy,
+                  onTap: _commentBusy ? null : _postComment,
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            _SendButton(
-              busy: _commentBusy,
-              onTap: _commentBusy ? null : _postComment,
-            ),
-          ],
-        ),
           ],
         ),
       ),
@@ -844,8 +834,7 @@ class _CommentTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (comment.authorIsVerified)
-                    const VerifiedTick(size: 13),
+                  if (comment.authorIsVerified) const VerifiedTick(size: 13),
                   if (isOwner) ...[
                     const SizedBox(width: 6),
                     Container(
@@ -1017,10 +1006,7 @@ class _PrayerOwnerMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: Icon(
-        Icons.more_horiz,
-        color: context.palette.textMuted,
-      ),
+      icon: Icon(Icons.more_horiz, color: context.palette.textMuted),
       onSelected: (v) {
         if (v == 'delete') onDelete();
       },

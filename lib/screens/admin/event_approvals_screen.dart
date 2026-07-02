@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Super-admin queue of community events awaiting review.
 /// Uses the admin_list_pending_events / admin_approve_event /
@@ -117,26 +118,24 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
   }
 
   void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      backgroundColor: isError ? AppColors.red : AppColors.primaryBlue,
-      content: Text(msg,
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: isError ? AppColors.red : AppColors.primaryBlue,
+        content: Text(
+          msg,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Event approvals',
-          style: AppTextStyles.appBarTitle,
-        ),
+        title: Text('Event approvals', style: AppTextStyles.appBarTitle),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
       body: _buildBody(),
@@ -145,9 +144,7 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null) {
       return Center(
@@ -156,15 +153,15 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_error!,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: context.palette.textMuted)),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _load,
-                child: const Text('Retry'),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.palette.textMuted,
+                ),
               ),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: _load, child: const Text('Retry')),
             ],
           ),
         ),
@@ -177,8 +174,11 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.event_available_outlined,
-                  size: 56, color: context.palette.textMuted),
+              Icon(
+                Icons.event_available_outlined,
+                size: 56,
+                color: context.palette.textMuted,
+              ),
               const SizedBox(height: 16),
               Text(
                 'No pending events',
@@ -191,8 +191,9 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
               Text(
                 'All community events have been reviewed.',
                 textAlign: TextAlign.center,
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: context.palette.textMuted),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.palette.textMuted,
+                ),
               ),
             ],
           ),
@@ -232,8 +233,18 @@ class _EventCard extends StatelessWidget {
 
   String _fmtDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
@@ -275,26 +286,30 @@ class _EventCard extends StatelessWidget {
           const SizedBox(height: 4),
           Row(
             children: [
-              Icon(Icons.calendar_today_outlined,
-                  size: 13, color: palette.textMuted),
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 13,
+                color: palette.textMuted,
+              ),
               const SizedBox(width: 4),
               Text(
                 _fmtDate(event.eventDate),
-                style:
-                    AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: palette.textMuted,
+                ),
               ),
               if (event.location != null && event.location!.isNotEmpty) ...[
                 const SizedBox(width: 12),
-                Icon(Icons.place_outlined,
-                    size: 13, color: palette.textMuted),
+                Icon(Icons.place_outlined, size: 13, color: palette.textMuted),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     event.location!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: palette.textMuted),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                    ),
                   ),
                 ),
               ],
@@ -309,8 +324,9 @@ class _EventCard extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   'By ${event.organizerName}',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: palette.textMuted),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: palette.textMuted,
+                  ),
                 ),
               ],
             ),

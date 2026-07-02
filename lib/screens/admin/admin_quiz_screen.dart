@@ -5,6 +5,7 @@ import '../../services/quiz_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Super-admin "Manage Quiz" — add / edit / delete Bible-quiz questions
 /// (patch_147). Gated server-side by RLS (super admin only).
@@ -39,13 +40,18 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.card,
-        title: Text('Delete question?',
-            style: AppTextStyles.titleMedium
-                .copyWith(fontWeight: FontWeight.w700)),
-        content: Text(q.question,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodyMedium.copyWith(color: palette.text)),
+        title: Text(
+          'Delete question?',
+          style: AppTextStyles.titleMedium.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          q.question,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -65,8 +71,9 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
       _reload();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not delete: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not delete: $e')));
       }
     }
   }
@@ -77,8 +84,10 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        title: Text('Manage Quiz',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 19)),
+        title: Text(
+          'Manage Quiz',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -97,27 +106,31 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child:
-                      CircularProgressIndicator(color: AppColors.primaryBlue));
+              return const Center(child: BrandSpinner(size: 30));
             }
             if (snap.hasError) {
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text('${snap.error}',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: palette.textMuted)),
+                  child: Text(
+                    '${snap.error}',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
                 ),
               );
             }
             final list = snap.data ?? const [];
             if (list.isEmpty) {
               return Center(
-                child: Text('No questions yet. Tap “Add question”.',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: palette.textMuted)),
+                child: Text(
+                  'No questions yet. Tap “Add question”.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: palette.textMuted,
+                  ),
+                ),
               );
             }
             return ListView.separated(
@@ -144,21 +157,29 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(q.question,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.titleSmall.copyWith(
-                                        fontWeight: FontWeight.w700)),
+                                Text(
+                                  q.question,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.titleSmall.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
-                                Text('${q.category} · ${q.difficulty}',
-                                    style: AppTextStyles.labelSmall
-                                        .copyWith(color: AppColors.primaryBlue)),
+                                Text(
+                                  '${q.category} · ${q.difficulty}',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.primaryBlue,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                color: AppColors.red),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: AppColors.red,
+                            ),
                             onPressed: () => _delete(q),
                           ),
                         ],
@@ -184,22 +205,27 @@ class _QuizEditorScreen extends StatefulWidget {
 }
 
 class _QuizEditorScreenState extends State<_QuizEditorScreen> {
-  late final _question =
-      TextEditingController(text: widget.question?.question ?? '');
+  late final _question = TextEditingController(
+    text: widget.question?.question ?? '',
+  );
   late final List<TextEditingController> _opts = List.generate(
     4,
     (i) => TextEditingController(
-        text: (widget.question != null && i < widget.question!.options.length)
-            ? widget.question!.options[i]
-            : ''),
+      text: (widget.question != null && i < widget.question!.options.length)
+          ? widget.question!.options[i]
+          : '',
+    ),
   );
   late int _correct = widget.question?.correctIndex ?? 0;
-  late final _explanation =
-      TextEditingController(text: widget.question?.explanation ?? '');
-  late final _reference =
-      TextEditingController(text: widget.question?.reference ?? '');
-  late final _category =
-      TextEditingController(text: widget.question?.category ?? 'General');
+  late final _explanation = TextEditingController(
+    text: widget.question?.explanation ?? '',
+  );
+  late final _reference = TextEditingController(
+    text: widget.question?.reference ?? '',
+  );
+  late final _category = TextEditingController(
+    text: widget.question?.category ?? 'General',
+  );
   late String _difficulty = widget.question?.difficulty ?? 'medium';
   bool _saving = false;
 
@@ -218,8 +244,11 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
   Future<void> _save() async {
     final opts = _opts.map((c) => c.text.trim()).toList();
     if (_question.text.trim().isEmpty || opts.any((o) => o.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Question and all 4 options are required.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Question and all 4 options are required.'),
+        ),
+      );
       return;
     }
     setState(() => _saving = true);
@@ -239,8 +268,9 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Could not save: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
     }
   }
 
@@ -250,8 +280,10 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        title: Text(widget.question == null ? 'New question' : 'Edit question',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 18)),
+        title: Text(
+          widget.question == null ? 'New question' : 'Edit question',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -264,9 +296,13 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
           children: [
             _field(_question, 'Question', minLines: 2, maxLines: 4),
             const SizedBox(height: 14),
-            Text('OPTIONS (tap the circle to mark the correct one)',
-                style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.textMuted, fontWeight: FontWeight.w700)),
+            Text(
+              'OPTIONS (tap the circle to mark the correct one)',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const SizedBox(height: 8),
             for (var i = 0; i < 4; i++)
               Padding(
@@ -284,20 +320,23 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
                               ? AppColors.successGreen
                               : Colors.transparent,
                           border: Border.all(
-                              color: _correct == i
-                                  ? AppColors.successGreen
-                                  : palette.divider,
-                              width: 2),
+                            color: _correct == i
+                                ? AppColors.successGreen
+                                : palette.divider,
+                            width: 2,
+                          ),
                         ),
                         child: _correct == i
-                            ? const Icon(Icons.check,
-                                color: AppColors.white, size: 16)
+                            ? const Icon(
+                                Icons.check,
+                                color: AppColors.white,
+                                size: 16,
+                              )
                             : null,
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(
-                        child: _field(_opts[i], 'Option ${i + 1}')),
+                    Expanded(child: _field(_opts[i], 'Option ${i + 1}')),
                   ],
                 ),
               ),
@@ -313,8 +352,12 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            _field(_explanation, 'Explanation (optional)',
-                minLines: 2, maxLines: 4),
+            _field(
+              _explanation,
+              'Explanation (optional)',
+              minLines: 2,
+              maxLines: 4,
+            ),
             const SizedBox(height: 14),
             _field(_reference, 'Bible / reference (optional)'),
             const SizedBox(height: 22),
@@ -324,7 +367,8 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 onPressed: _saving ? null : _save,
                 child: _saving
@@ -332,10 +376,16 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2.4, color: AppColors.white))
-                    : Text('Save question',
-                        style: AppTextStyles.buttonText
-                            .copyWith(color: AppColors.white)),
+                          strokeWidth: 2.4,
+                          color: AppColors.white,
+                        ),
+                      )
+                    : Text(
+                        'Save question',
+                        style: AppTextStyles.buttonText.copyWith(
+                          color: AppColors.white,
+                        ),
+                      ),
               ),
             ),
           ],
@@ -344,8 +394,12 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
     );
   }
 
-  Widget _field(TextEditingController c, String label,
-      {int minLines = 1, int maxLines = 1}) {
+  Widget _field(
+    TextEditingController c,
+    String label, {
+    int minLines = 1,
+    int maxLines = 1,
+  }) {
     final palette = context.palette;
     return TextField(
       controller: c,
@@ -355,19 +409,21 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
       style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle:
-            AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+        labelStyle: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
         filled: true,
         fillColor: palette.inputFill,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: palette.divider)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: palette.divider),
+        ),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: palette.divider)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: palette.divider),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.primaryBlue)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primaryBlue),
+        ),
       ),
     );
   }

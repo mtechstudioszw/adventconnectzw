@@ -8,6 +8,10 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/shimmer_loaders.dart';
 
 /// Editorial Advent News feed — distinct from the user post feed.
 /// Hosted at /news; reached from the home hero card and the home
@@ -65,8 +69,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
       floatingActionButton: _canPublish
           ? FloatingActionButton(
               onPressed: () async {
-                final published =
-                    await context.pushNamed<bool>('post_news');
+                final published = await context.pushNamed<bool>('post_news');
                 if (published == true && mounted) await _load();
               },
               backgroundColor: AppColors.primaryBlue,
@@ -127,8 +130,9 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color:
-                                  AppColors.goldAccent.withValues(alpha: 0.18),
+                              color: AppColors.goldAccent.withValues(
+                                alpha: 0.18,
+                              ),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: AppColors.goldAccent,
@@ -204,11 +208,14 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
   }
 
   Widget _buildBody() {
-    if (_loading && _items.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
-    }
+    return ContentReveal(
+      loading: _loading && _items.isEmpty,
+      skeleton: ShimmerLoaders.watchList(count: 3),
+      child: _buildBodyContent(),
+    );
+  }
+
+  Widget _buildBodyContent() {
     if (_items.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -244,10 +251,10 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
                   Text(
                     _activeCategory == null
                         ? 'Check back soon. Editorial coverage of the '
-                            'Adventist community in Zimbabwe will start '
-                            'landing here.'
+                              'Adventist community in Zimbabwe will start '
+                              'landing here.'
                         : 'No stories in this category yet. Try another '
-                            'category or check back later.',
+                              'category or check back later.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: context.palette.textMuted,
@@ -270,16 +277,11 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
         final item = _items[i];
         // The first card renders as a hero (taller cover) — like a
         // magazine front cover. Everything else is a compact row.
-        if (i == 0) {
-          return _NewsHeroCard(
-            item: item,
-            onTap: () => _openDetails(item),
-          );
-        }
-        return _NewsRowCard(
-          item: item,
-          onTap: () => _openDetails(item),
-        );
+        final card = i == 0
+            ? _NewsHeroCard(item: item, onTap: () => _openDetails(item))
+            : _NewsRowCard(item: item, onTap: () => _openDetails(item));
+        if (i >= 7) return card;
+        return StaggeredReveal(index: i, rise: 18, child: card);
       },
     );
   }
@@ -309,28 +311,30 @@ class _CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.primaryBlue : context.palette.card,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
+    return PressEffect(
+      child: Material(
+        color: selected ? AppColors.primaryBlue : context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected
+                    ? AppColors.primaryBlue
+                    : context.palette.divider,
+              ),
             ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: selected ? AppColors.white : context.palette.text,
-              fontWeight: FontWeight.w600,
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: selected ? AppColors.white : context.palette.text,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -347,145 +351,144 @@ class _NewsHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: context.palette.card,
-      borderRadius: BorderRadius.circular(22),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if ((item.coverPhotoUrl ?? '').isEmpty)
-                    Container(
-                      decoration: const BoxDecoration(
-                        gradient: AppColors.appBarGradient,
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.newspaper,
-                          color: AppColors.white.withValues(alpha: 0.55),
-                          size: 56,
+    return PressEffect(
+      child: Material(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(22),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if ((item.coverPhotoUrl ?? '').isEmpty)
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: AppColors.appBarGradient,
                         ),
-                      ),
-                    )
-                  else
-                    CachedImage(
-                      item.coverPhotoUrl!,
-                      fit: BoxFit.cover,
-                    ),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.55),
-                            ],
-                            stops: const [0.45, 1.0],
+                        child: Center(
+                          child: Icon(
+                            Icons.newspaper,
+                            color: AppColors.white.withValues(alpha: 0.55),
+                            size: 56,
+                          ),
+                        ),
+                      )
+                    else
+                      CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.55),
+                              ],
+                              stops: const [0.45, 1.0],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    child: Row(
-                      children: [
-                        _CategoryPill(
-                          label: item.category.label.toUpperCase(),
-                          highlighted: true,
-                        ),
-                        if (item.isPinned) ...[
-                          const SizedBox(width: 6),
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Row(
+                        children: [
                           _CategoryPill(
-                            label: 'PINNED',
+                            label: item.category.label.toUpperCase(),
                             highlighted: true,
-                            color: AppColors.goldAccent,
                           ),
+                          if (item.isPinned) ...[
+                            const SizedBox(width: 6),
+                            _CategoryPill(
+                              label: 'PINNED',
+                              highlighted: true,
+                              color: AppColors.goldAccent,
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  Positioned(
-                    left: 14,
-                    right: 14,
-                    bottom: 14,
-                    child: Text(
-                      item.title,
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      bottom: 14,
+                      child: Text(
+                        item.title,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.headlineSmall.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 19,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.summary,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.headlineSmall.copyWith(
-                        color: AppColors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 19,
-                        height: 1.25,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.summary,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.textMuted,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.schedule,
-                        size: 13,
+                      style: AppTextStyles.bodyMedium.copyWith(
                         color: context.palette.textMuted,
+                        height: 1.5,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _relative(item.publishedAt),
-                        style: AppTextStyles.labelSmall.copyWith(
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          size: 13,
                           color: context.palette.textMuted,
-                          fontSize: 11.5,
                         ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        'Read',
-                        style: AppTextStyles.labelMedium.copyWith(
+                        const SizedBox(width: 4),
+                        Text(
+                          _relative(item.publishedAt),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: context.palette.textMuted,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Read',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        const Icon(
+                          Icons.chevron_right_rounded,
                           color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
+                          size: 20,
                         ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppColors.primaryBlue,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -500,78 +503,80 @@ class _NewsRowCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: context.palette.card,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 96,
-                height: 96,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: (item.coverPhotoUrl ?? '').isEmpty
-                      ? const DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: AppColors.appBarGradient,
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.newspaper,
-                              color: AppColors.white,
-                              size: 26,
+    return PressEffect(
+      child: Material(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 96,
+                  height: 96,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: (item.coverPhotoUrl ?? '').isEmpty
+                        ? const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: AppColors.appBarGradient,
                             ),
-                          ),
-                        )
-                      : CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover),
+                            child: Center(
+                              child: Icon(
+                                Icons.newspaper,
+                                color: AppColors.white,
+                                size: 26,
+                              ),
+                            ),
+                          )
+                        : CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _CategoryPill(label: item.category.label.toUpperCase()),
-                    const SizedBox(height: 6),
-                    Text(
-                      item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5,
-                        height: 1.3,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _CategoryPill(label: item.category.label.toUpperCase()),
+                      const SizedBox(height: 6),
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          height: 1.3,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.summary,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.palette.textMuted,
-                        fontSize: 12.5,
-                        height: 1.4,
+                      const SizedBox(height: 4),
+                      Text(
+                        item.summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.palette.textMuted,
+                          fontSize: 12.5,
+                          height: 1.4,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _relative(item.publishedAt),
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: context.palette.textMuted,
-                        fontSize: 11,
+                      const SizedBox(height: 6),
+                      Text(
+                        _relative(item.publishedAt),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: context.palette.textMuted,
+                          fontSize: 11,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -606,8 +611,8 @@ class _CategoryPill extends StatelessWidget {
         style: AppTextStyles.labelSmall.copyWith(
           color: highlighted
               ? (color == AppColors.goldAccent
-                  ? AppColors.darkNavy
-                  : AppColors.white)
+                    ? AppColors.darkNavy
+                    : AppColors.white)
               : tint,
           fontSize: 9.5,
           fontWeight: FontWeight.w800,
@@ -644,8 +649,18 @@ String _relative(DateTime then) {
 
 String _absolute(DateTime t) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   final now = DateTime.now();
   final isSameDay =
@@ -653,7 +668,8 @@ String _absolute(DateTime t) {
   final time = _formatTime12(t);
   if (isSameDay) return 'Today $time';
   final yesterday = now.subtract(const Duration(days: 1));
-  final isYesterday = t.year == yesterday.year &&
+  final isYesterday =
+      t.year == yesterday.year &&
       t.month == yesterday.month &&
       t.day == yesterday.day;
   if (isYesterday) return 'Yesterday $time';
@@ -698,21 +714,23 @@ class _CircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
               color: AppColors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.10),
+              ),
             ),
+            child: Icon(icon, color: AppColors.white, size: 18),
           ),
-          child: Icon(icon, color: AppColors.white, size: 18),
         ),
       ),
     );

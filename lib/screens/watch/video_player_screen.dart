@@ -17,6 +17,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/youtube/live_chat_panel.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Full in-app player for a YouTube video. Official IFrame player (the only
 /// compliant way to play) + a faith-safe endless "Up next" built from OUR
@@ -97,8 +98,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       ),
     );
     _sub = controller.stream.listen(_onValue);
-    _progressTimer =
-        Timer.periodic(const Duration(seconds: 10), (_) => _saveProgress());
+    _progressTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _saveProgress(),
+    );
     _armLoadWatchdog();
 
     if (!mounted) return;
@@ -114,8 +117,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   Future<void> _parseVerses() async {
     final v = _video;
     if (v == null) return;
-    final refs =
-        await VerseRefService.parse('${v.title}\n${v.description ?? ''}');
+    final refs = await VerseRefService.parse(
+      '${v.title}\n${v.description ?? ''}',
+    );
     if (mounted) setState(() => _verses = refs);
   }
 
@@ -200,14 +204,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         durationSeconds: v.durationSeconds,
         completed: completed,
       );
-    } catch (_) {/* best effort */}
+    } catch (_) {
+      /* best effort */
+    }
   }
 
   Future<void> _loadUpNext() async {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
-    final rows =
-        await YoutubeService.upNext(_videoId, limit: _page, offset: _offset);
+    final rows = await YoutubeService.upNext(
+      _videoId,
+      limit: _page,
+      offset: _offset,
+    );
     if (!mounted) return;
     setState(() {
       _upNext.addAll(rows);
@@ -218,8 +227,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   void _onScroll() {
-    if (_scroll.position.pixels >=
-        _scroll.position.maxScrollExtent - 600) {
+    if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 600) {
       _loadUpNext();
     }
   }
@@ -259,11 +267,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     try {
       secs = (await c?.currentTime ?? 0).round();
     } catch (_) {}
-    final url = 'https://www.youtube.com/watch?v=${v.videoId}'
+    final url =
+        'https://www.youtube.com/watch?v=${v.videoId}'
         '${secs > 5 ? '&t=${secs}s' : ''}';
-    await Share.share(
-      '${v.title}\n\nWatch on Advent Connect ZW:\n$url',
-    );
+    await Share.share('${v.title}\n\nWatch on Advent Connect ZW:\n$url');
   }
 
   Future<void> _openInYouTube() async {
@@ -311,7 +318,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     color: Colors.black.withValues(alpha: 0.35),
                     shape: const CircleBorder(),
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: AppColors.white),
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: AppColors.white,
+                      ),
                       onPressed: () => Navigator.of(context).maybePop(),
                     ),
                   ),
@@ -333,10 +343,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         children: [
           Stack(
             children: [
-              YoutubePlayer(
-                controller: _controller!,
-                aspectRatio: 16 / 9,
-              ),
+              YoutubePlayer(controller: _controller!, aspectRatio: 16 / 9),
               if (!_playerStarted) Positioned.fill(child: _loadingOverlay()),
               Positioned(
                 left: 4,
@@ -381,16 +388,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon,
-                    size: 17,
-                    color: selected ? AppColors.primaryBlue : palette.textMuted),
+                Icon(
+                  icon,
+                  size: 17,
+                  color: selected ? AppColors.primaryBlue : palette.textMuted,
+                ),
                 const SizedBox(width: 6),
-                Text(label,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color:
-                          selected ? AppColors.primaryBlue : palette.textMuted,
-                      fontWeight: FontWeight.w700,
-                    )),
+                Text(
+                  label,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: selected ? AppColors.primaryBlue : palette.textMuted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
@@ -400,10 +410,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     return Row(
       children: [
-        seg('Up next', Icons.video_library_outlined, !_showChat,
-            () => setState(() => _showChat = false)),
-        seg('Live chat', Icons.forum_outlined, _showChat,
-            () => setState(() => _showChat = true)),
+        seg(
+          'Up next',
+          Icons.video_library_outlined,
+          !_showChat,
+          () => setState(() => _showChat = false),
+        ),
+        seg(
+          'Live chat',
+          Icons.forum_outlined,
+          _showChat,
+          () => setState(() => _showChat = true),
+        ),
       ],
     );
   }
@@ -421,8 +439,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           if (v?.thumbnailUrl != null)
             CachedImage(v!.thumbnailUrl!, fit: BoxFit.cover),
           DecoratedBox(
-            decoration:
-                BoxDecoration(color: Colors.black.withValues(alpha: 0.5)),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.5),
+            ),
           ),
           // Indeterminate top progress bar — the clear "it's loading on your
           // network, not frozen" signal while the player buffers.
@@ -432,8 +451,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               child: LinearProgressIndicator(
                 minHeight: 3,
                 backgroundColor: Color(0x33FFFFFF),
-                valueColor:
-                    AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  AppColors.primaryBlue,
+                ),
               ),
             ),
           Center(
@@ -441,21 +461,31 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.wifi_off_rounded,
-                          color: AppColors.white, size: 34),
+                      const Icon(
+                        Icons.wifi_off_rounded,
+                        color: AppColors.white,
+                        size: 34,
+                      ),
                       const SizedBox(height: 10),
-                      Text('Slow connection',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.white,
-                              fontWeight: FontWeight.w700)),
+                      Text(
+                        'Slow connection',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text('Check your network and try again.',
-                          style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.white.withValues(alpha: 0.8))),
+                      Text(
+                        'Check your network and try again.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.white.withValues(alpha: 0.8),
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       FilledButton(
                         style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primaryBlue),
+                          backgroundColor: AppColors.primaryBlue,
+                        ),
                         onPressed: _retryLoad,
                         child: const Text('Retry'),
                       ),
@@ -465,11 +495,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const CircularProgressIndicator(
-                          color: AppColors.white, strokeWidth: 2.5),
+                        color: AppColors.white,
+                        strokeWidth: 2.5,
+                      ),
                       const SizedBox(height: 12),
-                      Text('Loading…',
-                          style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.white.withValues(alpha: 0.85))),
+                      Text(
+                        'Loading…',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
                     ],
                   ),
           ),
@@ -492,7 +527,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               children: [
                 Row(
                   children: [
-                    if (v.isLive) ...[const LivePill(), const SizedBox(width: 8)],
+                    if (v.isLive) ...[
+                      const LivePill(),
+                      const SizedBox(width: 8),
+                    ],
                     Expanded(
                       child: Text(
                         v.title,
@@ -512,8 +550,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     if (v.isLive) 'LIVE now' else v.publishedLabel,
                     if (!v.isLive) v.viewsLabel,
                   ].where((e) => e.isNotEmpty).join('  ·  '),
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: palette.textMuted),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: palette.textMuted,
+                  ),
                 ),
               ],
             ),
@@ -534,15 +573,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             ),
           ),
         ),
-        ..._upNext.map((u) => YoutubeVideoCard(
-              video: u,
-              onTap: () => _switchTo(u),
-            )),
+        ..._upNext.map(
+          (u) => YoutubeVideoCard(video: u, onTap: () => _switchTo(u)),
+        ),
         if (_loadingMore)
           const Padding(
             padding: EdgeInsets.all(20),
-            child: Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue)),
+            child: Center(child: BrandSpinner(size: 30)),
           ),
         const SizedBox(height: 24),
       ],
@@ -595,9 +632,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       child: TextButton.icon(
         onPressed: onTap,
         icon: Icon(icon, size: 20, color: color),
-        label: Text(label,
-            style: AppTextStyles.bodySmall
-                .copyWith(color: color, fontWeight: FontWeight.w600)),
+        label: Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         style: TextButton.styleFrom(
           foregroundColor: color,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -618,9 +659,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           child: Text(
             v.description!.trim(),
             maxLines: _descExpanded ? null : 3,
-            overflow: _descExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: AppTextStyles.bodySmall
-                .copyWith(color: palette.textMuted, height: 1.45),
+            overflow: _descExpanded
+                ? TextOverflow.visible
+                : TextOverflow.ellipsis,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: palette.textMuted,
+              height: 1.45,
+            ),
           ),
         ),
       ),
@@ -637,15 +682,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         children: [
           for (final ref in _verses)
             ActionChip(
-              avatar: const Icon(Icons.menu_book_outlined,
-                  size: 16, color: AppColors.primaryBlue),
+              avatar: const Icon(
+                Icons.menu_book_outlined,
+                size: 16,
+                color: AppColors.primaryBlue,
+              ),
               label: Text(ref.display),
               labelStyle: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.primaryBlue, fontWeight: FontWeight.w700),
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+              ),
               backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.10),
               side: BorderSide.none,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
+                borderRadius: BorderRadius.circular(20),
+              ),
               onPressed: () => _openPassage(ref),
             ),
         ],
@@ -680,9 +731,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     const Icon(Icons.menu_book, color: AppColors.primaryBlue),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(ref.display,
-                          style: AppTextStyles.titleMedium.copyWith(
-                              fontWeight: FontWeight.w800, color: palette.text)),
+                      child: Text(
+                        ref.display,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: palette.text,
+                        ),
+                      ),
                     ),
                     TextButton(
                       onPressed: () {
@@ -697,28 +752,37 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 Expanded(
                   child: lines.isEmpty
                       ? Center(
-                          child: Text('Passage unavailable.',
-                              style: AppTextStyles.bodyMedium
-                                  .copyWith(color: palette.textMuted)))
+                          child: Text(
+                            'Passage unavailable.',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: palette.textMuted,
+                            ),
+                          ),
+                        )
                       : ListView.builder(
                           controller: scroll,
                           itemCount: lines.length,
                           itemBuilder: (_, i) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 5),
                             child: RichText(
-                              text: TextSpan(children: [
-                                TextSpan(
-                                  text: '${lines[i].number} ',
-                                  style: AppTextStyles.labelSmall.copyWith(
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: '${lines[i].number} ',
+                                    style: AppTextStyles.labelSmall.copyWith(
                                       color: AppColors.primaryBlue,
-                                      fontWeight: FontWeight.w800),
-                                ),
-                                TextSpan(
-                                  text: lines[i].text,
-                                  style: AppTextStyles.bodyLarge.copyWith(
-                                      color: palette.text, height: 1.5),
-                                ),
-                              ]),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: lines[i].text,
+                                    style: AppTextStyles.bodyLarge.copyWith(
+                                      color: palette.text,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -827,9 +891,13 @@ class _NotesSheetState extends State<_NotesSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Sermon notes',
-              style: AppTextStyles.titleMedium
-                  .copyWith(fontWeight: FontWeight.w800, color: palette.text)),
+          Text(
+            'Sermon notes',
+            style: AppTextStyles.titleMedium.copyWith(
+              fontWeight: FontWeight.w800,
+              color: palette.text,
+            ),
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -839,10 +907,13 @@ class _NotesSheetState extends State<_NotesSheet> {
                   color: AppColors.primaryBlue.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text('@ ${_stamp(widget.atSeconds)}',
-                    style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w700)),
+                child: Text(
+                  '@ ${_stamp(widget.atSeconds)}',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -860,7 +931,9 @@ class _NotesSheetState extends State<_NotesSheet> {
                       borderSide: BorderSide(color: palette.divider),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                 ),
               ),
@@ -879,9 +952,12 @@ class _NotesSheetState extends State<_NotesSheet> {
           else if (_notes.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Text('No notes yet. Tap a moment to remember it.',
-                  style:
-                      AppTextStyles.bodySmall.copyWith(color: palette.textMuted)),
+              child: Text(
+                'No notes yet. Tap a moment to remember it.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
             )
           else
             Flexible(
@@ -895,16 +971,26 @@ class _NotesSheetState extends State<_NotesSheet> {
                     contentPadding: EdgeInsets.zero,
                     leading: GestureDetector(
                       onTap: () => widget.onSeek(n.positionSeconds),
-                      child: Text(_stamp(n.positionSeconds),
-                          style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.primaryBlue,
-                              fontWeight: FontWeight.w700)),
+                      child: Text(
+                        _stamp(n.positionSeconds),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                    title: Text(n.note,
-                        style: AppTextStyles.bodyMedium
-                            .copyWith(color: palette.text)),
+                    title: Text(
+                      n.note,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: palette.text,
+                      ),
+                    ),
                     trailing: IconButton(
-                      icon: Icon(Icons.close, size: 18, color: palette.textMuted),
+                      icon: Icon(
+                        Icons.close,
+                        size: 18,
+                        color: palette.textMuted,
+                      ),
                       onPressed: () async {
                         await YoutubeService.deleteNote(n.id);
                         _load();

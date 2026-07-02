@@ -25,6 +25,9 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/shimmer_loaders.dart';
 
 /// Facebook-style cross-content search.
 ///
@@ -269,7 +272,8 @@ class _SearchScreenState extends State<SearchScreen> {
       _videos = videos;
       _searching = false;
     });
-    final hasAny = people.isNotEmpty ||
+    final hasAny =
+        people.isNotEmpty ||
         churches.isNotEmpty ||
         events.isNotEmpty ||
         products.isNotEmpty ||
@@ -373,17 +377,17 @@ class _SearchScreenState extends State<SearchScreen> {
             _buildSearchBar(),
             if (_lastQuery.isNotEmpty && _hasResults) _buildFilterChips(),
             Expanded(
-              child: _searching
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primaryBlue,
-                      ),
-                    )
-                  : _lastQuery.isEmpty
-                      ? _buildRecent()
-                      : _hasResults
-                          ? _buildResults()
-                          : _buildEmpty(),
+              // Row-shaped shimmer while searching, crossfading into
+              // whichever state lands (results / recent / empty).
+              child: ContentReveal(
+                loading: _searching,
+                skeleton: ShimmerLoaders.peopleList(),
+                child: _lastQuery.isEmpty
+                    ? _buildRecent()
+                    : _hasResults
+                    ? _buildResults()
+                    : _buildEmpty(),
+              ),
             ),
           ],
         ),
@@ -405,10 +409,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 context.goNamed('home');
               }
             },
-            icon: Icon(
-              Icons.arrow_back,
-              color: context.palette.text,
-            ),
+            icon: Icon(Icons.arrow_back, color: context.palette.text),
             splashRadius: 22,
           ),
           Expanded(
@@ -425,8 +426,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 textInputAction: TextInputAction.search,
                 style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
                 decoration: InputDecoration(
-                  hintText:
-                      'Search for friends, churches, events, products...',
+                  hintText: 'Search for friends, churches, events, products...',
                   hintStyle: AppTextStyles.bodyMedium.copyWith(
                     color: context.palette.textMuted,
                     fontSize: 14,
@@ -451,8 +451,10 @@ class _SearchScreenState extends State<SearchScreen> {
                           },
                         ),
                   isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 4,
+                  ),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -501,8 +503,9 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildRecent() {
-    final shown =
-        _seeAllRecent ? _recent : _recent.take(5).toList(growable: false);
+    final shown = _seeAllRecent
+        ? _recent
+        : _recent.take(5).toList(growable: false);
     return ListView(
       padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
       children: [
@@ -535,10 +538,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       'Solusi',
                       'Teaching',
                     ])
-                      _SuggestionTap(
-                        label: s,
-                        onTap: () => _useRecent(s),
-                      ),
+                      _SuggestionTap(label: s, onTap: () => _useRecent(s)),
                   ],
                 ),
               ],
@@ -611,120 +611,146 @@ class _SearchScreenState extends State<SearchScreen> {
     final sections = <Widget>[];
 
     if (_suggestions.isNotEmpty) {
-      sections.add(_landingHeader(
-        'People you may know',
-        actionLabel: _suggestions.length > 6
-            ? (_seeAllSuggestions ? 'Show less' : 'See all')
-            : null,
-        onAction: _suggestions.length > 6
-            ? () => setState(() => _seeAllSuggestions = !_seeAllSuggestions)
-            : null,
-      ));
-      sections.add(_landingList([
-        for (final p in (_seeAllSuggestions
-            ? _suggestions
-            : _suggestions.take(6)))
-          _PersonRow(
-            person: p,
-            onTap: () => context.pushNamed(
-              'user_profile',
-              pathParameters: {'userId': p.userId},
+      sections.add(
+        _landingHeader(
+          'People you may know',
+          actionLabel: _suggestions.length > 6
+              ? (_seeAllSuggestions ? 'Show less' : 'See all')
+              : null,
+          onAction: _suggestions.length > 6
+              ? () => setState(() => _seeAllSuggestions = !_seeAllSuggestions)
+              : null,
+        ),
+      );
+      sections.add(
+        _landingList([
+          for (final p
+              in (_seeAllSuggestions ? _suggestions : _suggestions.take(6)))
+            _PersonRow(
+              person: p,
+              onTap: () => context.pushNamed(
+                'user_profile',
+                pathParameters: {'userId': p.userId},
+              ),
             ),
-          ),
-      ]));
+        ]),
+      );
     }
 
     if (_suggVideos.isNotEmpty) {
-      sections.add(_landingHeader(
-        'Videos to watch',
-        actionLabel: 'See all',
-        onAction: () => context.goNamed('watch'),
-      ));
+      sections.add(
+        _landingHeader(
+          'Videos to watch',
+          actionLabel: 'See all',
+          onAction: () => context.goNamed('watch'),
+        ),
+      );
       for (final v in _suggVideos) {
-        sections.add(YoutubeVideoCard(
-          video: v,
-          onTap: () => context.pushNamed('watch_video',
-              pathParameters: {'id': v.videoId}, extra: v),
-        ));
+        sections.add(
+          YoutubeVideoCard(
+            video: v,
+            onTap: () => context.pushNamed(
+              'watch_video',
+              pathParameters: {'id': v.videoId},
+              extra: v,
+            ),
+          ),
+        );
       }
     }
 
     if (_suggProducts.isNotEmpty) {
-      sections.add(_landingHeader(
-        'In the marketplace',
-        actionLabel: 'See all',
-        onAction: () => context.goNamed('marketplace'),
-      ));
-      sections.add(_landingList([
-        for (final p in _suggProducts)
-          _ProductRow(
-            product: p,
-            onTap: () => context.pushNamed(
-              'product_details',
-              pathParameters: {'id': p.id},
-              extra: p,
+      sections.add(
+        _landingHeader(
+          'In the marketplace',
+          actionLabel: 'See all',
+          onAction: () => context.goNamed('marketplace'),
+        ),
+      );
+      sections.add(
+        _landingList([
+          for (final p in _suggProducts)
+            _ProductRow(
+              product: p,
+              onTap: () => context.pushNamed(
+                'product_details',
+                pathParameters: {'id': p.id},
+                extra: p,
+              ),
             ),
-          ),
-      ]));
+        ]),
+      );
     }
 
     if (_suggChurches.isNotEmpty) {
-      sections.add(_landingHeader(
-        // Not location-based — these are suggestions, so don't claim "near you".
-        // Real distance ranking lives on the Churches screen's "Near me".
-        'Discover churches',
-        actionLabel: 'See all',
-        onAction: () => context.goNamed('churches'),
-      ));
-      sections.add(_landingList([
-        for (final c in _suggChurches)
-          _ChurchRow(
-            church: c,
-            onTap: () => context.pushNamed(
-              'church_details',
-              pathParameters: {'id': c.id},
-              extra: c,
+      sections.add(
+        _landingHeader(
+          // Not location-based — these are suggestions, so don't claim "near you".
+          // Real distance ranking lives on the Churches screen's "Near me".
+          'Discover churches',
+          actionLabel: 'See all',
+          onAction: () => context.goNamed('churches'),
+        ),
+      );
+      sections.add(
+        _landingList([
+          for (final c in _suggChurches)
+            _ChurchRow(
+              church: c,
+              onTap: () => context.pushNamed(
+                'church_details',
+                pathParameters: {'id': c.id},
+                extra: c,
+              ),
             ),
-          ),
-      ]));
+        ]),
+      );
     }
 
     if (_suggEvents.isNotEmpty) {
-      sections.add(_landingHeader(
-        'Upcoming events',
-        actionLabel: 'See all',
-        onAction: () => context.pushNamed('events'),
-      ));
-      sections.add(_landingList([
-        for (final e in _suggEvents)
-          _EventRow(
-            event: e,
-            onTap: () => context.pushNamed(
-              'event_details',
-              pathParameters: {'id': e.id},
-              extra: e,
+      sections.add(
+        _landingHeader(
+          'Upcoming events',
+          actionLabel: 'See all',
+          onAction: () => context.pushNamed('events'),
+        ),
+      );
+      sections.add(
+        _landingList([
+          for (final e in _suggEvents)
+            _EventRow(
+              event: e,
+              onTap: () => context.pushNamed(
+                'event_details',
+                pathParameters: {'id': e.id},
+                extra: e,
+              ),
             ),
-          ),
-      ]));
+        ]),
+      );
     }
 
     if (_suggJobs.isNotEmpty) {
-      sections.add(_landingHeader(
-        'Jobs & opportunities',
-        actionLabel: 'See all',
-        onAction: () => context.goNamed('jobs'),
-      ));
-      sections.add(_landingList([
-        for (final j in _suggJobs)
-          _JobRow(
-            job: j,
-            onTap: () => context.pushNamed(
-              'job_details',
-              pathParameters: {'id': j.id},
-              extra: j,
+      sections.add(
+        _landingHeader(
+          'Jobs & opportunities',
+          actionLabel: 'See all',
+          onAction: () => context.goNamed('jobs'),
+        ),
+      );
+      sections.add(
+        _landingList([
+          for (final j in _suggJobs)
+            _JobRow(
+              job: j,
+              onTap: () => context.pushNamed(
+                'job_details',
+                pathParameters: {'id': j.id},
+                extra: j,
+              ),
             ),
-          ),
-      ]));
+        ]),
+      );
     }
 
     return sections;
@@ -773,10 +799,7 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Column(
         children: [
           for (final r in rows)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: r,
-            ),
+            Padding(padding: const EdgeInsets.only(bottom: 10), child: r),
         ],
       ),
     );
@@ -826,27 +849,27 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildResults() {
     final showPeople =
         (_filter == _Filter.all || _filter == _Filter.people) &&
-            _people.isNotEmpty;
+        _people.isNotEmpty;
     final showPosts =
         (_filter == _Filter.all || _filter == _Filter.posts) &&
-            _posts.isNotEmpty;
+        _posts.isNotEmpty;
     final showChurches =
         (_filter == _Filter.all || _filter == _Filter.churches) &&
-            _churches.isNotEmpty;
+        _churches.isNotEmpty;
     final showEvents =
         (_filter == _Filter.all || _filter == _Filter.events) &&
-            _events.isNotEmpty;
+        _events.isNotEmpty;
     final showProducts =
         (_filter == _Filter.all || _filter == _Filter.marketplace) &&
-            _products.isNotEmpty;
+        _products.isNotEmpty;
     final showJobs =
-        (_filter == _Filter.all || _filter == _Filter.jobs) &&
-            _jobs.isNotEmpty;
+        (_filter == _Filter.all || _filter == _Filter.jobs) && _jobs.isNotEmpty;
     final showVideos =
         (_filter == _Filter.all || _filter == _Filter.videos) &&
-            _videos.isNotEmpty;
+        _videos.isNotEmpty;
 
-    final anyForFilter = showPeople ||
+    final anyForFilter =
+        showPeople ||
         showPosts ||
         showChurches ||
         showEvents ||
@@ -878,8 +901,11 @@ class _SearchScreenState extends State<SearchScreen> {
                   video: v,
                   onTap: () => _openResult(
                     _lastQuery,
-                    () => context.pushNamed('watch_video',
-                        pathParameters: {'id': v.videoId}, extra: v),
+                    () => context.pushNamed(
+                      'watch_video',
+                      pathParameters: {'id': v.videoId},
+                      extra: v,
+                    ),
                   ),
                 ),
             ],
@@ -910,10 +936,8 @@ class _SearchScreenState extends State<SearchScreen> {
               for (final post in _posts)
                 _PostRow(
                   post: post,
-                  onTap: () => _openResult(
-                    _lastQuery,
-                    () => Navigator.pop(context),
-                  ),
+                  onTap: () =>
+                      _openResult(_lastQuery, () => Navigator.pop(context)),
                 ),
             ],
           ),
@@ -1038,31 +1062,29 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: active
-                ? AppColors.primaryBlue
-                : context.palette.chipBg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: active
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: active ? AppColors.primaryBlue : context.palette.chipBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: active ? AppColors.primaryBlue : context.palette.divider,
+              ),
             ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: active ? AppColors.white : context.palette.text,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: active ? AppColors.white : context.palette.text,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
             ),
           ),
         ),
@@ -1084,49 +1106,51 @@ class _RecentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: context.palette.chipBg,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.history,
-                  color: context.palette.text,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  query,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: context.palette.chipBg,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.history,
+                    color: context.palette.text,
+                    size: 18,
                   ),
                 ),
-              ),
-              IconButton(
-                onPressed: onRemove,
-                icon: Icon(
-                  Icons.close,
-                  color: context.palette.textMuted,
-                  size: 18,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    query,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
-                splashRadius: 18,
-              ),
-            ],
+                IconButton(
+                  onPressed: onRemove,
+                  icon: Icon(
+                    Icons.close,
+                    color: context.palette.textMuted,
+                    size: 18,
+                  ),
+                  splashRadius: 18,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1141,25 +1165,25 @@ class _SuggestionTap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: context.palette.chipBg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: context.palette.divider,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: context.palette.chipBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: context.palette.divider),
             ),
-          ),
-          child: Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: context.palette.text,
-              fontWeight: FontWeight.w700,
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: context.palette.text,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -1198,8 +1222,7 @@ class _Section extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.primaryBlue.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(20),
@@ -1234,66 +1257,70 @@ class _PersonRow extends StatelessWidget {
         ? 'Member'
         : person.fullName!.trim();
     final parts = <String>[
-      if ((person.profession ?? '').trim().isNotEmpty) person.profession!.trim(),
+      if ((person.profession ?? '').trim().isNotEmpty)
+        person.profession!.trim(),
       if ((person.city ?? '').trim().isNotEmpty) person.city!.trim(),
-      if ((person.churchName ?? '').trim().isNotEmpty) person.churchName!.trim(),
+      if ((person.churchName ?? '').trim().isNotEmpty)
+        person.churchName!.trim(),
     ];
     final subtitle = parts.isEmpty ? 'On Advent Connect' : parts.join('  ·  ');
-    return ScreenCard(
-      padding: const EdgeInsets.all(14),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Row(
-            children: [
-              _PersonAvatar(
-                photoUrl: person.profilePhotoUrl,
-                fullName: name,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleSmall.copyWith(
-                              fontWeight: FontWeight.w700,
+    return PressEffect(
+      child: ScreenCard(
+        padding: const EdgeInsets.all(14),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Row(
+              children: [
+                _PersonAvatar(photoUrl: person.profilePhotoUrl, fullName: name),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleSmall.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
-                        ),
-                        if (person.isVerified) ...[
-                          const SizedBox(width: 4),
-                          const Icon(Icons.verified,
-                              color: AppColors.goldAccent, size: 15),
+                          if (person.isVerified) ...[
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.verified,
+                              color: AppColors.goldAccent,
+                              size: 15,
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.palette.textMuted,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.palette.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.primaryBlue,
-                size: 22,
-              ),
-            ],
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.primaryBlue,
+                  size: 22,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1313,58 +1340,60 @@ class _PostRow extends StatelessWidget {
     final preview = body.isEmpty
         ? '(photo post)'
         : body.length > 140
-            ? '${body.substring(0, 140)}…'
-            : body;
-    return ScreenCard(
-      padding: const EdgeInsets.all(14),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(10),
+        ? '${body.substring(0, 140)}…'
+        : body;
+    return PressEffect(
+      child: ScreenCard(
+        padding: const EdgeInsets.all(14),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.article_outlined,
+                    color: AppColors.white,
+                    size: 18,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.article_outlined,
-                  color: AppColors.white,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      post.authorName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleSmall.copyWith(
-                        fontWeight: FontWeight.w700,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        post.authorName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      preview,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.palette.textMuted,
-                        height: 1.35,
+                      const SizedBox(height: 2),
+                      Text(
+                        preview,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.palette.textMuted,
+                          height: 1.35,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1423,14 +1452,16 @@ class _ChurchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Row(
-      icon: Icons.church,
-      title: church.name,
-      subtitle: church.city,
-      onTap: onTap,
-      trailing: church.isVerified
-          ? const Icon(Icons.verified, color: AppColors.goldAccent, size: 16)
-          : null,
+    return PressEffect(
+      child: _Row(
+        icon: Icons.church,
+        title: church.name,
+        subtitle: church.city,
+        onTap: onTap,
+        trailing: church.isVerified
+            ? const Icon(Icons.verified, color: AppColors.goldAccent, size: 16)
+            : null,
+      ),
     );
   }
 }
@@ -1584,10 +1615,7 @@ class _Row extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                color: context.palette.textMuted,
-              ),
+              Icon(Icons.chevron_right, color: context.palette.textMuted),
             ],
           ),
         ),

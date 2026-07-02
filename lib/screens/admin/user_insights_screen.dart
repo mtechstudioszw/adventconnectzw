@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Super-admin "User insights" — where signup-survey responses land
 /// (patch_136). Shows how members heard about the app, plus recent
@@ -39,8 +40,10 @@ class _UserInsightsScreenState extends State<UserInsightsScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        title: Text('User insights',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 19)),
+        title: Text(
+          'User insights',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -52,16 +55,13 @@ class _UserInsightsScreenState extends State<UserInsightsScreen> {
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child:
-                      CircularProgressIndicator(color: AppColors.primaryBlue));
+              return const Center(child: BrandSpinner(size: 30));
             }
             if (snap.hasError) {
               return _Error(message: '${snap.error}', onRetry: _reload);
             }
             final data = snap.data!;
-            final total =
-                data.summary.fold<int>(0, (sum, e) => sum + e.total);
+            final total = data.summary.fold<int>(0, (sum, e) => sum + e.total);
             if (total == 0) {
               return _Empty(palette: palette, onRetry: _reload);
             }
@@ -71,15 +71,21 @@ class _UserInsightsScreenState extends State<UserInsightsScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  Text('HOW USERS HEARD ABOUT US',
-                      style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.4)),
+                  Text(
+                    'HOW USERS HEARD ABOUT US',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('$total response(s)',
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: palette.textMuted)),
+                  Text(
+                    '$total response(s)',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   for (final s in data.summary)
                     _SourceBar(
@@ -88,11 +94,14 @@ class _UserInsightsScreenState extends State<UserInsightsScreen> {
                       fraction: total == 0 ? 0 : s.total / total,
                     ),
                   const SizedBox(height: 24),
-                  Text('RECENT RESPONSES',
-                      style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.primaryBlue,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.4)),
+                  Text(
+                    'RECENT RESPONSES',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   for (final r in data.recent) _ResponseTile(response: r),
                 ],
@@ -112,8 +121,11 @@ class _InsightsData {
 }
 
 class _SourceBar extends StatelessWidget {
-  const _SourceBar(
-      {required this.label, required this.count, required this.fraction});
+  const _SourceBar({
+    required this.label,
+    required this.count,
+    required this.fraction,
+  });
   final String label;
   final int count;
   final double fraction;
@@ -129,13 +141,20 @@ class _SourceBar extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                  child: Text(label,
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(fontWeight: FontWeight.w600))),
-              Text('$count',
+                child: Text(
+                  label,
                   style: AppTextStyles.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryBlue)),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                '$count',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -145,8 +164,9 @@ class _SourceBar extends StatelessWidget {
               value: fraction.clamp(0.02, 1.0),
               minHeight: 8,
               backgroundColor: palette.cardMuted,
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.primaryBlue,
+              ),
             ),
           ),
         ],
@@ -177,31 +197,40 @@ class _ResponseTile extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(response.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.titleSmall
-                        .copyWith(fontWeight: FontWeight.w700)),
+                child: Text(
+                  response.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.primaryBlue.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(response.source,
-                    style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w700)),
+                child: Text(
+                  response.source,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
           if (hope != null && hope.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text('“$hope”',
-                style: AppTextStyles.bodySmall.copyWith(
-                    color: palette.textMuted, fontStyle: FontStyle.italic)),
+            Text(
+              '“$hope”',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.textMuted,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
           ],
         ],
       ),
@@ -224,13 +253,17 @@ class _Empty extends StatelessWidget {
           children: [
             Icon(Icons.insights_outlined, size: 60, color: palette.textMuted),
             const SizedBox(height: 16),
-            Text('No survey responses yet.',
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: palette.textMuted)),
+            Text(
+              'No survey responses yet.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.textMuted,
+              ),
+            ),
             const SizedBox(height: 16),
             FilledButton(
               style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue),
+                backgroundColor: AppColors.primaryBlue,
+              ),
               onPressed: onRetry,
               child: const Text('Refresh'),
             ),
@@ -257,14 +290,16 @@ class _Error extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline, size: 48, color: AppColors.red),
             const SizedBox(height: 12),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: palette.textMuted)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+            ),
             const SizedBox(height: 16),
             FilledButton(
               style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue),
+                backgroundColor: AppColors.primaryBlue,
+              ),
               onPressed: onRetry,
               child: const Text('Retry'),
             ),

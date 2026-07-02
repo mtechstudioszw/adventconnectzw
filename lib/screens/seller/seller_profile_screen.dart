@@ -20,6 +20,7 @@ import '../../widgets/product_card.dart';
 import '../../widgets/rate_seller_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Public storefront view. Buyers reach this from product_details → tap
 /// seller, or from any future "Featured sellers" surface. Shows store
@@ -78,9 +79,10 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _bootstrap();
   }
 
@@ -277,8 +279,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     const adminPhone = '263778092494';
     const adminEmail = 'tanatswamichaelmikuwa@gmail.com';
 
-    final waUri =
-        Uri.parse('https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}');
+    final waUri = Uri.parse(
+      'https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}',
+    );
     try {
       final ok = await launchUrl(waUri, mode: LaunchMode.externalApplication);
       if (ok) return;
@@ -329,11 +332,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
       return Stack(
         children: [
           _buildHero(),
-          const Positioned.fill(
-            child: Center(
-              child: CircularProgressIndicator(color: AppColors.primaryBlue),
-            ),
-          ),
+          const Positioned.fill(child: Center(child: BrandSpinner(size: 30))),
         ],
       );
     }
@@ -345,9 +344,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
             _buildHero(),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-              child: _ErrorCard(
-                message: _error ?? 'Seller not found.',
-              ),
+              child: _ErrorCard(message: _error ?? 'Seller not found.'),
             ),
           ],
         ),
@@ -390,8 +387,8 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                     seller: seller,
                     onWhatsApp: () => _openWhatsApp(
                       (seller.whatsapp?.trim().isNotEmpty == true
-                              ? seller.whatsapp
-                              : seller.phone)!,
+                          ? seller.whatsapp
+                          : seller.phone)!,
                     ),
                     onCall: () => _callPhone(seller.phone),
                     onMessage: () {
@@ -399,8 +396,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                         SnackBar(
                           content: Text(
                             'In-app messaging opens once you start a conversation from a product.',
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: AppColors.white),
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.white,
+                            ),
                           ),
                         ),
                       );
@@ -409,7 +407,8 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                   if (seller.observesSabbath) ...[
                     const SizedBox(height: 16),
                     _SabbathBadge(
-                      notice: seller.sabbathNoticeText?.trim().isNotEmpty == true
+                      notice:
+                          seller.sabbathNoticeText?.trim().isNotEmpty == true
                           ? seller.sabbathNoticeText!
                           : 'This seller observes the Sabbath. Response times may be slower Friday sundown to Saturday sundown.',
                     ),
@@ -475,12 +474,14 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                     imageUrl: cover,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => const DecoratedBox(
-                      decoration:
-                          BoxDecoration(gradient: AppColors.appBarGradient),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.appBarGradient,
+                      ),
                     ),
                     errorWidget: (context, url, error) => const DecoratedBox(
-                      decoration:
-                          BoxDecoration(gradient: AppColors.appBarGradient),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.appBarGradient,
+                      ),
                     ),
                   ),
                 )
@@ -504,117 +505,117 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
             ),
           ),
         SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  _CircleIconButton(
-                    icon: Icons.arrow_back_ios_new,
-                    onTap: () => context.canPop()
-                        ? context.pop()
-                        : context.goNamed('marketplace'),
-                  ),
-                  const Spacer(),
-                  _CircleIconButton(
-                    icon: Icons.share_outlined,
-                    onTap: _shareSeller,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Center(
-                child: GestureDetector(
-                  onTap: hasPhoto
-                      ? () => FullImageViewer.show(context, photo)
-                      : null,
-                  child: Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    gradient: hasPhoto ? null : AppColors.primaryGradient,
-                    color: hasPhoto ? AppColors.lightGrey : null,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.white, width: 4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.30),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                    image: hasPhoto
-                        ? DecorationImage(
-                            image: CachedNetworkImageProvider(photo),
-                            fit: BoxFit.cover,
-                          )
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _CircleIconButton(
+                      icon: Icons.arrow_back_ios_new,
+                      onTap: () => context.canPop()
+                          ? context.pop()
+                          : context.goNamed('marketplace'),
+                    ),
+                    const Spacer(),
+                    _CircleIconButton(
+                      icon: Icons.share_outlined,
+                      onTap: _shareSeller,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Center(
+                  child: GestureDetector(
+                    onTap: hasPhoto
+                        ? () => FullImageViewer.show(context, photo)
                         : null,
+                    child: Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        gradient: hasPhoto ? null : AppColors.primaryGradient,
+                        color: hasPhoto ? AppColors.lightGrey : null,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.white, width: 4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.30),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                        image: hasPhoto
+                            ? DecorationImage(
+                                image: CachedNetworkImageProvider(photo),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: hasPhoto
+                          ? null
+                          : const Icon(
+                              Icons.storefront,
+                              color: AppColors.white,
+                              size: 42,
+                            ),
+                    ),
                   ),
-                  child: hasPhoto
-                      ? null
-                      : const Icon(
-                          Icons.storefront,
-                          color: AppColors.white,
-                          size: 42,
-                        ),
                 ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              seller?.businessName ?? 'Loading…',
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.displayMedium.copyWith(
-                                color: AppColors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                                height: 1.15,
+                const SizedBox(height: 14),
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                seller?.businessName ?? 'Loading…',
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.displayMedium.copyWith(
+                                  color: AppColors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.15,
+                                ),
                               ),
                             ),
-                          ),
-                          if (seller?.verified == true ||
-                              seller?.sdaVerified == true) ...[
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.verified,
-                              color: AppColors.goldAccent,
-                              size: 18,
-                            ),
+                            if (seller?.verified == true ||
+                                seller?.sdaVerified == true) ...[
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.verified,
+                                color: AppColors.goldAccent,
+                                size: 18,
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
-                      if (seller != null) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          SellerCategory.labelFor(seller.category),
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.white.withValues(alpha: 0.75),
-                            fontWeight: FontWeight.w600,
-                          ),
                         ),
+                        if (seller != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            SellerCategory.labelFor(seller.category),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.white.withValues(alpha: 0.75),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ],
     );
   }
@@ -628,9 +629,10 @@ class _IdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cityLine = [seller.city, seller.province]
-        .where((s) => s != null && s.isNotEmpty)
-        .join(', ');
+    final cityLine = [
+      seller.city,
+      seller.province,
+    ].where((s) => s != null && s.isNotEmpty).join(', ');
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -681,10 +683,7 @@ class _IdentityCard extends StatelessWidget {
                     : 'No reviews yet',
               ),
               _v(),
-              _Stat(
-                value: _memberSince(seller.createdAt),
-                label: 'SINCE',
-              ),
+              _Stat(value: _memberSince(seller.createdAt), label: 'SINCE'),
             ],
           ),
         ],
@@ -693,13 +692,13 @@ class _IdentityCard extends StatelessWidget {
   }
 
   Widget _v() => Builder(
-        builder: (context) => Container(
-          width: 1,
-          height: 38,
-          margin: const EdgeInsets.symmetric(horizontal: 8),
-          color: context.palette.divider,
-        ),
-      );
+    builder: (context) => Container(
+      width: 1,
+      height: 38,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: context.palette.divider,
+    ),
+  );
 
   String _memberSince(DateTime? createdAt) {
     if (createdAt == null) return '—';
@@ -784,7 +783,8 @@ class _ContactRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasWhatsApp = (seller.whatsapp?.trim().isNotEmpty == true) ||
+    final hasWhatsApp =
+        (seller.whatsapp?.trim().isNotEmpty == true) ||
         seller.phone.trim().isNotEmpty;
     final hasPhone = seller.phone.trim().isNotEmpty;
     return Container(
@@ -937,11 +937,7 @@ class _SabbathBadge extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.brightness_3,
-            color: AppColors.goldAccent,
-            size: 20,
-          ),
+          const Icon(Icons.brightness_3, color: AppColors.goldAccent, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1202,18 +1198,12 @@ class _ReportButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.red.withValues(alpha: 0.4),
-            ),
+            border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.flag_outlined,
-                color: AppColors.red,
-                size: 18,
-              ),
+              const Icon(Icons.flag_outlined, color: AppColors.red, size: 18),
               const SizedBox(width: 8),
               Text(
                 'Report this seller',
@@ -1238,9 +1228,7 @@ class _SafetyCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.darkNavy.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.darkNavy.withValues(alpha: 0.12),
-        ),
+        border: Border.all(color: AppColors.darkNavy.withValues(alpha: 0.12)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1522,10 +1510,7 @@ class _ReviewsSection extends StatelessWidget {
                   if (r != reviews.last)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(
-                        height: 1,
-                        color: Color(0x10000000),
-                      ),
+                      child: Divider(height: 1, color: Color(0x10000000)),
                     ),
                 ],
               ],
@@ -1598,9 +1583,7 @@ class _StarStrip extends StatelessWidget {
           child: Icon(
             half
                 ? Icons.star_half_rounded
-                : (filled
-                    ? Icons.star_rounded
-                    : Icons.star_outline_rounded),
+                : (filled ? Icons.star_rounded : Icons.star_outline_rounded),
             size: size,
             color: filled || half
                 ? AppColors.goldAccent
@@ -1652,9 +1635,7 @@ class _RateCta extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isEditing
-                          ? 'Update your review'
-                          : 'Rate this seller',
+                      isEditing ? 'Update your review' : 'Rate this seller',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.primaryBlue,
                         fontWeight: FontWeight.w700,
@@ -1671,10 +1652,7 @@ class _RateCta extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          _StarStrip(
-                            value: myStars.toDouble(),
-                            size: 13,
-                          ),
+                          _StarStrip(value: myStars.toDouble(), size: 13),
                         ],
                       ),
                     ],

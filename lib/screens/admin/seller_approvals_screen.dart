@@ -7,6 +7,7 @@ import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Super-admin queue of pending seller applications. Each row gives
 /// the admin enough context to make a call (business name, contact,
@@ -151,9 +152,7 @@ class _SellerApprovalsScreenState extends State<SellerApprovalsScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 80),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) {
@@ -269,12 +268,14 @@ class _PendingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cityLine = [seller.city, seller.province]
-        .where((s) => s != null && s.isNotEmpty)
-        .join(', ');
-    final addressLine = [seller.address, seller.suburb]
-        .where((s) => s != null && s.trim().isNotEmpty)
-        .join(' · ');
+    final cityLine = [
+      seller.city,
+      seller.province,
+    ].where((s) => s != null && s.isNotEmpty).join(', ');
+    final addressLine = [
+      seller.address,
+      seller.suburb,
+    ].where((s) => s != null && s.trim().isNotEmpty).join(' · ');
     final photo = seller.profilePhotoUrl;
     final hasPhoto = photo != null && photo.isNotEmpty;
     final cover = seller.coverPhotoUrl;
@@ -305,8 +306,7 @@ class _PendingCard extends StatelessWidget {
                 ? CachedNetworkImage(
                     imageUrl: cover,
                     fit: BoxFit.cover,
-                    errorWidget: (ctx, url, error) =>
-                        const _CoverPlaceholder(),
+                    errorWidget: (ctx, url, error) => const _CoverPlaceholder(),
                     placeholder: (ctx, url) => const _CoverPlaceholder(),
                   )
                 : const _CoverPlaceholder(),
@@ -322,8 +322,7 @@ class _PendingCard extends StatelessWidget {
                       width: 52,
                       height: 52,
                       decoration: BoxDecoration(
-                        gradient:
-                            hasPhoto ? null : AppColors.primaryGradient,
+                        gradient: hasPhoto ? null : AppColors.primaryGradient,
                         color: hasPhoto ? AppColors.lightGrey : null,
                         shape: BoxShape.circle,
                         image: hasPhoto
@@ -363,10 +362,7 @@ class _PendingCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    _AttemptBadge(
-                      attempt: attempt,
-                      isFinal: isFinalReview,
-                    ),
+                    _AttemptBadge(attempt: attempt, isFinal: isFinalReview),
                   ],
                 ),
                 if (isFinalReview) ...[
@@ -408,16 +404,10 @@ class _PendingCard extends StatelessWidget {
                 ],
                 if (cityLine.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  _MetaRow(
-                    icon: Icons.location_on_outlined,
-                    text: cityLine,
-                  ),
+                  _MetaRow(icon: Icons.location_on_outlined, text: cityLine),
                 ],
                 if (addressLine.isNotEmpty)
-                  _MetaRow(
-                    icon: Icons.home_outlined,
-                    text: addressLine,
-                  ),
+                  _MetaRow(icon: Icons.home_outlined, text: addressLine),
                 if ((seller.contactName ?? '').isNotEmpty)
                   _MetaRow(
                     icon: Icons.person_outline,
@@ -429,10 +419,7 @@ class _PendingCard extends StatelessWidget {
                     text: 'WhatsApp ${seller.whatsapp}',
                   ),
                 if ((seller.phone).isNotEmpty)
-                  _MetaRow(
-                    icon: Icons.phone_outlined,
-                    text: seller.phone,
-                  ),
+                  _MetaRow(icon: Icons.phone_outlined, text: seller.phone),
                 if ((seller.paymentMethods ?? '').isNotEmpty)
                   _MetaRow(
                     icon: Icons.payments_outlined,
@@ -480,13 +467,11 @@ class _PendingCard extends StatelessWidget {
                       child: OutlinedButton.icon(
                         onPressed: busy ? null : onReject,
                         icon: const Icon(Icons.close, size: 18),
-                        label:
-                            Text('Reject', style: AppTextStyles.labelLarge),
+                        label: Text('Reject', style: AppTextStyles.labelLarge),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.red,
                           side: const BorderSide(color: AppColors.red),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -513,8 +498,7 @@ class _PendingCard extends StatelessWidget {
                         ),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.successGreen,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -539,11 +523,7 @@ class _CoverPlaceholder extends StatelessWidget {
     return const DecoratedBox(
       decoration: BoxDecoration(gradient: AppColors.appBarGradient),
       child: Center(
-        child: Icon(
-          Icons.image_outlined,
-          color: AppColors.white,
-          size: 32,
-        ),
+        child: Icon(Icons.image_outlined, color: AppColors.white, size: 32),
       ),
     );
   }
@@ -583,10 +563,7 @@ class _AttemptBadge extends StatelessWidget {
 /// `await showDialog(...)`, which triggered `_dependents.isEmpty`
 /// when the dialog's children hadn't finished unmounting.
 class _RejectReasonDialog extends StatefulWidget {
-  const _RejectReasonDialog({
-    required this.seller,
-    required this.isFinal,
-  });
+  const _RejectReasonDialog({required this.seller, required this.isFinal});
 
   final Seller seller;
   final bool isFinal;
@@ -608,9 +585,7 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       title: Text(
         widget.isFinal
             ? 'Final-review reject ${widget.seller.businessName}?'
@@ -623,8 +598,7 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
         children: [
           if (widget.isFinal) ...[
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: AppColors.red.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(10),
@@ -674,13 +648,13 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
           style: TextButton.styleFrom(foregroundColor: AppColors.primaryBlue),
           child: Text(
             'Cancel',
-            style: AppTextStyles.labelMedium
-                .copyWith(color: AppColors.primaryBlue),
+            style: AppTextStyles.labelMedium.copyWith(
+              color: AppColors.primaryBlue,
+            ),
           ),
         ),
         FilledButton(
-          onPressed: () =>
-              Navigator.pop(context, _controller.text.trim()),
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
           style: FilledButton.styleFrom(backgroundColor: AppColors.red),
           child: Text(
             widget.isFinal ? 'Reject permanently' : 'Reject',
@@ -703,8 +677,7 @@ class _MetaRow extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
-          Icon(icon,
-              size: 14, color: AppColors.textMuted),
+          Icon(icon, size: 14, color: AppColors.textMuted),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -787,11 +760,7 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-           Icon(
-            Icons.cloud_off_outlined,
-            size: 48,
-            color: AppColors.textMuted,
-          ),
+          Icon(Icons.cloud_off_outlined, size: 48, color: AppColors.textMuted),
           const SizedBox(height: 12),
           Text(
             message,
@@ -843,8 +812,7 @@ class _CircleIconButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.white.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(14),
-            border:
-                Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
           ),
           child: Icon(icon, color: AppColors.white, size: 18),
         ),

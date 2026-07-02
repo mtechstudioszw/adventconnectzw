@@ -8,6 +8,7 @@ import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// WhatsApp-style privacy controls dedicated to the chat surface.
 /// Persists three flags on profiles:
@@ -70,11 +71,14 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     if (user == null) return;
     setState(() => _saving = true);
     try {
-      await _client.from('profiles').update({
-        'show_last_seen': _showLastSeen,
-        'show_online_status': _showOnlineStatus,
-        'show_read_receipts': _showReadReceipts,
-      }).eq('id', user.id);
+      await _client
+          .from('profiles')
+          .update({
+            'show_last_seen': _showLastSeen,
+            'show_online_status': _showOnlineStatus,
+            'show_read_receipts': _showReadReceipts,
+          })
+          .eq('id', user.id);
       // PresenceService caches its broadcast state in _isTracked —
       // flipping the DB column doesn't retroactively untrack the
       // existing presence channel. Tell PresenceService to reconcile
@@ -117,80 +121,75 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         foregroundColor: AppColors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.canPop()
-              ? context.pop()
-              : context.goNamed('settings'),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.goNamed('settings'),
         ),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryBlue),
-            )
+          ? const Center(child: BrandSpinner(size: 30))
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.red,
-                      ),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.red,
+                  ),
+                ),
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+              children: [
+                _section(
+                  title: 'Last seen',
+                  subtitle:
+                      'When off, other people won\'t see when you last opened the app.',
+                  value: _showLastSeen,
+                  onChanged: (v) => setState(() => _showLastSeen = v),
+                ),
+                const SizedBox(height: 12),
+                _section(
+                  title: 'Online status',
+                  subtitle:
+                      'When off, no green "Online" dot is shown next to your name in chats.',
+                  value: _showOnlineStatus,
+                  onChanged: (v) => setState(() => _showOnlineStatus = v),
+                ),
+                const SizedBox(height: 12),
+                _section(
+                  title: 'Read receipts',
+                  subtitle:
+                      'When off, blue double-ticks won\'t be sent. You won\'t see read receipts from others either.',
+                  value: _showReadReceipts,
+                  onChanged: (v) => setState(() => _showReadReceipts = v),
+                ),
+                const SizedBox(height: 28),
+                FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    foregroundColor: AppColors.white,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-                  children: [
-                    _section(
-                      title: 'Last seen',
-                      subtitle:
-                          'When off, other people won\'t see when you last opened the app.',
-                      value: _showLastSeen,
-                      onChanged: (v) => setState(() => _showLastSeen = v),
-                    ),
-                    const SizedBox(height: 12),
-                    _section(
-                      title: 'Online status',
-                      subtitle:
-                          'When off, no green "Online" dot is shown next to your name in chats.',
-                      value: _showOnlineStatus,
-                      onChanged: (v) =>
-                          setState(() => _showOnlineStatus = v),
-                    ),
-                    const SizedBox(height: 12),
-                    _section(
-                      title: 'Read receipts',
-                      subtitle:
-                          'When off, blue double-ticks won\'t be sent. You won\'t see read receipts from others either.',
-                      value: _showReadReceipts,
-                      onChanged: (v) =>
-                          setState(() => _showReadReceipts = v),
-                    ),
-                    const SizedBox(height: 28),
-                    FilledButton(
-                      onPressed: _saving ? null : _save,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primaryBlue,
-                        foregroundColor: AppColors.white,
-                        minimumSize: const Size.fromHeight(48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: _saving
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                color: AppColors.white,
-                                strokeWidth: 2.5,
-                              ),
-                            )
-                          : const Text('Save changes'),
-                    ),
-                  ],
+                  child: _saving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: AppColors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const Text('Save changes'),
                 ),
+              ],
+            ),
     );
   }
 

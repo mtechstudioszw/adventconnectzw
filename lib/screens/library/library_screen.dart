@@ -13,6 +13,8 @@ import 'hymnal_tab.dart';
 import 'music_tab.dart';
 import 'pdf_viewer_screen.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/motion/pressable.dart';
 
 /// The in-app Library: Bible (offline KJV), Hymnal (searchable structured
 /// hymns), EGW Books (uploaded PDFs) and Music (background audio player).
@@ -58,8 +60,10 @@ class _LibraryScreenState extends State<LibraryScreen>
       // prayer screens (the tester reported the bottom banner was covering the
       // catalog). Revenue stays on the home feed, stories and detail pages.
       appBar: AppBar(
-        title: Text('Library',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 19)),
+        title: Text(
+          'Library',
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
+        ),
         foregroundColor: AppColors.white,
         flexibleSpace: const DecoratedBox(
           decoration: BoxDecoration(gradient: AppColors.appBarGradient),
@@ -72,8 +76,9 @@ class _LibraryScreenState extends State<LibraryScreen>
           indicatorWeight: 3,
           labelColor: AppColors.white,
           unselectedLabelColor: AppColors.white.withValues(alpha: 0.6),
-          labelStyle:
-              AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w700),
+          labelStyle: AppTextStyles.labelMedium.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
           tabs: const [
             Tab(text: 'Bible'),
             Tab(text: 'Hymnal'),
@@ -154,8 +159,7 @@ class _PdfLibraryTabState extends State<_PdfLibraryTab>
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryBlue));
+            return const Center(child: BrandSpinner(size: 30));
           }
           final items = snap.data ?? const [];
           if (items.isEmpty) {
@@ -207,71 +211,83 @@ class _LibraryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Material(
-      color: palette.card,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
+    return PressEffect(
+      child: Material(
+        color: palette.card,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: palette.divider),
-          ),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: (item.coverUrl != null && item.coverUrl!.isNotEmpty)
-                      ? CachedImage(item.coverUrl!, fit: BoxFit.cover)
-                      : DecoratedBox(
-                          decoration: const BoxDecoration(
-                              gradient: AppColors.primaryGradient),
-                          child: Icon(leadingIcon,
-                              color: AppColors.white, size: 26),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: palette.divider),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: (item.coverUrl != null && item.coverUrl!.isNotEmpty)
+                        ? CachedImage(item.coverUrl!, fit: BoxFit.cover)
+                        : DecoratedBox(
+                            decoration: const BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                            ),
+                            child: Icon(
+                              leadingIcon,
+                              color: AppColors.white,
+                              size: 26,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          item.author,
+                          item.language,
+                        ].where((s) => s != null && s.isNotEmpty).join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleSmall
-                          .copyWith(fontWeight: FontWeight.w700),
+                if (onShare != null)
+                  IconButton(
+                    tooltip: 'Share',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      Icons.share_outlined,
+                      color: palette.textMuted,
+                      size: 20,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [item.author, item.language]
-                          .where((s) => s != null && s.isNotEmpty)
-                          .join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall
-                          .copyWith(color: palette.textMuted),
-                    ),
-                  ],
-                ),
-              ),
-              if (onShare != null)
-                IconButton(
-                  tooltip: 'Share',
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.share_outlined,
-                      color: palette.textMuted, size: 20),
-                  onPressed: onShare,
-                ),
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right, color: palette.textMuted),
-            ],
+                    onPressed: onShare,
+                  ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, color: palette.textMuted),
+              ],
+            ),
           ),
         ),
       ),

@@ -7,6 +7,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/brand_spinner.dart';
 
 /// Read-only feed of a single church's announcements.
 class ChurchAnnouncementsScreen extends StatefulWidget {
@@ -19,8 +20,7 @@ class ChurchAnnouncementsScreen extends StatefulWidget {
       _ChurchAnnouncementsScreenState();
 }
 
-class _ChurchAnnouncementsScreenState
-    extends State<ChurchAnnouncementsScreen> {
+class _ChurchAnnouncementsScreenState extends State<ChurchAnnouncementsScreen> {
   bool _loading = true;
   String? _error;
   List<ChurchAnnouncement> _items = const [];
@@ -37,8 +37,9 @@ class _ChurchAnnouncementsScreenState
       _error = null;
     });
     try {
-      final items =
-          await ChurchService.fetchAnnouncements(churchId: widget.church.id);
+      final items = await ChurchService.fetchAnnouncements(
+        churchId: widget.church.id,
+      );
       if (!mounted) return;
       setState(() {
         _items = items;
@@ -85,9 +86,7 @@ class _ChurchAnnouncementsScreenState
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 64),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primaryBlue),
-        ),
+        child: Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null) return ErrorBanner(message: _error!);
@@ -182,8 +181,7 @@ class _AnnouncementCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
@@ -201,8 +199,10 @@ class _AnnouncementCard extends StatelessWidget {
               if (item.isPinned) ...[
                 const SizedBox(width: 6),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.goldAccent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),

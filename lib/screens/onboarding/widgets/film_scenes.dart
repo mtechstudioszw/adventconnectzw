@@ -192,16 +192,10 @@ class _MiniSurface extends StatelessWidget {
 
 /// Grey placeholder text bar whose width "types itself in".
 class _TextBar extends StatelessWidget {
-  const _TextBar({
-    required this.grow,
-    required this.width,
-    this.height = 9,
-    this.color,
-  });
+  const _TextBar({required this.grow, required this.width, this.height = 9});
   final double grow; // 0→1
   final double width;
   final double height;
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -209,7 +203,7 @@ class _TextBar extends StatelessWidget {
       width: width * grow,
       height: height,
       decoration: BoxDecoration(
-        color: color ?? AppColors.darkNavy.withValues(alpha: 0.10),
+        color: AppColors.darkNavy.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(height / 2),
       ),
     );

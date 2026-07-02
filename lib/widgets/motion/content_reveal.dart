@@ -53,10 +53,7 @@ class ContentReveal extends StatelessWidget {
       // the top so the crossfade doesn't jump vertically mid-flight.
       layoutBuilder: (currentChild, previousChildren) => Stack(
         alignment: Alignment.topCenter,
-        children: [
-          ...previousChildren,
-          if (currentChild != null) currentChild,
-        ],
+        children: [...previousChildren, ?currentChild],
       ),
       child: loading
           ? KeyedSubtree(key: const ValueKey('skeleton'), child: skeleton)

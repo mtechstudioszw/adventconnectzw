@@ -31,6 +31,7 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/chat_wallpaper.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
@@ -1931,7 +1932,9 @@ class _ChatScreenState extends State<ChatScreen>
           _selectMode ? _buildSelectionBar() : _buildHeader(),
           _buildPinnedBanner(),
           _buildFriendshipBanner(),
-          Expanded(child: _buildBody()),
+          // Branded doodle wallpaper behind the thread — the chat reads
+          // as a place, not a list on a grey page.
+          Expanded(child: ChatWallpaper(child: _buildBody())),
           _buildInputBar(),
         ],
       ),
@@ -3775,8 +3778,15 @@ class _SystemMessage extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: context.palette.cardMuted,
-            borderRadius: BorderRadius.circular(10),
+            color: context.palette.card,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.darkNavy.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Text(
             text,
@@ -3802,11 +3812,17 @@ class _DateSeparator extends StatelessWidget {
       alignment: Alignment.center,
       margin: const EdgeInsets.symmetric(vertical: 10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
         decoration: BoxDecoration(
-          color: context.palette.cardMuted,
+          color: context.palette.card,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: context.palette.divider),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.darkNavy.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Text(
           label,
@@ -3928,16 +3944,23 @@ class _MessageBubble extends StatelessWidget {
           gradient: isMine ? AppColors.primaryGradient : null,
           color: isMine ? null : context.palette.card,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isMine ? 18 : 4),
-            bottomRight: Radius.circular(isMine ? 4 : 18),
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(isMine ? 20 : 5),
+            bottomRight: Radius.circular(isMine ? 5 : 20),
           ),
+          // Hairline on incoming bubbles so they hold their edge against
+          // the wallpaper (outgoing gets definition from the gradient).
+          border: isMine
+              ? null
+              : Border.all(
+                  color: context.palette.divider.withValues(alpha: 0.7),
+                ),
           boxShadow: [
             BoxShadow(
               color: isMine
-                  ? AppColors.primaryBlue.withValues(alpha: 0.20)
-                  : Colors.black.withValues(alpha: 0.05),
+                  ? AppColors.primaryBlue.withValues(alpha: 0.22)
+                  : AppColors.darkNavy.withValues(alpha: 0.07),
               blurRadius: isMine ? 12 : 10,
               offset: const Offset(0, 4),
             ),

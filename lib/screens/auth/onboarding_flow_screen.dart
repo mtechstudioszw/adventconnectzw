@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,8 +11,12 @@ import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/motion/pressable.dart';
+import '../onboarding/widgets/film_scenes.dart' show GoldRingPainter;
 import 'package:cached_network_image/cached_network_image.dart';
 
 /// Single-screen post-signup onboarding. PageView drives 6 steps:
@@ -128,8 +133,10 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
       final username = _usernameController.text.trim();
       if (username.isNotEmpty &&
           !RegExp(r'^[a-zA-Z0-9_]{3,20}$').hasMatch(username)) {
-        setState(() => _error =
-            'Username must be 3–20 letters, numbers or underscores.');
+        setState(
+          () =>
+              _error = 'Username must be 3–20 letters, numbers or underscores.',
+        );
         return;
       }
       setState(() => _saving = true);
@@ -159,9 +166,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     } else if (_index == 2) {
       if (_homeChurchId != null) {
         setState(() => _saving = true);
-        final result = await AuthService.updateProfile(
-          churchId: _homeChurchId,
-        );
+        final result = await AuthService.updateProfile(churchId: _homeChurchId);
         if (!mounted) return;
         if (!result.isSuccess) {
           setState(() {
@@ -279,71 +284,83 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Raw step pages; each is wrapped in a _StepDepth below, which layers
+    // a parallax drift + a replayed entrance onto the PageView slide so
+    // steps flow into each other instead of hard-cutting.
+    final pages = <Widget>[
+      _WelcomePage(onContinue: () => _go(1)),
+      _ProfilePage(
+        nameController: _nameController,
+        usernameController: _usernameController,
+        bioController: _bioController,
+        photoUrl: _profilePhotoUrl,
+        coverUrl: _coverPhotoUrl,
+        uploadingPhoto: _uploadingPhoto,
+        uploadingCover: _uploadingCover,
+        onPickPhoto: _pickPhoto,
+        onPickCover: _pickCover,
+        onRemovePhoto: _removeProfilePhoto,
+        onRemoveCover: _removeCoverPhoto,
+      ),
+      _ChurchPage(
+        churches: _allChurches,
+        selectedId: _homeChurchId,
+        loading: _churchesLoading,
+        onChanged: (id) => setState(() => _homeChurchId = id),
+      ),
+      _PersonalizationPage(
+        interests: _interests,
+        notifPrayers: _notifPrayers,
+        notifEvents: _notifEvents,
+        notifMarketplace: _notifMarketplace,
+        notifChat: _notifChat,
+        onInterestToggle: (k) => setState(() {
+          if (!_interests.add(k)) _interests.remove(k);
+        }),
+        onNotifChanged: (key, v) => setState(() {
+          switch (key) {
+            case 'prayers':
+              _notifPrayers = v;
+              break;
+            case 'events':
+              _notifEvents = v;
+              break;
+            case 'marketplace':
+              _notifMarketplace = v;
+              break;
+            case 'chat':
+              _notifChat = v;
+              break;
+          }
+        }),
+      ),
+      _PermissionsPage(
+        notif: _permNotif,
+        photos: _permPhotos,
+        camera: _permCamera,
+        onRequest: _requestPermission,
+      ),
+      _SuccessPage(onEnter: _finish),
+    ];
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       body: SafeArea(
         child: Column(
           children: [
-            _ProgressBar(active: _index, total: _stepCount),
+            _FlowProgress(page: _page, index: _index, total: _stepCount),
             Expanded(
               child: PageView(
                 controller: _page,
                 physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (i) => setState(() => _index = i),
                 children: [
-                  _WelcomePage(onContinue: () => _go(1)),
-                  _ProfilePage(
-                    nameController: _nameController,
-                    usernameController: _usernameController,
-                    bioController: _bioController,
-                    photoUrl: _profilePhotoUrl,
-                    coverUrl: _coverPhotoUrl,
-                    uploadingPhoto: _uploadingPhoto,
-                    uploadingCover: _uploadingCover,
-                    onPickPhoto: _pickPhoto,
-                    onPickCover: _pickCover,
-                    onRemovePhoto: _removeProfilePhoto,
-                    onRemoveCover: _removeCoverPhoto,
-                  ),
-                  _ChurchPage(
-                    churches: _allChurches,
-                    selectedId: _homeChurchId,
-                    loading: _churchesLoading,
-                    onChanged: (id) => setState(() => _homeChurchId = id),
-                  ),
-                  _PersonalizationPage(
-                    interests: _interests,
-                    notifPrayers: _notifPrayers,
-                    notifEvents: _notifEvents,
-                    notifMarketplace: _notifMarketplace,
-                    notifChat: _notifChat,
-                    onInterestToggle: (k) => setState(() {
-                      if (!_interests.add(k)) _interests.remove(k);
-                    }),
-                    onNotifChanged: (key, v) => setState(() {
-                      switch (key) {
-                        case 'prayers':
-                          _notifPrayers = v;
-                          break;
-                        case 'events':
-                          _notifEvents = v;
-                          break;
-                        case 'marketplace':
-                          _notifMarketplace = v;
-                          break;
-                        case 'chat':
-                          _notifChat = v;
-                          break;
-                      }
-                    }),
-                  ),
-                  _PermissionsPage(
-                    notif: _permNotif,
-                    photos: _permPhotos,
-                    camera: _permCamera,
-                    onRequest: _requestPermission,
-                  ),
-                  _SuccessPage(onEnter: _finish),
+                  for (var i = 0; i < pages.length; i++)
+                    _StepDepth(
+                      page: _page,
+                      index: i,
+                      active: _index == i,
+                      child: pages[i],
+                    ),
                 ],
               ),
             ),
@@ -374,33 +391,83 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
 // Step indicator
 // =============================================================================
 
-class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({required this.active, required this.total});
-  final int active;
+/// Continuous progress that rides the PageController directly — the fill
+/// and its gold head travel WITH the page slide instead of snapping per
+/// step, so advancing feels like one motion, not two.
+class _FlowProgress extends StatelessWidget {
+  const _FlowProgress({
+    required this.page,
+    required this.index,
+    required this.total,
+  });
+
+  final PageController page;
+  final int index;
   final int total;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-      child: Row(
-        children: [
-          for (int i = 0; i < total; i++) ...[
-            Expanded(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 280),
-                height: 6,
-                decoration: BoxDecoration(
-                  color: i <= active
-                      ? AppColors.primaryBlue
-                      : context.palette.divider,
-                  borderRadius: BorderRadius.circular(6),
+      child: AnimatedBuilder(
+        animation: page,
+        builder: (context, _) {
+          var position = index.toDouble();
+          if (page.hasClients && page.position.haveDimensions) {
+            position = page.page ?? position;
+          }
+          final fraction = ((position + 1) / total).clamp(0.0, 1.0);
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final fillWidth = constraints.maxWidth * fraction;
+              return SizedBox(
+                height: 12,
+                child: Stack(
+                  alignment: Alignment.centerLeft,
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: context.palette.divider,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    Container(
+                      height: 6,
+                      width: fillWidth,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    // Gold head — the progress's "comet", matching the
+                    // loading language elsewhere in the app.
+                    Positioned(
+                      left: (fillWidth - 5).clamp(0.0, double.infinity),
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: AppColors.goldAccent,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.goldAccent.withValues(
+                                alpha: 0.55,
+                              ),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ),
-            if (i < total - 1) const SizedBox(width: 6),
-          ],
-        ],
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -527,46 +594,55 @@ class _PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: onTap == null && !busy ? 0.6 : 1,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryBlue.withValues(alpha: 0.30),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
+    return PressEffect(
+      child: AnimatedOpacity(
+        duration: AppMotion.quick,
+        opacity: onTap == null && !busy ? 0.6 : 1,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
             borderRadius: BorderRadius.circular(22),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              alignment: Alignment.center,
-              child: busy
-                  // TODO(dark-mode): const CircularProgressIndicator — sits on primaryGradient.
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        color: AppColors.white,
-                        strokeWidth: 2.4,
-                      ),
-                    )
-                  : Text(
-                      label,
-                      style: AppTextStyles.buttonText.copyWith(
-                        fontSize: 15.5,
-                        letterSpacing: 0.4,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(22),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                alignment: Alignment.center,
+                child: AnimatedSwitcher(
+                  duration: AppMotion.quick,
+                  switchInCurve: AppMotion.easeOut,
+                  switchOutCurve: AppMotion.easeIn,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(scale: animation, child: child),
+                  ),
+                  child: busy
+                      ? const SizedBox(
+                          key: ValueKey('busy'),
+                          height: 22,
+                          child: BrandSpinner(size: 22, color: AppColors.white),
+                        )
+                      : Text(
+                          label,
+                          key: const ValueKey('label'),
+                          style: AppTextStyles.buttonText.copyWith(
+                            fontSize: 15.5,
+                            letterSpacing: 0.4,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ),
             ),
           ),
         ),
@@ -631,10 +707,7 @@ class _WelcomePage extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(36),
-                border: Border.all(
-                  color: AppColors.goldAccent,
-                  width: 2,
-                ),
+                border: Border.all(color: AppColors.goldAccent, width: 2),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.primaryBlue.withValues(alpha: 0.40),
@@ -645,10 +718,7 @@ class _WelcomePage extends StatelessWidget {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(18),
-                child: Image.asset(
-                  'assets/icon/logo.png',
-                  fit: BoxFit.contain,
-                ),
+                child: Image.asset('assets/icon/logo.png', fit: BoxFit.contain),
               ),
             ),
           ),
@@ -675,11 +745,7 @@ class _WelcomePage extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          _PrimaryButton(
-            label: 'Continue',
-            busy: false,
-            onTap: onContinue,
-          ),
+          _PrimaryButton(label: 'Continue', busy: false, onTap: onContinue),
           const SizedBox(height: 24),
         ],
       ),
@@ -838,25 +904,25 @@ class _CoverStrip extends StatelessWidget {
                     strokeWidth: 2.5,
                   )
                 : hasCover
-                    ? null
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.add_photo_alternate_outlined,
-                            size: 30,
-                            color: AppColors.primaryBlue.withValues(alpha: 0.7),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Add a cover photo',
-                            style: AppTextStyles.labelMedium.copyWith(
-                              color: AppColors.primaryBlue,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+                ? null
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 30,
+                        color: AppColors.primaryBlue.withValues(alpha: 0.7),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Add a cover photo',
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
         if (hasCover && onRemove != null && !uploading)
@@ -872,11 +938,7 @@ class _CoverStrip extends StatelessWidget {
                 // TODO(dark-mode): const Icon — sits on translucent-black scrim.
                 child: const Padding(
                   padding: EdgeInsets.all(6),
-                  child: Icon(
-                    Icons.close,
-                    size: 18,
-                    color: AppColors.white,
-                  ),
+                  child: Icon(Icons.close, size: 18, color: AppColors.white),
                 ),
               ),
             ),
@@ -903,36 +965,43 @@ class _PhotoAvatar extends StatelessWidget {
     return Stack(
       alignment: Alignment.bottomRight,
       children: [
-        Container(
-          width: 128,
-          height: 128,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: hasPhoto ? null : AppColors.primaryGradient,
-            color: hasPhoto ? context.palette.cardMuted : null,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primaryBlue.withValues(alpha: 0.28),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-            image: hasPhoto
-                ? DecorationImage(
-                    image: CachedNetworkImageProvider(photoUrl!),
-                    fit: BoxFit.cover,
-                  )
-                : null,
+        // Keyed by URL so a freshly picked photo scales in with a small
+        // spring instead of just appearing.
+        AnimatedSwitcher(
+          duration: AppMotion.maybe(context, AppMotion.standard),
+          switchInCurve: AppMotion.spring,
+          switchOutCurve: AppMotion.easeIn,
+          transitionBuilder: (child, animation) => ScaleTransition(
+            scale: animation,
+            child: FadeTransition(opacity: animation, child: child),
           ),
-          alignment: Alignment.center,
-          // TODO(dark-mode): const Icon — sits on primaryGradient avatar.
-          child: hasPhoto
-              ? null
-              : const Icon(
-                  Icons.person,
-                  size: 56,
-                  color: AppColors.white,
+          child: Container(
+            key: ValueKey(photoUrl ?? ''),
+            width: 128,
+            height: 128,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: hasPhoto ? null : AppColors.primaryGradient,
+              color: hasPhoto ? context.palette.cardMuted : null,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.28),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
+              ],
+              image: hasPhoto
+                  ? DecorationImage(
+                      image: CachedNetworkImageProvider(photoUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: hasPhoto
+                ? null
+                : const Icon(Icons.person, size: 56, color: AppColors.white),
+          ),
         ),
         Material(
           color: AppColors.primaryBlue,
@@ -1043,37 +1112,35 @@ class _ChurchPageState extends State<_ChurchPage> {
                     ),
                   )
                 : filtered.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            _query.isEmpty
-                                ? 'No churches available right now.'
-                                : 'No matches for "$_query".',
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: context.palette.textMuted,
-                            ),
-                          ),
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        _query.isEmpty
+                            ? 'No churches available right now.'
+                            : 'No matches for "$_query".',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: context.palette.textMuted,
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.only(top: 8, bottom: 16),
-                        itemCount: filtered.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 8),
-                        itemBuilder: (ctx, i) {
-                          final c = filtered[i];
-                          final selected = c.id == widget.selectedId;
-                          return _ChurchPickRow(
-                            church: c,
-                            selected: selected,
-                            onTap: () => widget.onChanged(
-                              selected ? null : c.id,
-                            ),
-                          );
-                        },
                       ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.only(top: 8, bottom: 16),
+                    itemCount: filtered.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (ctx, i) {
+                      final c = filtered[i];
+                      final selected = c.id == widget.selectedId;
+                      return _ChurchPickRow(
+                        church: c,
+                        selected: selected,
+                        onTap: () => widget.onChanged(selected ? null : c.id),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -1094,97 +1161,101 @@ class _ChurchPickRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.primaryBlue.withValues(alpha: 0.08)
-                : context.palette.card,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
+    return PressEffect(
+      pressedScale: 0.97,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
               color: selected
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
-              width: selected ? 1.6 : 1.0,
+                  ? AppColors.primaryBlue.withValues(alpha: 0.08)
+                  : context.palette.card,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected
+                    ? AppColors.primaryBlue
+                    : context.palette.divider,
+                width: selected ? 1.6 : 1.0,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient:
-                      selected ? AppColors.primaryGradient : null,
-                  color: selected ? null : context.palette.cardMuted,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.church,
-                  color: selected
-                      ? AppColors.white
-                      : AppColors.primaryBlue,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      church.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleSmall.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (church.city.isNotEmpty)
-                      Text(
-                        church.city,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.palette.textMuted,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? AppColors.primaryBlue
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: selected
-                        ? AppColors.primaryBlue
-                        : context.palette.divider,
-                    width: 1.6,
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: selected ? AppColors.primaryGradient : null,
+                    color: selected ? null : context.palette.cardMuted,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.church,
+                    color: selected ? AppColors.white : AppColors.primaryBlue,
+                    size: 20,
                   ),
                 ),
-                alignment: Alignment.center,
-                // TODO(dark-mode): const Icon — sits on primaryBlue check fill.
-                child: selected
-                    ? const Icon(
-                        Icons.check,
-                        size: 14,
-                        color: AppColors.white,
-                      )
-                    : null,
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        church.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (church.city.isNotEmpty)
+                        Text(
+                          church.city,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: context.palette.textMuted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.primaryBlue
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: selected
+                          ? AppColors.primaryBlue
+                          : context.palette.divider,
+                      width: 1.6,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: selected
+                      ? TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: 1),
+                          duration: AppMotion.quick,
+                          curve: AppMotion.easeOut,
+                          builder: (context, v, _) => _DrawnCheck(
+                            progress: v,
+                            size: 13,
+                            color: AppColors.white,
+                          ),
+                        )
+                      : null,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1243,8 +1314,7 @@ class _PersonalizationPage extends StatelessWidget {
           _StepHeader(
             tagline: 'Step 3',
             title: 'What interests you?',
-            subtitle:
-                'Pick a few — we\'ll prioritise these in your feed.',
+            subtitle: 'Pick a few — we\'ll prioritise these in your feed.',
           ),
           const SizedBox(height: 22),
           _SectionLabel('Show me more of'),
@@ -1309,59 +1379,74 @@ class _ChipTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.primaryBlue.withValues(alpha: 0.10)
-                : context.palette.card,
+    // Each toggle replays a quick scale pulse (key flips on selection),
+    // so picking an interest visibly "pops" rather than just recolours.
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(selected),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, child) => Transform.scale(
+        scale: AppMotion.enabled(context)
+            ? 1 + 0.06 * math.sin(v * math.pi)
+            : 1,
+        child: child,
+      ),
+      child: PressEffect(
+        pressedScale: 0.94,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: selected
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
-              width: selected ? 1.6 : 1,
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color:
-                          AppColors.primaryBlue.withValues(alpha: 0.18),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                  ]
-                : [],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                option.icon,
-                size: 18,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
                 color: selected
-                    ? AppColors.primaryBlue
-                    : AppColors.textMuted,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                option.label,
-                style: AppTextStyles.labelMedium.copyWith(
+                    ? AppColors.primaryBlue.withValues(alpha: 0.10)
+                    : context.palette.card,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
                   color: selected
                       ? AppColors.primaryBlue
-                      : AppColors.darkNavy,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
+                      : context.palette.divider,
+                  width: selected ? 1.6 : 1,
                 ),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.18),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ]
+                    : [],
               ),
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    option.icon,
+                    size: 18,
+                    color: selected
+                        ? AppColors.primaryBlue
+                        : AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    option.label,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: selected
+                          ? AppColors.primaryBlue
+                          : AppColors.darkNavy,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -1390,15 +1475,10 @@ class _NotifSwitch extends StatelessWidget {
           onTap: () => onChanged(!value),
           borderRadius: BorderRadius.circular(16),
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 10,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppColors.divider,
-              ),
+              border: Border.all(color: AppColors.divider),
             ),
             child: Row(
               children: [
@@ -1510,7 +1590,9 @@ class _PermissionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AnimatedContainer(
+      duration: AppMotion.quick,
+      curve: AppMotion.ease,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: context.palette.card,
@@ -1531,7 +1613,8 @@ class _PermissionCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
+          AnimatedContainer(
+            duration: AppMotion.quick,
             width: 46,
             height: 46,
             decoration: BoxDecoration(
@@ -1541,13 +1624,19 @@ class _PermissionCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
-            child: Icon(
-              granted ? Icons.check : icon,
-              color: granted
-                  ? AppColors.successGreen
-                  : AppColors.primaryBlue,
-              size: 22,
-            ),
+            child: granted
+                ? TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: AppMotion.standard,
+                    curve: AppMotion.easeOut,
+                    builder: (context, v, _) => _DrawnCheck(
+                      progress: v,
+                      size: 20,
+                      color: AppColors.successGreen,
+                      strokeWidth: 2.4,
+                    ),
+                  )
+                : Icon(icon, color: AppColors.primaryBlue, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1571,27 +1660,30 @@ class _PermissionCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Material(
-                    color: granted
-                        ? AppColors.successGreen.withValues(alpha: 0.10)
-                        : AppColors.primaryBlue,
-                    borderRadius: BorderRadius.circular(14),
-                    child: InkWell(
-                      onTap: granted ? null : onRequest,
+                  child: PressEffect(
+                    pressedScale: 0.94,
+                    child: Material(
+                      color: granted
+                          ? AppColors.successGreen.withValues(alpha: 0.10)
+                          : AppColors.primaryBlue,
                       borderRadius: BorderRadius.circular(14),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        child: Text(
-                          granted ? 'Granted' : 'Allow',
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: granted
-                                ? AppColors.successGreen
-                                : AppColors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
+                      child: InkWell(
+                        onTap: granted ? null : onRequest,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          child: Text(
+                            granted ? 'Granted' : 'Allow',
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: granted
+                                  ? AppColors.successGreen
+                                  : AppColors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ),
@@ -1623,6 +1715,10 @@ class _SuccessPageState extends State<_SuccessPage>
     with TickerProviderStateMixin {
   late final AnimationController _bounce;
   late final Animation<double> _scale;
+  // Celebration pass: the check draws itself, then a gold ring sweeps
+  // around the disc — the same gold-ring motif that runs through the
+  // intro film and the biometric unlock.
+  late final AnimationController _ring;
   // Tap "Enter App" -> the success disc swells to fill the screen (a
   // "diving into the app" reveal) while the text fades, then we navigate.
   late final AnimationController _exit;
@@ -1635,9 +1731,14 @@ class _SuccessPageState extends State<_SuccessPage>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
-    _scale = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _bounce, curve: Curves.elasticOut),
-    );
+    _scale = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _bounce, curve: Curves.elasticOut));
+    _ring = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..forward();
     _exit = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 560),
@@ -1647,6 +1748,7 @@ class _SuccessPageState extends State<_SuccessPage>
   @override
   void dispose() {
     _bounce.dispose();
+    _ring.dispose();
     _exit.dispose();
     super.dispose();
   }
@@ -1663,9 +1765,19 @@ class _SuccessPageState extends State<_SuccessPage>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_bounce, _exit]),
+      animation: Listenable.merge([_bounce, _ring, _exit]),
       builder: (context, _) {
         final exitT = Curves.easeInExpo.transform(_exit.value);
+        final checkT = const Interval(
+          0.0,
+          0.5,
+          curve: Curves.easeOutCubic,
+        ).transform(_ring.value);
+        final ringT = const Interval(
+          0.3,
+          1.0,
+          curve: Curves.easeInOutCubic,
+        ).transform(_ring.value);
         // Tap -> the disc accelerates outward and swells well past the
         // screen edges, flooding it with the brand gradient (a snappy
         // "dive into the app" reveal) while the text + button fade and
@@ -1681,28 +1793,47 @@ class _SuccessPageState extends State<_SuccessPage>
               Center(
                 child: Transform.scale(
                   scale: discScale,
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.40),
-                          blurRadius: 32,
-                          offset: const Offset(0, 16),
+                  child: SizedBox(
+                    width: 172,
+                    height: 172,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CustomPaint(
+                          size: const Size(172, 172),
+                          painter: GoldRingPainter(
+                            sweep: ringT,
+                            strokeWidth: 4,
+                          ),
+                        ),
+                        Container(
+                          width: 140,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryBlue.withValues(
+                                  alpha: 0.40,
+                                ),
+                                blurRadius: 32,
+                                offset: const Offset(0, 16),
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: Opacity(
+                            opacity: (1 - exitT * 2).clamp(0.0, 1.0),
+                            child: _DrawnCheck(
+                              progress: checkT,
+                              size: 64,
+                              color: AppColors.white,
+                              strokeWidth: 6,
+                            ),
+                          ),
                         ),
                       ],
-                    ),
-                    // TODO(dark-mode): const Icon — sits on primaryGradient success disc.
-                    child: Opacity(
-                      opacity: (1 - exitT * 2).clamp(0.0, 1.0),
-                      child: const Icon(
-                        Icons.check_rounded,
-                        color: AppColors.white,
-                        size: 72,
-                      ),
                     ),
                   ),
                 ),
@@ -1893,29 +2024,27 @@ class _GlowFieldState extends State<_GlowField> {
             padding: const EdgeInsets.only(left: 18, right: 12),
             child: Icon(
               widget.icon,
-              color: _focused
-                  ? AppColors.primaryBlue
-                  : AppColors.textMuted,
+              color: _focused ? AppColors.primaryBlue : AppColors.textMuted,
               size: 20,
             ),
           ),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 48, minHeight: 48),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 48,
+            minHeight: 48,
+          ),
           filled: true,
           fillColor: context.palette.inputFill,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 18,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
-            borderSide:  BorderSide(
-              color: AppColors.divider,
-            ),
+            borderSide: BorderSide(color: AppColors.divider),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
-            borderSide:  BorderSide(
-              color: AppColors.divider,
-            ),
+            borderSide: BorderSide(color: AppColors.divider),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
@@ -1928,4 +2057,157 @@ class _GlowFieldState extends State<_GlowField> {
       ),
     );
   }
+}
+
+// =============================================================================
+// Motion helpers
+// =============================================================================
+
+/// Layers premium motion onto the PageView slide: a parallax drift tied
+/// directly to the scroll position (content moves slightly faster than
+/// the page, with a fade), plus a replayed fade-and-rise entrance every
+/// time the step becomes active — so steps flow instead of hard-cutting.
+/// The child subtree is preserved (no remount), keeping in-page state
+/// like the church search text intact.
+class _StepDepth extends StatefulWidget {
+  const _StepDepth({
+    required this.page,
+    required this.index,
+    required this.active,
+    required this.child,
+  });
+
+  final PageController page;
+  final int index;
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_StepDepth> createState() => _StepDepthState();
+}
+
+class _StepDepthState extends State<_StepDepth>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _enter;
+
+  @override
+  void initState() {
+    super.initState();
+    _enter = AnimationController(vsync: this, duration: AppMotion.entrance);
+    if (widget.active) _enter.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _StepDepth old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) _enter.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _enter.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AppMotion.enabled(context)) return widget.child;
+    return AnimatedBuilder(
+      animation: Listenable.merge([widget.page, _enter]),
+      builder: (context, child) {
+        var delta = 0.0;
+        if (widget.page.hasClients && widget.page.position.haveDimensions) {
+          delta = widget.index - (widget.page.page ?? widget.index.toDouble());
+        }
+        final enter = Curves.easeOutCubic.transform(_enter.value);
+        return Opacity(
+          opacity:
+              ((1 - delta.abs() * 0.6).clamp(0.0, 1.0)) * (0.4 + 0.6 * enter),
+          child: Transform.translate(
+            offset: Offset(delta * 28, 14 * (1 - enter)),
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// A checkmark that draws itself stroke-by-stroke as [progress] runs
+/// 0 → 1 — used by the church picker, permission cards and the success
+/// disc so confirmation always feels performed, not stamped.
+class _DrawnCheck extends StatelessWidget {
+  const _DrawnCheck({
+    required this.progress,
+    required this.size,
+    required this.color,
+    this.strokeWidth = 2.0,
+  });
+
+  final double progress;
+  final double size;
+  final Color color;
+  final double strokeWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(size, size),
+      painter: _CheckPainter(
+        progress: progress,
+        color: color,
+        strokeWidth: strokeWidth,
+      ),
+    );
+  }
+}
+
+class _CheckPainter extends CustomPainter {
+  _CheckPainter({
+    required this.progress,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0) return;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final p1 = Offset(size.width * 0.12, size.height * 0.55);
+    final p2 = Offset(size.width * 0.40, size.height * 0.82);
+    final p3 = Offset(size.width * 0.88, size.height * 0.20);
+
+    final firstLen = (p2 - p1).distance;
+    final secondLen = (p3 - p2).distance;
+    final total = firstLen + secondLen;
+    final drawn = total * progress.clamp(0.0, 1.0);
+
+    final path = Path()..moveTo(p1.dx, p1.dy);
+    if (drawn <= firstLen) {
+      final end = Offset.lerp(p1, p2, drawn / firstLen)!;
+      path.lineTo(end.dx, end.dy);
+    } else {
+      path.lineTo(p2.dx, p2.dy);
+      final end = Offset.lerp(p2, p3, (drawn - firstLen) / secondLen)!;
+      path.lineTo(end.dx, end.dy);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_CheckPainter old) =>
+      old.progress != progress ||
+      old.color != color ||
+      old.strokeWidth != strokeWidth;
 }

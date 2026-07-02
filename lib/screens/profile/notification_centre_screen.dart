@@ -7,6 +7,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// In-app notification inbox. DB triggers populate `notifications` when
 /// people interact with the user's content (RSVPs, prayers, messages,
@@ -233,7 +234,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     final hasUnread = _items.any((n) => !n.isRead);
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

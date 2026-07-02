@@ -67,6 +67,7 @@ import '../../widgets/chat_contact_sheet.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -797,7 +798,7 @@ class _HomeScreenState extends State<HomeScreen>
       );
 
   Widget _buildScrollableContent() {
-    return RefreshIndicator(
+    return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _bootstrap,
       child: SingleChildScrollView(

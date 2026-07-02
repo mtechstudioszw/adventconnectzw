@@ -16,6 +16,7 @@ import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/post_form_widgets.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -397,7 +398,7 @@ class _EventsScreenState extends State<EventsScreen>
 
   Widget _buildList(List<Event> events, bool loading,
       {required bool isUpcoming}) {
-    return RefreshIndicator(
+    return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _refreshActive,
       child: _buildListContent(events, loading, isUpcoming: isUpcoming),

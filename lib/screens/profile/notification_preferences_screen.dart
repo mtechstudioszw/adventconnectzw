@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Per-church notification level. Three levels: All, Urgent only, None.
 /// Pulls existing preferences from `notification_preferences` and lets
@@ -91,7 +92,7 @@ class _NotificationPreferencesScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

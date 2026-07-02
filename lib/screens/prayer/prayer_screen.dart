@@ -8,6 +8,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/prayer_card.dart';
 import '../widgets/main_scaffold.dart';
 import '../widgets/post_form_widgets.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class PrayerScreen extends StatefulWidget {
   const PrayerScreen({super.key});
@@ -275,7 +276,7 @@ class _PrayerScreenState extends State<PrayerScreen>
         children: [
           _buildCategoryChips(),
           Expanded(
-            child: RefreshIndicator(
+            child: BrandedRefreshIndicator(
               color: AppColors.primaryBlue,
               onRefresh: _bootstrap,
               child: AnimatedBuilder(

@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
+import 'motion/pressable.dart';
 
 /// Large hero-style event card used in the Events tab.
 ///
@@ -24,128 +25,134 @@ class EventCard extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _months = [
-    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
   ];
 
-  static const _weekdays = [
-    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
-  ];
+  static const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.07),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _CoverHero(
-                url: event.coverPhotoUrl,
-                date: event.eventDate,
-                isGoing: isGoing,
-                isFull: event.isFull,
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      event.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleLarge.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
-                        height: 1.25,
+    return PressEffect(
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.palette.card,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _CoverHero(
+                  url: event.coverPhotoUrl,
+                  date: event.eventDate,
+                  isGoing: isGoing,
+                  isFull: event.isFull,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        event.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleLarge.copyWith(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 17,
+                          height: 1.25,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    _InfoRow(
-                      icon: event.isPast ? Icons.event_busy : Icons.schedule,
-                      // Past events get an "ENDED" prefix instead of the
-                      // future start time so the card doesn't look like a
-                      // live upcoming event when it isn't.
-                      text: event.isPast
-                          ? 'Ended  ·  ${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])}'
-                          : '${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])}  ·  ${_formatTime(event.eventTime)}',
-                    ),
-                    if (event.location != null &&
-                        event.location!.isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 10),
                       _InfoRow(
-                        icon: Icons.place_outlined,
-                        text: event.location!,
+                        icon: event.isPast ? Icons.event_busy : Icons.schedule,
+                        // Past events get an "ENDED" prefix instead of the
+                        // future start time so the card doesn't look like a
+                        // live upcoming event when it isn't.
+                        text: event.isPast
+                            ? 'Ended  ·  ${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])}'
+                            : '${_weekdays[event.eventDate.weekday - 1]} ${event.eventDate.day} ${_titleCase(_months[event.eventDate.month - 1])}  ·  ${_formatTime(event.eventTime)}',
                       ),
-                    ],
-                    const SizedBox(height: 12),
-                    Container(
-                      height: 1,
-                      color: AppColors.divider,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.people_outline,
-                          size: 16,
-                          color: AppColors.primaryBlue,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${event.rsvpCount}',
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          event.capacity != null
-                              ? ' / ${event.capacity} going'
-                              : ' going',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color:
-                                AppColors.textMuted,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          'View',
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppColors.primaryBlue,
-                          size: 20,
+                      if (event.location != null &&
+                          event.location!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _InfoRow(
+                          icon: Icons.place_outlined,
+                          text: event.location!,
                         ),
                       ],
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      Container(height: 1, color: AppColors.divider),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.people_outline,
+                            size: 16,
+                            color: AppColors.primaryBlue,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${event.rsvpCount}',
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            event.capacity != null
+                                ? ' / ${event.capacity} going'
+                                : ' going',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'View',
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.primaryBlue,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -188,8 +195,9 @@ class _CoverHero extends StatelessWidget {
         children: [
           if (url == null || url!.isEmpty)
             Container(
-              decoration:
-                  const BoxDecoration(gradient: AppColors.appBarGradient),
+              decoration: const BoxDecoration(
+                gradient: AppColors.appBarGradient,
+              ),
               child: Center(
                 child: Icon(
                   Icons.event,
@@ -231,11 +239,7 @@ class _CoverHero extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            top: 12,
-            left: 12,
-            child: _DateBadge(date: date),
-          ),
+          Positioned(top: 12, left: 12, child: _DateBadge(date: date)),
           if (isGoing || isFull)
             Positioned(
               top: 12,
@@ -361,11 +365,7 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 14,
-          color: AppColors.textMuted,
-        ),
+        Icon(icon, size: 14, color: AppColors.textMuted),
         const SizedBox(width: 6),
         Expanded(
           child: Text(

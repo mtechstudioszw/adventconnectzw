@@ -20,6 +20,7 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/verified_tick.dart';
 import 'chat_search_delegate.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key, this.initialTab});
@@ -788,7 +789,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           _chatSelect ? _buildChatSelectionBar() : _buildHero(),
           _buildTabBar(),
           Expanded(
-            child: RefreshIndicator(
+            child: BrandedRefreshIndicator(
               color: AppColors.primaryBlue,
               onRefresh: _bootstrap,
               child: AnimatedBuilder(

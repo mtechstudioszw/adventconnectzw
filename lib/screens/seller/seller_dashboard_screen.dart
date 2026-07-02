@@ -9,6 +9,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Entry point into the seller flow. Three states:
 ///   * no seller row → CTA to set up the store
@@ -82,7 +83,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,
         child: SingleChildScrollView(

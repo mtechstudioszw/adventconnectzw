@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// The user's saved (bookmarked) Watch videos — a clear, dedicated screen
 /// (reached from the Watch tab's bookmark icon) instead of a hidden feed
@@ -62,7 +63,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
                 child: CircularProgressIndicator(color: AppColors.primaryBlue))
             : _videos.isEmpty
                 ? _empty(palette)
-                : RefreshIndicator(
+                : BrandedRefreshIndicator(
                     color: AppColors.primaryBlue,
                     onRefresh: _load,
                     child: ListView(

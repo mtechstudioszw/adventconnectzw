@@ -8,6 +8,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Browse the marketplace by category. Two modes:
 ///   1. No `categoryId` → renders the category grid (one tile per
@@ -69,7 +70,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
     final cat = _category;
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: () async {
           if (widget.categoryId != null) await _load();

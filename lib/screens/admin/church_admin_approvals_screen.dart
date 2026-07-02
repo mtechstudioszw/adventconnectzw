@@ -8,6 +8,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Super-admin queue for church-admin claims (patch_112). Each card surfaces
 /// the applicant's contact so the founder can verify them on WhatsApp, then
@@ -214,7 +215,7 @@ class _ChurchAdminApprovalsScreenState
                     strokeWidth: 2.4, color: AppColors.white))
             : const Icon(Icons.refresh),
       ),
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

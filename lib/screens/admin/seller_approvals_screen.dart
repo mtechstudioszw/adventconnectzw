@@ -6,6 +6,7 @@ import '../../models/seller_model.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Super-admin queue of pending seller applications. Each row gives
 /// the admin enough context to make a call (business name, contact,
@@ -127,7 +128,7 @@ class _SellerApprovalsScreenState extends State<SellerApprovalsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

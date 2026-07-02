@@ -6,6 +6,7 @@ import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Gate into the church-admin dashboard. Checks for an approved row in
 /// `church_admins` against the current user and routes them on. This
@@ -67,7 +68,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     final pending = _roles.where((r) => !r.isApproved).toList();
     return Scaffold(
       backgroundColor: AppColors.scaffold,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _check,
         child: SingleChildScrollView(

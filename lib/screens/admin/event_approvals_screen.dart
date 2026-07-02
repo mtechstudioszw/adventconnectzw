@@ -5,6 +5,7 @@ import '../../services/event_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Super-admin queue of community events awaiting review.
 /// Uses the admin_list_pending_events / admin_approve_event /
@@ -198,7 +199,7 @@ class _EventApprovalsScreenState extends State<EventApprovalsScreen> {
         ),
       );
     }
-    return RefreshIndicator(
+    return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _load,
       child: ListView.separated(

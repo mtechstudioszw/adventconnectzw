@@ -9,6 +9,7 @@ import '../../services/hymn_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Library → Hymnal tab. Structured hymns searchable by number / title /
 /// lyrics (modern hymnal style), with a favorites filter and an in-app
@@ -98,7 +99,7 @@ class _HymnalTabState extends State<HymnalTab>
           child: CircularProgressIndicator(color: AppColors.primaryBlue));
     }
     if (_all.isEmpty) {
-      return RefreshIndicator(
+      return BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _refresh,
         child: _empty(context),
@@ -229,7 +230,7 @@ class _HymnalTabState extends State<HymnalTab>
           ),
         ),
         Expanded(
-          child: RefreshIndicator(
+          child: BrandedRefreshIndicator(
             color: AppColors.primaryBlue,
             onRefresh: _refresh,
             child: base.isEmpty

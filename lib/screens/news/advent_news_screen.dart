@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Editorial Advent News feed — distinct from the user post feed.
 /// Hosted at /news; reached from the home hero card and the home
@@ -79,7 +80,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
           _buildHero(context),
           _buildCategoryChips(),
           Expanded(
-            child: RefreshIndicator(
+            child: BrandedRefreshIndicator(
               color: AppColors.primaryBlue,
               onRefresh: _load,
               child: _buildBody(),

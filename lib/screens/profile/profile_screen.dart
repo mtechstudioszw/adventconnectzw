@@ -27,6 +27,7 @@ import '../../widgets/full_image_viewer.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -331,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,
         child: SingleChildScrollView(

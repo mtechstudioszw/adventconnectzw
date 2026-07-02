@@ -12,6 +12,7 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../widgets/main_bottom_nav.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// The Watch tab — a faith-safe media home. Hero (live/featured) + contextual
 /// rails (Continue watching, Upcoming) + playlist category chips + an endless
@@ -192,7 +193,7 @@ class _WatchScreenState extends State<WatchScreen> {
         top: false,
         child: _loading
             ? ShimmerLoaders.watchList()
-            : RefreshIndicator(
+            : BrandedRefreshIndicator(
                 color: AppColors.primaryBlue,
                 onRefresh: _bootstrap,
                 child: ListView(

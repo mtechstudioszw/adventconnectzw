@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Owner view of a seller's full product list. Lets them toggle each
 /// listing between live/hidden, jump into product details, and delete
@@ -199,7 +200,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
           style: AppTextStyles.buttonText.copyWith(fontSize: 14),
         ),
       ),
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

@@ -18,6 +18,7 @@ import '../../widgets/offline_inline_notice.dart';
 import '../../widgets/product_card.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -162,7 +163,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               const _ShopJobsSegment(active: _Section.shop),
               _buildCategoryStrip(),
               Expanded(
-                child: RefreshIndicator(
+                child: BrandedRefreshIndicator(
                   color: AppColors.primaryBlue,
                   onRefresh: _loadProducts,
                   child: AnimatedBuilder(

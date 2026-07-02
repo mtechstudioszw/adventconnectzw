@@ -5,6 +5,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'verified_tick.dart';
+import 'motion/pressable.dart';
 
 class PrayerCard extends StatelessWidget {
   const PrayerCard({
@@ -38,130 +39,132 @@ class PrayerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  _AuthorTapTarget(
-                    onTap: onAuthorTap,
-                    child: PrayerAvatar(
-                      name: prayer.authorName,
-                      photoUrl: prayer.authorPhotoUrl,
-                      size: 42,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _AuthorTapTarget(
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.palette.card,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _AuthorTapTarget(
                       onTap: onAuthorTap,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  prayer.authorName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.titleMedium.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
+                      child: PrayerAvatar(
+                        name: prayer.authorName,
+                        photoUrl: prayer.authorPhotoUrl,
+                        size: 42,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _AuthorTapTarget(
+                        onTap: onAuthorTap,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    prayer.authorName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.titleMedium.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
+                                if (prayer.authorIsVerified)
+                                  const VerifiedTick(size: 14),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              formatTimeAgo(prayer.createdAt),
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textMuted,
+                                fontSize: 12,
                               ),
-                              if (prayer.authorIsVerified)
-                                const VerifiedTick(size: 14),
-                            ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (onDelete != null || onEdit != null)
+                      _OwnerMenu(onEdit: onEdit, onDelete: onDelete),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  prayer.content,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    color: AppColors.text,
+                    fontSize: 14.5,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    PrayingButton(
+                      isPraying: isPraying,
+                      busy: busy,
+                      count: prayer.prayerCount,
+                      onTap: onTogglePray,
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.palette.chipBg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            size: 14,
+                            color: AppColors.textMuted,
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(width: 4),
                           Text(
-                            formatTimeAgo(prayer.createdAt),
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textMuted,
+                            '${prayer.commentCount}',
+                            style: AppTextStyles.labelSmall.copyWith(
                               fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textMuted,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  if (onDelete != null || onEdit != null)
-                    _OwnerMenu(onEdit: onEdit, onDelete: onDelete),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                prayer.content,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: AppColors.text,
-                  fontSize: 14.5,
-                  height: 1.5,
+                  ],
                 ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  PrayingButton(
-                    isPraying: isPraying,
-                    busy: busy,
-                    count: prayer.prayerCount,
-                    onTap: onTogglePray,
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: context.palette.chipBg,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                         Icon(
-                          Icons.chat_bubble_outline,
-                          size: 14,
-                          color: AppColors.textMuted,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${prayer.commentCount}',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -195,7 +198,11 @@ class PrayerAvatar extends StatelessWidget {
   final double size;
 
   String _initials() {
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
@@ -275,10 +282,7 @@ class _OwnerMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon:  Icon(
-        Icons.more_horiz,
-        color: AppColors.textMuted,
-      ),
+      icon: Icon(Icons.more_horiz, color: AppColors.textMuted),
       onSelected: (value) {
         if (value == 'edit') onEdit?.call();
         if (value == 'delete') onDelete?.call();
@@ -289,13 +293,17 @@ class _OwnerMenu extends StatelessWidget {
             value: 'edit',
             child: Row(
               children: [
-                const Icon(Icons.edit_outlined,
-                    color: AppColors.primaryBlue, size: 18),
+                const Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.primaryBlue,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Edit',
-                  style: AppTextStyles.labelMedium
-                      .copyWith(color: AppColors.text),
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.text,
+                  ),
                 ),
               ],
             ),
@@ -305,13 +313,17 @@ class _OwnerMenu extends StatelessWidget {
             value: 'delete',
             child: Row(
               children: [
-                const Icon(Icons.delete_outline,
-                    color: AppColors.red, size: 18),
+                const Icon(
+                  Icons.delete_outline,
+                  color: AppColors.red,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Delete',
-                  style:
-                      AppTextStyles.labelMedium.copyWith(color: AppColors.red),
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.red,
+                  ),
                 ),
               ],
             ),
@@ -348,7 +360,9 @@ class PrayingButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             gradient: filled ? AppColors.primaryGradient : null,
-            color: filled ? null : AppColors.primaryBlue.withValues(alpha: 0.08),
+            color: filled
+                ? null
+                : AppColors.primaryBlue.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
             boxShadow: filled
                 ? [

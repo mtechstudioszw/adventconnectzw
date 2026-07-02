@@ -13,6 +13,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/verified_tick.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Browse other community members who opted into the directory.
 class MemberDirectoryScreen extends StatefulWidget {
@@ -90,7 +91,7 @@ class _MemberDirectoryScreenState extends State<MemberDirectoryScreen> {
           style: AppTextStyles.buttonText.copyWith(fontSize: 14),
         ),
       ),
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

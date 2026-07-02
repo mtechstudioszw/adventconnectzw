@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Full-screen Audio Bible — opened from a button inside the Bible tab
 /// (founder preference: not its own Library tab). Reuses [MusicTab] with the
@@ -79,7 +80,7 @@ class _MusicTabState extends State<MusicTab>
     return Column(
       children: [
         Expanded(
-          child: RefreshIndicator(
+          child: BrandedRefreshIndicator(
             color: AppColors.primaryBlue,
             onRefresh: () async {
               final items = LibraryService.fetchItems(widget.kind);

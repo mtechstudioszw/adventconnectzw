@@ -16,6 +16,7 @@ import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
@@ -163,7 +164,7 @@ class _JobsScreenState extends State<JobsScreen>
             const SizedBox(height: 6),
             _buildLevelStrip(),
             Expanded(
-              child: RefreshIndicator(
+              child: BrandedRefreshIndicator(
                 color: AppColors.primaryBlue,
                 onRefresh: _loadJobs,
                 child: AnimatedBuilder(

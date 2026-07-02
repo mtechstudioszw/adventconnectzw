@@ -6,6 +6,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Lists everyone the current user has blocked. Tap "Unblock" to undo.
 class BlockedUsersScreen extends StatefulWidget {
@@ -83,7 +84,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

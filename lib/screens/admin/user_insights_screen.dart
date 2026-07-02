@@ -4,6 +4,7 @@ import '../../services/signup_survey_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Super-admin "User insights" — where signup-survey responses land
 /// (patch_136). Shows how members heard about the app, plus recent
@@ -64,7 +65,7 @@ class _UserInsightsScreenState extends State<UserInsightsScreen> {
             if (total == 0) {
               return _Empty(palette: palette, onRetry: _reload);
             }
-            return RefreshIndicator(
+            return BrandedRefreshIndicator(
               color: AppColors.primaryBlue,
               onRefresh: () async => _reload(),
               child: ListView(

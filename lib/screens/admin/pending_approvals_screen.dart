@@ -5,6 +5,7 @@ import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Approval queue for a church admin. Shows community events that
 /// reference this church and edit suggestions waiting on review.
@@ -107,7 +108,7 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
     final total = _events.length + _edits.length;
     return Scaffold(
       backgroundColor: AppColors.scaffold,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

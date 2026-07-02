@@ -19,6 +19,7 @@ import '../../widgets/full_image_viewer.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/rate_seller_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Public storefront view. Buyers reach this from product_details → tap
 /// seller, or from any future "Featured sellers" surface. Shows store
@@ -312,7 +313,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,
         child: _buildBody(),

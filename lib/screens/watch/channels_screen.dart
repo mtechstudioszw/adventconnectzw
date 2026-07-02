@@ -8,6 +8,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Browse all monitored channels — tap one to see its videos.
 class ChannelsScreen extends StatefulWidget {
@@ -66,7 +67,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                     child: Text('No channels yet.',
                         style: AppTextStyles.bodyMedium
                             .copyWith(color: palette.textMuted)))
-                : RefreshIndicator(
+                : BrandedRefreshIndicator(
                     color: AppColors.primaryBlue,
                     onRefresh: _load,
                     child: ListView.separated(

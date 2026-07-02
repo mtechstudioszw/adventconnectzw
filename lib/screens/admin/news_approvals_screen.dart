@@ -6,6 +6,7 @@ import '../../services/advent_news_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Super-admin queue of member-submitted Advent News awaiting review.
 /// Mirrors SellerApprovalsScreen — same RPC-backed approve/reject
@@ -139,7 +140,7 @@ class _NewsApprovalsScreenState extends State<NewsApprovalsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: RefreshIndicator(
+      body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,
         child: SingleChildScrollView(

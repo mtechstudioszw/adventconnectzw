@@ -12,6 +12,7 @@ import 'bible_tab.dart';
 import 'hymnal_tab.dart';
 import 'music_tab.dart';
 import 'pdf_viewer_screen.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// The in-app Library: Bible (offline KJV), Hymnal (searchable structured
 /// hymns), EGW Books (uploaded PDFs) and Music (background audio player).
@@ -146,7 +147,7 @@ class _PdfLibraryTabState extends State<_PdfLibraryTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return RefreshIndicator(
+    return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _refresh,
       child: FutureBuilder<List<LibraryItem>>(

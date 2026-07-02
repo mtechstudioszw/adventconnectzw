@@ -16,6 +16,7 @@ import '../../widgets/church_card.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class ChurchesScreen extends StatefulWidget {
   const ChurchesScreen({super.key});
@@ -468,7 +469,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   }
 
   Widget _buildList() {
-    return RefreshIndicator(
+    return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _bootstrap,
       child: _buildListContent(),

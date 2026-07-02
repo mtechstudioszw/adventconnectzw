@@ -6,9 +6,12 @@ import 'package:flutter/material.dart';
 import '../../models/seller_model.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/motion/pressable.dart';
 
 /// Friday-sundown to Saturday-sundown countdown with a province
 /// picker. Times are an astronomical approximation good enough for a
@@ -53,6 +56,14 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
     final inSabbath = _now.isAfter(start) && _now.isBefore(end);
     final target = inSabbath ? end : start;
     final remaining = target.difference(_now);
+    // Ring sweep: how far along we are — through the week toward Friday
+    // sundown, or through the Sabbath hours themselves.
+    final horizon = inSabbath
+        ? end.difference(start).inSeconds
+        : const Duration(days: 7).inSeconds;
+    final ringProgress = (1 - remaining.inSeconds / horizon)
+        .clamp(0.0, 1.0)
+        .toDouble();
 
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
@@ -73,59 +84,76 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _CountdownCard(
-                    remaining: remaining,
-                    inSabbath: inSabbath,
-                  ),
-                  const SizedBox(height: 16),
-                  _SundownTimes(start: start, end: end, province: _province),
-                  const SizedBox(height: 16),
-                  ScreenCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'PROVINCE',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: context.palette.textMuted,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          height: 38,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            children: [
-                              for (final p in sellerProvinces) ...[
-                                _Chip(
-                                  label: p,
-                                  active: _province == p,
-                                  onTap: () => setState(() => _province = p),
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Times are an approximation based on average sundown for the province. For exact local times consult a sundown calendar.',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: context.palette.textMuted,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
+                  StaggeredReveal(
+                    index: 0,
+                    child: _CountdownCard(
+                      remaining: remaining,
+                      inSabbath: inSabbath,
+                      progress: ringProgress,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  InfoBanner(
-                    icon: Icons.brightness_3,
-                    message:
-                        'Enable the Sabbath countdown in Settings → Preferences to show this on the home screen.',
+                  StaggeredReveal(
+                    index: 1,
+                    child: _SundownTimes(
+                      start: start,
+                      end: end,
+                      province: _province,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  StaggeredReveal(
+                    index: 2,
+                    child: ScreenCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'PROVINCE',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: context.palette.textMuted,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 38,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                for (final p in sellerProvinces) ...[
+                                  _Chip(
+                                    label: p,
+                                    active: _province == p,
+                                    onTap: () => setState(() => _province = p),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Times are an approximation based on average sundown for the province. For exact local times consult a sundown calendar.',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.palette.textMuted,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  StaggeredReveal(
+                    index: 3,
+                    child: InfoBanner(
+                      icon: Icons.brightness_3,
+                      message:
+                          'Enable the Sabbath countdown in Settings → Preferences to show this on the home screen.',
+                    ),
                   ),
                 ],
               ),
@@ -175,8 +203,9 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
     // before Saturday sundown), `start` is in the future — back up.
     final candidate = start.subtract(const Duration(days: 1));
     final inSabbath = ref.isAfter(_sundown(candidate, province));
-    final saturday =
-        inSabbath ? candidate.add(const Duration(days: 1)) : start.add(const Duration(days: 1));
+    final saturday = inSabbath
+        ? candidate.add(const Duration(days: 1))
+        : start.add(const Duration(days: 1));
     return _sundown(saturday, province);
   }
 
@@ -191,21 +220,22 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
   /// Sabbath countdown UI.
   DateTime _sundown(DateTime date, String province) {
     final coord = _provinceCoords[province] ?? _provinceCoords['Harare']!;
-    final dayOfYear =
-        date.difference(DateTime(date.year, 1, 1)).inDays + 1;
+    final dayOfYear = date.difference(DateTime(date.year, 1, 1)).inDays + 1;
 
     final lat = coord.lat * math.pi / 180;
     final lon = coord.lon;
 
     // Equation of time + solar declination (NOAA simplified).
     final gamma = 2 * math.pi / 365 * (dayOfYear - 1 + 0.5);
-    final eqTime = 229.18 *
+    final eqTime =
+        229.18 *
         (0.000075 +
             0.001868 * math.cos(gamma) -
             0.032077 * math.sin(gamma) -
             0.014615 * math.cos(2 * gamma) -
             0.040849 * math.sin(2 * gamma));
-    final declination = 0.006918 -
+    final declination =
+        0.006918 -
         0.399912 * math.cos(gamma) +
         0.070257 * math.sin(gamma) -
         0.006758 * math.cos(2 * gamma) +
@@ -214,7 +244,8 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
         0.00148 * math.sin(3 * gamma);
 
     final zenith = 90.833 * math.pi / 180;
-    final cosH = (math.cos(zenith) - math.sin(lat) * math.sin(declination)) /
+    final cosH =
+        (math.cos(zenith) - math.sin(lat) * math.sin(declination)) /
         (math.cos(lat) * math.cos(declination));
     // Hour angle clamps for latitudes that never see sunset/sunrise —
     // doesn't happen in Zimbabwe but defend against floating-point
@@ -233,9 +264,17 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
 }
 
 class _CountdownCard extends StatelessWidget {
-  const _CountdownCard({required this.remaining, required this.inSabbath});
+  const _CountdownCard({
+    required this.remaining,
+    required this.inSabbath,
+    required this.progress,
+  });
   final Duration remaining;
   final bool inSabbath;
+
+  /// 0→1 sweep of the gold ring — the week running toward Friday
+  /// sundown (or the Sabbath hours themselves once it has begun).
+  final double progress;
 
   @override
   Widget build(BuildContext context) {
@@ -255,10 +294,25 @@ class _CountdownCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(
-            inSabbath ? Icons.nights_stay : Icons.brightness_3,
-            color: accent,
-            size: 36,
+          // The Sabbath ring — same gold-ring motif as the intro film
+          // and the unlock screen, sweeping as sundown approaches.
+          SizedBox(
+            width: 92,
+            height: 92,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CustomPaint(
+                  size: const Size(92, 92),
+                  painter: _SabbathRingPainter(progress: progress),
+                ),
+                Icon(
+                  inSabbath ? Icons.nights_stay : Icons.brightness_3,
+                  color: accent,
+                  size: 34,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           Text(
@@ -312,13 +366,30 @@ class _Unit extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(
-            value,
-            style: AppTextStyles.displayMedium.copyWith(
-              color: AppColors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              height: 1,
+          // Digits roll upward when they change instead of snapping.
+          AnimatedSwitcher(
+            duration: AppMotion.maybe(context, AppMotion.quick),
+            switchInCurve: AppMotion.easeOut,
+            switchOutCurve: AppMotion.easeIn,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.35),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              style: AppTextStyles.displayMedium.copyWith(
+                color: AppColors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -355,15 +426,7 @@ class _SundownTimes extends StatelessWidget {
   }
 
   String _date(DateTime d) {
-    const days = [
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const months = [
       'Jan',
       'Feb',
@@ -467,45 +530,90 @@ class _TimeRow extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
+  const _Chip({required this.label, required this.active, required this.onTap});
   final String label;
   final bool active;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            gradient: active ? AppColors.primaryGradient : null,
-            color: active ? null : context.palette.chipBg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: active
-                  ? AppColors.primaryBlue
-                  : context.palette.divider,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: active ? AppColors.primaryGradient : null,
+              color: active ? null : context.palette.chipBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: active ? AppColors.primaryBlue : context.palette.divider,
+              ),
             ),
-          ),
-          child: Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: active ? AppColors.white : context.palette.text,
-              fontWeight: FontWeight.w700,
-              fontSize: 12.5,
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: active ? AppColors.white : context.palette.text,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Gold progress ring around the countdown moon: a faint white track
+/// with the gold sweep drawing clockwise from the top as sundown nears.
+class _SabbathRingPainter extends CustomPainter {
+  _SabbathRingPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2 - 3;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5
+        ..color = AppColors.white.withValues(alpha: 0.14),
+    );
+    if (progress <= 0) return;
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      progress * 2 * math.pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5
+        ..strokeCap = StrokeCap.round
+        ..color = AppColors.goldAccent,
+    );
+    // The comet head marking "now" on the ring.
+    final angle = -math.pi / 2 + progress * 2 * math.pi;
+    canvas.drawCircle(
+      Offset(
+        center.dx + radius * math.cos(angle),
+        center.dy + radius * math.sin(angle),
+      ),
+      4,
+      Paint()..color = AppColors.goldAccent,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SabbathRingPainter old) => old.progress != progress;
 }

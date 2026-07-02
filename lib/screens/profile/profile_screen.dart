@@ -28,6 +28,8 @@ import '../../widgets/last_updated_strip.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -36,12 +38,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
+class _ProfileScreenState extends State<ProfileScreen> {
   int _churchesFollowed = 0;
   int _eventsGoing = 0;
   List<Post> _myPosts = const [];
@@ -58,23 +55,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
     _bootstrap();
     _loadAdminRoles();
     _loadVerified();
-  }
-
-  @override
-  void dispose() {
-    _entrance.dispose();
-    super.dispose();
   }
 
   /// Best-effort load of the user's approved church-admin roles so the
@@ -127,20 +110,31 @@ class _ProfileScreenState extends State<ProfileScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 14),
-            Text('Choose a church',
-                style: AppTextStyles.titleMedium
-                    .copyWith(fontWeight: FontWeight.w700)),
+            Text(
+              'Choose a church',
+              style: AppTextStyles.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const SizedBox(height: 8),
             for (final role in _adminRoles)
               ListTile(
-                leading: const Icon(Icons.church_outlined,
-                    color: AppColors.primaryBlue),
-                title: Text(role.churchName,
-                    style: AppTextStyles.bodyLarge
-                        .copyWith(fontWeight: FontWeight.w600)),
-                subtitle: Text('Admin · ${role.role}',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: ctx.palette.textMuted)),
+                leading: const Icon(
+                  Icons.church_outlined,
+                  color: AppColors.primaryBlue,
+                ),
+                title: Text(
+                  role.churchName,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  'Admin · ${role.role}',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: ctx.palette.textMuted,
+                  ),
+                ),
                 onTap: () => Navigator.pop(ctx, role),
               ),
             const SizedBox(height: 12),
@@ -172,8 +166,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       final myPosts = viewerId == null
           ? const <Post>[]
           : allPosts.where((p) => p.authorId == viewerId).toList();
-      final myChurches =
-          allChurches.where((c) => followed.contains(c.id)).toList();
+      final myChurches = allChurches
+          .where((c) => followed.contains(c.id))
+          .toList();
       setState(() {
         _churchesFollowed = followed.length;
         _eventsGoing = (results[1] as Set).length;
@@ -195,8 +190,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       final viewerId = AuthService.currentUser?.id;
       final posts = ((decoded['posts'] as List?) ?? const [])
-          .map((p) =>
-              Post.fromJson(p as Map<String, dynamic>, viewerId: viewerId))
+          .map(
+            (p) => Post.fromJson(p as Map<String, dynamic>, viewerId: viewerId),
+          )
           .toList();
       final churches = ((decoded['churches'] as List?) ?? const [])
           .map((c) => Church.fromJson(c as Map<String, dynamic>))
@@ -231,8 +227,10 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   String _initials() {
     final name = _displayName();
-    final parts =
-        name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = name
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
@@ -313,7 +311,8 @@ class _ProfileScreenState extends State<ProfileScreen>
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.red,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
             child: Text('Sign out', style: AppTextStyles.labelLarge),
           ),
@@ -337,33 +336,34 @@ class _ProfileScreenState extends State<ProfileScreen>
         onRefresh: _bootstrap,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: AnimatedBuilder(
-            animation: _entrance,
-            builder: (context, child) => Opacity(
-              opacity: _fade.value,
-              child: Transform.translate(
-                offset: Offset(0, _slide.value),
-                child: child,
+          // Sections cascade in instead of the old one-block fade.
+          child: Column(
+            children: [
+              StaggeredReveal(index: 0, rise: 14, child: _buildHeader()),
+              StaggeredReveal(
+                index: 1,
+                child: Column(
+                  children: [
+                    _buildIdentity(),
+                    const SizedBox(height: 10),
+                    _buildInlineStats(),
+                  ],
+                ),
               ),
-            ),
-            child: Column(
-              children: [
-                _buildHeader(),
-                _buildIdentity(),
-                const SizedBox(height: 10),
-                _buildInlineStats(),
-                const SizedBox(height: 16),
-                Padding(
+              const SizedBox(height: 16),
+              StaggeredReveal(
+                index: 2,
+                child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: _buildActionToolbar(),
                 ),
-                const SizedBox(height: 18),
-                _buildTabSelector(),
-                const SizedBox(height: 12),
-                _buildTabContent(),
-                const SizedBox(height: 32),
-              ],
-            ),
+              ),
+              const SizedBox(height: 18),
+              StaggeredReveal(index: 3, child: _buildTabSelector()),
+              const SizedBox(height: 12),
+              StaggeredReveal(index: 4, child: _buildTabContent()),
+              const SizedBox(height: 32),
+            ],
           ),
         ),
       ),
@@ -507,10 +507,26 @@ class _ProfileScreenState extends State<ProfileScreen>
       padding: const EdgeInsets.all(4),
       child: Row(
         children: [
-          _TabPill(label: 'Posts', selected: _tabIndex == 0, onTap: () => setState(() => _tabIndex = 0)),
-          _TabPill(label: 'About', selected: _tabIndex == 1, onTap: () => setState(() => _tabIndex = 1)),
-          _TabPill(label: 'Photos', selected: _tabIndex == 2, onTap: () => setState(() => _tabIndex = 2)),
-          _TabPill(label: 'Churches', selected: _tabIndex == 3, onTap: () => setState(() => _tabIndex = 3)),
+          _TabPill(
+            label: 'Posts',
+            selected: _tabIndex == 0,
+            onTap: () => setState(() => _tabIndex = 0),
+          ),
+          _TabPill(
+            label: 'About',
+            selected: _tabIndex == 1,
+            onTap: () => setState(() => _tabIndex = 1),
+          ),
+          _TabPill(
+            label: 'Photos',
+            selected: _tabIndex == 2,
+            onTap: () => setState(() => _tabIndex = 2),
+          ),
+          _TabPill(
+            label: 'Churches',
+            selected: _tabIndex == 3,
+            onTap: () => setState(() => _tabIndex = 3),
+          ),
         ],
       ),
     );
@@ -584,13 +600,14 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Future<void> _toggleLike(Post post) async {
     final newLiked = !post.viewerLiked;
-    final newCount =
-        (post.likeCount + (newLiked ? 1 : -1)).clamp(0, 1 << 30);
+    final newCount = (post.likeCount + (newLiked ? 1 : -1)).clamp(0, 1 << 30);
     setState(() {
       _myPosts = _myPosts
-          .map((p) => p.id == post.id
-              ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
-              : p)
+          .map(
+            (p) => p.id == post.id
+                ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+                : p,
+          )
           .toList();
     });
     try {
@@ -603,12 +620,14 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (!mounted) return;
       setState(() {
         _myPosts = _myPosts
-            .map((p) => p.id == post.id
-                ? p.copyWith(
-                    viewerLiked: post.viewerLiked,
-                    likeCount: post.likeCount,
-                  )
-                : p)
+            .map(
+              (p) => p.id == post.id
+                  ? p.copyWith(
+                      viewerLiked: post.viewerLiked,
+                      likeCount: post.likeCount,
+                    )
+                  : p,
+            )
             .toList();
       });
     }
@@ -623,8 +642,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         if (!mounted) return;
         setState(() {
           _myPosts = _myPosts
-              .map((p) =>
-                  p.id == post.id ? p.copyWith(commentCount: newCount) : p)
+              .map(
+                (p) => p.id == post.id ? p.copyWith(commentCount: newCount) : p,
+              )
               .toList();
         });
       },
@@ -665,12 +685,15 @@ class _ProfileScreenState extends State<ProfileScreen>
         ? PostVisibility.friendsOnly
         : PostVisibility.public;
     try {
-      final updated =
-          await FeedService.updatePost(post.id, visibility: newVisibility);
+      final updated = await FeedService.updatePost(
+        post.id,
+        visibility: newVisibility,
+      );
       if (!mounted) return;
       setState(() {
-        _myPosts =
-            _myPosts.map((p) => p.id == updated.id ? updated : p).toList();
+        _myPosts = _myPosts
+            .map((p) => p.id == updated.id ? updated : p)
+            .toList();
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -697,15 +720,18 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _editPost(Post post) async {
-    final newBody =
-        await showEditPostDialog(context, initialBody: post.body ?? '');
+    final newBody = await showEditPostDialog(
+      context,
+      initialBody: post.body ?? '',
+    );
     if (newBody == null) return;
     try {
       final updated = await FeedService.updatePost(post.id, body: newBody);
       if (!mounted) return;
       setState(() {
-        _myPosts =
-            _myPosts.map((p) => p.id == updated.id ? updated : p).toList();
+        _myPosts = _myPosts
+            .map((p) => p.id == updated.id ? updated : p)
+            .toList();
       });
     } catch (_) {
       if (!mounted) return;
@@ -727,8 +753,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       builder: (ctx) => AlertDialog(
         title: Text(
           'Delete post?',
-          style:
-              AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
         ),
         content: Text(
           'This will remove the post for everyone. You can\'t undo it.',
@@ -800,9 +825,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     final multi = _adminRoles.length > 1;
     final subtitle = multi
         ? 'You manage ${_adminRoles.length} churches — post announcements, '
-            'events and manage info.'
+              'events and manage info.'
         : 'Post announcements, events and manage info for '
-            '${_adminRoles.first.churchName}.';
+              '${_adminRoles.first.churchName}.';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -824,8 +849,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                     gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.verified_user_outlined,
-                      color: AppColors.white, size: 22),
+                  child: const Icon(
+                    Icons.verified_user_outlined,
+                    color: AppColors.white,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -954,9 +982,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               decoration: BoxDecoration(
                 color: context.palette.card,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: context.palette.divider,
-                ),
+                border: Border.all(color: context.palette.divider),
               ),
               child: Material(
                 color: Colors.transparent,
@@ -968,8 +994,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                   borderRadius: BorderRadius.circular(14),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         Container(
@@ -1057,9 +1085,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               clipper: _CoverClipper(),
               child: Container(
                 decoration: coverUrl == null
-                    ? const BoxDecoration(
-                        gradient: AppColors.appBarGradient,
-                      )
+                    ? const BoxDecoration(gradient: AppColors.appBarGradient)
                     : null,
                 child: Stack(
                   fit: StackFit.expand,
@@ -1072,10 +1098,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) =>
                               Container(
-                            decoration: const BoxDecoration(
-                              gradient: AppColors.appBarGradient,
-                            ),
-                          ),
+                                decoration: const BoxDecoration(
+                                  gradient: AppColors.appBarGradient,
+                                ),
+                              ),
                         ),
                       ),
                     // Always darken slightly so the white app-bar text
@@ -1143,57 +1169,61 @@ class _ProfileScreenState extends State<ProfileScreen>
                       child: CircularProgressIndicator(
                         value: _profileCompletion(),
                         strokeWidth: 4,
-                        backgroundColor:
-                            AppColors.white.withValues(alpha: 0.35),
+                        backgroundColor: AppColors.white.withValues(
+                          alpha: 0.35,
+                        ),
                         valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.goldAccent),
+                          AppColors.goldAccent,
+                        ),
                       ),
                     ),
                   Container(
                     width: 120,
                     height: 120,
                     clipBehavior: Clip.antiAlias,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: photoUrl == null
-                      ? AppColors.primaryGradient
-                      : null,
-                  color: photoUrl == null ? null : AppColors.lightGrey,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.white, width: 5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.30),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: photoUrl == null
-                    ? Text(
-                        _initials(),
-                        style: AppTextStyles.displayMedium.copyWith(
-                          color: AppColors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: photoUrl == null
+                          ? AppColors.primaryGradient
+                          : null,
+                      color: photoUrl == null ? null : AppColors.lightGrey,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.white, width: 5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
                         ),
-                      )
-                    : GestureDetector(
-                        onTap: () => FullImageViewer.show(context, photoUrl),
-                        child: CachedImage(
-                          photoUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Text(
+                      ],
+                    ),
+                    child: photoUrl == null
+                        ? Text(
                             _initials(),
                             style: AppTextStyles.displayMedium.copyWith(
                               color: AppColors.white,
                               fontWeight: FontWeight.w700,
                               fontSize: 38,
                             ),
+                          )
+                        : GestureDetector(
+                            onTap: () =>
+                                FullImageViewer.show(context, photoUrl),
+                            child: CachedImage(
+                              photoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Text(
+                                    _initials(),
+                                    style: AppTextStyles.displayMedium.copyWith(
+                                      color: AppColors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 38,
+                                    ),
+                                  ),
+                            ),
                           ),
-                        ),
-                      ),
-              ),
+                  ),
                 ],
               ),
             ),
@@ -1252,16 +1282,20 @@ class _ProfileScreenState extends State<ProfileScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.calendar_today_outlined,
-                    size: 13, color: context.palette.textMuted),
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 13,
+                  color: context.palette.textMuted,
+                ),
                 const SizedBox(width: 5),
                 Flexible(
                   child: Text(
                     'Joined Advent Connect ZW · ${formatJoinDate(_joinedAt()!)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: context.palette.textMuted),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.textMuted,
+                    ),
                   ),
                 ),
               ],
@@ -1325,8 +1359,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     final church = meta['church_id'];
     return [
       MapEntry('Add a profile photo', s('profile_photo_url').isNotEmpty),
-      MapEntry('Set your home church',
-          church != null && church.toString().isNotEmpty),
+      MapEntry(
+        'Set your home church',
+        church != null && church.toString().isNotEmpty,
+      ),
       MapEntry('Write a short bio', s('bio').isNotEmpty),
       MapEntry('Add your date of birth', _birthDate() != null),
       MapEntry('Add your full name', s('full_name').isNotEmpty),
@@ -1416,7 +1452,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                 ),
                 const SizedBox(height: 14),
-                ...missing.take(3).map(
+                ...missing
+                    .take(3)
+                    .map(
                       (i) => Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Row(
@@ -1628,19 +1666,23 @@ class _CircleIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.10),
+              ),
+            ),
+            child: Icon(icon, color: AppColors.white, size: 22),
           ),
-          child: Icon(icon, color: AppColors.white, size: 22),
         ),
       ),
     );
@@ -1662,43 +1704,45 @@ class _ToolbarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: primary ? AppColors.primaryGradient : null,
-            color: primary ? null : context.palette.card,
-            borderRadius: BorderRadius.circular(12),
-            border: primary
-                ? null
-                : Border.all(color: context.palette.divider),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: primary ? 16 : 20,
-                color: primary ? AppColors.white : AppColors.primaryBlue,
-              ),
-              if (label.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    color: primary ? AppColors.white : AppColors.primaryBlue,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                  ),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: primary ? AppColors.primaryGradient : null,
+              color: primary ? null : context.palette.card,
+              borderRadius: BorderRadius.circular(12),
+              border: primary
+                  ? null
+                  : Border.all(color: context.palette.divider),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: primary ? 16 : 20,
+                  color: primary ? AppColors.white : AppColors.primaryBlue,
                 ),
+                if (label.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: AppTextStyles.buttonText.copyWith(
+                      color: primary ? AppColors.white : AppColors.primaryBlue,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -1719,26 +1763,28 @@ class _TabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: selected ? AppColors.primaryGradient : null,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              label,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: selected ? AppColors.white : context.palette.text,
-                fontWeight: FontWeight.w700,
-                fontSize: 12.5,
+    return PressEffect(
+      child: Expanded(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: selected ? AppColors.primaryGradient : null,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: selected ? AppColors.white : context.palette.text,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
               ),
             ),
           ),
@@ -1764,24 +1810,26 @@ class _MoreMenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = destructive ? AppColors.red : context.palette.text;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 14),
-              Text(
-                label,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 14),
+                Text(
+                  label,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

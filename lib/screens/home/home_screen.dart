@@ -62,6 +62,9 @@ import '../../widgets/youtube/youtube_video_card.dart';
 import '../../models/youtube_video.dart';
 import '../../services/youtube_service.dart';
 import '../../widgets/last_updated_strip.dart';
+import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/chat_contact_sheet.dart';
 import '../../widgets/shimmer_loaders.dart';
@@ -76,12 +79,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
+class _HomeScreenState extends State<HomeScreen> {
   List<Event> _events = [];
   List<Church> _churches = [];
   List<MemberDirectoryEntry> _suggestedMembers = [];
@@ -123,14 +121,8 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    // (Entrance animation now lives in _buildScrollableContent's
+    // StaggeredReveal sections — no screen-level controller needed.)
     // Today's devotion — paint the cached copy instantly (survives a slow /
     // offline open since the card is pinned to the top), then refresh.
     _devotion = DevotionService.cachedToday();
@@ -142,18 +134,12 @@ class _HomeScreenState extends State<HomeScreen>
     // Watch content — live stream + recent videos. Independent of the main
     // bootstrap so a slow YouTube read never delays the rest of Home.
     _loadWatch();
-    _msgActivitySub = MessagingService.streamInboxActivity().listen(
-      (_) {
-        _unreadRefreshDebounce?.cancel();
-        _unreadRefreshDebounce = Timer(
-          const Duration(milliseconds: 600),
-          () {
-            if (mounted) _refreshUnreadBadge();
-          },
-        );
-      },
-      onError: (_) {},
-    );
+    _msgActivitySub = MessagingService.streamInboxActivity().listen((_) {
+      _unreadRefreshDebounce?.cancel();
+      _unreadRefreshDebounce = Timer(const Duration(milliseconds: 600), () {
+        if (mounted) _refreshUnreadBadge();
+      });
+    }, onError: (_) {});
     // Rebuild whenever the user's profile metadata changes (e.g. after a
     // save in Edit Profile) so the greeting / welcome card refresh without
     // requiring the user to relaunch the app.
@@ -196,32 +182,43 @@ class _HomeScreenState extends State<HomeScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.card,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            const Icon(Icons.system_update,
-                color: AppColors.primaryBlue, size: 24),
+            const Icon(
+              Icons.system_update,
+              color: AppColors.primaryBlue,
+              size: 24,
+            ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text('Update available',
-                  style: AppTextStyles.titleMedium.copyWith(
-                      color: palette.text, fontWeight: FontWeight.w700)),
+              child: Text(
+                'Update available',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
         content: Text(
           'A newer version of Advent Connect is available. You have $window '
           'to update before it becomes required.',
-          style: AppTextStyles.bodyMedium
-              .copyWith(color: palette.textMuted, height: 1.5),
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: palette.textMuted,
+            height: 1.5,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Later',
-                style: AppTextStyles.buttonText
-                    .copyWith(color: palette.textMuted)),
+            child: Text(
+              'Later',
+              style: AppTextStyles.buttonText.copyWith(
+                color: palette.textMuted,
+              ),
+            ),
           ),
           FilledButton(
             onPressed: () {
@@ -231,7 +228,8 @@ class _HomeScreenState extends State<HomeScreen>
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Update now'),
           ),
@@ -243,7 +241,8 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _openStore() async {
     final market = Uri.parse('market://details?id=$kAndroidPackageId');
     final web = Uri.parse(
-        'https://play.google.com/store/apps/details?id=$kAndroidPackageId');
+      'https://play.google.com/store/apps/details?id=$kAndroidPackageId',
+    );
     if (!await launchUrl(market, mode: LaunchMode.externalApplication)) {
       await launchUrl(web, mode: LaunchMode.externalApplication);
     }
@@ -251,7 +250,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
-    _entrance.dispose();
     _authSub?.cancel();
     _unreadRefreshDebounce?.cancel();
     _msgActivitySub?.cancel();
@@ -330,7 +328,9 @@ class _HomeScreenState extends State<HomeScreen>
       // on the home screen until midnight rolls over.
       final now = DateTime.now();
       final stillUpcoming = (results[0] as List<Event>)
-          .where((e) => e.startsAt.isAfter(now.subtract(const Duration(hours: 6))))
+          .where(
+            (e) => e.startsAt.isAfter(now.subtract(const Duration(hours: 6))),
+          )
           .toList();
       final events = stillUpcoming.take(8).toList();
       // Show a per-user RANDOM selection of churches (stable for a given user,
@@ -432,10 +432,9 @@ class _HomeScreenState extends State<HomeScreen>
           .toList();
       final viewerId = AuthService.currentUser?.id;
       final posts = ((decoded['posts'] as List?) ?? const [])
-          .map((p) => Post.fromJson(
-                p as Map<String, dynamic>,
-                viewerId: viewerId,
-              ))
+          .map(
+            (p) => Post.fromJson(p as Map<String, dynamic>, viewerId: viewerId),
+          )
           .toList();
       // Drop any cached stories that have since expired (24h window).
       final stories = ((decoded['stories'] as List?) ?? const [])
@@ -501,8 +500,7 @@ class _HomeScreenState extends State<HomeScreen>
         .toUpperCase();
   }
 
-  bool get _hasUnreadChat =>
-      _unreadMessages > 0 || _pendingFriendRequests > 0;
+  bool get _hasUnreadChat => _unreadMessages > 0 || _pendingFriendRequests > 0;
 
   int? get _chatBadgeCount {
     final total = _unreadMessages + _pendingFriendRequests;
@@ -607,14 +605,18 @@ class _HomeScreenState extends State<HomeScreen>
           children: [
             const SizedBox(height: 10),
             ListTile(
-              leading: const Icon(Icons.auto_stories_outlined,
-                  color: AppColors.primaryBlue),
+              leading: const Icon(
+                Icons.auto_stories_outlined,
+                color: AppColors.primaryBlue,
+              ),
               title: const Text('View status'),
               onTap: () => Navigator.pop(ctx, 'story'),
             ),
             ListTile(
-              leading: const Icon(Icons.person_outline,
-                  color: AppColors.primaryBlue),
+              leading: const Icon(
+                Icons.person_outline,
+                color: AppColors.primaryBlue,
+              ),
               title: const Text('View profile'),
               onTap: () => Navigator.pop(ctx, 'profile'),
             ),
@@ -639,9 +641,11 @@ class _HomeScreenState extends State<HomeScreen>
     final newCount = (post.likeCount + (newLiked ? 1 : -1)).clamp(0, 1 << 30);
     setState(() {
       _posts = _posts
-          .map((p) => p.id == post.id
-              ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
-              : p)
+          .map(
+            (p) => p.id == post.id
+                ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+                : p,
+          )
           .toList();
     });
     try {
@@ -655,12 +659,14 @@ class _HomeScreenState extends State<HomeScreen>
       // Revert on failure.
       setState(() {
         _posts = _posts
-            .map((p) => p.id == post.id
-                ? p.copyWith(
-                    viewerLiked: post.viewerLiked,
-                    likeCount: post.likeCount,
-                  )
-                : p)
+            .map(
+              (p) => p.id == post.id
+                  ? p.copyWith(
+                      viewerLiked: post.viewerLiked,
+                      likeCount: post.likeCount,
+                    )
+                  : p,
+            )
             .toList();
       });
     }
@@ -675,8 +681,9 @@ class _HomeScreenState extends State<HomeScreen>
         if (!mounted) return;
         setState(() {
           _posts = _posts
-              .map((p) =>
-                  p.id == post.id ? p.copyWith(commentCount: newCount) : p)
+              .map(
+                (p) => p.id == post.id ? p.copyWith(commentCount: newCount) : p,
+              )
               .toList();
         });
       },
@@ -792,119 +799,145 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _openVideo(YoutubeVideo v) => context.pushNamed(
-        'watch_video',
-        pathParameters: {'id': v.videoId},
-        extra: v,
-      );
+    'watch_video',
+    pathParameters: {'id': v.videoId},
+    extra: v,
+  );
 
   Widget _buildScrollableContent() {
+    // Staggered entrance: each section fades in and rises ~70ms after
+    // the previous one, so Home assembles itself instead of appearing as
+    // one block — this is the receiving end of the profile-setup
+    // completion handoff.
     return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _bootstrap,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        child: AnimatedBuilder(
-            animation: _entrance,
-            builder: (context, child) => Opacity(
-              opacity: _fade.value,
-              child: Transform.translate(
-                offset: Offset(0, _slide.value),
-                child: child,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeader(),
-                // LIVE now — collapses to nothing when no channel is live.
-                LiveBanner(live: _liveVideo, onTap: _openVideo),
-                if (_banner != null &&
-                    !_dismissedBannerIds.contains(_banner!.id)) ...[
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _UrgentBannerCard(
-                      banner: _banner!,
-                      onDismiss: () => setState(
-                        () => _dismissedBannerIds.add(_banner!.id),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            StaggeredReveal(index: 0, rise: 16, child: _buildHeader()),
+            StaggeredReveal(
+              index: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // LIVE now — collapses to nothing when no channel is live.
+                  LiveBanner(live: _liveVideo, onTap: _openVideo),
+                  if (_banner != null &&
+                      !_dismissedBannerIds.contains(_banner!.id)) ...[
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _UrgentBannerCard(
+                        banner: _banner!,
+                        onDismiss: () => setState(
+                          () => _dismissedBannerIds.add(_banner!.id),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-                // What's on your mind + Stories + Devotion always sit at
-                // the top, right under the header. Everything else (news,
-                // product pick, the feed) follows.
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _ComposerEntry(
-                    photoUrl: _viewerPhotoUrl(),
-                    name: _displayFullName(),
-                    onTap: _openPostComposer,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildSectionHeader(
-                  'Stories',
-                  'Advent News',
-                  onAction: () => context.pushNamed('news'),
-                ),
-                const SizedBox(height: 10),
-                StoriesRail(
-                  stories: _stories,
-                  viewerId: AuthService.currentUser?.id ?? '',
-                  viewerName: _displayFullName(),
-                  viewerPhotoUrl: _viewerPhotoUrl(),
-                  onAddStory: _openStoryComposer,
-                  onAuthorTapped: (_, list) => _openStoryViewer(list),
-                  viewedStoryIds: _allViewedIds,
-                ),
-                // Devotion CARD depends on the network fetch — only show it
-                // when we have it.
-                if (_devotion != null) ...[
+                  ],
+                  // What's on your mind + Stories + Devotion always sit at
+                  // the top, right under the header. Everything else (news,
+                  // product pick, the feed) follows.
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _DevotionCard(
-                      devotion: _devotion!,
-                      onOpenLibrary: () => context.pushNamed('library'),
+                    child: _ComposerEntry(
+                      photoUrl: _viewerPhotoUrl(),
+                      name: _displayFullName(),
+                      onTap: _openPostComposer,
                     ),
                   ),
                 ],
-                // Library chips (Bible / Hymnal / EGW / Music) are static
-                // navigation — ALWAYS show them, even on poor network when
-                // the devotion fetch fails (previously they were nested in
-                // the devotion block and vanished with it).
-                const SizedBox(height: 12),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: _LibraryChips(),
-                ),
-                // Official church-posted events, featured prominently with the
-                // church's name + gold tick. Self-hides when there are none.
-                const SizedBox(height: 16),
-                const FeaturedChurchEvents(),
-                const SizedBox(height: 6),
-                // Advent News + Music now live INSIDE the shuffled discovery
-                // feed (see _buildDiscoveryCards) so their position varies
-                // per user instead of being pinned to the same spot here.
-                // _buildFeedList() is now a Facebook-style mixed feed:
-                // posts intercalated with discovery cards (suggested
-                // people, events, prayer prompt, churches, invite
-                // friends, quick stats). The standalone sections that
-                // used to live below this point were folded into the
-                // feed so the user gets one continuous scroll instead
-                // of jumping between mode-locked panels.
-                _buildFeedList(),
-                const SizedBox(height: 24),
-                // Bottom padding so the floating chat bubble + plus FAB
-                // don't sit on top of the last bit of feed content.
-                const SizedBox(height: 96),
-              ],
+              ),
             ),
-          ),
+            StaggeredReveal(
+              index: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 16),
+                  _buildSectionHeader(
+                    'Stories',
+                    'Advent News',
+                    onAction: () => context.pushNamed('news'),
+                  ),
+                  const SizedBox(height: 10),
+                  StoriesRail(
+                    stories: _stories,
+                    viewerId: AuthService.currentUser?.id ?? '',
+                    viewerName: _displayFullName(),
+                    viewerPhotoUrl: _viewerPhotoUrl(),
+                    onAddStory: _openStoryComposer,
+                    onAuthorTapped: (_, list) => _openStoryViewer(list),
+                    viewedStoryIds: _allViewedIds,
+                  ),
+                ],
+              ),
+            ),
+            StaggeredReveal(
+              index: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Devotion CARD depends on the network fetch — only show it
+                  // when we have it.
+                  if (_devotion != null) ...[
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _DevotionCard(
+                        devotion: _devotion!,
+                        onOpenLibrary: () => context.pushNamed('library'),
+                      ),
+                    ),
+                  ],
+                  // Library chips (Bible / Hymnal / EGW / Music) are static
+                  // navigation — ALWAYS show them, even on poor network when
+                  // the devotion fetch fails (previously they were nested in
+                  // the devotion block and vanished with it).
+                  const SizedBox(height: 12),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: _LibraryChips(),
+                  ),
+                ],
+              ),
+            ),
+            // Official church-posted events, featured prominently with the
+            // church's name + gold tick. Self-hides when there are none.
+            const StaggeredReveal(
+              index: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(height: 16),
+                  FeaturedChurchEvents(),
+                  SizedBox(height: 6),
+                ],
+              ),
+            ),
+            // Advent News + Music now live INSIDE the shuffled discovery
+            // feed (see _buildDiscoveryCards) so their position varies
+            // per user instead of being pinned to the same spot here.
+            // _buildFeedList() is now a Facebook-style mixed feed:
+            // posts intercalated with discovery cards (suggested
+            // people, events, prayer prompt, churches, invite
+            // friends, quick stats). The standalone sections that
+            // used to live below this point were folded into the
+            // feed so the user gets one continuous scroll instead
+            // of jumping between mode-locked panels.
+            StaggeredReveal(index: 5, child: _buildFeedList()),
+            const SizedBox(height: 24),
+            // Bottom padding so the floating chat bubble + plus FAB
+            // don't sit on top of the last bit of feed content.
+            const SizedBox(height: 96),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildHeader() {
@@ -915,9 +948,7 @@ class _HomeScreenState extends State<HomeScreen>
     return ClipPath(
       clipper: _HeaderClipper(),
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.appBarGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
         child: Stack(
           children: [
             Positioned.fill(
@@ -978,13 +1009,13 @@ class _HomeScreenState extends State<HomeScreen>
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) =>
                                     Text(
-                                  _initials(),
-                                  style: AppTextStyles.titleLarge.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                  ),
-                                ),
+                                      _initials(),
+                                      style: AppTextStyles.titleLarge.copyWith(
+                                        color: AppColors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
+                                      ),
+                                    ),
                               ),
                       ),
                     ),
@@ -1158,12 +1189,15 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildEventsRow() {
-    if (_loading && _events.isEmpty) {
-      return SizedBox(
-        height: 200,
-        child: ShimmerLoaders.cardList(count: 2),
-      );
-    }
+    // Skeleton crossfades into content — no pop-in from blank.
+    return ContentReveal(
+      loading: _loading && _events.isEmpty,
+      skeleton: SizedBox(height: 200, child: ShimmerLoaders.cardList(count: 2)),
+      child: _buildEventsRowContent(),
+    );
+  }
+
+  Widget _buildEventsRowContent() {
     if (_events.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1280,12 +1314,14 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildChurchGrid() {
-    if (_loading && _churches.isEmpty) {
-      return SizedBox(
-        height: 160,
-        child: ShimmerLoaders.cardList(count: 2),
-      );
-    }
+    return ContentReveal(
+      loading: _loading && _churches.isEmpty,
+      skeleton: SizedBox(height: 160, child: ShimmerLoaders.cardList(count: 2)),
+      child: _buildChurchGridContent(),
+    );
+  }
+
+  Widget _buildChurchGridContent() {
     if (_churches.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1330,25 +1366,17 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildFeedList() {
-    if (_loading && _posts.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: Column(
-          children: [
-            for (var i = 0; i < 2; i++) ...[
-              Container(
-                height: 240,
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: context.palette.card,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
+    // Shimmering post-shaped skeletons (avatar + name + tall media
+    // block) that crossfade into the real feed — replaces the old flat
+    // grey boxes that snapped to content.
+    return ContentReveal(
+      loading: _loading && _posts.isEmpty,
+      skeleton: ShimmerLoaders.postColumn(count: 2),
+      child: _buildFeedListContent(),
+    );
+  }
+
+  Widget _buildFeedListContent() {
     if (_posts.isEmpty) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -1385,34 +1413,38 @@ class _HomeScreenState extends State<HomeScreen>
     final children = <Widget>[];
     if (cachedAt != null) {
       children.add(const SizedBox(height: 4));
-      children.add(LastUpdatedStrip(
-        timestamp: cachedAt,
-        isOnline: ConnectivityService.isOnline,
-        onRefresh: _bootstrap,
-      ));
+      children.add(
+        LastUpdatedStrip(
+          timestamp: cachedAt,
+          isOnline: ConnectivityService.isOnline,
+          onRefresh: _bootstrap,
+        ),
+      );
     }
     var cardIdx = 0;
     var adsInserted = 0;
     var videoIdx = 0;
     for (var i = 0; i < _posts.length; i++) {
       final post = _posts[i];
-      children.add(PostCard(
-        post: post,
-        viewerId: viewerId,
-        onLikeToggled: () => _toggleLike(post),
-        onCommentsTapped: () => _openComments(post),
-        onImageTapped: () => _openImageViewer(post),
-        onEdit: () => _editPost(post),
-        onDelete: () => _confirmDeletePost(post),
-        onToggleVisibility: () => _togglePostVisibility(post),
-        onReport: () => _reportPost(post),
-        onAuthorTapped: () => _openAuthorProfile(post),
-        onAuthorAvatarTapped: () => _previewAuthor(post),
-        hasStory: _authorHasStory(post.authorId),
-        storyViewed: _authorStoryViewed(post.authorId),
-        onStoryRingTapped: () => _onAuthorStoryRing(post),
-        onSaveImage: () => _savePostImage(post),
-      ));
+      children.add(
+        PostCard(
+          post: post,
+          viewerId: viewerId,
+          onLikeToggled: () => _toggleLike(post),
+          onCommentsTapped: () => _openComments(post),
+          onImageTapped: () => _openImageViewer(post),
+          onEdit: () => _editPost(post),
+          onDelete: () => _confirmDeletePost(post),
+          onToggleVisibility: () => _togglePostVisibility(post),
+          onReport: () => _reportPost(post),
+          onAuthorTapped: () => _openAuthorProfile(post),
+          onAuthorAvatarTapped: () => _previewAuthor(post),
+          hasStory: _authorHasStory(post.authorId),
+          storyViewed: _authorStoryViewed(post.authorId),
+          onStoryRingTapped: () => _onAuthorStoryRing(post),
+          onSaveImage: () => _savePostImage(post),
+        ),
+      );
       if ((i + 1) % _discoveryEveryNPosts == 0 &&
           cardIdx < discoveryCards.length) {
         children.add(discoveryCards[cardIdx++]);
@@ -1491,100 +1523,117 @@ class _HomeScreenState extends State<HomeScreen>
     // Advent News + Music live in the shuffled pool so their position
     // varies per user (no longer pinned to a fixed spot up top).
     if (_topNews.isNotEmpty) {
-      discoverable.add(_DiscoverySlot(
-        key: 'news',
-        widget: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: _AdventNewsHero(items: _topNews),
+      discoverable.add(
+        _DiscoverySlot(
+          key: 'news',
+          widget: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: _AdventNewsHero(items: _topNews),
+          ),
         ),
-      ));
+      );
     }
-    discoverable.add(const _DiscoverySlot(key: 'music', widget: _HomeMusicStrip()));
+    discoverable.add(
+      const _DiscoverySlot(key: 'music', widget: _HomeMusicStrip()),
+    );
     if (_hasNonFriendSuggestions) {
-      discoverable.add(_DiscoverySlot(
-        key: 'people',
-        widget: _discoverySection(
-          title: 'People to meet',
-          child: _buildSuggestedMembersRow(),
+      discoverable.add(
+        _DiscoverySlot(
+          key: 'people',
+          widget: _discoverySection(
+            title: 'People to meet',
+            child: _buildSuggestedMembersRow(),
+          ),
         ),
-      ));
+      );
     }
     if (_events.isNotEmpty) {
-      discoverable.add(_DiscoverySlot(
-        key: 'events',
-        widget: _discoverySection(
-          title: 'Upcoming events',
-          action: 'See all',
-          onAction: () => context.pushNamed('events'),
-          child: _buildEventsRow(),
+      discoverable.add(
+        _DiscoverySlot(
+          key: 'events',
+          widget: _discoverySection(
+            title: 'Upcoming events',
+            action: 'See all',
+            onAction: () => context.pushNamed('events'),
+            child: _buildEventsRow(),
+          ),
         ),
-      ));
+      );
     }
-    discoverable.add(_DiscoverySlot(
-      key: 'prayers',
-      widget: _discoverySection(
-        title: 'Active prayers',
-        action: _prayers.isEmpty ? null : 'See all',
-        onAction: _prayers.isEmpty
-            ? null
-            : () => context.pushNamed('prayer'),
-        child: _prayers.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child:
-                    _PrayersEmpty(onTap: () => context.pushNamed('prayer')),
-              )
-            : _buildPrayersStrip(),
+    discoverable.add(
+      _DiscoverySlot(
+        key: 'prayers',
+        widget: _discoverySection(
+          title: 'Active prayers',
+          action: _prayers.isEmpty ? null : 'See all',
+          onAction: _prayers.isEmpty ? null : () => context.pushNamed('prayer'),
+          child: _prayers.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _PrayersEmpty(
+                    onTap: () => context.pushNamed('prayer'),
+                  ),
+                )
+              : _buildPrayersStrip(),
+        ),
       ),
-    ));
+    );
     if (_products.isNotEmpty) {
-      discoverable.add(_DiscoverySlot(
-        key: 'product_pick',
-        widget: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _FeaturedProductCard(
-            product: _products.first,
-            onTap: () => context.pushNamed(
-              'product_details',
-              pathParameters: {'id': _products.first.id},
-              extra: _products.first,
+      discoverable.add(
+        _DiscoverySlot(
+          key: 'product_pick',
+          widget: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _FeaturedProductCard(
+              product: _products.first,
+              onTap: () => context.pushNamed(
+                'product_details',
+                pathParameters: {'id': _products.first.id},
+                extra: _products.first,
+              ),
             ),
           ),
         ),
-      ));
+      );
     }
     if (_churches.isNotEmpty) {
-      discoverable.add(_DiscoverySlot(
-        key: 'churches',
-        widget: _discoverySection(
-          title: 'Discover churches',
-          action: 'See all',
-          onAction: () => context.goNamed('churches'),
-          child: _buildChurchGrid(),
+      discoverable.add(
+        _DiscoverySlot(
+          key: 'churches',
+          widget: _discoverySection(
+            title: 'Discover churches',
+            action: 'See all',
+            onAction: () => context.goNamed('churches'),
+            child: _buildChurchGrid(),
+          ),
         ),
-      ));
+      );
     }
     if (_products.isNotEmpty) {
-      discoverable.add(_DiscoverySlot(
-        key: 'marketplace',
-        widget: _discoverySection(
-          title: 'From the marketplace',
-          action: 'See all',
-          onAction: () => context.goNamed('marketplace'),
-          child: _buildProductsRow(),
+      discoverable.add(
+        _DiscoverySlot(
+          key: 'marketplace',
+          widget: _discoverySection(
+            title: 'From the marketplace',
+            action: 'See all',
+            onAction: () => context.goNamed('marketplace'),
+            child: _buildProductsRow(),
+          ),
         ),
-      ));
+      );
     }
     if (_jobs.isNotEmpty) {
-      discoverable.add(_DiscoverySlot(
-        key: 'jobs',
-        widget: _discoverySection(
-          title: 'Jobs & opportunities',
-          action: 'See all',
-          onAction: () => context.goNamed('jobs'),
-          child: _buildJobsRow(),
+      discoverable.add(
+        _DiscoverySlot(
+          key: 'jobs',
+          widget: _discoverySection(
+            title: 'Jobs & opportunities',
+            action: 'See all',
+            onAction: () => context.goNamed('jobs'),
+            child: _buildJobsRow(),
+          ),
         ),
-      ));
+      );
     }
     // Stable per-viewer shuffle, weighted by onboarding interests so
     // the rails the user said they wanted ("Show me more of Events /
@@ -1614,10 +1663,7 @@ class _HomeScreenState extends State<HomeScreen>
         padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: InviteFriendsCard(),
       ),
-      _discoverySection(
-        title: 'Quick stats',
-        child: _buildQuickStats(),
-      ),
+      _discoverySection(title: 'Quick stats', child: _buildQuickStats()),
     ];
   }
 
@@ -1718,8 +1764,10 @@ class _HomeScreenState extends State<HomeScreen>
         ? PostVisibility.friendsOnly
         : PostVisibility.public;
     try {
-      final updated =
-          await FeedService.updatePost(post.id, visibility: newVisibility);
+      final updated = await FeedService.updatePost(
+        post.id,
+        visibility: newVisibility,
+      );
       if (!mounted) return;
       setState(() {
         _posts = _posts.map((p) => p.id == updated.id ? updated : p).toList();
@@ -1749,7 +1797,10 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _editPost(Post post) async {
-    final newBody = await showEditPostDialog(context, initialBody: post.body ?? '');
+    final newBody = await showEditPostDialog(
+      context,
+      initialBody: post.body ?? '',
+    );
     if (newBody == null) return;
     try {
       final updated = await FeedService.updatePost(post.id, body: newBody);
@@ -1862,8 +1913,10 @@ class _HomeScreenState extends State<HomeScreen>
                       status: FriendshipStatus.accepted,
                       createdAt: friendship.createdAt,
                     );
-                    _pendingFriendRequests =
-                        (_pendingFriendRequests - 1).clamp(0, 1 << 30);
+                    _pendingFriendRequests = (_pendingFriendRequests - 1).clamp(
+                      0,
+                      1 << 30,
+                    );
                   });
                 } catch (_) {
                   // surface a quiet failure
@@ -1962,19 +2015,12 @@ class _SabbathChipState extends State<_SabbathChip> {
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.goldAccent,
-              width: 1.2,
-            ),
+            border: Border.all(color: AppColors.goldAccent, width: 1.2),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.auto_awesome,
-                size: 13,
-                color: AppColors.white,
-              ),
+              const Icon(Icons.auto_awesome, size: 13, color: AppColors.white),
               const SizedBox(width: 6),
               Text(
                 'Happy Sabbath',
@@ -2066,8 +2112,8 @@ class _SuggestedMemberTile extends StatelessWidget {
     final subtitle = entry.profession?.trim().isNotEmpty == true
         ? entry.profession!.trim()
         : (entry.city?.trim().isNotEmpty == true
-            ? entry.city!.trim()
-            : 'Adventist member');
+              ? entry.city!.trim()
+              : 'Adventist member');
     return Material(
       color: context.palette.card,
       borderRadius: BorderRadius.circular(18),
@@ -2093,10 +2139,7 @@ class _SuggestedMemberTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _MemberAvatar(
-                photoUrl: entry.profilePhotoUrl,
-                name: name,
-              ),
+              _MemberAvatar(photoUrl: entry.profilePhotoUrl, name: name),
               const SizedBox(height: 10),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -2204,32 +2247,34 @@ class _GradientPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 13, color: AppColors.white),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 13, color: AppColors.white),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2252,33 +2297,35 @@ class _OutlinePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withValues(alpha: 0.35)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 13, color: color),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: color.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 13, color: color),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2339,8 +2386,10 @@ class _MemberAvatar extends StatelessWidget {
   }
 
   String _initialsFrom(String name) {
-    final parts =
-        name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = name
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
@@ -2448,46 +2497,48 @@ class _NotificationBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.white.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
+    return PressEffect(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
                   color: AppColors.white.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppColors.white.withValues(alpha: 0.10),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: AppColors.white,
+                  size: 22,
                 ),
               ),
-              child: const Icon(
-                Icons.notifications_none_rounded,
-                color: AppColors.white,
-                size: 22,
-              ),
             ),
           ),
-        ),
-        if (unread > 0)
-          Positioned(
-            top: 6,
-            right: 6,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: AppColors.red,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.darkNavy, width: 2),
+          if (unread > 0)
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: AppColors.red,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.darkNavy, width: 2),
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -2504,189 +2555,201 @@ class _HomeEventCard extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _months = [
-    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
   ];
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: context.palette.card,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Stack(
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: _CoverImage(
-                          url: event.coverPhotoUrl,
-                          fallbackIcon: Icons.event,
+    return PressEffect(
+      child: SizedBox(
+        width: 160,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: context.palette.card,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Stack(
+                      children: [
+                        AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: _CoverImage(
+                            url: event.coverPhotoUrl,
+                            fallbackIcon: Icons.event,
+                          ),
                         ),
-                      ),
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withValues(alpha: 0.45),
-                                ],
-                                stops: const [0.5, 1.0],
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.45),
+                                  ],
+                                  stops: const [0.5, 1.0],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        top: 12,
-                        left: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _months[event.eventDate.month - 1],
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.primaryBlue,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.2,
-                                  height: 1,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                event.eventDate.day.toString(),
-                                style: AppTextStyles.headlineMedium.copyWith(
-                                  color: AppColors.darkNavy,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (isGoing)
                         Positioned(
                           top: 12,
-                          right: 12,
+                          left: 12,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                              horizontal: 10,
+                              vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.successGreen,
-                              borderRadius: BorderRadius.circular(8),
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            child: Row(
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
-                                  Icons.check_circle,
-                                  color: AppColors.white,
-                                  size: 12,
-                                ),
-                                const SizedBox(width: 4),
                                 Text(
-                                  'GOING',
+                                  _months[event.eventDate.month - 1],
                                   style: AppTextStyles.labelSmall.copyWith(
-                                    color: AppColors.white,
+                                    color: AppColors.primaryBlue,
                                     fontSize: 9,
                                     fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.1,
+                                    letterSpacing: 1.2,
+                                    height: 1,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  event.eventDate.day.toString(),
+                                  style: AppTextStyles.headlineMedium.copyWith(
+                                    color: AppColors.darkNavy,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          event.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.place_outlined,
-                              size: 11,
-                              color: context.palette.textMuted,
-                            ),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                (event.location ?? '').isEmpty
-                                    ? 'Location TBA'
-                                    : event.location!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: context.palette.textMuted,
-                                  fontSize: 10.5,
-                                ),
+                        if (isGoing)
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.successGreen,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.check_circle,
+                                    color: AppColors.white,
+                                    size: 12,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'GOING',
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: AppColors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.1,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          ),
                       ],
                     ),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            event.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.place_outlined,
+                                size: 11,
+                                color: context.palette.textMuted,
+                              ),
+                              const SizedBox(width: 3),
+                              Flexible(
+                                child: Text(
+                                  (event.location ?? '').isEmpty
+                                      ? 'Location TBA'
+                                      : event.location!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: context.palette.textMuted,
+                                    fontSize: 10.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -2709,138 +2772,142 @@ class _HomeChurchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.10),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _CoverImage(
-                  url: church.coverPhotoUrl,
-                  fallbackIcon: Icons.church,
-                ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.7),
-                          ],
-                          stops: const [0.45, 1.0],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (church.isVerified)
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppColors.darkNavy.withValues(alpha: 0.55),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.verified,
-                        size: 14,
-                        color: AppColors.goldAccent,
-                      ),
-                    ),
-                  ),
-                if (isFollowed)
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.successGreen,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'FOLLOWING',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.white,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                        ),
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 12,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        church.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleMedium.copyWith(
-                          color: AppColors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.place_outlined,
-                            size: 11,
-                            color: Color.fromRGBO(255, 255, 255, 0.85),
-                          ),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              church.city.isEmpty
-                                  ? 'Zimbabwe'
-                                  : church.city,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: const Color.fromRGBO(
-                                    255, 255, 255, 0.85),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
                 ),
               ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _CoverImage(
+                    url: church.coverPhotoUrl,
+                    fallbackIcon: Icons.church,
+                  ),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.7),
+                            ],
+                            stops: const [0.45, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (church.isVerified)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkNavy.withValues(alpha: 0.55),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.verified,
+                          size: 14,
+                          color: AppColors.goldAccent,
+                        ),
+                      ),
+                    ),
+                  if (isFollowed)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.successGreen,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'FOLLOWING',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          church.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: AppColors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.place_outlined,
+                              size: 11,
+                              color: Color.fromRGBO(255, 255, 255, 0.85),
+                            ),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                church.city.isEmpty ? 'Zimbabwe' : church.city,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: const Color.fromRGBO(
+                                    255,
+                                    255,
+                                    255,
+                                    0.85,
+                                  ),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -2906,83 +2973,86 @@ class _PrayerHomeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final author =
-        prayer.authorName.trim().isNotEmpty ? prayer.authorName.trim() : 'A member';
-    return SizedBox(
-      width: 260,
-      child: Material(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.front_hand_outlined,
-                        size: 18,
-                        color: AppColors.primaryBlue,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        author,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleMedium.copyWith(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
+    final author = prayer.authorName.trim().isNotEmpty
+        ? prayer.authorName.trim()
+        : 'A member';
+    return PressEffect(
+      child: SizedBox(
+        width: 260,
+        child: Material(
+          color: context.palette.card,
+          borderRadius: BorderRadius.circular(18),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.front_hand_outlined,
+                          size: 18,
+                          color: AppColors.primaryBlue,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: Text(
-                    prayer.content,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.textMuted,
-                      fontSize: 12.5,
-                      height: 1.4,
-                    ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          author,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.favorite_outline,
-                      size: 14,
-                      color: AppColors.primaryBlue,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${prayer.prayerCount} praying',
-                      style: AppTextStyles.labelSmall.copyWith(
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Text(
+                      prayer.content,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium.copyWith(
                         color: context.palette.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
+                        height: 1.4,
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.favorite_outline,
+                        size: 14,
+                        color: AppColors.primaryBlue,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${prayer.prayerCount} praying',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: context.palette.textMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -3076,23 +3146,25 @@ class _HeaderIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.white.withValues(alpha: 0.18),
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.white.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.white.withValues(alpha: 0.18),
+              ),
             ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: AppColors.white, size: 20),
           ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: AppColors.white, size: 20),
         ),
       ),
     );
@@ -3114,55 +3186,55 @@ class _CompactStatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: context.palette.divider,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: AppColors.primaryBlue),
-              const SizedBox(width: 8),
-              Text(
-                value,
-                style: AppTextStyles.titleMedium.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: context.palette.text,
-                  height: 1.0,
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            decoration: BoxDecoration(
+              color: context.palette.card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: context.palette.divider),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-              ),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: context.palette.textMuted,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: AppColors.primaryBlue),
+                const SizedBox(width: 8),
+                Text(
+                  value,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: context.palette.text,
+                    height: 1.0,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: context.palette.textMuted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -3186,84 +3258,84 @@ class _ComposerEntry extends StatelessWidget {
     final initial = name.trim().isEmpty
         ? '?'
         : name.trim().substring(0, 1).toUpperCase();
-    return Material(
-      color: context.palette.card,
-      borderRadius: BorderRadius.circular(28),
-      child: InkWell(
-        onTap: onTap,
+    return PressEffect(
+      child: Material(
+        color: context.palette.card,
         borderRadius: BorderRadius.circular(28),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: context.palette.divider,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  shape: BoxShape.circle,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: context.palette.card,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: context.palette.divider),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-                alignment: Alignment.center,
-                child: photoUrl == null || photoUrl!.isEmpty
-                    ? Text(
-                        initial,
-                        style: AppTextStyles.titleMedium.copyWith(
-                          color: AppColors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      )
-                    : CachedImage(
-                        photoUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Text(
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: photoUrl == null || photoUrl!.isEmpty
+                      ? Text(
                           initial,
                           style: AppTextStyles.titleMedium.copyWith(
                             color: AppColors.white,
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
                           ),
+                        )
+                      : CachedImage(
+                          photoUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Text(
+                            initial,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
                         ),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'What\'s on your mind?',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.palette.textMuted,
-                    fontSize: 14,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'What\'s on your mind?',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: context.palette.textMuted,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: AppColors.primaryBlue,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.edit_outlined,
-                  size: 16,
-                  color: AppColors.primaryBlue,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -3289,17 +3361,11 @@ class _EmptyTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.palette.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: context.palette.divider,
-        ),
+        border: Border.all(color: context.palette.divider),
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: context.palette.textMuted,
-            size: 28,
-          ),
+          Icon(icon, color: context.palette.textMuted, size: 28),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -3356,82 +3422,85 @@ class _DevotionCard extends StatelessWidget {
     return GestureDetector(
       onTap: onOpenLibrary,
       child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: AppColors.appBarGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.darkNavy.withValues(alpha: 0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.auto_stories_outlined,
-                  color: AppColors.goldAccent, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                "TODAY'S DEVOTION",
-                style: AppTextStyles.labelSmall.copyWith(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: AppColors.appBarGradient,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.darkNavy.withValues(alpha: 0.25),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.auto_stories_outlined,
                   color: AppColors.goldAccent,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
+                  size: 18,
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  "TODAY'S DEVOTION",
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.goldAccent,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '"${devotion.bibleText}"',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.white,
+                height: 1.45,
+                fontStyle: FontStyle.italic,
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '"${devotion.bibleText}"',
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.white,
-              height: 1.45,
-              fontStyle: FontStyle.italic,
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            devotion.bibleRef,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.white.withValues(alpha: 0.85),
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 6),
+            Text(
+              devotion.bibleRef,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.white.withValues(alpha: 0.85),
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Divider(
-              color: AppColors.white.withValues(alpha: 0.18),
-              height: 1,
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Divider(
+                color: AppColors.white.withValues(alpha: 0.18),
+                height: 1,
+              ),
             ),
-          ),
-          Text(
-            devotion.egwQuote,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.white.withValues(alpha: 0.92),
-              height: 1.4,
+            Text(
+              devotion.egwQuote,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.white.withValues(alpha: 0.92),
+                height: 1.4,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '— Ellen G. White, ${devotion.egwSource}',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.white.withValues(alpha: 0.7),
-              fontStyle: FontStyle.italic,
+            const SizedBox(height: 6),
+            Text(
+              '— Ellen G. White, ${devotion.egwSource}',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.white.withValues(alpha: 0.7),
+                fontStyle: FontStyle.italic,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -3472,13 +3541,14 @@ class _LibraryChips extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    Icon(_items[i].$2,
-                        color: AppColors.primaryBlue, size: 22),
+                    Icon(_items[i].$2, color: AppColors.primaryBlue, size: 22),
                     const SizedBox(height: 6),
                     Text(
                       _items[i].$1,
                       style: AppTextStyles.labelSmall.copyWith(
-                          fontWeight: FontWeight.w700, color: palette.text),
+                        fontWeight: FontWeight.w700,
+                        color: palette.text,
+                      ),
                     ),
                   ],
                 ),
@@ -3522,19 +3592,28 @@ class _HomeMusicStripState extends State<_HomeMusicStrip> {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: Row(
             children: [
-              const Icon(Icons.headphones_rounded,
-                  color: AppColors.primaryBlue, size: 18),
+              const Icon(
+                Icons.headphones_rounded,
+                color: AppColors.primaryBlue,
+                size: 18,
+              ),
               const SizedBox(width: 8),
-              Text('Music',
-                  style: AppTextStyles.titleMedium
-                      .copyWith(fontWeight: FontWeight.w800)),
+              Text(
+                'Music',
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const Spacer(),
               GestureDetector(
                 onTap: () => context.pushNamed('library', extra: 3),
-                child: Text('See all',
-                    style: AppTextStyles.labelMedium.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w700)),
+                child: Text(
+                  'See all',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ),
@@ -3562,18 +3641,24 @@ class _HomeMusicStripState extends State<_HomeMusicStrip> {
                     children: [
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16)),
+                          top: Radius.circular(16),
+                        ),
                         child: SizedBox(
                           height: 96,
                           width: double.infinity,
-                          child: (item.coverUrl != null &&
+                          child:
+                              (item.coverUrl != null &&
                                   item.coverUrl!.isNotEmpty)
                               ? CachedImage(item.coverUrl!, fit: BoxFit.cover)
                               : const DecoratedBox(
                                   decoration: BoxDecoration(
-                                      gradient: AppColors.primaryGradient),
-                                  child: Icon(Icons.music_note_rounded,
-                                      color: AppColors.white, size: 34),
+                                    gradient: AppColors.primaryGradient,
+                                  ),
+                                  child: Icon(
+                                    Icons.music_note_rounded,
+                                    color: AppColors.white,
+                                    size: 34,
+                                  ),
                                 ),
                         ),
                       ),
@@ -3585,8 +3670,9 @@ class _HomeMusicStripState extends State<_HomeMusicStrip> {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.labelMedium.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: palette.text),
+                              fontWeight: FontWeight.w700,
+                              color: palette.text,
+                            ),
                           ),
                         ),
                       ),
@@ -3628,8 +3714,10 @@ class _FeaturedProductCard extends StatelessWidget {
                   ? CachedImage(img, fit: BoxFit.cover)
                   : Container(
                       color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                      child: const Icon(Icons.shopping_bag_outlined,
-                          color: AppColors.primaryBlue),
+                      child: const Icon(
+                        Icons.shopping_bag_outlined,
+                        color: AppColors.primaryBlue,
+                      ),
                     ),
             ),
             Expanded(
@@ -3653,8 +3741,9 @@ class _FeaturedProductCard extends StatelessWidget {
                       product.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleSmall
-                          .copyWith(fontWeight: FontWeight.w700),
+                      style: AppTextStyles.titleSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -3670,7 +3759,10 @@ class _FeaturedProductCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Icon(Icons.chevron_right, color: context.palette.textMuted),
+              child: Icon(
+                Icons.chevron_right,
+                color: context.palette.textMuted,
+              ),
             ),
           ],
         ),
@@ -3736,126 +3828,115 @@ class _AdventNewsHeroState extends State<_AdventNewsHero> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-                  if (hasCover)
-                    CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover)
-                  else
-                    const DecoratedBox(
-                      decoration:
-                          BoxDecoration(gradient: AppColors.appBarGradient),
-                      child: Center(
-                        child: Icon(
-                          Icons.newspaper,
-                          color: AppColors.white,
-                          size: 48,
-                        ),
-                      ),
-                    ),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.15),
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.65),
-                            ],
-                            stops: const [0.0, 0.45, 1.0],
-                          ),
-                        ),
-                      ),
-                    ),
+          if (hasCover)
+            CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover)
+          else
+            const DecoratedBox(
+              decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+              child: Center(
+                child: Icon(Icons.newspaper, color: AppColors.white, size: 48),
+              ),
+            ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.15),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.65),
+                    ],
+                    stops: const [0.0, 0.45, 1.0],
                   ),
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.goldAccent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.bolt,
-                            color: AppColors.darkNavy,
-                            size: 12,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'ADVENT NEWS',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.darkNavy,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        item.category.label.toUpperCase(),
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.white,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 14,
-                    right: 14,
-                    bottom: 14,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.headlineSmall.copyWith(
-                            color: AppColors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 17,
-                            height: 1.25,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.summary,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.white.withValues(alpha: 0.88),
-                            height: 1.35,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 12,
+            left: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.goldAccent,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.bolt, color: AppColors.darkNavy, size: 12),
+                  const SizedBox(width: 4),
+                  Text(
+                    'ADVENT NEWS',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.darkNavy,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.4,
                     ),
                   ),
                 ],
               ),
+            ),
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                item.category.label.toUpperCase(),
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 14,
+            right: 14,
+            bottom: 14,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.headlineSmall.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.summary,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.white.withValues(alpha: 0.88),
+                    height: 1.35,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3888,8 +3969,11 @@ class _AdventNewsHeroState extends State<_AdventNewsHero> {
               ),
             ),
             const SizedBox(width: 2),
-            const Icon(Icons.chevron_right,
-                size: 18, color: AppColors.primaryBlue),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AppColors.primaryBlue,
+            ),
           ],
         ),
       ),

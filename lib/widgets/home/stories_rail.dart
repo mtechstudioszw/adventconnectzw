@@ -4,6 +4,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
+import '../motion/pressable.dart';
 
 /// Parse a '#RRGGBB' text-status background colour (brand blue default).
 Color _storyBg(String? hex) {
@@ -138,119 +139,122 @@ class _YourStoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5),
-      child: SizedBox(
-        width: 116,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Material(
-            color: context.palette.card,
-            child: InkWell(
-              // Single tap region for the whole card. When the viewer
-              // hasn't posted yet the whole thing is "Create story";
-              // once they have one, tapping opens their viewer and a
-              // tiny "+" badge in the top-right adds another.
-              onTap: _hasStory ? onView : onAdd,
-              child: Stack(
-                children: [
-                  Column(
-                    children: [
-                      // Top: ~70% image / avatar.
-                      Expanded(
-                        flex: 7,
-                        child: !_hasStory
-                            ? _avatarBackground()
-                            : ownStories!.first.isText
-                                ? Container(
-                                    width: double.infinity,
-                                    color: _storyBg(
-                                        ownStories!.first.backgroundColor),
-                                    alignment: Alignment.center,
-                                    padding: const EdgeInsets.all(6),
-                                    child: Text(
-                                      ownStories!.first.textContent ?? '',
-                                      textAlign: TextAlign.center,
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: AppColors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  )
-                                : CachedImage(
-                                    ownStories!.first.mediaUrl,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            _avatarBackground(),
+    return PressEffect(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5),
+        child: SizedBox(
+          width: 116,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Material(
+              color: context.palette.card,
+              child: InkWell(
+                // Single tap region for the whole card. When the viewer
+                // hasn't posted yet the whole thing is "Create story";
+                // once they have one, tapping opens their viewer and a
+                // tiny "+" badge in the top-right adds another.
+                onTap: _hasStory ? onView : onAdd,
+                child: Stack(
+                  children: [
+                    Column(
+                      children: [
+                        // Top: ~70% image / avatar.
+                        Expanded(
+                          flex: 7,
+                          child: !_hasStory
+                              ? _avatarBackground()
+                              : ownStories!.first.isText
+                              ? Container(
+                                  width: double.infinity,
+                                  color: _storyBg(
+                                    ownStories!.first.backgroundColor,
                                   ),
-                      ),
-                      // Bottom: white banner with label only — no overlay
-                      // button to avoid the double-tap target the old
-                      // layout had.
-                      Expanded(
-                        flex: 3,
-                        child: Container(
-                          color: context.palette.card,
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: Text(
-                            _hasStory ? 'Your story' : 'Create story',
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.labelMedium.copyWith(
-                              color: context.palette.text,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.all(6),
+                                  child: Text(
+                                    ownStories!.first.textContent ?? '',
+                                    textAlign: TextAlign.center,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                )
+                              : CachedImage(
+                                  ownStories!.first.mediaUrl,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      _avatarBackground(),
+                                ),
                         ),
-                      ),
-                    ],
-                  ),
-                  // "+" affordance — when the viewer already has a story
-                  // we show a small badge in the corner so they can add
-                  // another. When they don't, the whole card acts as
-                  // "Create" so an overlay button is redundant.
-                  if (_hasStory)
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: GestureDetector(
-                        onTap: onAdd,
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.white,
-                              width: 2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primaryBlue
-                                    .withValues(alpha: 0.35),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
+                        // Bottom: white banner with label only — no overlay
+                        // button to avoid the double-tap target the old
+                        // layout had.
+                        Expanded(
+                          flex: 3,
+                          child: Container(
+                            color: context.palette.card,
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text(
+                              _hasStory ? 'Your story' : 'Create story',
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: context.palette.text,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
                               ),
-                            ],
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.add,
-                            color: AppColors.white,
-                            size: 16,
+                        ),
+                      ],
+                    ),
+                    // "+" affordance — when the viewer already has a story
+                    // we show a small badge in the corner so they can add
+                    // another. When they don't, the whole card acts as
+                    // "Create" so an overlay button is redundant.
+                    if (_hasStory)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: GestureDetector(
+                          onTap: onAdd,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.white,
+                                width: 2,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primaryBlue.withValues(
+                                    alpha: 0.35,
+                                  ),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              color: AppColors.white,
+                              size: 16,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -304,145 +308,147 @@ class _FriendStoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5),
-      child: SizedBox(
-        width: 116,
-        child: GestureDetector(
-          onTap: onTap,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Layer 1: full-bleed story image, OR a coloured text
-                // status preview.
-                if (story.isText)
-                  Container(
-                    color: _storyBg(story.backgroundColor),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.all(8),
-                    child: Text(
-                      story.textContent ?? '',
-                      textAlign: TextAlign.center,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  )
-                else
-                  CachedImage(
-                    story.mediaUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: AppColors.darkNavy,
-                    ),
-                  ),
-                // Dark gradient to keep the name legible.
-                IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.25),
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.55),
-                        ],
-                        stops: const [0.0, 0.4, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-                // Layer 2: floating avatar top-left with blue ring.
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2.5),
-                    decoration: BoxDecoration(
-                      gradient: viewed ? null : AppColors.primaryGradient,
-                      color: viewed
-                          ? AppColors.white.withValues(alpha: 0.45)
-                          : null,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.white,
-                      ),
-                      child: ClipOval(
-                        child: SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: (story.authorPhotoUrl ?? '').isEmpty
-                              ? _initialAvatar(story.authorName)
-                              : CachedImage(
-                                  story.authorPhotoUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      _initialAvatar(story.authorName),
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                // Layer 3: author name + relative time at the bottom.
-                Positioned(
-                  left: 8,
-                  right: 8,
-                  bottom: 8,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        story.authorName.split(' ').first,
-                        maxLines: 1,
+    return PressEffect(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5),
+        child: SizedBox(
+          width: 116,
+          child: GestureDetector(
+            onTap: onTap,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Layer 1: full-bleed story image, OR a coloured text
+                  // status preview.
+                  if (story.isText)
+                    Container(
+                      color: _storyBg(story.backgroundColor),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(8),
+                      child: Text(
+                        story.textContent ?? '',
+                        textAlign: TextAlign.center,
+                        maxLines: 4,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.labelMedium.copyWith(
+                        style: const TextStyle(
                           color: AppColors.white,
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          shadows: const [
-                            Shadow(
-                              color: Colors.black54,
-                              blurRadius: 4,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
                         ),
                       ),
-                      const SizedBox(height: 1),
-                      Text(
-                        _relativeTime(story.createdAt),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.85),
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          shadows: const [
-                            Shadow(
-                              color: Colors.black54,
-                              blurRadius: 4,
-                              offset: Offset(0, 1),
-                            ),
+                    )
+                  else
+                    CachedImage(
+                      story.mediaUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          Container(color: AppColors.darkNavy),
+                    ),
+                  // Dark gradient to keep the name legible.
+                  IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.25),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.55),
                           ],
+                          stops: const [0.0, 0.4, 1.0],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                  // Layer 2: floating avatar top-left with blue ring.
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(2.5),
+                      decoration: BoxDecoration(
+                        gradient: viewed ? null : AppColors.primaryGradient,
+                        color: viewed
+                            ? AppColors.white.withValues(alpha: 0.45)
+                            : null,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.white,
+                        ),
+                        child: ClipOval(
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: (story.authorPhotoUrl ?? '').isEmpty
+                                ? _initialAvatar(story.authorName)
+                                : CachedImage(
+                                    story.authorPhotoUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            _initialAvatar(story.authorName),
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Layer 3: author name + relative time at the bottom.
+                  Positioned(
+                    left: 8,
+                    right: 8,
+                    bottom: 8,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          story.authorName.split(' ').first,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black54,
+                                blurRadius: 4,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          _relativeTime(story.createdAt),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.white.withValues(alpha: 0.85),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black54,
+                                blurRadius: 4,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

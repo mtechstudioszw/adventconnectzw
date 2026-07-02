@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../models/post_model.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
+import '../motion/pressable.dart';
 
 /// One card in the home feed. Stateless — the parent owns the Post and
 /// receives optimistic-update callbacks for like/comment/menu taps.
@@ -72,7 +74,8 @@ class PostCard extends StatelessWidget {
           _buildHeader(context),
           if ((post.body ?? '').isNotEmpty) _buildBody(context),
           if ((post.imageUrl ?? '').isNotEmpty) _buildImage(context),
-          if (post.likeCount > 0 || post.commentCount > 0) _buildCounts(context),
+          if (post.likeCount > 0 || post.commentCount > 0)
+            _buildCounts(context),
           Divider(height: 1, color: context.palette.divider),
           _buildActions(),
         ],
@@ -127,8 +130,11 @@ class PostCard extends StatelessWidget {
                       // Gold tick for church posts (always) or verified authors.
                       if (post.isChurchPost || post.authorIsVerified) ...[
                         const SizedBox(width: 4),
-                        const Icon(Icons.verified,
-                            size: 14, color: AppColors.goldAccent),
+                        const Icon(
+                          Icons.verified,
+                          size: 14,
+                          color: AppColors.goldAccent,
+                        ),
                       ],
                       const SizedBox(width: 6),
                       Icon(
@@ -162,12 +168,16 @@ class PostCard extends StatelessWidget {
               onEdit: onEdit,
               onDelete: onDelete,
               onToggleVisibility: onToggleVisibility,
-              onSaveImage: (post.imageUrl ?? '').isNotEmpty ? onSaveImage : null,
+              onSaveImage: (post.imageUrl ?? '').isNotEmpty
+                  ? onSaveImage
+                  : null,
             )
           else if (onReport != null)
             _ViewerMenu(
               onReport: onReport!,
-              onSaveImage: (post.imageUrl ?? '').isNotEmpty ? onSaveImage : null,
+              onSaveImage: (post.imageUrl ?? '').isNotEmpty
+                  ? onSaveImage
+                  : null,
             ),
         ],
       ),
@@ -281,9 +291,7 @@ class PostCard extends StatelessWidget {
       children: [
         Expanded(
           child: _ActionButton(
-            icon: post.viewerLiked
-                ? Icons.favorite
-                : Icons.favorite_border,
+            icon: post.viewerLiked ? Icons.favorite : Icons.favorite_border,
             label: 'Like',
             highlighted: post.viewerLiked,
             onTap: onLikeToggled,
@@ -444,28 +452,44 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        highlighted ? AppColors.primaryBlue : context.palette.text;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: AppTextStyles.buttonText.copyWith(
-                  color: color,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
+    final color = highlighted ? AppColors.primaryBlue : context.palette.text;
+    return PressEffect(
+      pressedScale: 0.94,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Icon swap (e.g. heart outline -> filled) lands with a
+                // spring pop instead of an instant flip.
+                AnimatedSwitcher(
+                  duration: AppMotion.maybe(context, AppMotion.quick),
+                  switchInCurve: AppMotion.spring,
+                  switchOutCurve: AppMotion.easeIn,
+                  transitionBuilder: (child, animation) =>
+                      ScaleTransition(scale: animation, child: child),
+                  child: Icon(
+                    icon,
+                    key: ValueKey(icon),
+                    size: 18,
+                    color: color,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTextStyles.buttonText.copyWith(
+                    color: color,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -491,15 +515,9 @@ class _OwnerMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: Icon(
-        Icons.more_horiz,
-        color: context.palette.textMuted,
-        size: 20,
-      ),
+      icon: Icon(Icons.more_horiz, color: context.palette.textMuted, size: 20),
       tooltip: 'Manage post',
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (value) {
         switch (value) {
           case 'edit':
@@ -522,8 +540,11 @@ class _OwnerMenu extends StatelessWidget {
             value: 'edit',
             child: Row(
               children: const [
-                Icon(Icons.edit_outlined, size: 18,
-                    color: AppColors.primaryBlue),
+                Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: AppColors.primaryBlue,
+                ),
                 SizedBox(width: 10),
                 Text('Edit post'),
               ],
@@ -549,8 +570,11 @@ class _OwnerMenu extends StatelessWidget {
             value: 'save',
             child: Row(
               children: const [
-                Icon(Icons.download_outlined, size: 18,
-                    color: AppColors.primaryBlue),
+                Icon(
+                  Icons.download_outlined,
+                  size: 18,
+                  color: AppColors.primaryBlue,
+                ),
                 SizedBox(width: 10),
                 Text('Save to gallery'),
               ],
@@ -581,14 +605,9 @@ class _ViewerMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: Icon(
-        Icons.more_horiz,
-        color: context.palette.textMuted,
-        size: 20,
-      ),
+      icon: Icon(Icons.more_horiz, color: context.palette.textMuted, size: 20),
       tooltip: 'More',
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (value) {
         switch (value) {
           case 'save':
@@ -605,8 +624,11 @@ class _ViewerMenu extends StatelessWidget {
             value: 'save',
             child: Row(
               children: const [
-                Icon(Icons.download_outlined, size: 18,
-                    color: AppColors.primaryBlue),
+                Icon(
+                  Icons.download_outlined,
+                  size: 18,
+                  color: AppColors.primaryBlue,
+                ),
                 SizedBox(width: 10),
                 Text('Save image to gallery'),
               ],

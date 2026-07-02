@@ -20,8 +20,8 @@ class ShimmerLoaders {
       Theme.of(context).brightness == Brightness.dark ? _baseDark : _base;
   static Color highlightColor(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-          ? _highlightDark
-          : _highlight;
+      ? _highlightDark
+      : _highlight;
 
   /// A vertically stacked list of generic cards — used by Churches,
   /// Events, Jobs, Prayer feeds.
@@ -43,6 +43,23 @@ class ShimmerLoaders {
         const SizedBox(height: 16),
         for (var i = 0; i < count; i++) _VideoSkeleton(),
       ],
+    );
+  }
+
+  /// Non-scrollable column of tall post-shaped blocks — for the home
+  /// feed, which lives inside an outer SingleChildScrollView.
+  static Widget postColumn({int count = 2}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        children: [
+          for (var i = 0; i < count; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: _PostSkeleton(),
+            ),
+        ],
+      ),
     );
   }
 
@@ -124,6 +141,51 @@ class _VideoSkeleton extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PostSkeleton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: ShimmerLoaders.baseColor(context),
+      highlightColor: ShimmerLoaders.highlightColor(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                height: 12,
+                width: 140,
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: 180,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: context.palette.card,
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        ],
       ),
     );
   }

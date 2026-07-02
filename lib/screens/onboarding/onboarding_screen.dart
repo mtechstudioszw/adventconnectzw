@@ -6,15 +6,29 @@ import 'package:go_router/go_router.dart';
 
 import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/motion/pressable.dart';
+import 'widgets/film_scenes.dart';
 
-/// First-launch slides shown before sign-in. Repalette: matches the
-/// post-verification profile-setup look — light grey background,
-/// white cards, primary-blue accents, gold sparkle. The old dark-navy
-/// shimmer + particles felt "AI generated" per user feedback; this
-/// version is calm, branded, and consistent with the rest of the auth
-/// flow.
+/// First-run intro — a continuous, auto-playing motion piece, not
+/// slides. One master timeline drives five overlapping scenes (brand →
+/// churches → prayer → chat/marketplace → sabbath finale); elements
+/// transform into each other instead of page-cutting, an ambient light
+/// field keeps even resting moments breathing, and the final scene
+/// settles into the sign-up CTA so intro → auth feels like the same
+/// film continuing.
+///
+/// Interaction model (stories-style):
+/// * it plays itself — no static frame ever waits for a swipe;
+/// * tap = fast-forward to the next scene boundary (the film scrubs
+///   through the in-between frames, so continuity is preserved);
+/// * press-and-hold = pause, release = resume;
+/// * Skip = glide straight to the end state.
+///
+/// Accessibility: with "remove animations" on, the film parks on its
+/// final frame immediately — headline + CTA, fully usable.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -26,104 +40,128 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
-  final _pageController = PageController();
-  Timer? _autoTimer;
-  int _index = 0;
-  bool _autoPaused = false;
+  /// The master timeline. Every scene, caption and morph reads from this
+  /// one controller (via Interval-style windows in FilmTimeline), so the
+  /// whole film is choreographed against shared timing.
+  late final AnimationController _film;
 
-  static const _slides = <_Slide>[
-    _Slide(
-      tag: 'CHURCHES',
-      icon: Icons.church_rounded,
-      headline: '2,600 churches.\nOne community.',
-      description:
-          'Discover every Seventh-day Adventist church across Zimbabwe — '
-          'with directions, services, and pastors at your fingertips.',
-    ),
-    _Slide(
-      tag: 'DEVOTIONS',
-      icon: Icons.auto_stories_rounded,
-      headline: 'A fresh word\nevery morning.',
-      description:
-          'Wake up to a daily Bible verse paired with an Ellen G. White '
-          'reflection — gently delivered to start your day with Christ.',
-    ),
-    _Slide(
-      tag: 'EVENTS',
-      icon: Icons.event_available_rounded,
-      headline: 'Never miss\na gathering.',
-      description:
-          'RSVP to conferences, youth programs, and revival meetings near '
-          'you — your spiritual calendar, always in tune.',
-    ),
-    _Slide(
-      tag: 'MARKETPLACE',
-      icon: Icons.storefront_rounded,
-      headline: 'Trade within\na trusted circle.',
-      description:
-          'Buy and sell with verified members — health food, books, modest '
-          'fashion, and more, all in one safe place.',
-    ),
-    _Slide(
-      tag: 'OPPORTUNITY',
-      icon: Icons.work_outline_rounded,
-      headline: 'Build your\nfuture together.',
-      description:
-          'Discover jobs and opportunities shared by members and recruiters '
-          'who walk the same path as you.',
-    ),
-    _Slide(
-      tag: 'PRAYER',
-      icon: Icons.volunteer_activism_rounded,
-      headline: 'Carry each\nother in prayer.',
-      description:
-          'Lift up requests, intercede for one another, and witness how '
-          'God moves through community.',
-    ),
-    _Slide(
-      tag: 'STORIES',
-      icon: Icons.amp_stories_rounded,
-      headline: 'Share your\nmoment.',
-      description:
-          'Post photo and text status updates your community sees for 24 '
-          'hours — testimonies, verses, and everyday blessings.',
-    ),
-    _Slide(
-      tag: 'CONNECT',
-      icon: Icons.forum_rounded,
-      headline: 'Fellowship,\nwherever you are.',
-      description:
-          'Message members, build prayer circles, and form lasting '
-          'friendships rooted in Christ.',
-    ),
-  ];
+  /// Ambient light loop — independent of the film so the background
+  /// never stops breathing, even while paused or parked on the CTA.
+  late final AnimationController _ambient;
+
+  Timer? _holdTimer;
+  bool _holdPaused = false;
+  bool _reducedMotion = false;
+  int _lastSceneIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _startAutoAdvance();
+    _film = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 24),
+    )..addListener(_onFilmTick);
+    _ambient = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduced = !AppMotion.enabled(context);
+    if (reduced && !_reducedMotion) {
+      _reducedMotion = true;
+      _film.value = 1.0;
+      _ambient.stop();
+    } else if (!_reducedMotion && !_film.isAnimating && _film.value == 0) {
+      _film.forward();
+    }
   }
 
   @override
   void dispose() {
-    _autoTimer?.cancel();
-    _pageController.dispose();
+    _holdTimer?.cancel();
+    _film.dispose();
+    _ambient.dispose();
     super.dispose();
   }
 
-  void _startAutoAdvance() {
-    _autoTimer?.cancel();
-    _autoTimer = Timer.periodic(const Duration(milliseconds: 5500), (_) {
-      if (!mounted || _autoPaused) return;
-      if (_index >= _slides.length - 1) {
-        _autoTimer?.cancel();
-        return;
-      }
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 700),
-        curve: Curves.easeInOutCubic,
-      );
+  void _onFilmTick() {
+    // A soft tick as each scene hands off to the next.
+    final index = FilmTimeline.sceneIndex(_film.value);
+    if (index != _lastSceneIndex) {
+      _lastSceneIndex = index;
+      if (_film.value < 1.0) HapticFeedback.selectionClick();
+    }
+  }
+
+  // ---- Interaction ---------------------------------------------------------
+
+  void _advanceToNextScene() {
+    if (_reducedMotion || _film.value >= 1.0) return;
+    HapticFeedback.selectionClick();
+    final next = FilmTimeline.boundaries.firstWhere(
+      (b) => b > _film.value + 0.005,
+      orElse: () => 1.0,
+    );
+    _film
+        .animateTo(
+          next,
+          duration: const Duration(milliseconds: 550),
+          curve: Curves.easeInOutCubic,
+        )
+        .whenCompleteOrCancel(_resumeIfIdle);
+  }
+
+  void _resumeIfIdle() {
+    if (mounted &&
+        !_holdPaused &&
+        !_reducedMotion &&
+        !_film.isAnimating &&
+        _film.value < 1.0) {
+      _film.forward();
+    }
+  }
+
+  void _onTapDown(TapDownDetails _) {
+    if (_reducedMotion) return;
+    _holdTimer?.cancel();
+    _holdTimer = Timer(const Duration(milliseconds: 180), () {
+      _holdPaused = true;
+      _film.stop();
     });
+  }
+
+  void _onTapUp(TapUpDetails _) {
+    final wasQuickTap = _holdTimer?.isActive ?? false;
+    _holdTimer?.cancel();
+    if (wasQuickTap) {
+      _advanceToNextScene();
+    } else if (_holdPaused) {
+      _holdPaused = false;
+      _resumeIfIdle();
+    }
+  }
+
+  void _onTapCancel() {
+    _holdTimer?.cancel();
+    if (_holdPaused) {
+      _holdPaused = false;
+      _resumeIfIdle();
+    }
+  }
+
+  void _skipToEnd() {
+    HapticFeedback.selectionClick();
+    _holdTimer?.cancel();
+    _holdPaused = false;
+    _film.animateTo(
+      1.0,
+      duration: AppMotion.maybe(context, const Duration(milliseconds: 700)),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   Future<void> _finish() async {
@@ -136,450 +174,235 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     context.goNamed('login');
   }
 
-  void _next() {
-    HapticFeedback.selectionClick();
-    if (_index >= _slides.length - 1) {
-      _finish();
-      return;
-    }
-    _pageController.nextPage(
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutCubic,
-    );
-  }
+  // ---- Build ---------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    final isLast = _index == _slides.length - 1;
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: GestureDetector(
-        onTapDown: (_) => setState(() => _autoPaused = true),
-        onTapUp: (_) => setState(() => _autoPaused = false),
-        onTapCancel: () => setState(() => _autoPaused = false),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildTopBar(isLast),
-              Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: _slides.length,
-                  physics: const BouncingScrollPhysics(),
-                  onPageChanged: (i) {
-                    HapticFeedback.lightImpact();
-                    setState(() => _index = i);
-                  },
-                  itemBuilder: (context, i) {
-                    return _SlideView(
-                      slide: _slides[i],
-                      active: i == _index,
-                    );
-                  },
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Ambient light field — always moving, in its own repaint layer.
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_ambient, _film]),
+              builder: (context, _) => CustomPaint(
+                painter: AmbientPainter(
+                  loop: _ambient.value,
+                  film: _film.value,
                 ),
               ),
-              const SizedBox(height: 8),
-              _buildProgress(),
-              const SizedBox(height: 28),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-                child: _PrimaryButton(
-                  label: isLast ? 'Get started' : 'Continue',
-                  onTap: _next,
+            ),
+          ),
+          SafeArea(
+            child: AnimatedBuilder(
+              animation: _film,
+              builder: (context, _) {
+                final t = _film.value;
+                return Stack(
+                  children: [
+                    // Tap / hold layer + the film's stage.
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: _onTapDown,
+                        onTapUp: _onTapUp,
+                        onTapCancel: _onTapCancel,
+                        child: _buildStage(t),
+                      ),
+                    ),
+                    _buildProgressBars(t),
+                    _buildSkip(t),
+                    _buildCta(t),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The film's stage: scenes are only mounted while their window (plus
+  /// a small margin) is live, and they overlap so exits become entrances.
+  Widget _buildStage(double t) {
+    bool live((double, double) w) => t > w.$1 - 0.01 && t < w.$2 + 0.03;
+    return Padding(
+      // Keep the action clear of the CTA zone at the bottom.
+      padding: const EdgeInsets.only(bottom: 120),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (live(FilmTimeline.s0)) SceneBrandOpen(t: t),
+          if (live(FilmTimeline.s1)) SceneChurch(t: t),
+          if (live(FilmTimeline.s2)) ScenePrayer(t: t),
+          if (live(FilmTimeline.s3)) SceneChatMarket(t: t),
+          if (t > FilmTimeline.s4.$1 - 0.01) SceneSabbathFinale(t: t),
+        ],
+      ),
+    );
+  }
+
+  /// Stories-style progress: five thin bars filling with the timeline,
+  /// bowing out as the CTA arrives.
+  Widget _buildProgressBars(double t) {
+    final fade = 1 - seg(t, 0.86, 0.92);
+    if (fade <= 0) return const SizedBox.shrink();
+    var prev = 0.0;
+    final bars = <Widget>[];
+    for (final boundary in FilmTimeline.boundaries) {
+      final fill = seg(t, prev, boundary);
+      prev = boundary;
+      bars.add(
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.darkNavy.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: fill,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue,
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
-            ],
+            ),
+          ),
+        ),
+      );
+    }
+    return Positioned(
+      top: 14,
+      left: 20,
+      right: 20,
+      child: Opacity(
+        opacity: fade,
+        child: Row(children: bars),
+      ),
+    );
+  }
+
+  Widget _buildSkip(double t) {
+    final fade = 1 - seg(t, 0.78, 0.85);
+    if (fade <= 0) return const SizedBox.shrink();
+    return Positioned(
+      top: 26,
+      right: 12,
+      child: Opacity(
+        opacity: fade,
+        child: IgnorePointer(
+          ignoring: fade < 0.5,
+          child: TextButton(
+            onPressed: _skipToEnd,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            ),
+            child: Text(
+              'Skip',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.4,
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTopBar(bool isLast) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 12, 0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Real brand mark — the actual logo PNG so the pre-signup
-          // intro slides match the launcher icon and splash logo.
-          Container(
-            width: 44,
-            height: 44,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.28),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(5),
-              child: Image.asset(
-                'assets/icon/logo.png',
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-          if (!isLast)
-            TextButton(
-              onPressed: _finish,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-              ),
-              child: Text(
-                'Skip',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.textMuted,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  letterSpacing: 0.4,
-                ),
-              ),
-            )
-          else
-            const SizedBox(width: 56),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgress() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 26),
-      child: Row(
-        children: List.generate(_slides.length, (i) {
-          final active = i <= _index;
-          return Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              height: 4,
-              decoration: BoxDecoration(
-                color: active
-                    ? AppColors.primaryBlue
-                    : AppColors.divider,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// Slide
-// =============================================================================
-
-class _Slide {
-  const _Slide({
-    required this.tag,
-    required this.icon,
-    required this.headline,
-    required this.description,
-  });
-
-  final String tag;
-  final IconData icon;
-  final String headline;
-  final String description;
-}
-
-class _SlideView extends StatefulWidget {
-  const _SlideView({required this.slide, required this.active});
-
-  final _Slide slide;
-  final bool active;
-
-  @override
-  State<_SlideView> createState() => _SlideViewState();
-}
-
-class _SlideViewState extends State<_SlideView>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance;
-
-  @override
-  void initState() {
-    super.initState();
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    if (widget.active) _entrance.forward();
-  }
-
-  @override
-  void didUpdateWidget(covariant _SlideView old) {
-    super.didUpdateWidget(old);
-    if (widget.active && !old.active) {
-      _entrance
-        ..reset()
-        ..forward();
-    }
-  }
-
-  @override
-  void dispose() {
-    _entrance.dispose();
-    super.dispose();
-  }
-
-  Animation<double> _stage(double begin, double end) => CurvedAnimation(
-        parent: _entrance,
-        curve: Interval(begin, end, curve: Curves.easeOutCubic),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final tagAnim = _stage(0.0, 0.6);
-    final iconAnim = _stage(0.1, 0.8);
-    final headlineAnim = _stage(0.25, 0.9);
-    final descAnim = _stage(0.4, 1.0);
-
-    return AnimatedBuilder(
-      animation: _entrance,
-      builder: (context, _) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Opacity(
-                opacity: tagAnim.value,
-                child: Transform.translate(
-                  offset: Offset(0, (1 - tagAnim.value) * 12),
-                  child: _TagChip(text: widget.slide.tag),
-                ),
-              ),
-              const SizedBox(height: 28),
-              Opacity(
-                opacity: iconAnim.value,
-                child: Transform.scale(
-                  scale: 0.92 + iconAnim.value * 0.08,
-                  child: _HeroCard(icon: widget.slide.icon),
-                ),
-              ),
-              const SizedBox(height: 40),
-              Opacity(
-                opacity: headlineAnim.value,
-                child: Transform.translate(
-                  offset: Offset(0, (1 - headlineAnim.value) * 16),
-                  child: Text(
-                    widget.slide.headline,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.displayLarge.copyWith(
-                      color: AppColors.darkNavy,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      height: 1.18,
-                      letterSpacing: -0.2,
+  /// The landing: real buttons that rise as the film settles. The gold
+  /// ring's handoff (Scene 4) sinks into this button's glow.
+  Widget _buildCta(double t) {
+    final ctaIn = seg(t, 0.885, 0.965, Curves.easeOutCubic);
+    final glow = seg(t, 0.930, 0.985, Curves.easeOutCubic);
+    if (ctaIn <= 0) return const SizedBox.shrink();
+    return Positioned(
+      left: 24,
+      right: 24,
+      bottom: 24,
+      child: IgnorePointer(
+        ignoring: ctaIn < 0.6,
+        child: Opacity(
+          opacity: ctaIn,
+          child: Transform.translate(
+            offset: Offset(0, 34 * (1 - ctaIn)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                PressEffect(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        // Blue lift + the gold bloom the ring dissolves into.
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.32),
+                          blurRadius: 22,
+                          offset: const Offset(0, 12),
+                        ),
+                        BoxShadow(
+                          color: AppColors.goldAccent.withValues(
+                            alpha: 0.35 * glow,
+                          ),
+                          blurRadius: 34,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Opacity(
-                opacity: descAnim.value,
-                child: Transform.translate(
-                  offset: Offset(0, (1 - descAnim.value) * 16),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      widget.slide.description,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textMuted,
-                        fontSize: 14.5,
-                        height: 1.55,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _finish,
+                        borderRadius: BorderRadius.circular(22),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Get started',
+                                style: AppTextStyles.buttonText.copyWith(
+                                  color: AppColors.white,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.arrow_forward_rounded,
+                                color: AppColors.white,
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _TagChip extends StatelessWidget {
-  const _TagChip({required this.text});
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.goldAccent.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(
-          color: AppColors.goldAccent.withValues(alpha: 0.55),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              color: AppColors.goldAccent,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: const Color(0xFF8A6E1F),
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.8,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// Hero card — a clean white circle with the icon, primary-blue
-// gradient inside, soft drop shadow, gold rim. Same vibe as the auth
-// screen's _LogoMark + the success screen's checkmark.
-// =============================================================================
-
-class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.icon});
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 200,
-      height: 200,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Soft halo
-          Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.22),
-                  blurRadius: 36,
-                  spreadRadius: 4,
-                ),
-              ],
-            ),
-          ),
-          // Gold rim
-          Container(
-            width: 170,
-            height: 170,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.goldAccent.withValues(alpha: 0.55),
-                width: 1.4,
-              ),
-            ),
-          ),
-          // Primary-blue gradient disk with the icon
-          Container(
-            width: 148,
-            height: 148,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: AppColors.primaryGradient,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.30),
-                  blurRadius: 20,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Icon(icon, color: AppColors.white, size: 64),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// Primary button — same gradient + shadow as AuthScreen for visual
-// consistency across the entire auth journey.
-// =============================================================================
-
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.32),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(22),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    color: AppColors.white,
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.4,
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: _finish,
+                  child: Text(
+                    'I already have an account',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.textMuted,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 6),
-                // TODO(dark-mode): const Icon — sits on primaryGradient button.
-                const Icon(
-                  Icons.arrow_forward_rounded,
-                  color: AppColors.white,
-                  size: 18,
                 ),
               ],
             ),

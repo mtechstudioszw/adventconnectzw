@@ -63,6 +63,7 @@ import '../../models/youtube_video.dart';
 import '../../services/youtube_service.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/home/story_viewer.dart';
@@ -79,7 +80,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   List<Event> _events = [];
   List<Church> _churches = [];
   List<MemberDirectoryEntry> _suggestedMembers = [];
@@ -729,55 +730,61 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: Stack(
-        children: [
-          _buildScrollableContent(),
-          Positioned(
-            right: 16,
-            bottom: 24,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Prayer quick-access — sits above the Advent Chat
-                // bubble. Tapping it opens the Prayer tab where the
-                // user posts their request (the in-prayer-screen FAB
-                // handles the actual compose).
-                FloatingActionButton(
-                  heroTag: 'home_prayer_fab',
-                  mini: true,
-                  backgroundColor: context.palette.card,
-                  foregroundColor: AppColors.primaryBlue,
-                  elevation: 4,
-                  tooltip: 'Prayer requests',
-                  onPressed: () => context.pushNamed('prayer'),
-                  child: const Icon(Icons.volunteer_activism_rounded),
-                ),
-                const SizedBox(height: 12),
-                AdventChatBubble(
-                  hasUnread: _hasUnreadChat,
-                  unreadCount: _chatBadgeCount,
-                  onTap: () async {
-                    await context.pushNamed('messages');
-                    // Returning from the inbox refreshes the badge
-                    // — covers the case where the user read every
-                    // unread message inside the chat and the FAB
-                    // would otherwise stay red until the next
-                    // realtime activity event.
-                    if (mounted) await _refreshUnreadBadge();
-                  },
-                ),
-              ],
+      body: NotificationListener<UserScrollNotification>(
+        onNotification: handleNavScroll,
+        child: Stack(
+          children: [
+            _buildScrollableContent(),
+            Positioned(
+              right: 16,
+              bottom: 24,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Prayer quick-access — sits above the Advent Chat
+                  // bubble. Tapping it opens the Prayer tab where the
+                  // user posts their request (the in-prayer-screen FAB
+                  // handles the actual compose).
+                  FloatingActionButton(
+                    heroTag: 'home_prayer_fab',
+                    mini: true,
+                    backgroundColor: context.palette.card,
+                    foregroundColor: AppColors.primaryBlue,
+                    elevation: 4,
+                    tooltip: 'Prayer requests',
+                    onPressed: () => context.pushNamed('prayer'),
+                    child: const Icon(Icons.volunteer_activism_rounded),
+                  ),
+                  const SizedBox(height: 12),
+                  AdventChatBubble(
+                    hasUnread: _hasUnreadChat,
+                    unreadCount: _chatBadgeCount,
+                    onTap: () async {
+                      await context.pushNamed('messages');
+                      // Returning from the inbox refreshes the badge
+                      // — covers the case where the user read every
+                      // unread message inside the chat and the FAB
+                      // would otherwise stay red until the next
+                      // realtime activity event.
+                      if (mounted) await _refreshUnreadBadge();
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-      bottomNavigationBar: const MainBottomNav(
-        currentIndex: 0,
-        // No chat badge on the Profile tab — the floating Advent Chat
-        // bubble (bottom-right) already surfaces unread counts, and
-        // tapping Profile doesn't actually take the user to messages,
-        // which made the badge misleading ("6 unread shown but
-        // nothing in profile when I open it").
+      bottomNavigationBar: HideOnScroll(
+        visible: navVisible,
+        child: const MainBottomNav(
+          currentIndex: 0,
+          // No chat badge on the Profile tab — the floating Advent Chat
+          // bubble (bottom-right) already surfaces unread counts, and
+          // tapping Profile doesn't actually take the user to messages,
+          // which made the badge misleading ("6 unread shown but
+          // nothing in profile when I open it").
+        ),
       ),
     );
   }

@@ -20,6 +20,7 @@ import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../../widgets/motion/pressable.dart';
@@ -31,7 +32,8 @@ class MarketplaceScreen extends StatefulWidget {
   State<MarketplaceScreen> createState() => _MarketplaceScreenState();
 }
 
-class _MarketplaceScreenState extends State<MarketplaceScreen> {
+class _MarketplaceScreenState extends State<MarketplaceScreen>
+    with NavVisibilityMixin {
   final _searchController = TextEditingController();
   Timer? _debounce;
 
@@ -130,35 +132,41 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [AdBanner(), MainBottomNav(currentIndex: 3)],
+      bottomNavigationBar: HideOnScroll(
+        visible: navVisible,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [AdBanner(), MainBottomNav(currentIndex: 3)],
+        ),
       ),
       floatingActionButton: const PostFab(
         routeName: 'add_product',
         tooltip: 'List a product',
       ),
-      body: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height,
-          child: Column(
-            children: [
-              _buildHero(),
-              _buildSearchBar(),
-              if (_mySeller != null) _SellerStatusBanner(seller: _mySeller!),
-              const _ShopJobsSegment(active: _Section.shop),
-              _buildCategoryStrip(),
-              Expanded(
-                child: BrandedRefreshIndicator(
-                  color: AppColors.primaryBlue,
-                  onRefresh: _loadProducts,
-                  // Entrance now happens per-card (StaggeredReveal in the
-                  // grid) instead of one block fade.
-                  child: _buildGrid(),
+      body: NotificationListener<UserScrollNotification>(
+        onNotification: handleNavScroll,
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height,
+            child: Column(
+              children: [
+                _buildHero(),
+                _buildSearchBar(),
+                if (_mySeller != null) _SellerStatusBanner(seller: _mySeller!),
+                const _ShopJobsSegment(active: _Section.shop),
+                _buildCategoryStrip(),
+                Expanded(
+                  child: BrandedRefreshIndicator(
+                    color: AppColors.primaryBlue,
+                    onRefresh: _loadProducts,
+                    // Entrance now happens per-card (StaggeredReveal in the
+                    // grid) instead of one block fade.
+                    child: _buildGrid(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

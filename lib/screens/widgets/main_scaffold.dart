@@ -3,9 +3,10 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ads/ad_banner.dart';
+import '../../widgets/motion/hide_on_scroll.dart';
 import 'main_bottom_nav.dart';
 
-class MainScaffold extends StatelessWidget {
+class MainScaffold extends StatefulWidget {
   const MainScaffold({
     super.key,
     required this.title,
@@ -32,6 +33,11 @@ class MainScaffold extends StatelessWidget {
   final bool showNav;
 
   @override
+  State<MainScaffold> createState() => _MainScaffoldState();
+}
+
+class _MainScaffoldState extends State<MainScaffold> with NavVisibilityMixin {
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
@@ -39,24 +45,31 @@ class MainScaffold extends StatelessWidget {
         flexibleSpace: Container(
           decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
         ),
-        title: Text(title, style: AppTextStyles.appBarTitle),
+        title: Text(widget.title, style: AppTextStyles.appBarTitle),
         elevation: 0,
       ),
-      body: SafeArea(child: body),
+      // Scroll direction drives nav visibility (YouTube-style hide).
+      body: NotificationListener<UserScrollNotification>(
+        onNotification: handleNavScroll,
+        child: SafeArea(child: widget.body),
+      ),
       // Banner sits directly above the main bottom nav. AdBanner self-hides
       // (zero height) until an ad loads, so the nav never shifts on a miss.
-      bottomNavigationBar: showNav
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showAd) const AdBanner(),
-                MainBottomNav(currentIndex: currentIndex),
-              ],
+      bottomNavigationBar: widget.showNav
+          ? HideOnScroll(
+              visible: navVisible,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.showAd) const AdBanner(),
+                  MainBottomNav(currentIndex: widget.currentIndex),
+                ],
+              ),
             )
-          : (showAd
-              ? const SafeArea(top: false, child: AdBanner())
-              : null),
-      floatingActionButton: floatingActionButton,
+          : (widget.showAd
+                ? const SafeArea(top: false, child: AdBanner())
+                : null),
+      floatingActionButton: widget.floatingActionButton,
     );
   }
 }

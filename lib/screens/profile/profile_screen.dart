@@ -30,6 +30,7 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/motion/hide_on_scroll.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -38,7 +39,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
   int _churchesFollowed = 0;
   int _eventsGoing = 0;
   List<Post> _myPosts = const [];
@@ -331,43 +332,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: BrandedRefreshIndicator(
-        color: AppColors.primaryBlue,
-        onRefresh: _bootstrap,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          // Sections cascade in instead of the old one-block fade.
-          child: Column(
-            children: [
-              StaggeredReveal(index: 0, rise: 14, child: _buildHeader()),
-              StaggeredReveal(
-                index: 1,
-                child: Column(
-                  children: [
-                    _buildIdentity(),
-                    const SizedBox(height: 10),
-                    _buildInlineStats(),
-                  ],
+      body: NotificationListener<UserScrollNotification>(
+        onNotification: handleNavScroll,
+        child: BrandedRefreshIndicator(
+          color: AppColors.primaryBlue,
+          onRefresh: _bootstrap,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            // Sections cascade in instead of the old one-block fade.
+            child: Column(
+              children: [
+                StaggeredReveal(index: 0, rise: 14, child: _buildHeader()),
+                StaggeredReveal(
+                  index: 1,
+                  child: Column(
+                    children: [
+                      _buildIdentity(),
+                      const SizedBox(height: 10),
+                      _buildInlineStats(),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              StaggeredReveal(
-                index: 2,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildActionToolbar(),
+                const SizedBox(height: 16),
+                StaggeredReveal(
+                  index: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildActionToolbar(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              StaggeredReveal(index: 3, child: _buildTabSelector()),
-              const SizedBox(height: 12),
-              StaggeredReveal(index: 4, child: _buildTabContent()),
-              const SizedBox(height: 32),
-            ],
+                const SizedBox(height: 18),
+                StaggeredReveal(index: 3, child: _buildTabSelector()),
+                const SizedBox(height: 12),
+                StaggeredReveal(index: 4, child: _buildTabContent()),
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
         ),
       ),
-      bottomNavigationBar: const MainBottomNav(currentIndex: 4),
+      bottomNavigationBar: HideOnScroll(
+        visible: navVisible,
+        child: const MainBottomNav(currentIndex: 4),
+      ),
     );
   }
 

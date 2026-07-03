@@ -15,6 +15,7 @@ import '../widgets/main_bottom_nav.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 
@@ -28,7 +29,7 @@ class WatchScreen extends StatefulWidget {
   State<WatchScreen> createState() => _WatchScreenState();
 }
 
-class _WatchScreenState extends State<WatchScreen> {
+class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
   final ScrollController _scroll = ScrollController();
 
   YoutubeVideo? _live;
@@ -203,73 +204,79 @@ class _WatchScreenState extends State<WatchScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        // Video-shaped shimmer crossfades into the feed.
-        child: ContentReveal(
-          loading: _loading,
-          skeleton: ShimmerLoaders.watchList(),
-          child: BrandedRefreshIndicator(
-            color: AppColors.primaryBlue,
-            onRefresh: _bootstrap,
-            child: ListView(
-              controller: _scroll,
-              padding: const EdgeInsets.only(bottom: 28),
-              children: [
-                if (_hero != null) _heroCard(_hero!, palette),
-                // When several channels are live at once, a "Live now"
-                // rail lists them all (hero shows the first).
-                if (_liveNow.length > 1) _liveNowRail(palette),
-                if (_continue.isNotEmpty) _continueRail(palette),
-                if (_upcoming.isNotEmpty) _upcomingRail(palette),
-                _categoryChips(palette),
-                if (_feed.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Center(
-                      child: Text(
-                        _category == 'saved'
-                            ? 'Nothing saved yet.'
-                            : 'No videos yet.',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: palette.textMuted,
+      body: NotificationListener<UserScrollNotification>(
+        onNotification: handleNavScroll,
+        child: SafeArea(
+          top: false,
+          // Video-shaped shimmer crossfades into the feed.
+          child: ContentReveal(
+            loading: _loading,
+            skeleton: ShimmerLoaders.watchList(),
+            child: BrandedRefreshIndicator(
+              color: AppColors.primaryBlue,
+              onRefresh: _bootstrap,
+              child: ListView(
+                controller: _scroll,
+                padding: const EdgeInsets.only(bottom: 28),
+                children: [
+                  if (_hero != null) _heroCard(_hero!, palette),
+                  // When several channels are live at once, a "Live now"
+                  // rail lists them all (hero shows the first).
+                  if (_liveNow.length > 1) _liveNowRail(palette),
+                  if (_continue.isNotEmpty) _continueRail(palette),
+                  if (_upcoming.isNotEmpty) _upcomingRail(palette),
+                  _categoryChips(palette),
+                  if (_feed.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Center(
+                        child: Text(
+                          _category == 'saved'
+                              ? 'Nothing saved yet.'
+                              : 'No videos yet.',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: palette.textMuted,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                for (int i = 0; i < _feed.length; i++) ...[
-                  if (i < 5)
-                    StaggeredReveal(
-                      index: i,
-                      rise: 18,
-                      child: YoutubeVideoCard(
+                  for (int i = 0; i < _feed.length; i++) ...[
+                    if (i < 5)
+                      StaggeredReveal(
+                        index: i,
+                        rise: 18,
+                        child: YoutubeVideoCard(
+                          video: _feed[i],
+                          onTap: () => _open(_feed[i]),
+                          saved: _saved.contains(_feed[i].videoId),
+                          onSaveToggle: () => _toggleSave(_feed[i]),
+                        ),
+                      )
+                    else
+                      YoutubeVideoCard(
                         video: _feed[i],
                         onTap: () => _open(_feed[i]),
                         saved: _saved.contains(_feed[i].videoId),
                         onSaveToggle: () => _toggleSave(_feed[i]),
                       ),
-                    )
-                  else
-                    YoutubeVideoCard(
-                      video: _feed[i],
-                      onTap: () => _open(_feed[i]),
-                      saved: _saved.contains(_feed[i].videoId),
-                      onSaveToggle: () => _toggleSave(_feed[i]),
+                    // Native ad every ~8 videos in the browse feed.
+                    if ((i + 1) % 8 == 0) const NativeAdCard(),
+                  ],
+                  if (_loadingMore)
+                    const Padding(
+                      padding: EdgeInsets.all(18),
+                      child: Center(child: BrandSpinner(size: 28)),
                     ),
-                  // Native ad every ~8 videos in the browse feed.
-                  if ((i + 1) % 8 == 0) const NativeAdCard(),
                 ],
-                if (_loadingMore)
-                  const Padding(
-                    padding: EdgeInsets.all(18),
-                    child: Center(child: BrandSpinner(size: 28)),
-                  ),
-              ],
+              ),
             ),
           ),
         ),
       ),
-      bottomNavigationBar: const MainBottomNav(currentIndex: 1),
+      bottomNavigationBar: HideOnScroll(
+        visible: navVisible,
+        child: const MainBottomNav(currentIndex: 1),
+      ),
     );
   }
 

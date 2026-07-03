@@ -18,6 +18,7 @@ import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/shimmer_loaders.dart';
@@ -29,7 +30,7 @@ class JobsScreen extends StatefulWidget {
   State<JobsScreen> createState() => _JobsScreenState();
 }
 
-class _JobsScreenState extends State<JobsScreen> {
+class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
   final _searchController = TextEditingController();
   Timer? _debounce;
 
@@ -133,33 +134,39 @@ class _JobsScreenState extends State<JobsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [AdBanner(), MainBottomNav(currentIndex: 3)],
+      bottomNavigationBar: HideOnScroll(
+        visible: navVisible,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [AdBanner(), MainBottomNav(currentIndex: 3)],
+        ),
       ),
       floatingActionButton: const PostFab(
         routeName: 'post_job',
         tooltip: 'Post a job',
       ),
-      body: SizedBox(
-        height: MediaQuery.of(context).size.height,
-        child: Column(
-          children: [
-            _buildHero(),
-            _buildSearchBar(),
-            const _ShopJobsSegment(active: _Section.jobs),
-            _buildCategoryStrip(),
-            const SizedBox(height: 6),
-            _buildLevelStrip(),
-            Expanded(
-              child: BrandedRefreshIndicator(
-                color: AppColors.primaryBlue,
-                onRefresh: _loadJobs,
-                // Entrance now happens per-card (StaggeredReveal below).
-                child: _buildList(),
+      body: NotificationListener<UserScrollNotification>(
+        onNotification: handleNavScroll,
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height,
+          child: Column(
+            children: [
+              _buildHero(),
+              _buildSearchBar(),
+              const _ShopJobsSegment(active: _Section.jobs),
+              _buildCategoryStrip(),
+              const SizedBox(height: 6),
+              _buildLevelStrip(),
+              Expanded(
+                child: BrandedRefreshIndicator(
+                  color: AppColors.primaryBlue,
+                  onRefresh: _loadJobs,
+                  // Entrance now happens per-card (StaggeredReveal below).
+                  child: _buildList(),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

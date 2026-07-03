@@ -141,6 +141,16 @@ class AppTextStyles {
         color: AppColors.white,
       );
 
+  /// App-bar title for the flat, single-colour light headers — same weight
+  /// and size as [appBarTitle] but the colour follows the active brightness
+  /// (dark navy on light, near-white on dark) so it reads on the flat
+  /// scaffold background instead of the old navy block.
+  static TextStyle get appBarTitleFlat => GoogleFonts.poppins(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: _bodyColor,
+      );
+
   static TextStyle get overline => GoogleFonts.poppins(
         fontSize: 10,
         fontWeight: FontWeight.w600,

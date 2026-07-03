@@ -91,11 +91,7 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
       appBar: AppBar(
         title: Text(
           'Bible Quiz',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 19),
         ),
       ),
       body: SafeArea(

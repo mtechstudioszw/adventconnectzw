@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/cached_image.dart';
 
 import '../../models/event_model.dart';
 import '../../services/event_service.dart';
@@ -266,7 +267,7 @@ class _EventCard extends StatelessWidget {
           if (event.coverPhotoUrl != null && event.coverPhotoUrl!.isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: Image.network(
+              child: CachedImage(
                 event.coverPhotoUrl!,
                 height: 160,
                 width: double.infinity,

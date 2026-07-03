@@ -306,21 +306,16 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.white),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () =>
               context.canPop() ? context.pop() : context.goNamed('prayer'),
         ),
-        title: Text('Prayer request', style: AppTextStyles.appBarTitle),
+        title: Text('Prayer request', style: AppTextStyles.appBarTitleFlat),
         actions: [
           if (_prayer != null && _isAuthor(_prayer!))
             IconButton(
-              icon: const Icon(Icons.edit_outlined, color: AppColors.white),
+              icon: const Icon(Icons.edit_outlined),
               tooltip: 'Edit prayer',
               onPressed: () async {
                 final updated = await context.pushNamed<bool>(

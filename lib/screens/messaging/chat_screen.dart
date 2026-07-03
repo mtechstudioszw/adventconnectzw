@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../widgets/screen_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -2362,10 +2363,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildSelectionBar() {
     final count = _selectedMsgIds.length;
-    return ClipPath(
-      clipper: _HeaderClipper(),
+    return FlatStatusBar(
       child: Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        color: context.palette.scaffoldBg,
         child: SafeArea(
           bottom: false,
           child: Padding(
@@ -2378,21 +2378,21 @@ class _ChatScreenState extends State<ChatScreen>
                   child: Text(
                     '$count selected',
                     style: AppTextStyles.titleLarge.copyWith(
-                      color: AppColors.white,
+                      color: context.palette.text,
                       fontWeight: FontWeight.w700,
                       fontSize: 17,
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.shortcut, color: AppColors.white),
+                  icon: Icon(Icons.shortcut, color: context.palette.text),
                   tooltip: 'Forward',
                   onPressed: count == 0 ? null : _forwardSelected,
                 ),
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.delete_outline,
-                    color: AppColors.white,
+                    color: context.palette.text,
                   ),
                   tooltip: 'Delete',
                   onPressed: count == 0 ? null : _confirmDeleteSelected,
@@ -2501,10 +2501,9 @@ class _ChatScreenState extends State<ChatScreen>
       'group_info',
       pathParameters: {'id': widget.conversationId},
     );
-    return ClipPath(
-      clipper: _HeaderClipper(),
+    return FlatStatusBar(
       child: Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        color: context.palette.scaffoldBg,
         child: SafeArea(
           bottom: false,
           child: Padding(
@@ -2589,7 +2588,7 @@ class _ChatScreenState extends State<ChatScreen>
                                         overflow: TextOverflow.ellipsis,
                                         style: AppTextStyles.titleLarge
                                             .copyWith(
-                                              color: AppColors.white,
+                                              color: context.palette.text,
                                               fontWeight: FontWeight.w700,
                                               fontSize: 16,
                                             ),
@@ -2615,8 +2614,7 @@ class _ChatScreenState extends State<ChatScreen>
                                           key: const ValueKey('group-sub'),
                                           style: AppTextStyles.labelSmall
                                               .copyWith(
-                                                color: AppColors.white
-                                                    .withValues(alpha: 0.75),
+                                                color: context.palette.textMuted,
                                                 fontSize: 11,
                                               ),
                                         )
@@ -2647,7 +2645,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildOverflowMenu(bool canOpenProfile, String? otherUserId) {
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: AppColors.white),
+      icon: Icon(Icons.more_vert, color: context.palette.text),
       color: context.palette.card,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onSelected: (action) async {
@@ -3731,7 +3729,7 @@ class _ChatScreenState extends State<ChatScreen>
         'recording audio…',
         key: const ValueKey('recording'),
         style: AppTextStyles.labelSmall.copyWith(
-          color: AppColors.white,
+          color: AppColors.primaryBlue,
           fontSize: 11,
           fontStyle: FontStyle.italic,
           fontWeight: FontWeight.w500,
@@ -3743,7 +3741,7 @@ class _ChatScreenState extends State<ChatScreen>
         'typing…',
         key: const ValueKey('typing'),
         style: AppTextStyles.labelSmall.copyWith(
-          color: AppColors.white,
+          color: AppColors.primaryBlue,
           fontSize: 11,
           fontStyle: FontStyle.italic,
           fontWeight: FontWeight.w500,
@@ -3769,7 +3767,7 @@ class _ChatScreenState extends State<ChatScreen>
           Text(
             'Online',
             style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.white,
+              color: context.palette.textMuted,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -3785,7 +3783,7 @@ class _ChatScreenState extends State<ChatScreen>
       label,
       key: ValueKey(label),
       style: AppTextStyles.labelSmall.copyWith(
-        color: AppColors.white.withValues(alpha: 0.7),
+        color: context.palette.textMuted,
         fontSize: 11,
         fontWeight: FontWeight.w500,
       ),
@@ -4298,13 +4296,31 @@ class _VoiceBubble extends StatelessWidget {
                                     // (WhatsApp blue-mic parity).
                                     if (isMine) ...[
                                       const SizedBox(width: 6),
+                                      // Solid gold mic once the recipient has
+                                      // played it; hollow muted mic before, so
+                                      // the played/unplayed state is legible at
+                                      // a glance (not just a colour shift).
                                       Icon(
-                                        Icons.mic,
-                                        size: 13,
+                                        message.isVoicePlayed
+                                            ? Icons.mic
+                                            : Icons.mic_none,
+                                        size: 14,
                                         color: message.isVoicePlayed
                                             ? AppColors.goldAccent
                                             : muted,
                                       ),
+                                      if (message.isVoicePlayed) ...[
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          'Played',
+                                          style: AppTextStyles.labelSmall
+                                              .copyWith(
+                                                color: AppColors.goldAccent,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ],
                                     ] else if (!message.isVoicePlayed) ...[
                                       // Unheard RECEIVED note: gold "new"
                                       // dot until you play it (WhatsApp's
@@ -4837,7 +4853,7 @@ class _StoryReplyBubble extends StatelessWidget {
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('This status is no longer available.'),
+                        content: Text('This story is no longer available.'),
                       ),
                     );
                   }
@@ -4877,8 +4893,8 @@ class _StoryReplyBubble extends StatelessWidget {
                     Flexible(
                       child: Text(
                         isMine
-                            ? 'You replied to a status'
-                            : 'Replied to your status',
+                            ? 'You replied to a story'
+                            : 'Replied to your story',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: onText.withValues(alpha: 0.9),
                           fontWeight: FontWeight.w600,
@@ -5278,26 +5294,6 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-class _HeaderClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 22);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 22,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
 class _CircleIconButton extends StatelessWidget {
   const _CircleIconButton({required this.icon, required this.onTap});
   final IconData icon;
@@ -5318,13 +5314,12 @@ class _CircleIconButton extends StatelessWidget {
             height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.14),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? context.palette.cardMuted
+                  : const Color(0xFFE4E9F2),
               shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.25),
-              ),
             ),
-            child: Icon(icon, color: AppColors.white, size: 18),
+            child: Icon(icon, color: context.palette.text, size: 18),
           ),
         ),
       ),

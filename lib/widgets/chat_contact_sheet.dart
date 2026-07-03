@@ -12,6 +12,7 @@ import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'cached_image.dart';
 import 'full_image_viewer.dart';
+import 'verified_tick.dart';
 import 'home/report_sheet.dart';
 import 'home/story_viewer.dart';
 
@@ -265,7 +266,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                 const SizedBox(height: 6),
                 Center(
                   child: Text(
-                    _allViewed ? 'Tap to view status' : 'New status · tap to view',
+                    _allViewed ? 'Tap to view story' : 'New story · tap to view',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: _allViewed
                           ? context.palette.textMuted
@@ -280,14 +281,24 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
-                    Text(
-                      name,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.titleLarge.copyWith(
-                        color: context.palette.text,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 20,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.titleLarge.copyWith(
+                              color: context.palette.text,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 20,
+                            ),
+                          ),
+                        ),
+                        if (_profile?.showsVerifiedTick == true)
+                          const VerifiedTick(size: 18),
+                      ],
                     ),
                     const SizedBox(height: 6),
                     Row(

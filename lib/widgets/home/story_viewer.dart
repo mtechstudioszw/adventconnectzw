@@ -572,7 +572,7 @@ class _StoryViewerState extends State<StoryViewer>
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,
-                                hintText: 'Reply to status…',
+                                hintText: 'Reply to story…',
                                 hintStyle: TextStyle(
                                     color:
                                         AppColors.white.withValues(alpha: 0.7)),

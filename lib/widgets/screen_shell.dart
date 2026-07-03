@@ -1,12 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:go_router/go_router.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
-/// Reusable navy-gradient hero used at the top of most secondary
-/// screens. Saves the ~50 lines of clipper boilerplate per screen.
+/// Wraps a bespoke flat header so the status-bar icons are dark on the light
+/// background (and light in dark mode). The themed AppBar does this for
+/// AppBar screens automatically; custom `Container` headers need it set here
+/// so no screen ends up with invisible status-bar icons.
+class FlatStatusBar extends StatelessWidget {
+  const FlatStatusBar({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Light-grey chip fill for circular header icon buttons. Sits a touch
+/// darker than the scaffold so the buttons read against the flat header;
+/// swaps to a muted card fill in dark mode.
+Color _headerChipColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? context.palette.cardMuted
+        : const Color(0xFFE4E9F2);
+
+/// Flat, single-colour header used at the top of most secondary screens.
+/// Shares the scaffold background so the screen reads as one continuous
+/// colour from the status bar down — no navy block, no curve, no gradient.
 class ScreenHero extends StatelessWidget {
   const ScreenHero({
     super.key,
@@ -25,15 +57,15 @@ class ScreenHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipPath(
-      clipper: _HeroClipper(),
+    final palette = context.palette;
+    return FlatStatusBar(
       child: Container(
         width: double.infinity,
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        color: palette.scaffoldBg,
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 36),
+            padding: const EdgeInsets.fromLTRB(12, 8, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -44,27 +76,28 @@ class ScreenHero extends StatelessWidget {
                     ?trailing,
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (tagline != null)
+                      if (tagline != null) ...[
                         Text(
                           tagline!.toUpperCase(),
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.white.withValues(alpha: 0.55),
+                            color: AppColors.primaryBlue,
                             fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.8,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.6,
                           ),
                         ),
-                      if (tagline != null) const SizedBox(height: 6),
+                        const SizedBox(height: 6),
+                      ],
                       Text(
                         title,
                         style: AppTextStyles.displayMedium.copyWith(
-                          color: AppColors.white,
+                          color: palette.text,
                           fontSize: 26,
                           fontWeight: FontWeight.w700,
                         ),
@@ -74,7 +107,7 @@ class ScreenHero extends StatelessWidget {
                         Text(
                           subtitle!,
                           style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.white.withValues(alpha: 0.7),
+                            color: palette.textMuted,
                           ),
                         ),
                       ],
@@ -98,6 +131,8 @@ class ScreenHeroBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
           if (context.canPop()) {
@@ -108,18 +143,16 @@ class ScreenHeroBackButton extends StatelessWidget {
             context.goNamed('home');
           }
         },
-        borderRadius: BorderRadius.circular(14),
         child: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+            color: _headerChipColor(context),
+            shape: BoxShape.circle,
           ),
-          child: const Icon(
+          child: Icon(
             Icons.arrow_back_ios_new,
-            size: 14,
-            color: AppColors.white,
+            size: 16,
+            color: context.palette.text,
           ),
         ),
       ),
@@ -134,43 +167,80 @@ class ScreenHeroTrailing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
-          ),
-          child: Icon(icon, color: AppColors.white, size: 18),
-        ),
-      ),
-    );
+    return HeaderIconButton(icon: icon, onTap: onTap);
   }
 }
 
-class _HeroClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 28);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 28,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
+/// Circular icon button for the flat light headers — a light-grey chip with
+/// a navy icon (both adapt to dark mode), plus an optional red count badge
+/// for things like the notifications bell.
+class HeaderIconButton extends StatelessWidget {
+  const HeaderIconButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.badgeCount = 0,
+    this.tooltip,
+    this.iconSize = 20,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final int badgeCount;
+  final String? tooltip;
+  final double iconSize;
 
   @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+  Widget build(BuildContext context) {
+    Widget result = Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: _headerChipColor(context),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: context.palette.text, size: iconSize),
+        ),
+      ),
+    );
+    if (badgeCount > 0) {
+      result = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          result,
+          Positioned(
+            right: -1,
+            top: -1,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              constraints: const BoxConstraints(minWidth: 18),
+              decoration: BoxDecoration(
+                color: AppColors.red,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: context.palette.scaffoldBg, width: 1.5),
+              ),
+              child: Text(
+                badgeCount > 99 ? '99+' : '$badgeCount',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return tooltip == null ? result : Tooltip(message: tooltip!, child: result);
+  }
 }
 
 /// White rounded card with the standard subtle shadow. Used everywhere

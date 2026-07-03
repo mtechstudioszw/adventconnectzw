@@ -1,6 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import '../../widgets/screen_shell.dart';
 
 import '../../services/advent_news_service.dart';
 import '../../theme/app_colors.dart';
@@ -226,64 +226,12 @@ class _NewsApprovalsScreenState extends State<NewsApprovalsScreen> {
   }
 
   Widget _buildHero() {
-    return ClipPath(
-      clipper: _HeroClipper(),
-      child: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 36),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _CircleIconButton(
-                  icon: Icons.arrow_back_ios_new,
-                  onTap: () => context.canPop()
-                      ? context.pop()
-                      : context.goNamed('settings'),
-                ),
-                const SizedBox(height: 20),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SUPER ADMIN',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.goldAccent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.8,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'News approvals',
-                        style: AppTextStyles.displayMedium.copyWith(
-                          color: AppColors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Review member-submitted stories before they go '
-                        'live on Advent News.',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return const ScreenHero(
+      title: 'News approvals',
+      tagline: 'Super admin',
+      subtitle:
+          'Review member-submitted stories before they go live on Advent News.',
+      fallbackRoute: 'settings',
     );
   }
 }
@@ -435,48 +383,3 @@ class _PendingNewsCard extends StatelessWidget {
   }
 }
 
-class _HeroClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 28);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 28,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
-          ),
-          child: Icon(icon, color: AppColors.white, size: 18),
-        ),
-      ),
-    );
-  }
-}

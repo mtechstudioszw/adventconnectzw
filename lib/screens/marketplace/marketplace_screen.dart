@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
@@ -174,63 +175,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   }
 
   Widget _buildHero() {
-    return ClipPath(
-      clipper: _HeroClipper(),
-      child: Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _CircleIconButton(
-                      icon: Icons.arrow_back,
-                      onTap: () => context.canPop()
-                          ? context.pop()
-                          : context.goNamed('home'),
-                    ),
-                    const Spacer(),
-                    _CircleIconButton(
-                      icon: Icons.grid_view_rounded,
-                      onTap: () => context.pushNamed('categories'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'MARKETPLACE',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.55),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.8,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Shop within the community',
-                        style: AppTextStyles.displayMedium.copyWith(
-                          color: AppColors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    return ScreenHero(
+      title: 'Shop within the community',
+      tagline: 'Marketplace',
+      fallbackRoute: 'home',
+      trailing: ScreenHeroTrailing(
+        icon: Icons.grid_view_rounded,
+        onTap: () => context.pushNamed('categories'),
       ),
     );
   }
@@ -742,60 +693,6 @@ class _SellerStatusBanner extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 24);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 24,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          // Frosted circle — same family as the Home header buttons so
-          // back/search chips read consistently across every hero.
-          child: Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.14),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.25),
-              ),
-            ),
-            child: Icon(icon, color: AppColors.white, size: 18),
           ),
         ),
       ),

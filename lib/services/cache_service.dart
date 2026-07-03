@@ -52,6 +52,11 @@ class CacheService {
         if (key is! String || key.endsWith('__ts') || key.startsWith('pref:')) {
           continue;
         }
+        // Offline-first library content (the Hymnal) must survive so people
+        // can read hymns with no connection — it's static text that rarely
+        // changes, so it's never pruned (an admin edit busts it via
+        // HymnService.invalidate + refetch when back online).
+        if (key.startsWith('hymns_')) continue;
         final tsRaw = box.get('${key}__ts');
         final ts = tsRaw == null ? null : DateTime.tryParse(tsRaw);
         if (ts == null) continue;

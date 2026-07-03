@@ -44,6 +44,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ads/native_ad_card.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
+import '../../widgets/screen_shell.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_sheet.dart';
 import '../../widgets/home/featured_church_events.dart';
@@ -610,7 +611,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                 Icons.auto_stories_outlined,
                 color: AppColors.primaryBlue,
               ),
-              title: const Text('View status'),
+              title: const Text('View story'),
               onTap: () => Navigator.pop(ctx, 'story'),
             ),
             ListTile(
@@ -735,41 +736,24 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
         child: Stack(
           children: [
             _buildScrollableContent(),
+            // Exactly one floating bubble: Advent Chat (with its unread
+            // badge). The old Prayer quick-access bubble that stacked on top
+            // was removed — Prayer is reached from the Stories section link
+            // and the Prayer tab.
             Positioned(
               right: 16,
               bottom: 24,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Prayer quick-access — sits above the Advent Chat
-                  // bubble. Tapping it opens the Prayer tab where the
-                  // user posts their request (the in-prayer-screen FAB
-                  // handles the actual compose).
-                  FloatingActionButton(
-                    heroTag: 'home_prayer_fab',
-                    mini: true,
-                    backgroundColor: context.palette.card,
-                    foregroundColor: AppColors.primaryBlue,
-                    elevation: 4,
-                    tooltip: 'Prayer requests',
-                    onPressed: () => context.pushNamed('prayer'),
-                    child: const Icon(Icons.volunteer_activism_rounded),
-                  ),
-                  const SizedBox(height: 12),
-                  AdventChatBubble(
-                    hasUnread: _hasUnreadChat,
-                    unreadCount: _chatBadgeCount,
-                    onTap: () async {
-                      await context.pushNamed('messages');
-                      // Returning from the inbox refreshes the badge
-                      // — covers the case where the user read every
-                      // unread message inside the chat and the FAB
-                      // would otherwise stay red until the next
-                      // realtime activity event.
-                      if (mounted) await _refreshUnreadBadge();
-                    },
-                  ),
-                ],
+              child: AdventChatBubble(
+                hasUnread: _hasUnreadChat,
+                unreadCount: _chatBadgeCount,
+                onTap: () async {
+                  await context.pushNamed('messages');
+                  // Returning from the inbox refreshes the badge — covers the
+                  // case where the user read every unread message inside the
+                  // chat and the FAB would otherwise stay red until the next
+                  // realtime activity event.
+                  if (mounted) await _refreshUnreadBadge();
+                },
               ),
             ),
           ],
@@ -868,8 +852,8 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                   const SizedBox(height: 16),
                   _buildSectionHeader(
                     'Stories',
-                    'Advent News',
-                    onAction: () => context.pushNamed('news'),
+                    'Prayer',
+                    onAction: () => context.pushNamed('prayer'),
                   ),
                   const SizedBox(height: 10),
                   StoriesRail(
@@ -952,10 +936,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     // row. Replaces the old 240px header + floating welcome card, which
     // repeated the user's name three times and pushed Stories/Devotion down.
     final photoUrl = _profilePhotoUrl();
-    return ClipPath(
-      clipper: _HeaderClipper(),
+    return FlatStatusBar(
       child: Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        color: context.palette.scaffoldBg,
         child: Stack(
           children: [
             Positioned.fill(
@@ -1035,7 +1018,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                           Text(
                             _greeting().toUpperCase(),
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.white.withValues(alpha: 0.65),
+                              color: context.palette.textMuted,
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 1.4,
@@ -1047,7 +1030,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.headlineLarge.copyWith(
-                              color: AppColors.white,
+                              color: context.palette.text,
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
                             ),
@@ -1953,26 +1936,6 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   }
 }
 
-class _HeaderClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 24);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 24,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
 /// Compact countdown to next Friday sundown. Hidden unless the user
 /// has opted in (Settings → Sabbath countdown) AND we're within 7
 /// days of the next sundown (always true at any given moment, but
@@ -2519,16 +2482,15 @@ class _NotificationBell extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: AppColors.white.withValues(alpha: 0.14),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? context.palette.cardMuted
+                      : const Color(0xFFE4E9F2),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.white.withValues(alpha: 0.25),
-                  ),
                 ),
                 alignment: Alignment.center,
-                child: const Icon(
+                child: Icon(
                   Icons.notifications_none_rounded,
-                  color: AppColors.white,
+                  color: context.palette.text,
                   size: 21,
                 ),
               ),
@@ -2544,7 +2506,7 @@ class _NotificationBell extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.red,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.darkNavy, width: 1.5),
+                  border: Border.all(color: context.palette.scaffoldBg, width: 1.5),
                 ),
                 alignment: Alignment.center,
                 child: Text(
@@ -3177,14 +3139,13 @@ class _HeaderIconButton extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.14),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? context.palette.cardMuted
+                  : const Color(0xFFE4E9F2),
               shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.25),
-              ),
             ),
             alignment: Alignment.center,
-            child: Icon(icon, color: AppColors.white, size: 20),
+            child: Icon(icon, color: context.palette.text, size: 20),
           ),
         ),
       ),

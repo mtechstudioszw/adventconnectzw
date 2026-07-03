@@ -417,11 +417,7 @@ class _HymnReaderScreenState extends State<_HymnReaderScreen> {
       appBar: AppBar(
         title: Text(
           h.number != null ? 'Hymn ${h.number}' : 'Hymn',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18),
         ),
         actions: [
           // Reliable A- / A+ text sizing (replaces the old bottom slider,

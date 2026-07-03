@@ -145,12 +145,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
           widget.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 17),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 17),
         ),
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
-        foregroundColor: AppColors.white,
         actions: [
           IconButton(
             tooltip: _night ? 'Day mode' : 'Night mode',

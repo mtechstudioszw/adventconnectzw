@@ -42,11 +42,7 @@ class _UserInsightsScreenState extends State<UserInsightsScreen> {
       appBar: AppBar(
         title: Text(
           'User insights',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 19),
         ),
       ),
       body: SafeArea(

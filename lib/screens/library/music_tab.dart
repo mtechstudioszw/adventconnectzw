@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 
 /// Full-screen Audio Bible — opened from a button inside the Bible tab
@@ -24,11 +25,7 @@ class AudioBibleScreen extends StatelessWidget {
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
         title: Text('Audio Bible',
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 18)),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
+            style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18)),
       ),
       body: const SafeArea(
         top: false,
@@ -91,9 +88,7 @@ class _MusicTabState extends State<MusicTab>
               future: _future,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.primaryBlue));
+                  return const Center(child: BrandSpinner(size: 30));
                 }
                 final items = snap.data ?? const [];
                 if (items.isEmpty) return _empty(context);

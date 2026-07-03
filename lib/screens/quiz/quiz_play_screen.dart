@@ -129,11 +129,7 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
         title: Text(widget.title,
-            style: AppTextStyles.appBarTitle.copyWith(fontSize: 18)),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
+            style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18)),
       ),
       body: SafeArea(
         top: false,

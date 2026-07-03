@@ -51,12 +51,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        elevation: 0,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
-        foregroundColor: AppColors.white,
-        title: Text('Channels', style: AppTextStyles.appBarTitle),
+        title: const Text('Channels'),
       ),
       body: SafeArea(
         top: false,

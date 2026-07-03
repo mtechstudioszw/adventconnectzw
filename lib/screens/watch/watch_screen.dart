@@ -165,12 +165,7 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        elevation: 0,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
-        foregroundColor: AppColors.white,
-        title: Text('Watch', style: AppTextStyles.appBarTitle),
+        title: const Text('Watch'),
         actions: [
           IconButton(
             tooltip: 'Search',

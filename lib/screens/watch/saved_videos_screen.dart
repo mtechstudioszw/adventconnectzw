@@ -52,12 +52,7 @@ class _SavedVideosScreenState extends State<SavedVideosScreen> {
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       appBar: AppBar(
-        elevation: 0,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
-        foregroundColor: AppColors.white,
-        title: Text('Saved', style: AppTextStyles.appBarTitle),
+        title: const Text('Saved'),
       ),
       body: SafeArea(
         top: false,

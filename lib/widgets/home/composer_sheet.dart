@@ -591,7 +591,7 @@ Color _storyTextColor(int bgArgb) {
                                       border: InputBorder.none,
                                       enabledBorder: InputBorder.none,
                                       focusedBorder: InputBorder.none,
-                                      hintText: 'Type a status…',
+                                      hintText: 'Type a story…',
                                       hintStyle: TextStyle(
                                           color: textCol.withValues(alpha: 0.55),
                                           fontSize: 24),

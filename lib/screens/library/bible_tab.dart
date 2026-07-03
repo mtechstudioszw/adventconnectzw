@@ -328,11 +328,7 @@ class _BibleChaptersScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           book.name,
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18),
         ),
       ),
       body: SafeArea(
@@ -453,11 +449,7 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
       appBar: AppBar(
         title: Text(
           '${widget.book.name} ${_chapter + 1}',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18),
         ),
         actions: [
           IconButton(
@@ -883,11 +875,7 @@ class _BibleSearchScreenState extends State<BibleSearchScreen> {
       appBar: AppBar(
         title: Text(
           'Search the Bible',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18),
         ),
       ),
       body: SafeArea(
@@ -1081,11 +1069,7 @@ class _BibleSavedScreenState extends State<BibleSavedScreen>
       appBar: AppBar(
         title: Text(
           'Saved',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18),
         ),
         bottom: TabBar(
           controller: _tabs,

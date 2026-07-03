@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/screen_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
@@ -112,78 +113,11 @@ class _MarketplaceGuidelinesScreenState
   }
 
   Widget _buildHero(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => context.canPop()
-                      ? context.pop()
-                      : context.goNamed('marketplace'),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.white.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: AppColors.white.withValues(alpha: 0.10),
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'MARKETPLACE',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.white.withValues(alpha: 0.55),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.8,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Code of Conduct',
-                  style: AppTextStyles.displayMedium.copyWith(
-                    color: AppColors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Read this carefully. Selling here means agreeing to it.',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.white.withValues(alpha: 0.78),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return const ScreenHero(
+      title: 'Code of Conduct',
+      tagline: 'Marketplace',
+      subtitle: 'Read this carefully. Selling here means agreeing to it.',
+      fallbackRoute: 'marketplace',
     );
   }
 

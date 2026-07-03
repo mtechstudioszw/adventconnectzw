@@ -149,7 +149,7 @@ class ChatSearchDelegate extends SearchDelegate<void> {
           chip('Messages', ChatSearchScope.messages),
           chip('Groups', ChatSearchScope.groups),
           chip('Archived', ChatSearchScope.archived),
-          chip('Status', ChatSearchScope.status),
+          chip('Stories', ChatSearchScope.status),
           chip('Explore', ChatSearchScope.explore),
         ],
       ),
@@ -294,7 +294,7 @@ class ChatSearchDelegate extends SearchDelegate<void> {
           .where((e) => e.value.first.authorName.toLowerCase().contains(q))
           .toList();
     }
-    if (authors.isEmpty) return _empty(context, 'No status updates match.');
+    if (authors.isEmpty) return _empty(context, 'No stories match.');
     return ListView.builder(
       itemCount: authors.length,
       itemBuilder: (_, i) {
@@ -312,8 +312,8 @@ class ChatSearchDelegate extends SearchDelegate<void> {
           ),
           subtitle: Text(
             reel.length == 1
-                ? '1 status update'
-                : '${reel.length} status updates',
+                ? '1 story'
+                : '${reel.length} stories',
             style: AppTextStyles.bodySmall.copyWith(
               color: context.palette.textMuted,
             ),

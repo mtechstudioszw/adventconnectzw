@@ -86,11 +86,7 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
       appBar: AppBar(
         title: Text(
           'Manage Quiz',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 19),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -282,11 +278,7 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
       appBar: AppBar(
         title: Text(
           widget.question == null ? 'New question' : 'Edit question',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18),
         ),
       ),
       body: SafeArea(

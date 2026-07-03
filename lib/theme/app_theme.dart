@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/motion/page_transitions.dart';
 import 'app_colors.dart';
@@ -82,13 +83,26 @@ class AppTheme {
           labelMedium: AppTextStyles.labelMedium,
           labelSmall: AppTextStyles.labelSmall,
         ),
+        // Flat, single-colour header: the app bar shares the scaffold
+        // background so the screen reads as one continuous colour from the
+        // status bar down (WhatsApp-style). scrolledUnderElevation +
+        // surfaceTintColor are pinned so M3 never tints the bar on scroll.
         appBarTheme: AppBarTheme(
-          backgroundColor: AppColors.darkNavy,
-          foregroundColor: AppColors.white,
+          backgroundColor: AppColors.lightGrey,
+          foregroundColor: AppColors.darkNavy,
           elevation: 0,
-          centerTitle: true,
-          titleTextStyle: AppTextStyles.appBarTitle,
-          iconTheme: const IconThemeData(color: AppColors.white),
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          centerTitle: false,
+          titleTextStyle:
+              AppTextStyles.appBarTitle.copyWith(color: AppColors.darkNavy),
+          iconTheme: const IconThemeData(color: AppColors.darkNavy),
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -241,13 +255,24 @@ class AppTheme {
           labelMedium: AppTextStyles.labelMedium.copyWith(color: _darkOnSurface),
           labelSmall: AppTextStyles.labelSmall.copyWith(color: _darkOnSurfaceMuted),
         ),
+        // Flat, single-colour header (see light theme note) — in dark mode the
+        // bar matches the dark scaffold so the screen stays one colour.
         appBarTheme: AppBarTheme(
-          backgroundColor: AppColors.darkNavy,
-          foregroundColor: AppColors.white,
+          backgroundColor: _darkBg,
+          foregroundColor: _darkOnSurface,
           elevation: 0,
-          centerTitle: true,
-          titleTextStyle: AppTextStyles.appBarTitle,
-          iconTheme: const IconThemeData(color: AppColors.white),
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          centerTitle: false,
+          titleTextStyle:
+              AppTextStyles.appBarTitle.copyWith(color: _darkOnSurface),
+          iconTheme: const IconThemeData(color: _darkOnSurface),
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            statusBarBrightness: Brightness.dark,
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(

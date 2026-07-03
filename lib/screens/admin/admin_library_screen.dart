@@ -38,18 +38,14 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
       appBar: AppBar(
         title: Text(
           'Manage Library',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 19),
         ),
         bottom: TabBar(
           controller: _tabs,
-          indicatorColor: AppColors.goldAccent,
+          indicatorColor: AppColors.primaryBlue,
           indicatorWeight: 3,
-          labelColor: AppColors.white,
-          unselectedLabelColor: AppColors.white.withValues(alpha: 0.6),
+          labelColor: AppColors.primaryBlue,
+          unselectedLabelColor: const Color(0xFF7C8698),
           labelStyle: AppTextStyles.labelMedium.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -295,11 +291,7 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
       appBar: AppBar(
         title: Text(
           widget.hymn == null ? 'New hymn' : 'Edit hymn',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18),
         ),
       ),
       body: SafeArea(

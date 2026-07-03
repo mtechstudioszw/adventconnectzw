@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/message_model.dart';
 import '../../models/story_model.dart';
@@ -38,7 +39,7 @@ class ConversationsScreen extends StatefulWidget {
   State<ConversationsScreen> createState() => _ConversationsScreenState();
 }
 
-enum _ConversationsTab { chats, groups, status }
+enum _ConversationsTab { chats, stories }
 
 /// WhatsApp-style quick filter chips on the Chats tab.
 enum _ChatFilter { all, unread, groups }
@@ -417,6 +418,21 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         .toList(),
   );
 
+  /// Merged inbox for the Chats tab: 1:1 chats, the church announcements
+  /// channel AND every group chat, together in one activity-ordered list
+  /// (self-chat + pinned first). Groups no longer live in a separate tab —
+  /// the "Groups" filter chip narrows this list to groups only.
+  List<Conversation> get _inbox {
+    final filtered = _conversations
+        .where(
+          (c) => !c.isIncomingRequestFor(_currentUserId) && !_isArchived(c),
+        )
+        .toList();
+    final selfChats = filtered.where((c) => c.isSelfChat).toList();
+    final others = _pinnedFirst(filtered.where((c) => !c.isSelfChat).toList());
+    return [...selfChats, ...others];
+  }
+
   /// Everything (1:1 or group) the viewer has archived.
   List<Conversation> get _archived => _conversations
       .where((c) => !c.isIncomingRequestFor(_currentUserId) && _isArchived(c))
@@ -771,20 +787,22 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: AppColors.white,
-        // Status tab: the + adds a photo/text STATUS (story composer).
-        // Chats / Groups: the + starts a new chat as before.
-        onPressed: _tab == _ConversationsTab.status
+        // Stories tab: the + adds a photo/text story (story composer).
+        // Chats: the + starts a new chat / group as before.
+        onPressed: _tab == _ConversationsTab.stories
             ? _openStoryComposer
             : _openNewChatSheet,
         child: Icon(
-          _tab == _ConversationsTab.status
+          _tab == _ConversationsTab.stories
               ? Icons.add_a_photo_outlined
               : Icons.edit_square,
         ),
       ),
       body: Column(
         children: [
-          _chatSelect ? _buildChatSelectionBar() : _buildHero(),
+          FlatStatusBar(
+            child: _chatSelect ? _buildChatSelectionBar() : _buildHero(),
+          ),
           _buildTabBar(),
           Expanded(
             child: BrandedRefreshIndicator(
@@ -805,7 +823,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   Widget _buildChatSelectionBar() {
     final count = _selectedChats.length;
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+      color: context.palette.scaffoldBg,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -818,14 +836,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 child: Text(
                   '$count selected',
                   style: AppTextStyles.titleLarge.copyWith(
-                    color: AppColors.white,
+                    color: context.palette.text,
                     fontWeight: FontWeight.w700,
                     fontSize: 18,
                   ),
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline, color: AppColors.white),
+                icon: Icon(Icons.delete_outline, color: context.palette.text),
                 tooltip: 'Delete',
                 onPressed: count == 0 ? null : _deleteSelectedChats,
               ),
@@ -841,7 +859,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   /// list starts ~90px higher.
   Widget _buildHero() {
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+      color: context.palette.scaffoldBg,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -857,7 +875,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               Text(
                 'Advent Chat',
                 style: AppTextStyles.titleLarge.copyWith(
-                  color: AppColors.white,
+                  color: context.palette.text,
                   fontWeight: FontWeight.w700,
                   fontSize: 20,
                 ),
@@ -866,7 +884,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               _CircleIconButton(icon: Icons.search, onTap: _openChatSearch),
               const SizedBox(width: 6),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: AppColors.white),
+                icon: Icon(Icons.more_vert, color: context.palette.text),
                 color: context.palette.card,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -913,12 +931,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
-  /// WhatsApp-style tabs: they live ON the navy header (same gradient —
-  /// no floating white card), evenly distributed, with a white underline
-  /// under the active tab. Content below flows edge-to-edge.
+  /// WhatsApp-style tabs on the flat light header (same background as the
+  /// scaffold — one continuous colour), evenly distributed, with a blue
+  /// underline under the active tab. Two tabs only: Chats | Stories.
   Widget _buildTabBar() {
     return Container(
-      decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+      color: context.palette.scaffoldBg,
       child: SizedBox(
         height: 42,
         child: Row(
@@ -932,19 +950,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               },
             ),
             _TabPill(
-              label: 'Groups',
-              selected: _tab == _ConversationsTab.groups,
+              label: 'Stories',
+              selected: _tab == _ConversationsTab.stories,
               onTap: () {
                 if (_showRequests) setState(() => _showRequests = false);
-                _selectTab(_ConversationsTab.groups);
-              },
-            ),
-            _TabPill(
-              label: 'Status',
-              selected: _tab == _ConversationsTab.status,
-              onTap: () {
-                if (_showRequests) setState(() => _showRequests = false);
-                _selectTab(_ConversationsTab.status);
+                _selectTab(_ConversationsTab.stories);
               },
             ),
           ],
@@ -973,7 +983,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return PageView(
       controller: _pageController,
       onPageChanged: (i) => setState(() => _tab = _ConversationsTab.values[i]),
-      children: [_buildChatsTab(), _buildGroupsTab(), _buildStatusTab()],
+      children: [_buildChatsTab(), _buildStoriesTab()],
     );
   }
 
@@ -1055,7 +1065,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   // ----- Chats tab: requests banner + 1:1 conversation list -----------
   Widget _buildChatsTab() {
-    final all = _chats;
+    final all = _inbox;
     final requestCount = _requests.length + _friendRequests.length;
     if (all.isEmpty && requestCount == 0 && _archived.isEmpty) {
       return _buildEmptyState(
@@ -1189,22 +1199,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
-  // ----- Groups tab ---------------------------------------------------
-  Widget _buildGroupsTab() {
-    final list = _groups;
-    if (list.isEmpty) {
-      return _buildEmptyState(
-        title: 'No groups yet',
-        body:
-            'Create a group from the pencil button to chat with several '
-            'people at once.',
-      );
-    }
-    return _conversationListView(list);
-  }
-
-  // ----- Status tab: the stories rail (moved off the chat list) -------
-  Widget _buildStatusTab() {
+  // ----- Stories tab: the stories rail (moved off the chat list) -------
+  Widget _buildStoriesTab() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 8, bottom: 32),
@@ -1224,7 +1220,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
             child: Text(
-              'No status updates yet. Tap the + to share one — it disappears '
+              'No stories yet. Tap the + to share one — it disappears '
               'after 24 hours.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
@@ -1607,10 +1603,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     color: AppColors.primaryBlue.withValues(alpha: 0.10),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    _tab == _ConversationsTab.groups
-                        ? Icons.groups_outlined
-                        : Icons.forum_outlined,
+                  child: const Icon(
+                    Icons.forum_outlined,
                     color: AppColors.primaryBlue,
                     size: 40,
                   ),
@@ -1669,8 +1663,8 @@ class _TabPill extends StatelessWidget {
                 duration: AppMotion.quick,
                 style: AppTextStyles.titleMedium.copyWith(
                   color: selected
-                      ? AppColors.white
-                      : AppColors.white.withValues(alpha: 0.60),
+                      ? AppColors.primaryBlue
+                      : const Color(0xFF7C8698),
                   fontSize: 13.5,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   letterSpacing: 0.2,
@@ -1683,9 +1677,9 @@ class _TabPill extends StatelessWidget {
                 curve: AppMotion.easeOut,
                 height: 3,
                 width: selected ? 32 : 0,
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: const BorderRadius.vertical(
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryBlue,
+                  borderRadius: BorderRadius.vertical(
                     top: Radius.circular(3),
                   ),
                 ),
@@ -2555,13 +2549,12 @@ class _CircleIconButton extends StatelessWidget {
             height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.14),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? context.palette.cardMuted
+                  : const Color(0xFFE4E9F2),
               shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.25),
-              ),
             ),
-            child: Icon(icon, color: AppColors.white, size: 18),
+            child: Icon(icon, color: context.palette.text, size: 18),
           ),
         ),
       ),

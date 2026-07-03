@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
-import '../../theme/app_text_styles.dart';
 import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/motion/hide_on_scroll.dart';
 import 'main_bottom_nav.dart';
@@ -41,12 +39,11 @@ class _MainScaffoldState extends State<MainScaffold> with NavVisibilityMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
+      // Flat, single-colour header — matches the scaffold background so the
+      // screen reads as one continuous colour (styling comes from the themed
+      // AppBarTheme; the back button is auto-added on pushed routes).
       appBar: AppBar(
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        ),
-        title: Text(widget.title, style: AppTextStyles.appBarTitle),
-        elevation: 0,
+        title: Text(widget.title),
       ),
       // Scroll direction drives nav visibility (YouTube-style hide).
       body: NotificationListener<UserScrollNotification>(

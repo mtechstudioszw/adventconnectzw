@@ -62,20 +62,16 @@ class _LibraryScreenState extends State<LibraryScreen>
       appBar: AppBar(
         title: Text(
           'Library',
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 19),
-        ),
-        foregroundColor: AppColors.white,
-        flexibleSpace: const DecoratedBox(
-          decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 19),
         ),
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          indicatorColor: AppColors.goldAccent,
+          indicatorColor: AppColors.primaryBlue,
           indicatorWeight: 3,
-          labelColor: AppColors.white,
-          unselectedLabelColor: AppColors.white.withValues(alpha: 0.6),
+          labelColor: AppColors.primaryBlue,
+          unselectedLabelColor: const Color(0xFF7C8698),
           labelStyle: AppTextStyles.labelMedium.copyWith(
             fontWeight: FontWeight.w700,
           ),

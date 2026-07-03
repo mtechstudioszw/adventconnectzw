@@ -29,7 +29,10 @@ class _SplashScreenState extends State<SplashScreen>
   // user reported the splash dragged, so trimmed to ~1100ms (the
   // entrance fade finishes at 1800ms but the user can already see
   // logo+wordmark by ~900ms because of the staggered intervals).
-  static const Duration _minLoaderDuration = Duration(milliseconds: 700);
+  // Minimum brand dwell. 450ms is enough for the logo + ring entrance to
+  // register (was 700ms) — on fast starts this is pure saved time, on
+  // slow starts the Supabase/cache waits dominate anyway.
+  static const Duration _minLoaderDuration = Duration(milliseconds: 450);
 
   late final AnimationController _entrance;
   late final AnimationController _progress;

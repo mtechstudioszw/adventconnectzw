@@ -494,15 +494,24 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const CircularProgressIndicator(
-                        color: AppColors.white,
-                        strokeWidth: 2.5,
-                      ),
+                      // Branded comet spinner — unmistakably "the video
+                      // is being fetched from YouTube", so the ~2s iframe
+                      // boot never reads as the app freezing.
+                      const BrandSpinner(size: 38, color: AppColors.white),
                       const SizedBox(height: 12),
                       Text(
-                        'Loading…',
+                        'Loading video…',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Streaming from YouTube',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.85),
+                          color: AppColors.white.withValues(alpha: 0.65),
+                          fontSize: 11,
                         ),
                       ),
                     ],

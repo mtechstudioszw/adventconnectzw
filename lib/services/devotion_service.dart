@@ -18,15 +18,19 @@ class DevotionService {
   static String _today() =>
       DateTime.now().toUtc().toIso8601String().substring(0, 10);
 
-  /// Today's devotion from the local cache, read synchronously (no await)
-  /// so Home can paint it on the first frame. Returns null when nothing is
-  /// cached for today's date — so we never show yesterday's devotion.
+  /// The devotion from the local cache, read synchronously (no await)
+  /// so Home can paint it on the first frame.
+  ///
+  /// Deliberately returns the LAST cached devotion even when it's from a
+  /// previous day: the old date check made the card vanish every morning
+  /// on slow networks (nothing cached "for today" until the fetch
+  /// succeeded). A one-day-stale devotion is better than a hole at the
+  /// top of Home — fetchToday() replaces it the moment the network lands.
   static Devotion? cachedToday() {
     final raw = CacheService.readStringStale(_cacheKey);
     if (raw == null || raw.isEmpty) return null;
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>;
-      if (map['date'] != _today()) return null;
       return Devotion.fromJson(map['devotion'] as Map<String, dynamic>);
     } catch (_) {
       return null;

@@ -773,14 +773,18 @@ class _CircleIconButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          customBorder: const CircleBorder(),
+          // Frosted circle — same family as the Home header buttons so
+          // back/search chips read consistently across every hero.
           child: Container(
-            padding: const EdgeInsets.all(10),
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
+              color: AppColors.white.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.10),
+                color: AppColors.white.withValues(alpha: 0.25),
               ),
             ),
             child: Icon(icon, color: AppColors.white, size: 18),
@@ -818,6 +822,7 @@ class _ShopJobsSegment extends StatelessWidget {
                   ? null
                   : () => context.goNamed('marketplace'),
             ),
+            const SizedBox(width: 6),
             _SegmentButton(
               label: 'Jobs',
               icon: Icons.work_outline,
@@ -848,8 +853,8 @@ class _SegmentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressEffect(
-      child: Expanded(
+    return Expanded(
+      child: PressEffect(
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -857,7 +862,7 @@ class _SegmentButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(vertical: 12),
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 gradient: selected ? AppColors.primaryGradient : null,

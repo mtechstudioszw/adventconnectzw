@@ -134,7 +134,11 @@ class ChurchCard extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '${_formatCount(church.membersCount)} members',
+                                // Honest label: this is the exact count of
+                                // app users following this church — NOT
+                                // congregation membership, which the app
+                                // has no data for.
+                                '${_formatCount(church.membersCount)} on Advent',
                                 style: AppTextStyles.labelMedium.copyWith(
                                   color: AppColors.primaryBlue,
                                   fontWeight: FontWeight.w600,

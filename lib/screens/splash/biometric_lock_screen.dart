@@ -109,12 +109,15 @@ class _BiometricLockScreenState extends State<BiometricLockScreen>
     );
     if (!mounted) return;
     if (ok) {
-      // After a successful unlock, route to home (or profile setup if
-      // they never finished onboarding). Mirrors the splash logic so
-      // both entry points end up in the same place.
-      final completed = await AuthService.hasCompletedProfileSetup();
-      if (!mounted) return;
-      // Celebrate BEFORE navigating — gold ring draws in, fingerprint
+      // Route to home (or profile setup if they never finished
+      // onboarding). The profile-setup check is a NETWORK call — run it
+      // in PARALLEL with the success choreography instead of before it,
+      // so unlock takes ~600ms, not network + 600ms. Timeboxed and
+      // defaulting to home so a slow connection never stalls the door.
+      final completedFuture = AuthService.hasCompletedProfileSetup()
+          .timeout(const Duration(seconds: 2), onTimeout: () => true)
+          .catchError((_) => true);
+      // Celebrate while the check runs — gold ring draws in, fingerprint
       // becomes a check — so unlocking feels like a moment, not a cut.
       _setStage(_LockStage.success);
       _pulse.stop();
@@ -124,6 +127,7 @@ class _BiometricLockScreenState extends State<BiometricLockScreen>
         // Let the check breathe for a beat.
         await Future<void>.delayed(const Duration(milliseconds: 140));
       }
+      final completed = await completedFuture;
       if (!mounted) return;
       if (!completed) {
         context.goNamed('profile_setup');

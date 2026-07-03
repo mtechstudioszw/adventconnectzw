@@ -20,6 +20,7 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/verified_tick.dart';
 import 'chat_search_delegate.dart';
+import '../../theme/app_motion.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
 import '../../widgets/motion/pressable.dart';
@@ -912,22 +913,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
+  /// WhatsApp-style tabs: they live ON the navy header (same gradient —
+  /// no floating white card), evenly distributed, with a white underline
+  /// under the active tab. Content below flows edge-to-edge.
   Widget _buildTabBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: Container(
-        height: 44,
-        decoration: BoxDecoration(
-          color: context.palette.card,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
+    return Container(
+      decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+      child: SizedBox(
+        height: 42,
         child: Row(
           children: [
             _TabPill(
@@ -1322,7 +1315,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       builder: (context, _, _) {
         return ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          // Slimmer gutters so the inbox flows edge-to-edge like
+          // WhatsApp instead of sitting inside a boxed column.
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 32),
           itemCount: list.length + (banner == null ? 0 : 1),
           separatorBuilder: (context, index) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
@@ -1659,41 +1654,43 @@ class _TabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressEffect(
-      child: Expanded(
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              margin: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                gradient: selected ? AppColors.primaryGradient : null,
-                color: selected ? null : Colors.transparent,
-                borderRadius: BorderRadius.circular(11),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ]
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    // Lives on the navy header: white text, animated white underline —
+    // WhatsApp's tab language, evenly distributed by the Expanded.
+    return Expanded(
+      child: PressEffect(
+        pressedScale: 0.95,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AnimatedDefaultTextStyle(
+                duration: AppMotion.quick,
                 style: AppTextStyles.titleMedium.copyWith(
-                  color: selected ? AppColors.white : context.palette.text,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
+                  color: selected
+                      ? AppColors.white
+                      : AppColors.white.withValues(alpha: 0.60),
+                  fontSize: 13.5,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+                child: Text(label, maxLines: 1),
+              ),
+              const SizedBox(height: 7),
+              AnimatedContainer(
+                duration: AppMotion.quick,
+                curve: AppMotion.easeOut,
+                height: 3,
+                width: selected ? 32 : 0,
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(3),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -2550,14 +2547,18 @@ class _CircleIconButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          customBorder: const CircleBorder(),
+          // Frosted circle — same family as the Home header buttons so
+          // back/search chips read consistently across every hero.
           child: Container(
-            padding: const EdgeInsets.all(10),
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
+              color: AppColors.white.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.10),
+                color: AppColors.white.withValues(alpha: 0.25),
               ),
             ),
             child: Icon(icon, color: AppColors.white, size: 18),

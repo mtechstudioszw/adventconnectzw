@@ -12,6 +12,7 @@ import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../onboarding/onboarding_screen.dart';
+import '../onboarding/widgets/film_scenes.dart' show GoldRingPainter;
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -392,6 +393,14 @@ class _SplashScreenState extends State<SplashScreen>
         // scale-up + fade-out during the first-launch hand-off.
         final opacity = _logoOpacity.value * (1 - _blossomLogoFade.value);
         final scale = _logoScale.value * _blossomLogoScale.value;
+        // The gold ring draws itself around the emblem as it lands —
+        // the same ring motif that runs through the intro film, the
+        // unlock screen and the Sabbath timer.
+        final ringSweep = const Interval(
+          0.30,
+          1.0,
+          curve: Curves.easeInOutCubic,
+        ).transform(_entrance.value);
         return Opacity(
           opacity: opacity,
           child: Transform.scale(
@@ -400,36 +409,49 @@ class _SplashScreenState extends State<SplashScreen>
             // image as the launcher icon so the splash → app handoff
             // feels continuous. The disc / ring / glow framing keeps
             // the premium feel on the white splash canvas.
-            child: Container(
-              width: 116,
-              height: 116,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: AppColors.primaryGradient,
-                border: Border.all(
-                  color: AppColors.goldAccent,
-                  width: 2.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.goldAccent.withValues(alpha: 0.30),
-                    blurRadius: 28,
-                    spreadRadius: 1,
+            child: SizedBox(
+              width: 148,
+              height: 148,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CustomPaint(
+                    size: const Size(148, 148),
+                    painter: GoldRingPainter(
+                      sweep: ringSweep,
+                      strokeWidth: 3,
+                    ),
                   ),
-                  BoxShadow(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.35),
-                    blurRadius: 24,
-                    offset: const Offset(0, 10),
+                  Container(
+                    width: 116,
+                    height: 116,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: AppColors.primaryGradient,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.goldAccent.withValues(alpha: 0.30),
+                          blurRadius: 28,
+                          spreadRadius: 1,
+                        ),
+                        BoxShadow(
+                          color:
+                              AppColors.primaryBlue.withValues(alpha: 0.35),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Image.asset(
+                        'assets/icon/logo.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
                 ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Image.asset(
-                  'assets/icon/logo.png',
-                  fit: BoxFit.contain,
-                ),
               ),
             ),
           ),

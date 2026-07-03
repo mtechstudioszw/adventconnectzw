@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/notification_preferences_service.dart';
+import '../../services/push_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/theme_service.dart';
@@ -550,6 +551,16 @@ class _SettingsScreenState extends State<SettingsScreen>
                           value: _categoryPrefs.news,
                           onChanged: (v) => _setCategory(
                               _categoryPrefs.copyWith(news: v)),
+                        ),
+                        const _Divider(),
+                        _ToggleRow(
+                          icon: Icons.play_circle_outline,
+                          label: 'Watch — new videos & live',
+                          value: _categoryPrefs.watch,
+                          onChanged: (v) {
+                            _setCategory(_categoryPrefs.copyWith(watch: v));
+                            PushService.setWatchPushesEnabled(v);
+                          },
                         ),
                         const _Divider(),
                         _NavRow(

@@ -751,6 +751,12 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _typingThrottle;
   bool _otherTyping = false;
   DateTime _lastTypingBroadcast = DateTime.fromMillisecondsSinceEpoch(0);
+  // "recording audio…" presence (WhatsApp parity): set by 'recording'
+  // pings on the same typing channel, broadcast every 2s while the mic
+  // is held on the other side.
+  bool _otherRecording = false;
+  Timer? _recordingExpiry;
+  Timer? _recordingBroadcast;
 
   // Presence (other-user online / last-seen) state.
   DateTime? _otherLastSeen;
@@ -1310,6 +1316,8 @@ class _ChatScreenState extends State<ChatScreen>
     _highlightTimer?.cancel();
     _typingExpiry?.cancel();
     _typingThrottle?.cancel();
+    _recordingExpiry?.cancel();
+    _recordingBroadcast?.cancel();
     _recordingTimer?.cancel();
     _lastSeenRefreshTimer?.cancel();
     _tickReconcileTimer?.cancel();
@@ -1450,8 +1458,16 @@ class _ChatScreenState extends State<ChatScreen>
       );
       _typingChannel = MessagingService.subscribeTyping(
         conversationId: widget.conversationId,
-        onTyping: (_) {
+        onTyping: (_, kind) {
           if (!mounted) return;
+          if (kind == 'recording') {
+            setState(() => _otherRecording = true);
+            _recordingExpiry?.cancel();
+            _recordingExpiry = Timer(const Duration(seconds: 4), () {
+              if (mounted) setState(() => _otherRecording = false);
+            });
+            return;
+          }
           setState(() => _otherTyping = true);
           // Auto-clear if no follow-up ping arrives — sender is debouncing
           // at 2s so 4s of silence means they stopped.
@@ -1526,6 +1542,16 @@ class _ChatScreenState extends State<ChatScreen>
         _recordingElapsed = Duration.zero;
         _recordWarned = false;
       });
+      // Tell the other side we're recording (their header shows
+      // "recording audio…"), refreshed every 2s while the mic runs.
+      final ch = _typingChannel;
+      if (ch != null) {
+        MessagingService.broadcastTyping(ch, kind: 'recording');
+        _recordingBroadcast?.cancel();
+        _recordingBroadcast = Timer.periodic(const Duration(seconds: 2), (_) {
+          MessagingService.broadcastTyping(ch, kind: 'recording');
+        });
+      }
       _recordingTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
         if (!mounted || _recordingStartedAt == null) return;
         final elapsed = DateTime.now().difference(_recordingStartedAt!);
@@ -1552,6 +1578,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _cancelRecording() async {
     _recordingTimer?.cancel();
+    _recordingBroadcast?.cancel();
     try {
       await _recorder.stop();
     } catch (_) {
@@ -1577,6 +1604,7 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _stopAndSendRecording() async {
     if (!_recording) return;
     _recordingTimer?.cancel();
+    _recordingBroadcast?.cancel();
     final duration = _recordingElapsed.inSeconds;
     String? path;
     try {
@@ -3697,7 +3725,19 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildPresenceSubtitle() {
-    // Typing always wins — it's the most "live" signal.
+    // Live activity wins over presence; recording wins over typing.
+    if (_otherRecording) {
+      return Text(
+        'recording audio…',
+        key: const ValueKey('recording'),
+        style: AppTextStyles.labelSmall.copyWith(
+          color: AppColors.white,
+          fontSize: 11,
+          fontStyle: FontStyle.italic,
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
     if (_otherTyping) {
       return Text(
         'typing…',
@@ -4264,6 +4304,19 @@ class _VoiceBubble extends StatelessWidget {
                                         color: message.isVoicePlayed
                                             ? AppColors.goldAccent
                                             : muted,
+                                      ),
+                                    ] else if (!message.isVoicePlayed) ...[
+                                      // Unheard RECEIVED note: gold "new"
+                                      // dot until you play it (WhatsApp's
+                                      // green-dot parity).
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        width: 7,
+                                        height: 7,
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.goldAccent,
+                                          shape: BoxShape.circle,
+                                        ),
                                       ),
                                     ],
                                   ],
@@ -5257,14 +5310,18 @@ class _CircleIconButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          customBorder: const CircleBorder(),
+          // Frosted circle — same family as the Home header buttons so
+          // back/search chips read consistently across every hero.
           child: Container(
-            padding: const EdgeInsets.all(10),
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
+              color: AppColors.white.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.10),
+                color: AppColors.white.withValues(alpha: 0.25),
               ),
             ),
             child: Icon(icon, color: AppColors.white, size: 18),

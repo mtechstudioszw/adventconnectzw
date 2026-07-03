@@ -370,15 +370,14 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
                 saving: _saving,
                 error: _error,
                 onBack: () => _go(_index - 1),
-                // Home church is MANDATORY — Continue is disabled on the
-                // church step (index 2) until one is picked, and that step
-                // has no Skip. It anchors the user to a congregation + their
-                // auto church group (patch_065). Every other step (profile,
-                // personalization, permissions) stays passable.
+                // Church step is now SKIPPABLE (user decision 2026-07-02;
+                // it was previously mandatory per patch_065). Picking one
+                // still auto-follows it; skipping just means no home
+                // church until they set it later from a church page.
                 onNext: (_index == 2 && _homeChurchId == null)
                     ? null
                     : _saveAndNext,
-                onSkip: _index == 2 ? null : () => _go(_index + 1),
+                onSkip: () => _go(_index + 1),
               ),
           ],
         ),
@@ -1741,7 +1740,7 @@ class _SuccessPageState extends State<_SuccessPage>
     )..forward();
     _exit = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 560),
+      duration: const Duration(milliseconds: 380),
     );
   }
 
@@ -1757,8 +1756,13 @@ class _SuccessPageState extends State<_SuccessPage>
     if (_leaving) return;
     setState(() => _leaving = true);
     HapticFeedback.mediumImpact();
-    // Navigate straight into the app — the long "dive-in" zoom felt broken,
-    // so we hand off immediately (no exit animation).
+    // Quick "dive into the app": the disc swells past the screen edges
+    // (~380ms — the old 560ms version felt broken because it dragged)
+    // and Home's staggered entrance picks up on the other side.
+    if (AppMotion.enabled(context)) {
+      await _exit.forward();
+    }
+    if (!mounted) return;
     widget.onEnter();
   }
 

@@ -504,7 +504,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.palette.divider),
       ),
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(5),
       child: Row(
         children: [
           _TabPill(
@@ -512,16 +512,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             selected: _tabIndex == 0,
             onTap: () => setState(() => _tabIndex = 0),
           ),
+          const SizedBox(width: 5),
           _TabPill(
             label: 'About',
             selected: _tabIndex == 1,
             onTap: () => setState(() => _tabIndex = 1),
           ),
+          const SizedBox(width: 5),
           _TabPill(
             label: 'Photos',
             selected: _tabIndex == 2,
             onTap: () => setState(() => _tabIndex = 2),
           ),
+          const SizedBox(width: 5),
           _TabPill(
             label: 'Churches',
             selected: _tabIndex == 3,
@@ -1671,17 +1674,21 @@ class _CircleIconButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          customBorder: const CircleBorder(),
+          // Frosted circle — same family as the Home header buttons so
+          // back/search chips read consistently across every hero.
           child: Container(
-            padding: const EdgeInsets.all(10),
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
+              color: AppColors.white.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.10),
+                color: AppColors.white.withValues(alpha: 0.25),
               ),
             ),
-            child: Icon(icon, color: AppColors.white, size: 22),
+            child: Icon(icon, color: AppColors.white, size: 20),
           ),
         ),
       ),
@@ -1763,8 +1770,8 @@ class _TabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressEffect(
-      child: Expanded(
+    return Expanded(
+      child: PressEffect(
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -1772,18 +1779,22 @@ class _TabPill extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(vertical: 11),
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 gradient: selected ? AppColors.primaryGradient : null,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: selected ? AppColors.white : context.palette.text,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12.5,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: selected ? AppColors.white : context.palette.text,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
                 ),
               ),
             ),

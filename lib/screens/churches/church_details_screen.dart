@@ -368,7 +368,9 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                '${church.membersCount} members',
+                // Exact follower count, honestly labelled — the app has
+                // no data on real congregation membership.
+                '${church.membersCount} on Advent',
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: AppColors.primaryBlue,
                   fontWeight: FontWeight.w600,

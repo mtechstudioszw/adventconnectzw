@@ -1495,9 +1495,12 @@ class MessagingService {
   ///
   /// Uses Supabase Realtime Broadcast (not DB-backed) — typing state is
   /// ephemeral and doesn't need to survive a refresh.
+  /// [onTyping] receives the sender id plus the activity kind:
+  /// 'typing' (default) or 'recording' (holding the mic — WhatsApp's
+  /// "recording audio…" presence line).
   static RealtimeChannel subscribeTyping({
     required String conversationId,
-    required void Function(String typingUserId) onTyping,
+    required void Function(String typingUserId, String kind) onTyping,
   }) {
     final me = _client.auth.currentUser?.id;
     final channel = _client.channel(_typingChannelName(conversationId));
@@ -1507,23 +1510,31 @@ class MessagingService {
           callback: (payload) {
             final from = (payload['user_id'] ?? '').toString();
             if (from.isEmpty || from == me) return;
-            onTyping(from);
+            final kind = (payload['kind'] ?? 'typing').toString();
+            onTyping(from, kind);
           },
         )
         .subscribe();
     return channel;
   }
 
-  /// Send a "typing" ping on the conversation's broadcast channel.
-  /// The caller should debounce — emitting once every 1.5-2 seconds
-  /// while the input has text is plenty.
-  static Future<void> broadcastTyping(RealtimeChannel channel) async {
+  /// Send a "typing" (or "recording") ping on the conversation's
+  /// broadcast channel. The caller should debounce — emitting once
+  /// every 1.5-2 seconds while active is plenty.
+  static Future<void> broadcastTyping(
+    RealtimeChannel channel, {
+    String kind = 'typing',
+  }) async {
     final me = _client.auth.currentUser?.id;
     if (me == null) return;
     try {
       await channel.sendBroadcastMessage(
         event: 'typing',
-        payload: {'user_id': me, 'ts': DateTime.now().millisecondsSinceEpoch},
+        payload: {
+          'user_id': me,
+          'kind': kind,
+          'ts': DateTime.now().millisecondsSinceEpoch,
+        },
       );
     } catch (_) {
       // No-op: typing pings are decorative.

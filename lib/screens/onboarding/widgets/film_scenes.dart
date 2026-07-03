@@ -38,15 +38,24 @@ double pulse(double t, double a, double b) {
 class FilmTimeline {
   FilmTimeline._();
 
-  static const s0 = (0.000, 0.145); // brand open
-  static const s1 = (0.125, 0.330); // churches
-  static const s2 = (0.310, 0.510); // prayer
-  static const s3 = (0.490, 0.690); // chat + marketplace
-  static const s4 = (0.670, 0.860); // watch (video + live)
-  static const s5 = (0.835, 1.000); // sabbath finale + CTA
+  static const s0 = (0.000, 0.125); // brand open
+  static const s1 = (0.108, 0.270); // churches
+  static const s2 = (0.253, 0.415); // prayer
+  static const s3 = (0.398, 0.545); // chat
+  static const s4 = (0.528, 0.690); // marketplace + jobs
+  static const s5 = (0.673, 0.830); // watch (video + live)
+  static const s6 = (0.812, 1.000); // sabbath finale + CTA
 
   /// Tap-to-skip-ahead targets.
-  static const boundaries = <double>[0.145, 0.330, 0.510, 0.690, 0.860, 1.0];
+  static const boundaries = <double>[
+    0.125,
+    0.270,
+    0.415,
+    0.545,
+    0.690,
+    0.830,
+    1.0,
+  ];
 
   /// Which progress segment (0..4) the value falls in — for the top bars.
   static int sceneIndex(double t) {
@@ -310,9 +319,9 @@ class SceneBrandOpen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (a, b) = FilmTimeline.s0;
-    final logoIn = seg(t, a, a + 0.045, Curves.easeOutCubic);
-    final ringSweep = seg(t, a + 0.035, a + 0.095, Curves.easeInOutCubic);
-    final lineIn = seg(t, a + 0.065, a + 0.110, Curves.easeOutCubic);
+    final logoIn = seg(t, a, a + 0.04, Curves.easeOutCubic);
+    final ringSweep = seg(t, a + 0.03, a + 0.082, Curves.easeInOutCubic);
+    final lineIn = seg(t, a + 0.055, a + 0.095, Curves.easeOutCubic);
     final exit = seg(t, b - 0.022, b, Curves.easeInCubic);
 
     // On exit the whole composition glides up and shrinks; the ring
@@ -390,11 +399,11 @@ class SceneChurch extends StatelessWidget {
   Widget build(BuildContext context) {
     final (a, b) = FilmTimeline.s1;
     final cardIn = seg(t, a, a + 0.05, Curves.easeOutBack);
-    final barsIn = seg(t, a + 0.03, a + 0.09, Curves.easeOutCubic);
-    final pinDrop = seg(t, a + 0.06, a + 0.10, Curves.bounceOut);
-    final tickPop = seg(t, a + 0.045, a + 0.075, Curves.easeOutBack);
-    final followFill = seg(t, a + 0.10, a + 0.14, Curves.easeInOutCubic);
-    final countT = seg(t, a + 0.10, a + 0.175);
+    final barsIn = seg(t, a + 0.025, a + 0.075, Curves.easeOutCubic);
+    final pinDrop = seg(t, a + 0.05, a + 0.085, Curves.bounceOut);
+    final tickPop = seg(t, a + 0.04, a + 0.065, Curves.easeOutBack);
+    final followFill = seg(t, a + 0.08, a + 0.115, Curves.easeInOutCubic);
+    final countT = seg(t, a + 0.08, a + 0.14);
     final lineIn = seg(t, a + 0.05, a + 0.10, Curves.easeOutCubic);
     final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
 
@@ -558,11 +567,11 @@ class ScenePrayer extends StatelessWidget {
     final (a, b) = FilmTimeline.s2;
     final cardIn = seg(t, a, a + 0.05, Curves.easeOutBack);
     final barsIn = seg(t, a + 0.03, a + 0.09, Curves.easeOutCubic);
-    final countT = seg(t, a + 0.06, a + 0.165);
+    final countT = seg(t, a + 0.05, a + 0.13);
     // Linear 0→1 flight progress for each "+1" chip; opacity is a sine
     // of the progress so they rise steadily while fading in-then-out.
-    final chip1 = seg(t, a + 0.065, a + 0.12);
-    final chip2 = seg(t, a + 0.11, a + 0.165);
+    final chip1 = seg(t, a + 0.055, a + 0.095);
+    final chip2 = seg(t, a + 0.09, a + 0.13);
     final lineIn = seg(t, a + 0.05, a + 0.10, Curves.easeOutCubic);
     final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
 
@@ -571,7 +580,7 @@ class ScenePrayer extends StatelessWidget {
     final beat =
         1 +
         0.10 *
-            pulse(t, a + 0.06, a + 0.165) *
+            pulse(t, a + 0.05, a + 0.13) *
             (0.5 + 0.5 * math.sin(countT * math.pi * 6));
 
     if (cardIn == 0) return const SizedBox.shrink();
@@ -710,17 +719,16 @@ class SceneChatMarket extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (a, b) = FilmTimeline.s3;
-    final stageIn = seg(t, a, a + 0.04, Curves.easeOutCubic);
+    final stageIn = seg(t, a, a + 0.035, Curves.easeOutCubic);
     final typing = pulse(
       t,
-      a + 0.01,
-      a + 0.065,
+      a + 0.008,
+      a + 0.055,
     ); // typing bubble lives then goes
-    final bubble1 = seg(t, a + 0.055, a + 0.085, Curves.easeOutBack);
-    final ticksBlue = seg(t, a + 0.09, a + 0.11);
-    final bubble2 = seg(t, a + 0.10, a + 0.13, Curves.easeOutBack);
-    final productIn = seg(t, a + 0.125, a + 0.16, Curves.easeOutBack);
-    final lineIn = seg(t, a + 0.045, a + 0.09, Curves.easeOutCubic);
+    final bubble1 = seg(t, a + 0.047, a + 0.072, Curves.easeOutBack);
+    final ticksBlue = seg(t, a + 0.078, a + 0.095);
+    final bubble2 = seg(t, a + 0.088, a + 0.112, Curves.easeOutBack);
+    final lineIn = seg(t, a + 0.038, a + 0.078, Curves.easeOutCubic);
     final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
 
     if (stageIn == 0) return const SizedBox.shrink();
@@ -738,7 +746,9 @@ class SceneChatMarket extends StatelessWidget {
             children: [
               SizedBox(
                 width: 300,
-                height: 150,
+                // Two bubbles only — sized so nothing overflows on
+                // small screens (the old 150 stage clipped by ~10px).
+                height: 104,
                 child: Column(
                   children: [
                     // Incoming: typing dots morph into the message bubble.
@@ -841,73 +851,12 @@ class SceneChatMarket extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // Mini product card glides through below the chat.
-                    if (productIn > 0)
-                      Transform.translate(
-                        offset: Offset(120 * (1 - productIn), 0),
-                        child: Opacity(
-                          opacity: productIn.clamp(0.0, 1.0),
-                          child: _MiniSurface(
-                            width: 230,
-                            padding: const EdgeInsets.all(10),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    gradient: AppColors.primaryGradient,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(
-                                    Icons.shopping_bag_outlined,
-                                    color: AppColors.white,
-                                    size: 18,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _TextBar(
-                                        grow: productIn,
-                                        width: 90,
-                                        height: 8,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'USD 15.00',
-                                        style: AppTextStyles.labelSmall
-                                            .copyWith(
-                                              color: AppColors.darkNavy,
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 11,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(
-                                  Icons.favorite,
-                                  size: 16,
-                                  color: AppColors.red.withValues(
-                                    alpha: seg(productIn, 0.6, 1.0),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
               const SizedBox(height: 26),
               SceneLine(
-                text: 'Chat, buy & sell\nwithin the family.',
+                text: 'Chat freely with\nyour church family.',
                 enter: lineIn,
                 exit: exit,
               ),
@@ -945,7 +894,169 @@ class _ChatBubble extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Scene 4 — watch (sermons, music & live services)
+// Scene 4 — marketplace + jobs
+// ---------------------------------------------------------------------------
+
+class SceneMarketJobs extends StatelessWidget {
+  const SceneMarketJobs({super.key, required this.t});
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    final (a, b) = FilmTimeline.s4;
+    final productIn = seg(t, a, a + 0.045, Curves.easeOutBack);
+    final barsIn = seg(t, a + 0.03, a + 0.08, Curves.easeOutCubic);
+    final heartPop = seg(t, a + 0.07, a + 0.095, Curves.easeOutBack);
+    final jobIn = seg(t, a + 0.055, a + 0.10, Curves.easeOutBack);
+    final salaryPop = seg(t, a + 0.10, a + 0.125, Curves.easeOutBack);
+    final lineIn = seg(t, a + 0.04, a + 0.085, Curves.easeOutCubic);
+    final exit = seg(t, b - 0.022, b, Curves.easeInCubic);
+
+    if (productIn == 0) return const SizedBox.shrink();
+
+    return Opacity(
+      opacity: (productIn * (1 - exit)).clamp(0.0, 1.0),
+      child: Transform.translate(
+        offset: Offset(0, 50 * (1 - productIn) - 60 * exit),
+        child: Transform.scale(
+          scale: (0.94 + 0.06 * productIn) * (1 - 0.16 * exit),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Product card slides in from the right…
+              Transform.translate(
+                offset: Offset(70 * (1 - productIn), 0),
+                child: _MiniSurface(
+                  width: 270,
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.shopping_bag_outlined,
+                          color: AppColors.white,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _TextBar(grow: barsIn, width: 110, height: 10),
+                            const SizedBox(height: 7),
+                            Text(
+                              'USD 15.00',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.primaryBlue,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Transform.scale(
+                        scale: heartPop,
+                        child: const Icon(
+                          Icons.favorite,
+                          size: 18,
+                          color: AppColors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // …and a job card answers from the left.
+              if (jobIn > 0)
+                Transform.translate(
+                  offset: Offset(-70 * (1 - jobIn), 0),
+                  child: Opacity(
+                    opacity: jobIn.clamp(0.0, 1.0),
+                    child: _MiniSurface(
+                      width: 270,
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: AppColors.goldAccent.withValues(
+                                alpha: 0.16,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.work_outline,
+                              color: AppColors.goldAccent,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _TextBar(grow: barsIn, width: 130, height: 10),
+                                const SizedBox(height: 7),
+                                Transform.scale(
+                                  scale: salaryPop,
+                                  alignment: Alignment.centerLeft,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryBlue.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                      borderRadius: BorderRadius.circular(7),
+                                    ),
+                                    child: Text(
+                                      'HIRING',
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: AppColors.primaryBlue,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 9.5,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 28),
+              SceneLine(
+                text: 'Buy, sell & find work\nwithin the family.',
+                enter: lineIn,
+                exit: exit,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scene 5 — watch (sermons, music & live services)
 // ---------------------------------------------------------------------------
 
 class SceneWatch extends StatelessWidget {
@@ -954,14 +1065,14 @@ class SceneWatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (a, b) = FilmTimeline.s4;
-    final cardIn = seg(t, a, a + 0.045, Curves.easeOutBack);
-    final playPop = seg(t, a + 0.04, a + 0.07, Curves.easeOutBack);
-    final liveIn = seg(t, a + 0.055, a + 0.08, Curves.easeOutBack);
-    final playing = seg(t, a + 0.085, a + 0.10); // play btn hands off
-    final progressT = seg(t, a + 0.095, a + 0.165, Curves.easeInOutCubic);
-    final barsIn = seg(t, a + 0.03, a + 0.08, Curves.easeOutCubic);
-    final lineIn = seg(t, a + 0.045, a + 0.09, Curves.easeOutCubic);
+    final (a, b) = FilmTimeline.s5;
+    final cardIn = seg(t, a, a + 0.04, Curves.easeOutBack);
+    final playPop = seg(t, a + 0.035, a + 0.06, Curves.easeOutBack);
+    final liveIn = seg(t, a + 0.048, a + 0.07, Curves.easeOutBack);
+    final playing = seg(t, a + 0.075, a + 0.09); // play btn hands off
+    final progressT = seg(t, a + 0.085, a + 0.14, Curves.easeInOutCubic);
+    final barsIn = seg(t, a + 0.025, a + 0.07, Curves.easeOutCubic);
+    final lineIn = seg(t, a + 0.04, a + 0.08, Curves.easeOutCubic);
     final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
 
     if (cardIn == 0) return const SizedBox.shrink();
@@ -1158,7 +1269,7 @@ class SceneSabbathFinale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (a, b) = FilmTimeline.s5;
+    final (a, b) = FilmTimeline.s6;
     final ringIn = seg(t, a, a + 0.04, Curves.easeOutCubic);
     final sweep = seg(t, a + 0.02, a + 0.085, Curves.easeInOutCubic);
     final lineIn = seg(t, a + 0.05, a + 0.095, Curves.easeOutCubic);

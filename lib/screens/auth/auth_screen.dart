@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/motion/brand_spinner.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/support_sheet.dart';
@@ -1083,16 +1084,7 @@ class _GoogleButton extends StatelessWidget {
               ],
             ),
             child: busy
-                ? const Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        color: AppColors.primaryBlue,
-                      ),
-                    ),
-                  )
+                ? const Center(child: BrandSpinner(size: 22))
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1149,14 +1141,7 @@ class _AppleButton extends StatelessWidget {
             ),
             child: busy
                 ? const Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        color: Colors.white,
-                      ),
-                    ),
+                    child: BrandSpinner(size: 22, color: Colors.white),
                   )
                 : const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1537,15 +1522,7 @@ class _PrimaryButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 18),
               alignment: Alignment.center,
               child: busy
-                  // TODO(dark-mode): const CircularProgressIndicator — sits on primaryGradient.
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        color: AppColors.white,
-                        strokeWidth: 2.4,
-                      ),
-                    )
+                  ? const BrandSpinner(size: 22, color: AppColors.white)
                   : Text(
                       label,
                       style: AppTextStyles.buttonText.copyWith(

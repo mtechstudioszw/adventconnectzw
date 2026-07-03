@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_bootstrap.dart';
@@ -337,6 +338,11 @@ class PushService {
       unawaited(MessagingService.markConversationDelivered(referenceId));
     }
 
+    // Watch pushes (new upload / live) can be muted from Settings →
+    // Watch notifications. Foreground suppression happens here; the
+    // server-side notif_categories check covers background delivery.
+    if (referenceType == 'video' && !await watchPushesEnabled()) return;
+
     // Render the heads-up banner. Chat pushes get the inline Reply action +
     // the sender's photo via [_renderIncomingChat]. For data-only payloads
     // (notif == null) the banner is built from `data` — that's how chat
@@ -346,6 +352,27 @@ class PushService {
         referenceType == 'conversation' && referenceId.isNotEmpty;
     if (message.notification == null && !isConversation) return;
     await _renderIncomingChat(message, _local);
+  }
+
+  static const _kWatchPushPrefKey = 'watch_pushes_enabled';
+
+  /// Local mirror of the Settings → "Watch — new videos & live" toggle,
+  /// in SharedPreferences so the foreground handler (and background
+  /// isolate, which can't touch Hive) can read it cheaply.
+  static Future<void> setWatchPushesEnabled(bool enabled) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setBool(_kWatchPushPrefKey, enabled);
+    } catch (_) {/* best effort */}
+  }
+
+  static Future<bool> watchPushesEnabled() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      return sp.getBool(_kWatchPushPrefKey) ?? true;
+    } catch (_) {
+      return true;
+    }
   }
 
   static void _onLocalTap(NotificationResponse response) {

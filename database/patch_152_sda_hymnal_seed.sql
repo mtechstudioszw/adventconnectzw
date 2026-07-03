@@ -1,0 +1,17 @@
+-- patch_152_sda_hymnal_seed.sql  (DATA SEED — applied live, not re-run here)
+--
+-- Seeded the English "SDA Hymnal" collection with all 695 hymns so the Hymnal
+-- tab actually shows lyrics (the hymns table was empty -> blank hymnal).
+--
+-- Source: public dataset https://github.com/joshpetit/sda-hymnal (data/hymns.db,
+-- SQLite, stated free to use). Imported 2026-06-29 via the service-role REST API
+-- in 100-row chunks. Each row:
+--   collection='sda_hymnal', language='English', is_published=true,
+--   number=<1..695>, title, category=<section title>,
+--   lyrics = verses (numbered) with the Refrain placed after verse 1.
+--
+-- The Shona "Kristu MuNzwiyo" collection is intentionally left empty — the
+-- founder is adding those himself via Settings -> Manage Library -> Hymns.
+--
+-- No schema change. To re-seed, re-run the importer in scratchpad/ against the
+-- same SQLite source. Verified: 695 rows, all published, under 'sda_hymnal'.

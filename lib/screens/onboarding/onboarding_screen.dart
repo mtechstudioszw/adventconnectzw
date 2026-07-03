@@ -59,7 +59,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.initState();
     _film = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 28),
+      duration: const Duration(seconds: 31),
     )..addListener(_onFilmTick);
     _ambient = AnimationController(
       vsync: this,
@@ -166,9 +166,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Future<void> _finish() async {
     HapticFeedback.mediumImpact();
-    await SecureStorageService.write(
-      OnboardingScreen.onboardingFlagKey,
-      'true',
+    // Fire-and-forget: the secure-storage write can take a beat on some
+    // devices, and awaiting it made "Get started" feel dead before the
+    // route transition began. Navigate now; the flag lands in parallel.
+    unawaited(
+      SecureStorageService.write(OnboardingScreen.onboardingFlagKey, 'true'),
     );
     if (!mounted) return;
     context.goNamed('login');
@@ -239,8 +241,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           if (live(FilmTimeline.s1)) SceneChurch(t: t),
           if (live(FilmTimeline.s2)) ScenePrayer(t: t),
           if (live(FilmTimeline.s3)) SceneChatMarket(t: t),
-          if (live(FilmTimeline.s4)) SceneWatch(t: t),
-          if (t > FilmTimeline.s5.$1 - 0.01) SceneSabbathFinale(t: t),
+          if (live(FilmTimeline.s4)) SceneMarketJobs(t: t),
+          if (live(FilmTimeline.s5)) SceneWatch(t: t),
+          if (t > FilmTimeline.s6.$1 - 0.01) SceneSabbathFinale(t: t),
         ],
       ),
     );

@@ -80,6 +80,12 @@ class _WatchScreenState extends State<WatchScreen> {
         _loading = false;
       }
     }
+    // Rails hydrate from cache too — previously they started empty and
+    // "popped in" a couple of seconds after the tab opened.
+    if (_liveNow.isEmpty) _liveNow = YoutubeService.cachedLiveNow();
+    if (_continue.isEmpty) _continue = YoutubeService.cachedContinueWatching();
+    if (_upcoming.isEmpty) _upcoming = YoutubeService.cachedUpcoming();
+    if (_saved.isEmpty) _saved = YoutubeService.cachedBookmarkIds();
     if (mounted) setState(() => _loading = _feed.isEmpty);
 
     final results = await Future.wait<Object?>([

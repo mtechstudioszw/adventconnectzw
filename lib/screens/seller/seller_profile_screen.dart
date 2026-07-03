@@ -14,7 +14,6 @@ import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/rate_seller_sheet.dart';
@@ -321,9 +320,8 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         onRefresh: _bootstrap,
         child: _buildBody(),
       ),
-      bottomNavigationBar: const SafeArea(
-        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
-      ),
+      // No ad here (user decision 2026-07-02): a banner under a seller's
+      // own storefront cheapened the page and competed with their goods.
     );
   }
 

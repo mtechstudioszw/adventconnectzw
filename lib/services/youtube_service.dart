@@ -62,6 +62,13 @@ class YoutubeService {
   static const _channelsKey = 'yt_channels_v1';
   static const _playlistsKey = 'yt_playlists_v1';
   static const _liveKey = 'yt_live_v1';
+  // Rails caches — without these the Live now / Continue watching /
+  // Upcoming rails started empty on every Watch open and "popped in"
+  // ~2s later when the network returned.
+  static const _liveNowKey = 'yt_live_now_v1';
+  static const _upcomingKey = 'yt_upcoming_v1';
+  static const _continueKey = 'yt_continue_v1';
+  static const _savedIdsKey = 'yt_saved_ids_v1';
 
   // ----------------------------- Feed --------------------------------
   /// Newest videos for the infinite Watch / Home feed. Excludes scheduled
@@ -211,13 +218,21 @@ class YoutubeService {
           .select()
           .eq('live_status', 'live')
           .order('actual_start_at', ascending: false);
-      return (rows as List)
+      final list = (rows as List)
           .map((e) => YoutubeVideo.fromJson(e as Map<String, dynamic>))
           .toList();
+      await CacheService.writeString(
+        _liveNowKey,
+        jsonEncode(list.map((v) => v.toJson()).toList()),
+      );
+      return list;
     } catch (_) {
-      return const [];
+      return cachedLiveNow();
     }
   }
+
+  /// Cached "Live now" rail, readable synchronously for the first paint.
+  static List<YoutubeVideo> cachedLiveNow() => _cachedList(_liveNowKey);
 
   /// Scheduled-but-not-started broadcasts (Upcoming rail).
   static Future<List<YoutubeVideo>> fetchUpcoming({int limit = 10}) async {
@@ -228,13 +243,21 @@ class YoutubeService {
           .eq('live_status', 'upcoming')
           .order('scheduled_start_at')
           .limit(limit);
-      return (rows as List)
+      final list = (rows as List)
           .map((e) => YoutubeVideo.fromJson(e as Map<String, dynamic>))
           .toList();
+      await CacheService.writeString(
+        _upcomingKey,
+        jsonEncode(list.map((v) => v.toJson()).toList()),
+      );
+      return list;
     } catch (_) {
-      return const [];
+      return cachedUpcoming();
     }
   }
+
+  /// Cached Upcoming rail, readable synchronously for the first paint.
+  static List<YoutubeVideo> cachedUpcoming() => _cachedList(_upcomingKey);
 
   // ---------------------------- Channels -----------------------------
   static Future<List<YoutubeChannel>> fetchChannels() async {
@@ -340,10 +363,23 @@ class YoutubeService {
     try {
       final rows =
           await _c.from('youtube_bookmarks').select('video_id').eq('user_id', uid);
-      return {
+      final ids = {
         for (final r in rows as List)
           (r as Map<String, dynamic>)['video_id'].toString()
       };
+      await CacheService.writeString(_savedIdsKey, jsonEncode(ids.toList()));
+      return ids;
+    } catch (_) {
+      return cachedBookmarkIds();
+    }
+  }
+
+  /// Cached saved-video ids, readable synchronously for the first paint.
+  static Set<String> cachedBookmarkIds() {
+    final raw = CacheService.readStringStale(_savedIdsKey);
+    if (raw == null || raw.isEmpty) return <String>{};
+    try {
+      return (jsonDecode(raw) as List).map((e) => e.toString()).toSet();
     } catch (_) {
       return <String>{};
     }
@@ -428,7 +464,38 @@ class YoutubeService {
           durationSeconds: (m['duration_seconds'] as num?)?.toInt() ?? 0,
         ));
       }
+      await CacheService.writeString(
+        _continueKey,
+        jsonEncode([
+          for (final item in out)
+            {
+              'position_seconds': item.positionSeconds,
+              'duration_seconds': item.durationSeconds,
+              'video': item.video.toJson(),
+            },
+        ]),
+      );
       return out;
+    } catch (_) {
+      return cachedContinueWatching();
+    }
+  }
+
+  /// Cached Continue-watching rail, readable synchronously.
+  static List<ResumeItem> cachedContinueWatching() {
+    final raw = CacheService.readStringStale(_continueKey);
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      return [
+        for (final e in jsonDecode(raw) as List)
+          ResumeItem(
+            video: YoutubeVideo.fromJson(
+              (e as Map<String, dynamic>)['video'] as Map<String, dynamic>,
+            ),
+            positionSeconds: (e['position_seconds'] as num?)?.toInt() ?? 0,
+            durationSeconds: (e['duration_seconds'] as num?)?.toInt() ?? 0,
+          ),
+      ];
     } catch (_) {
       return const [];
     }

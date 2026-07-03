@@ -719,14 +719,18 @@ class _CircleIconButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          customBorder: const CircleBorder(),
+          // Frosted circle — same family as the Home header buttons so
+          // back/search chips read consistently across every hero.
           child: Container(
-            padding: const EdgeInsets.all(10),
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
+              color: AppColors.white.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.10),
+                color: AppColors.white.withValues(alpha: 0.25),
               ),
             ),
             child: Icon(icon, color: AppColors.white, size: 18),

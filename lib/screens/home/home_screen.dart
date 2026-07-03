@@ -2501,39 +2501,53 @@ class _NotificationBell extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // Circular frosted chip — matches the search button so the
+          // header icons read as one family.
           Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: onTap,
-              borderRadius: BorderRadius.circular(14),
+              customBorder: const CircleBorder(),
               child: Container(
-                padding: const EdgeInsets.all(10),
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: AppColors.white.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(14),
+                  color: AppColors.white.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
                   border: Border.all(
-                    color: AppColors.white.withValues(alpha: 0.10),
+                    color: AppColors.white.withValues(alpha: 0.25),
                   ),
                 ),
+                alignment: Alignment.center,
                 child: const Icon(
                   Icons.notifications_none_rounded,
                   color: AppColors.white,
-                  size: 22,
+                  size: 21,
                 ),
               ),
             ),
           ),
           if (unread > 0)
             Positioned(
-              top: 6,
-              right: 6,
+              top: -3,
+              right: -3,
               child: Container(
-                width: 10,
-                height: 10,
+                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
                   color: AppColors.red,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.darkNavy, width: 2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.darkNavy, width: 1.5),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  unread > 99 ? '99+' : '$unread',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.white,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
                 ),
               ),
             ),
@@ -3153,13 +3167,13 @@ class _HeaderIconButton extends StatelessWidget {
           onTap: onTap,
           customBorder: const CircleBorder(),
           child: Container(
-            width: 40,
-            height: 40,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.12),
+              color: AppColors.white.withValues(alpha: 0.14),
               shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.white.withValues(alpha: 0.18),
+                color: AppColors.white.withValues(alpha: 0.25),
               ),
             ),
             alignment: Alignment.center,
@@ -3423,10 +3437,12 @@ class _DevotionCard extends StatelessWidget {
       onTap: onOpenLibrary,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(14),
+        // Slightly tighter than before (14/12) — the card was tall
+        // enough to collide with the floating prayer bubble.
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           gradient: AppColors.appBarGradient,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
               color: AppColors.darkNavy.withValues(alpha: 0.25),
@@ -3443,7 +3459,7 @@ class _DevotionCard extends StatelessWidget {
                 const Icon(
                   Icons.auto_stories_outlined,
                   color: AppColors.goldAccent,
-                  size: 18,
+                  size: 16,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -3452,11 +3468,12 @@ class _DevotionCard extends StatelessWidget {
                     color: AppColors.goldAccent,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.5,
+                    fontSize: 9.5,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 9),
             Text(
               '"${devotion.bibleText}"',
               maxLines: 3,
@@ -3526,31 +3543,41 @@ class _LibraryChips extends StatelessWidget {
     return Row(
       children: [
         for (var i = 0; i < _items.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
+          if (i > 0) const SizedBox(width: 8),
           Expanded(
-            child: GestureDetector(
-              onTap: () => _items[i].$3 == -1
-                  ? context.pushNamed('quiz')
-                  : context.pushNamed('library', extra: _items[i].$3),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: palette.card,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: palette.divider),
-                ),
-                child: Column(
-                  children: [
-                    Icon(_items[i].$2, color: AppColors.primaryBlue, size: 22),
-                    const SizedBox(height: 6),
-                    Text(
-                      _items[i].$1,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: palette.text,
+            child: PressEffect(
+              pressedScale: 0.93,
+              child: GestureDetector(
+                onTap: () => _items[i].$3 == -1
+                    ? context.pushNamed('quiz')
+                    : context.pushNamed('library', extra: _items[i].$3),
+                // Compact chips (12->9 vertical, smaller icon/label) so
+                // the Library row doesn't crowd the prayer bubble.
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: BoxDecoration(
+                    color: palette.card,
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(color: palette.divider),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        _items[i].$2,
+                        color: AppColors.primaryBlue,
+                        size: 19,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        _items[i].$1,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: palette.text,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

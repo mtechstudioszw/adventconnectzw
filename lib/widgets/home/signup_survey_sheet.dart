@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../../services/signup_survey_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../motion/brand_spinner.dart';
+import '../motion/pressable.dart';
 
 /// One-time welcome survey shown on the first home visit after signup.
 /// Asks how the user found the app (+ a light optional question) so the
-/// founder can understand their audience. Skippable; never shown twice.
+/// founder can understand their audience. Not skippable (user decision
+/// 2026-07-02): the sheet can't be dismissed until a source is picked
+/// and submitted. Never shown twice.
 class SignupSurveySheet extends StatefulWidget {
   const SignupSurveySheet({super.key});
 
@@ -21,7 +26,9 @@ class SignupSurveySheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      isDismissible: true,
+      // Must answer — no tap-outside/drag dismissal, no Skip button.
+      isDismissible: false,
+      enableDrag: false,
       builder: (_) => const SignupSurveySheet(),
     );
   }
@@ -31,12 +38,12 @@ class SignupSurveySheet extends StatefulWidget {
 }
 
 class _SignupSurveySheetState extends State<SignupSurveySheet> {
-  static const _sources = [
-    'Friend or family',
-    'My church',
-    'Social media',
-    'App store / search',
-    'Other',
+  static const _sources = <(String, IconData)>[
+    ('Friend or family', Icons.diversity_3_rounded),
+    ('My church', Icons.church_rounded),
+    ('Social media', Icons.public_rounded),
+    ('App store / search', Icons.storefront_rounded),
+    ('Other', Icons.more_horiz_rounded),
   ];
 
   String? _source;
@@ -71,114 +78,140 @@ class _SignupSurveySheetState extends State<SignupSurveySheet> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: Container(
-        decoration: BoxDecoration(
-          color: palette.sheet,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: palette.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text('Welcome! 👋',
-                  style: AppTextStyles.headlineSmall
-                      .copyWith(fontWeight: FontWeight.w800)),
-              const SizedBox(height: 6),
-              Text(
-                'Quick question so we can grow the community — how did you hear '
-                'about Advent Connect?',
-                style:
-                    AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final s in _sources)
-                    _Chip(
-                      label: s,
-                      selected: _source == s,
-                      onTap: () => setState(() => _source = s),
+    // Back button shouldn't dismiss it either — answering takes one tap.
+    return PopScope(
+      canPop: false,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottom),
+        child: Container(
+          decoration: BoxDecoration(
+            color: palette.sheet,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: AppColors.goldAccent.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.waving_hand_rounded,
+                        color: AppColors.goldAccent,
+                        size: 22,
+                      ),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Welcome to the family!',
+                            style: AppTextStyles.headlineSmall
+                                .copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'One quick question before you dive in.',
+                            style: AppTextStyles.bodySmall
+                                .copyWith(color: palette.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'HOW DID YOU HEAR ABOUT ADVENT CONNECT?',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: palette.textMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                for (final (label, icon) in _sources) ...[
+                  _OptionRow(
+                    label: label,
+                    icon: icon,
+                    selected: _source == label,
+                    onTap: () => setState(() => _source = label),
+                  ),
+                  const SizedBox(height: 8),
                 ],
-              ),
-              const SizedBox(height: 18),
-              Text('What are you hoping to find here? (optional)',
+                const SizedBox(height: 10),
+                Text(
+                  'What are you hoping to find here? (optional)',
                   style: AppTextStyles.labelMedium
-                      .copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _hopeController,
-                minLines: 1,
-                maxLines: 3,
-                maxLength: 200,
-                textCapitalization: TextCapitalization.sentences,
-                style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
-                decoration: InputDecoration(
-                  hintText: 'Fellowship, events, marketplace…',
-                  hintStyle: TextStyle(color: palette.textMuted),
-                  counterText: '',
-                  filled: true,
-                  fillColor: palette.inputFill,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: palette.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: palette.divider),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.primaryBlue),
+                      .copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _hopeController,
+                  minLines: 1,
+                  maxLines: 3,
+                  maxLength: 200,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
+                  decoration: InputDecoration(
+                    hintText: 'Fellowship, events, marketplace…',
+                    hintStyle: TextStyle(color: palette.textMuted),
+                    counterText: '',
+                    filled: true,
+                    fillColor: palette.inputFill,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: palette.divider),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: palette.divider),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primaryBlue),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 50,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                const SizedBox(height: 12),
+                PressEffect(
+                  child: SizedBox(
+                    height: 52,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        disabledBackgroundColor:
+                            AppColors.primaryBlue.withValues(alpha: 0.35),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: (_source == null || _saving) ? null : _submit,
+                      child: _saving
+                          ? const BrandSpinner(size: 22, color: AppColors.white)
+                          : Text(
+                              _source == null
+                                  ? 'Pick one to continue'
+                                  : 'Continue',
+                              style: AppTextStyles.buttonText
+                                  .copyWith(color: AppColors.white),
+                            ),
+                    ),
                   ),
-                  onPressed: (_source == null || _saving) ? null : _submit,
-                  child: _saving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2.4, color: AppColors.white))
-                      : Text('Submit',
-                          style: AppTextStyles.buttonText
-                              .copyWith(color: AppColors.white)),
                 ),
-              ),
-              Center(
-                child: TextButton(
-                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
-                  child: Text('Skip',
-                      style: TextStyle(color: palette.textMuted)),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -186,36 +219,78 @@ class _SignupSurveySheetState extends State<SignupSurveySheet> {
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip(
-      {required this.label, required this.selected, required this.onTap});
+class _OptionRow extends StatelessWidget {
+  const _OptionRow({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
   final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          gradient: selected ? AppColors.primaryGradient : null,
-          color: selected ? null : palette.inputFill,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? AppColors.primaryBlue : palette.divider,
+    return PressEffect(
+      pressedScale: 0.97,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppMotion.quick,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primaryBlue.withValues(alpha: 0.08)
+                : palette.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? AppColors.primaryBlue : palette.divider,
+              width: selected ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: selected ? AppColors.white : palette.text,
-            fontWeight: FontWeight.w700,
-            fontSize: 12.5,
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? AppColors.primaryBlue : palette.textMuted,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: selected ? AppColors.primaryBlue : palette.text,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                ),
+              ),
+              AnimatedSwitcher(
+                duration: AppMotion.maybe(context, AppMotion.quick),
+                switchInCurve: AppMotion.spring,
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: child),
+                child: selected
+                    ? const Icon(
+                        Icons.check_circle_rounded,
+                        key: ValueKey('on'),
+                        color: AppColors.primaryBlue,
+                        size: 20,
+                      )
+                    : Icon(
+                        Icons.circle_outlined,
+                        key: const ValueKey('off'),
+                        color: palette.divider,
+                        size: 20,
+                      ),
+              ),
+            ],
           ),
         ),
       ),

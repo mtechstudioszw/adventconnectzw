@@ -96,6 +96,7 @@ class NotificationCategoryPrefs {
     this.announcements = true,
     this.news = true,
     this.social = true,
+    this.watch = true,
   });
 
   final bool events;
@@ -107,6 +108,10 @@ class NotificationCategoryPrefs {
 
   /// Likes & comments on your posts/comments (engagement pushes).
   final bool social;
+
+  /// Watch-tab pushes: new uploads + live streams from followed
+  /// channels. notify-fcm reads the same JSON key server-side.
+  final bool watch;
 
   static const defaults = NotificationCategoryPrefs();
 
@@ -129,6 +134,7 @@ class NotificationCategoryPrefs {
       announcements: read('announcements', true),
       news: read('news', true),
       social: read('social', true),
+      watch: read('watch', true),
     );
   }
 
@@ -140,6 +146,7 @@ class NotificationCategoryPrefs {
         'announcements': announcements,
         'news': news,
         'social': social,
+        'watch': watch,
       };
 
   NotificationCategoryPrefs copyWith({
@@ -150,6 +157,7 @@ class NotificationCategoryPrefs {
     bool? announcements,
     bool? news,
     bool? social,
+    bool? watch,
   }) {
     return NotificationCategoryPrefs(
       events: events ?? this.events,
@@ -159,6 +167,7 @@ class NotificationCategoryPrefs {
       announcements: announcements ?? this.announcements,
       news: news ?? this.news,
       social: social ?? this.social,
+      watch: watch ?? this.watch,
     );
   }
 }

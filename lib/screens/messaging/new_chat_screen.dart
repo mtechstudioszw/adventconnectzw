@@ -12,6 +12,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/verified_tick.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/shimmer_loaders.dart';
@@ -283,11 +284,22 @@ class _NewChatScreenState extends State<NewChatScreen> {
                                 name: name,
                                 photoUrl: m.profilePhotoUrl,
                               ),
-                              title: Text(
-                                name,
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              title: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  // Gold tick for verified accounts — was
+                                  // missing from the people picker rows.
+                                  if (m.isVerified) const VerifiedTick(),
+                                ],
                               ),
                               subtitle: (m.churchName ?? '').trim().isEmpty
                                   ? null

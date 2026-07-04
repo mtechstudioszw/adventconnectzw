@@ -479,12 +479,10 @@ class _TopBar extends StatelessWidget {
                   color: AppColors.divider,
                 ),
               ),
-              // TODO(dark-mode): swap to context.palette.text in dark mode
-              // (const here, so left as darkNavy for now).
-              child: const Icon(
+              child: Icon(
                 Icons.arrow_back_ios_new,
                 size: 14,
-                color: AppColors.darkNavy,
+                color: context.palette.text,
               ),
             ),
           ),

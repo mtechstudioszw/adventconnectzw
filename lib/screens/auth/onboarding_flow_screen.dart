@@ -1487,7 +1487,6 @@ class _NotifSwitch extends StatelessWidget {
                   child: Text(
                     label,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.darkNavy,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                     ),
@@ -1854,7 +1853,6 @@ class _SuccessPageState extends State<_SuccessPage>
                       'Your account is ready',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.displayLarge.copyWith(
-                        color: AppColors.darkNavy,
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
                         height: 1.18,
@@ -1924,7 +1922,6 @@ class _StepHeader extends StatelessWidget {
         Text(
           title,
           style: AppTextStyles.displayMedium.copyWith(
-            color: AppColors.darkNavy,
             fontSize: 24,
             fontWeight: FontWeight.w800,
             height: 1.2,

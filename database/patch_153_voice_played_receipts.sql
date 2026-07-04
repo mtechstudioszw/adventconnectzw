@@ -29,7 +29,7 @@ begin
          select 1
            from public.conversations c
           where c.id = m.conversation_id
-            and auth.uid() in (c.participant_one_id, c.participant_two_id)
+            and auth.uid() in (c.participant_a_id, c.participant_b_id)
        )
        or exists (
          select 1

@@ -47,6 +47,7 @@ enum _ChatFilter { all, unread, groups }
 class _ConversationsScreenState extends State<ConversationsScreen> {
   List<Conversation> _conversations = [];
   Map<String, ConversationState> _convStates = const {};
+  Map<String, InboxReactionPreview> _reactionPreviews = const {};
   List<Story> _stories = const [];
   Set<String> _viewedStoryIds = const {};
   List<PendingFriendRequest> _friendRequests = const [];
@@ -269,6 +270,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         FeedService.fetchPendingFriendRequests(),
         MessagingService.fetchConversationStates(),
         FeedService.fetchMyViewedStoryIds(),
+        MessagingService.fetchInboxReactionPreviews(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -277,6 +279,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         _friendRequests = results[2] as List<PendingFriendRequest>;
         _convStates = results[3] as Map<String, ConversationState>;
         _viewedStoryIds = results[4] as Set<String>;
+        _reactionPreviews = results[5] as Map<String, InboxReactionPreview>;
         _loading = false;
         // Auto-route to Requests tab on first paint if the inbox is
         // empty but there are pending requests. Fixes the "chat icon
@@ -1352,6 +1355,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   ? () => FullImageViewer.show(context, c.otherUserPhotoUrl)
                   : () => _openChat(c),
               previewCleared: _isPreviewCleared(c),
+              reactionPreview: _reactionPreviews[c.id],
             );
             if (revealIndex < 0) return tile;
             return StaggeredReveal(index: revealIndex, rise: 18, child: tile);
@@ -1715,6 +1719,7 @@ class _ConversationTile extends StatelessWidget {
     this.selected = false,
     this.onAvatarTap,
     this.previewCleared = false,
+    this.reactionPreview,
   });
 
   final Conversation conversation;
@@ -1728,6 +1733,16 @@ class _ConversationTile extends StatelessWidget {
   // True when the user cleared this chat — hide the stale last-message
   // preview (the messages themselves are already hidden inside).
   final bool previewCleared;
+
+  /// Latest reaction on this conversation (newer than the last message), shown
+  /// in place of the preview like WhatsApp. Null when there's none.
+  final InboxReactionPreview? reactionPreview;
+
+  String _reactionPreviewLabel(InboxReactionPreview r) {
+    if (r.reactorIsMe) return 'You reacted ${r.emoji}';
+    if (r.onMyMessage) return 'Reacted ${r.emoji} to your message';
+    return 'Reacted ${r.emoji} to a message';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1917,16 +1932,18 @@ class _ConversationTile extends StatelessWidget {
                           ],
                           Expanded(
                             child: Text(
-                              (previewCleared ||
-                                      conversation.lastMessage.isEmpty)
-                                  ? (conversation.isChurchChannel
-                                        ? 'Church announcements appear here'
-                                        : 'Say hello')
-                                  : (isLastFromMe
-                                        ? _selfSystemLabel(
-                                            conversation.lastMessage,
-                                          )
-                                        : conversation.lastMessage),
+                              (reactionPreview != null && !previewCleared)
+                                  ? _reactionPreviewLabel(reactionPreview!)
+                                  : (previewCleared ||
+                                          conversation.lastMessage.isEmpty)
+                                      ? (conversation.isChurchChannel
+                                            ? 'Church announcements appear here'
+                                            : 'Say hello')
+                                      : (isLastFromMe
+                                            ? _selfSystemLabel(
+                                                conversation.lastMessage,
+                                              )
+                                            : conversation.lastMessage),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.bodySmall.copyWith(

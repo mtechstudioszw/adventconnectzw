@@ -50,6 +50,19 @@ class ChatLaunchIntent {
   }
 }
 
+/// Latest reaction on a conversation, shown in the inbox preview when it's
+/// newer than the last message (WhatsApp-style "Reacted 👍 to your message").
+class InboxReactionPreview {
+  const InboxReactionPreview({
+    required this.emoji,
+    required this.onMyMessage,
+    required this.reactorIsMe,
+  });
+  final String emoji;
+  final bool onMyMessage;
+  final bool reactorIsMe;
+}
+
 class MessagingService {
   MessagingService._();
 
@@ -1237,6 +1250,31 @@ class MessagingService {
 
   /// All reactions for a conversation, grouped by message id →
   /// {emoji: count} plus the viewer's own emoji under key '_mine'.
+  /// Latest reaction per conversation that's newer than that conversation's
+  /// last message, so the inbox can show "Reacted 👍 to your message" like
+  /// WhatsApp. Keyed by conversation id. Best-effort — empty on any error so
+  /// the inbox just falls back to the normal last-message preview.
+  static Future<Map<String, InboxReactionPreview>>
+      fetchInboxReactionPreviews() async {
+    try {
+      final rows = await _client.rpc('my_inbox_reaction_previews');
+      final map = <String, InboxReactionPreview>{};
+      for (final r in rows as List) {
+        final m = r as Map<String, dynamic>;
+        final cid = m['conversation_id']?.toString();
+        if (cid == null) continue;
+        map[cid] = InboxReactionPreview(
+          emoji: (m['emoji'] ?? '👍').toString(),
+          onMyMessage: m['on_my_message'] == true,
+          reactorIsMe: m['reactor_is_me'] == true,
+        );
+      }
+      return map;
+    } catch (_) {
+      return const {};
+    }
+  }
+
   static Future<Map<String, Map<String, int>>> fetchReactions(
     String conversationId,
   ) async {

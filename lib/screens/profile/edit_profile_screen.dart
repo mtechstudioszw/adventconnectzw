@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../utils/name_validator.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -106,11 +107,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     }
   }
 
-  String? _validateName(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Name is required';
-    if (v.trim().length < 2) return 'Enter your full name';
-    return null;
-  }
+  String? _validateName(String? v) => NameValidator.fullName(v);
 
   String? _validateBio(String? v) {
     if (v != null && v.length > 280) return 'Bio must be 280 characters or fewer';
@@ -546,6 +543,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               controller: _usernameController,
               textInputAction: TextInputAction.next,
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+              validator: (v) => NameValidator.username(v),
               decoration: _filledDecoration(
                 icon: Icons.alternate_email,
                 hint: 'tendai_moyo',

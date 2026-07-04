@@ -964,7 +964,16 @@ class AuthService {
           await _client
               .from('profiles')
               .upsert({'id': user.id, ...dbUpdates}, onConflict: 'id');
-        } catch (_) {
+        } catch (e) {
+          // Duplicate username (case-insensitive unique index) — tell the user
+          // plainly instead of a generic failure, and don't retry (the retry
+          // would hit the same conflict).
+          if (_isUsernameTaken(e)) {
+            return AuthResult.failure(
+              'That username is already taken. If you believe this is your '
+              'name, contact support.',
+            );
+          }
           final safe = Map<String, dynamic>.from(dbUpdates)
             ..remove('cover_photo_url');
           if (safe.isNotEmpty) {
@@ -981,6 +990,16 @@ class AuthService {
     } catch (_) {
       return AuthResult.failure('Could not update profile.');
     }
+  }
+
+  /// True when [e] is a Postgres unique-constraint violation on the username
+  /// (the profiles_username / profiles_username_lower unique indexes).
+  static bool _isUsernameTaken(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('username') &&
+        (s.contains('duplicate') ||
+            s.contains('unique') ||
+            s.contains('23505'));
   }
 
   static Future<void> updateMetadataDirect(Map<String, dynamic> patch) async {

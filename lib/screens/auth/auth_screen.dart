@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../../utils/name_validator.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -49,10 +50,12 @@ class _AuthScreenState extends State<AuthScreen>
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   final _nameController = TextEditingController();
+  final _surnameController = TextEditingController();
 
   late final FocusNode _emailFocus;
   late final FocusNode _passwordFocus;
   late final FocusNode _nameFocus;
+  late final FocusNode _surnameFocus;
 
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -76,6 +79,7 @@ class _AuthScreenState extends State<AuthScreen>
     _emailFocus = FocusNode();
     _passwordFocus = FocusNode();
     _nameFocus = FocusNode();
+    _surnameFocus = FocusNode();
     _entrance = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 480),
@@ -105,9 +109,11 @@ class _AuthScreenState extends State<AuthScreen>
     _passwordController.dispose();
     _confirmController.dispose();
     _nameController.dispose();
+    _surnameController.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     _nameFocus.dispose();
+    _surnameFocus.dispose();
     super.dispose();
   }
 
@@ -135,9 +141,12 @@ class _AuthScreenState extends State<AuthScreen>
 
   String? _validateName(String? v) {
     if (_stage != _Stage.signup) return null;
-    if (v == null || v.trim().isEmpty) return 'Full name is required';
-    if (v.trim().length < 2) return 'Enter your full name';
-    return null;
+    return NameValidator.namePart(v, 'First name');
+  }
+
+  String? _validateSurname(String? v) {
+    if (_stage != _Stage.signup) return null;
+    return NameValidator.namePart(v, 'Surname');
   }
 
   Future<void> _onContinue() async {
@@ -338,7 +347,10 @@ class _AuthScreenState extends State<AuthScreen>
     final result = await AuthService.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      fullName: _nameController.text.trim(),
+      fullName: NameValidator.combine(
+        _nameController.text,
+        _surnameController.text,
+      ),
       birthDate: birthDate,
     );
     if (!mounted) return;
@@ -536,6 +548,7 @@ class _AuthScreenState extends State<AuthScreen>
       _passwordController.clear();
       _confirmController.clear();
       _nameController.clear();
+      _surnameController.clear();
       _acceptedTerms = false;
       _error = null;
     });
@@ -849,11 +862,21 @@ class _AuthScreenState extends State<AuthScreen>
         _GlowField(
           controller: _nameController,
           focusNode: _nameFocus,
-          hint: 'Full name',
+          hint: 'First name',
           icon: Icons.person_outline,
           textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.name],
+          autofillHints: const [AutofillHints.givenName],
           validator: _validateName,
+        ),
+        const SizedBox(height: 14),
+        _GlowField(
+          controller: _surnameController,
+          focusNode: _surnameFocus,
+          hint: 'Surname',
+          icon: Icons.badge_outlined,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.familyName],
+          validator: _validateSurname,
         ),
         const SizedBox(height: 14),
         _GlowField(

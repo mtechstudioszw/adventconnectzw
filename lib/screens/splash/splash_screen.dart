@@ -94,10 +94,14 @@ class _SplashScreenState extends State<SplashScreen>
       curve: const Interval(0.30, 0.50, curve: Curves.easeOut),
     );
 
+    // The loader fills toward ~85% while the app actually boots (Supabase
+    // session restore + cache open), then snaps to 100% the moment
+    // _navigate() has everything it needs — so the bar reflects real
+    // readiness instead of running on a fixed timer.
     _progress = AnimationController(
       vsync: this,
-      duration: _minLoaderDuration,
-    )..forward();
+      duration: const Duration(milliseconds: 900),
+    )..animateTo(0.85, curve: Curves.easeOut);
 
     _exit = AnimationController(
       vsync: this,
@@ -188,6 +192,9 @@ class _SplashScreenState extends State<SplashScreen>
           .timeout(const Duration(milliseconds: 1500), onTimeout: () {}),
     ]);
     if (!mounted) return;
+    // Bootstrap is ready — complete the loader so it reads as "done" instead
+    // of resting at a partial fill while we finish routing.
+    _progress.animateTo(1.0, duration: const Duration(milliseconds: 220));
 
     // Force-update gate (patch_091): below the hard floor — or past the
     // grace window for a newer build — block here before anything else.

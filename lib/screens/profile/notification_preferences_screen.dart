@@ -103,10 +103,11 @@ class _NotificationPreferencesScreenState
           child: Column(
             children: [
               const ScreenHero(
-                title: 'Notifications',
-                tagline: 'Per-church preferences',
+                title: 'Church notifications',
+                tagline: 'Notifications',
                 subtitle:
-                    'Choose how loudly each church speaks to you in the app.',
+                    'Pick which alerts you get from each church you follow — '
+                    'All, only Urgent, or None.',
                 fallbackRoute: 'settings',
               ),
               Padding(
@@ -131,9 +132,10 @@ class _NotificationPreferencesScreenState
     if (_prefs.isEmpty) {
       return EmptyStateCard(
         icon: Icons.notifications_off_outlined,
-        title: 'No church preferences yet',
+        title: 'No churches followed yet',
         message:
-            'Follow a church and we\'ll create a preference row for you. You can mute or downgrade each one from here.',
+            'Once you follow a church, choose here whether it sends you all '
+            'notices, only urgent ones, or none at all.',
       );
     }
     return Column(

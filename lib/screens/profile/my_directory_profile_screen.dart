@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/motion/brand_spinner.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/member_directory_model.dart';
@@ -127,11 +128,7 @@ class _MyDirectoryProfileScreenState extends State<MyDirectoryProfileScreen> {
               child: _loading
                   ? const Padding(
                       padding: EdgeInsets.symmetric(vertical: 64),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primaryBlue,
-                        ),
-                      ),
+                      child: Center(child: BrandSpinner(size: 30)),
                     )
                   : Form(
                       key: _formKey,

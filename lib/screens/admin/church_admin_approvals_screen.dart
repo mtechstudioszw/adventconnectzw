@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../widgets/motion/brand_spinner.dart';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -233,9 +234,7 @@ class _ChurchAdminApprovalsScreenState
                 child: _loading
                     ? const Padding(
                         padding: EdgeInsets.symmetric(vertical: 60),
-                        child: Center(
-                            child: CircularProgressIndicator(
-                                color: AppColors.primaryBlue)),
+                        child: Center(child: BrandSpinner(size: 30)),
                       )
                     : _error != null
                         ? ErrorBanner(message: _error!)

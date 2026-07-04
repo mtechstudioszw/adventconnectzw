@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../motion/brand_spinner.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/post_comment_model.dart';
 import '../../services/auth_service.dart';
@@ -287,9 +288,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
 
   Widget _buildList(ScrollController controller) {
     if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryBlue),
-      );
+      return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null) {
       return Center(

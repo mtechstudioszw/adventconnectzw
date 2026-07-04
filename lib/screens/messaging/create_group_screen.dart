@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../widgets/motion/brand_spinner.dart';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -248,11 +249,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             ),
             Expanded(
               child: _loadingPeople
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primaryBlue,
-                      ),
-                    )
+                  ? const Center(child: BrandSpinner(size: 30))
                   : ListView.builder(
                       itemCount: _results.length,
                       itemBuilder: (context, i) {

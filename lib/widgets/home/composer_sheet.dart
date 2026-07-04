@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../motion/brand_spinner.dart';
 import '../../models/post_model.dart';
 import '../../models/story_model.dart';
 import '../../services/feed_service.dart';
@@ -704,11 +705,7 @@ Color _storyTextColor(int bgArgb) {
                           if (_uploading)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 48),
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: AppColors.primaryBlue,
-                                ),
-                              ),
+                              child: Center(child: BrandSpinner(size: 30)),
                             )
                           else if (_mediaUrl != null)
                             ClipRRect(

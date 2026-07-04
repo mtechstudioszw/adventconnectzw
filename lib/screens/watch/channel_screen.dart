@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../models/youtube_channel.dart';
 import '../../models/youtube_video.dart';
 import '../../services/youtube_service.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
@@ -109,11 +108,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
                   if (_loadingMore)
                     const Padding(
                       padding: EdgeInsets.all(18),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primaryBlue,
-                        ),
-                      ),
+                      child: Center(child: BrandSpinner(size: 30)),
                     ),
                 ],
               ),

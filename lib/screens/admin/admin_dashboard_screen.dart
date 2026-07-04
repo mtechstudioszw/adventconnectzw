@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/motion/brand_spinner.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -179,11 +180,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     if (_loading)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.primaryBlue,
-                          ),
-                        ),
+                        child: Center(child: BrandSpinner(size: 30)),
                       )
                     else if (_error != null)
                       ErrorBanner(message: _error!)

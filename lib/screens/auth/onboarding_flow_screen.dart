@@ -10,6 +10,7 @@ import '../../models/church_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
+import '../../utils/name_validator.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
@@ -126,17 +127,17 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     setState(() => _error = null);
     if (_index == 1) {
       final name = _nameController.text.trim();
-      if (name.length < 2) {
-        setState(() => _error = 'Please add your display name.');
+      // Real first name + surname, junk-filtered — this is where Google
+      // sign-ups get caught (they skip the email signup form).
+      final nameErr = NameValidator.fullName(_nameController.text);
+      if (nameErr != null) {
+        setState(() => _error = nameErr);
         return;
       }
       final username = _usernameController.text.trim();
-      if (username.isNotEmpty &&
-          !RegExp(r'^[a-zA-Z0-9_]{3,20}$').hasMatch(username)) {
-        setState(
-          () =>
-              _error = 'Username must be 3–20 letters, numbers or underscores.',
-        );
+      final usernameErr = NameValidator.username(username);
+      if (usernameErr != null) {
+        setState(() => _error = usernameErr);
         return;
       }
       setState(() => _saving = true);
@@ -1110,11 +1111,7 @@ class _ChurchPageState extends State<_ChurchPage> {
           const SizedBox(height: 8),
           Expanded(
             child: widget.loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primaryBlue,
-                    ),
-                  )
+                ? const Center(child: BrandSpinner(size: 30))
                 : filtered.isEmpty
                 ? Center(
                     child: Padding(

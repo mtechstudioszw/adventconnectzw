@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../motion/brand_spinner.dart';
 import '../../config/router_config.dart';
 import '../../models/story_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
@@ -915,11 +916,7 @@ class _StoryPeopleSheetState extends State<_StoryPeopleSheet> {
             const Divider(height: 1),
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primaryBlue,
-                      ),
-                    )
+                  ? const Center(child: BrandSpinner(size: 30))
                   : _viewers.isEmpty
                       ? Center(
                           child: Padding(

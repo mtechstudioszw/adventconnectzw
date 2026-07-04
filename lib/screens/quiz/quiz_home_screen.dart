@@ -159,11 +159,7 @@ class _QuizHomeScreenState extends State<QuizHomeScreen> {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primaryBlue,
-                      ),
-                    ),
+                    child: Center(child: BrandSpinner(size: 30)),
                   );
                 }
                 if (cats.isEmpty) {

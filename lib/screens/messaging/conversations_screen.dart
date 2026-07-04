@@ -387,9 +387,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   /// Pinned conversations float to the top, preserving their existing
   /// (recency) order within each group.
   List<Conversation> _pinnedFirst(List<Conversation> list) {
-    final pinned = list.where(_isPinned).toList();
-    final rest = list.where((c) => !_isPinned(c)).toList();
-    return [...pinned, ...rest];
+    // Three tiers so a user's pin can NEVER jump above the church defaults:
+    //   1. Church defaults — the announcements channel + the church members
+    //      group (always pinned to the very top, can't be unpinned).
+    //   2. The user's own pinned chats.
+    //   3. Everything else.
+    bool isChurchDefault(Conversation c) =>
+        c.isChurchChannel || c.isChurchGroup;
+    bool userPinned(Conversation c) =>
+        !isChurchDefault(c) && (_convStates[c.id]?.pinned ?? false);
+    final churchDefaults = list.where(isChurchDefault).toList();
+    final pinned = list.where(userPinned).toList();
+    final rest =
+        list.where((c) => !isChurchDefault(c) && !userPinned(c)).toList();
+    return [...churchDefaults, ...pinned, ...rest];
   }
 
   List<Conversation> get _chats {

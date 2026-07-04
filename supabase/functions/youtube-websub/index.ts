@@ -68,7 +68,51 @@ Deno.serve(async (req) => {
   let synced = 0;
   if (ids.length && API_KEY) {
     try { synced = await fetchAndUpsertVideos(sb, API_KEY, ids); } catch (_) { /* swallow: hub retries */ }
-    // NOTE (Phase 4): emit live-start / new-upload push notifications here.
+    // "New video" push. Spam-safe by construction:
+    //   - only genuinely-new uploads (upload_notified_at IS NULL),
+    //   - only recent ones (<6h) so a backfill/re-sync of old videos is silent,
+    //   - NON-live only (live starts are notified by youtube-sync's live path),
+    //   - at most ONE push per channel per 12h (rate limit), so a burst of
+    //     uploads can never flood every user.
+    // Best-effort throughout — a failure here must never break the hub's 200.
+    try {
+      const sixHoursAgo = new Date(Date.now() - 6 * 3600e3).toISOString();
+      const twelveHoursAgo = new Date(Date.now() - 12 * 3600e3).toISOString();
+      const nowIso = new Date().toISOString();
+      const { data: fresh } = await sb
+        .from("youtube_videos")
+        .select("video_id, title, channel_id, channel_title, published_at")
+        .in("video_id", ids)
+        .eq("live_status", "none")
+        .is("upload_notified_at", null)
+        .gt("published_at", sixHoursAgo)
+        .order("published_at", { ascending: false });
+      const seenChannel = new Set<string>();
+      for (const v of fresh ?? []) {
+        if (seenChannel.has(v.channel_id)) continue; // one per channel/delivery
+        seenChannel.add(v.channel_id);
+        const { data: recent } = await sb
+          .from("youtube_videos")
+          .select("video_id")
+          .eq("channel_id", v.channel_id)
+          .gt("upload_notified_at", twelveHoursAgo)
+          .limit(1);
+        if (recent && recent.length) continue; // rate-limited this channel
+        const ch = v.channel_title || "A channel";
+        try {
+          await sb.rpc("youtube_fanout_notification", {
+            p_title: `📺 New video from ${ch}`,
+            p_body: v.title
+              ? `${ch} just posted: ${v.title}. Tap to watch.`
+              : `${ch} just posted a new video. Tap to watch.`,
+            p_video_id: v.video_id,
+          });
+          await sb.from("youtube_videos")
+            .update({ upload_notified_at: nowIso })
+            .eq("video_id", v.video_id);
+        } catch (_) { /* per-video best effort */ }
+      }
+    } catch (_) { /* notifications are best-effort */ }
   }
 
   // Always 200 so the hub doesn't hammer retries.

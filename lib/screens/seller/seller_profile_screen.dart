@@ -276,7 +276,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         'Report: ${seller.businessName}\nReason: $reason\nSeller id: ${seller.authUserId}\nReporter: $reporterId';
 
     const adminPhone = '263778092494';
-    const adminEmail = 'tanatswamichaelmikuwa@gmail.com';
+    const adminEmail = 'adventconnectzw@gmail.com';
 
     final waUri = Uri.parse(
       'https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}',

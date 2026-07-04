@@ -19,7 +19,7 @@ class AboutScreen extends StatelessWidget {
   static const _appVersion = 'v1.0.0';
   static const _developerName = 'Tanatswa Michael Mikuwa';
   static const _studioName = 'MyTech Studios Zw';
-  static const _contactEmail = 'tanatswamichaelmikuwa@gmail.com';
+  static const _contactEmail = 'adventconnectzw@gmail.com';
   static const _contactWhatsApp = '+263778092494';
   static const _sponsorEcoCash = '0778 092 494';
   static const _sponsorEcoCashName = 'Tanatswa Michael Mikuwa';

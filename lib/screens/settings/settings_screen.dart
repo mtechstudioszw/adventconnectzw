@@ -240,7 +240,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   // Same number doubles as the support WhatsApp + a contact email.
   // Update these as the ministry's reach grows.
   static const _supportWhatsApp = '+263778092494';
-  static const _supportEmail = 'tanatswamichaelmikuwa@gmail.com';
+  static const _supportEmail = 'adventconnectzw@gmail.com';
 
   Future<void> _openSupportSheet() async {
     await showModalBottomSheet<void>(

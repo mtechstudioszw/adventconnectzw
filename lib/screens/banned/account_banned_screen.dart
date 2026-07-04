@@ -26,7 +26,7 @@ class AccountBannedScreen extends StatefulWidget {
 
 class _AccountBannedScreenState extends State<AccountBannedScreen> {
   static const _whatsApp = '263778092494';
-  static const _email = 'tanatswamichaelmikuwa@gmail.com';
+  static const _email = 'adventconnectzw@gmail.com';
 
   Timer? _poll;
 

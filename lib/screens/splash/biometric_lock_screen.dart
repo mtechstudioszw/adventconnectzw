@@ -114,8 +114,12 @@ class _BiometricLockScreenState extends State<BiometricLockScreen>
       // in PARALLEL with the success choreography instead of before it,
       // so unlock takes ~600ms, not network + 600ms. Timeboxed and
       // defaulting to home so a slow connection never stalls the door.
+      // Timeboxed SHORTER than the ~740ms success animation so the network
+      // check resolves in parallel and is never on the critical path — a
+      // returning (biometric) user has completed setup, so we default to
+      // home on a slow connection instead of stalling the door ~2-3s.
       final completedFuture = AuthService.hasCompletedProfileSetup()
-          .timeout(const Duration(seconds: 2), onTimeout: () => true)
+          .timeout(const Duration(milliseconds: 700), onTimeout: () => true)
           .catchError((_) => true);
       // Celebrate while the check runs — gold ring draws in, fingerprint
       // becomes a check — so unlocking feels like a moment, not a cut.

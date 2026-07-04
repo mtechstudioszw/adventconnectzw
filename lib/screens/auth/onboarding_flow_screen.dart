@@ -277,7 +277,12 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     // on profiles.username — but username is OPTIONAL on step 1, so
     // users who skipped it got asked to set up again every cold
     // start. The flag is the authoritative signal.
-    await AuthService.updateMetadataDirect({'onboarding_completed': true});
+    // Don't block "Enter App" on this network write — a slow connection here
+    // made the blue reveal hang ~3s. Home loads immediately; the completion
+    // flag persists in the background.
+    unawaited(
+      AuthService.updateMetadataDirect({'onboarding_completed': true}),
+    );
     if (!mounted) return;
     context.goNamed('home');
   }

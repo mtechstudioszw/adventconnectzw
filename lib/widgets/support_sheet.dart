@@ -7,7 +7,7 @@ import '../theme/app_text_styles.dart';
 
 /// App-wide support contacts. Reach the founder for help with any problem.
 const String kSupportWhatsApp = '263778092494';
-const String kSupportEmail = 'tanatswamichaelmikuwa@gmail.com';
+const String kSupportEmail = 'adventconnectzw@gmail.com';
 
 /// Show the "Contact support" bottom sheet — WhatsApp or email. [topic] seeds
 /// the message/subject so you can tell where the user came from

@@ -84,7 +84,8 @@ class YoutubeService {
           .select()
           .neq('live_status', 'upcoming')
           .order('published_at', ascending: false)
-          .range(offset, offset + limit - 1);
+          .range(offset, offset + limit - 1)
+          .timeout(const Duration(seconds: 15));
       final list = (rows as List)
           .map((e) => YoutubeVideo.fromJson(e as Map<String, dynamic>))
           .toList();

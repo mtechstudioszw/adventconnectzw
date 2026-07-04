@@ -271,7 +271,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         MessagingService.fetchConversationStates(),
         FeedService.fetchMyViewedStoryIds(),
         MessagingService.fetchInboxReactionPreviews(),
-      ]);
+      ]).timeout(const Duration(seconds: 15));
       if (!mounted) return;
       setState(() {
         _conversations = results[0] as List<Conversation>;

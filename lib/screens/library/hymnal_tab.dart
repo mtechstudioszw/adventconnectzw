@@ -37,6 +37,15 @@ class _HymnalTabState extends State<HymnalTab>
   @override
   void initState() {
     super.initState();
+    // Hydrate from the local cache synchronously so the Hymnal opens instantly
+    // (like the bundled Bible) instead of flashing a spinner; the background
+    // refresh in _load then keeps it fresh.
+    final cached = HymnService.cached();
+    if (cached.isNotEmpty) {
+      _all = cached;
+      _shown = cached;
+      _loading = false;
+    }
     _load();
     HymnPrefs.revision.addListener(_onFav);
   }

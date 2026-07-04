@@ -20,6 +20,12 @@ class HymnService {
   /// after an admin adds/edits/removes a hymn so the change shows immediately.
   static void invalidate() => _mem = null;
 
+  /// The locally-cached hymns (in-memory, else the persisted Hive copy), read
+  /// synchronously so the Hymnal tab can render instantly — like the bundled
+  /// Bible — instead of spinning while the network round-trips. Empty only on
+  /// the very first ever run before anything has been cached.
+  static List<Hymn> cached() => _mem ?? _readCache();
+
   /// All published hymns, ordered by number. Memory-cached after first load.
   static Future<List<Hymn>> all() async {
     final mem = _mem;

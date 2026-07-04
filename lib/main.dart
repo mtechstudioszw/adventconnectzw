@@ -139,9 +139,37 @@ Future<void> _initBackgroundServices() async {
   try {
     await Firebase.initializeApp();
 
-    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    // Transient network / auth-retry failures (no connection, DNS blip,
+    // Supabase token-refresh retry) are NOT real crashes — record them as
+    // non-fatal so they don't dominate Crashlytics' "trending crashes" or
+    // trigger false stability alerts (e.g. the GotrueFetch AuthRetryable
+    // reports). Everything else stays fatal.
+    bool isTransientNetwork(Object error) {
+      final t = error.runtimeType.toString();
+      final s = error.toString();
+      return t.contains('AuthRetryableFetchException') ||
+          t.contains('SocketException') ||
+          t.contains('TimeoutException') ||
+          t.contains('ClientException') ||
+          t.contains('HandshakeException') ||
+          s.contains('Failed host lookup') ||
+          s.contains('Connection closed') ||
+          s.contains('Connection reset') ||
+          s.contains('Software caused connection abort');
+    }
+
+    FlutterError.onError = (details) {
+      FirebaseCrashlytics.instance.recordFlutterError(
+        details,
+        fatal: !isTransientNetwork(details.exception),
+      );
+    };
     PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      FirebaseCrashlytics.instance.recordError(
+        error,
+        stack,
+        fatal: !isTransientNetwork(error),
+      );
       return true;
     };
 

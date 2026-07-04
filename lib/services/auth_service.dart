@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'cache_service.dart';
 import 'connectivity_service.dart';
 import 'secure_storage_service.dart';
 
@@ -827,6 +828,10 @@ class AuthService {
       await GoogleSignIn(serverClientId: _googleWebClientId).signOut();
     } catch (_) {}
     await SecureStorageService.clearAll();
+    // Wipe cached account data (inbox, chats, feed, profiles) so the next
+    // account that logs in on this device never briefly sees the previous
+    // user's data. Device prefs (theme, Sabbath) are preserved.
+    await CacheService.clearUserData();
   }
 
   static const _bannedKey = 'account_banned';

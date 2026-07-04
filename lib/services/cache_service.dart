@@ -117,6 +117,21 @@ class CacheService {
     await _box?.clear();
   }
 
+  /// Wipe every cached network payload (inbox, chats, feed, profiles, member
+  /// directory, …) but KEEP device-level `pref:` settings (theme, Sabbath
+  /// opt-in, etc.). Called on sign-out so the next account never briefly sees
+  /// the previous user's cached data — a privacy fix for the "old chats flash
+  /// then correct themselves" bug.
+  static Future<void> clearUserData() async {
+    final box = _box;
+    if (box == null) return;
+    final keys = box.keys
+        .whereType<String>()
+        .where((k) => !k.startsWith('pref:'))
+        .toList();
+    await box.deleteAll(keys);
+  }
+
   // ---------- Long-term preferences (no TTL) -------------------------
   //
   // The TTL-tracking writeString/readString above are right for cached

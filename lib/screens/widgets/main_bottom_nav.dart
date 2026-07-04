@@ -62,16 +62,12 @@ class MainBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Container(
+      // Same colour as the screen behind it so the tabs read as icons on the
+      // page (one continuous background), not a separate white bar. A hairline
+      // top border keeps just enough separation; no drop shadow.
       decoration: BoxDecoration(
-        color: palette.card,
+        color: palette.scaffoldBg,
         border: Border(top: BorderSide(color: palette.divider, width: 0.7)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.darkNavy.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, -6),
-          ),
-        ],
       ),
       child: SafeArea(
         top: false,
@@ -206,7 +202,7 @@ class _BadgedIcon extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.red,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.white, width: 1.5),
+              border: Border.all(color: context.palette.scaffoldBg, width: 1.5),
             ),
             alignment: Alignment.center,
             child: Text(

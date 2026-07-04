@@ -52,8 +52,6 @@ class _StarredMessagesScreenState extends State<StarredMessagesScreen> {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkNavy,
-        foregroundColor: AppColors.white,
         title: const Text('Starred messages'),
       ),
       body: _loading

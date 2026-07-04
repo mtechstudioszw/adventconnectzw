@@ -468,8 +468,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkNavy,
-        foregroundColor: AppColors.white,
         title: Text(
           _isChannel
               ? 'Channel info'

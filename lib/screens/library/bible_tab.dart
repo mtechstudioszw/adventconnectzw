@@ -1073,9 +1073,10 @@ class _BibleSavedScreenState extends State<BibleSavedScreen>
         ),
         bottom: TabBar(
           controller: _tabs,
-          indicatorColor: AppColors.goldAccent,
-          labelColor: AppColors.white,
-          unselectedLabelColor: AppColors.white.withValues(alpha: 0.6),
+          dividerColor: Colors.transparent,
+          indicatorColor: AppColors.primaryBlue,
+          labelColor: AppColors.primaryBlue,
+          unselectedLabelColor: const Color(0xFF7C8698),
           tabs: const [
             Tab(text: 'Bookmarks'),
             Tab(text: 'Notes'),

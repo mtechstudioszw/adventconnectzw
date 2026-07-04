@@ -66,6 +66,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         ),
         bottom: TabBar(
           controller: _tabs,
+          dividerColor: Colors.transparent,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           indicatorColor: AppColors.primaryBlue,

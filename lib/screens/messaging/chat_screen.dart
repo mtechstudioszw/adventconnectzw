@@ -5262,10 +5262,9 @@ class _Avatar extends StatelessWidget {
       height: size,
       clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.white.withValues(alpha: 0.15),
+      decoration: const BoxDecoration(
+        gradient: AppColors.primaryGradient,
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.white.withValues(alpha: 0.30)),
       ),
       child: hasPhoto
           ? CachedImage(

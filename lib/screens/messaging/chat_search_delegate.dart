@@ -47,18 +47,21 @@ class ChatSearchDelegate extends SearchDelegate<void> {
   @override
   ThemeData appBarTheme(BuildContext context) {
     final base = Theme.of(context);
+    final onSurface = base.colorScheme.onSurface;
     return base.copyWith(
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.darkNavy,
-        foregroundColor: AppColors.white,
+      appBarTheme: AppBarTheme(
+        backgroundColor: base.scaffoldBackgroundColor,
+        foregroundColor: onSurface,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
       ),
-      inputDecorationTheme: const InputDecorationTheme(
-        hintStyle: TextStyle(color: Colors.white70),
+      inputDecorationTheme: InputDecorationTheme(
+        hintStyle: TextStyle(color: onSurface.withValues(alpha: 0.5)),
         border: InputBorder.none,
       ),
       textTheme: base.textTheme.copyWith(
-        titleLarge: AppTextStyles.titleMedium.copyWith(color: AppColors.white),
+        titleLarge: AppTextStyles.titleMedium.copyWith(color: onSurface),
       ),
     );
   }

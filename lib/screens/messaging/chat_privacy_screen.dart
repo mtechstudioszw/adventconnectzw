@@ -117,8 +117,6 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
       backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
         title: const Text('Chat privacy'),
-        backgroundColor: AppColors.darkNavy,
-        foregroundColor: AppColors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () =>

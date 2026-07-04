@@ -972,18 +972,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                         height: 46,
                         clipBehavior: Clip.antiAlias,
                         alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          gradient: photoUrl == null
-                              ? AppColors.primaryGradient
-                              : null,
-                          color: photoUrl == null
-                              ? null
-                              : AppColors.white.withValues(alpha: 0.15),
+                        decoration: const BoxDecoration(
+                          gradient: AppColors.primaryGradient,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.white.withValues(alpha: 0.35),
-                            width: 2,
-                          ),
                         ),
                         child: photoUrl == null
                             ? Text(

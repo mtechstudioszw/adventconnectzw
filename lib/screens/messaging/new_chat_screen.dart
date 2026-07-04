@@ -230,10 +230,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkNavy,
-        foregroundColor: AppColors.white,
         title: const Text('New chat'),
-        elevation: 0,
       ),
       body: SafeArea(
         child: Column(

@@ -273,10 +273,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (_error != null || _profile == null) {
       return Scaffold(
         backgroundColor: context.palette.scaffoldBg,
-        appBar: AppBar(
-          backgroundColor: AppColors.darkNavy,
-          foregroundColor: AppColors.white,
-        ),
+        appBar: AppBar(),
         body: Center(
           child: Text(
             _error ?? 'Profile not found.',

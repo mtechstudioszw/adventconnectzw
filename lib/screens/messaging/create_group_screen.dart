@@ -162,10 +162,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       appBar: AppBar(
-        backgroundColor: AppColors.darkNavy,
-        foregroundColor: AppColors.white,
         title: const Text('New group'),
-        elevation: 0,
       ),
       body: SafeArea(
         child: Column(

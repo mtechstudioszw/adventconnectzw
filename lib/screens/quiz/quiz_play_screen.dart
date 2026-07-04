@@ -68,26 +68,30 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
   /// Opt-in rewarded bonus: watch a short ad to remove two wrong answers.
   Future<void> _useHint() async {
     if (_hintUsed || _chosen != null || _hintBusy) return;
-    if (!RewardedAdManager.isReady) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hint available right now.')),
-      );
-      RewardedAdManager.loadAd();
-      return;
+    // A rewarded ad monetises the hint when one is available — but a missing
+    // ad (poor fill / offline) must NEVER block the hint, which is why players
+    // kept seeing "no hint". If no ad is ready, grant it for free.
+    if (RewardedAdManager.isReady) {
+      setState(() => _hintBusy = true);
+      final earned = await RewardedAdManager.showForReward();
+      if (!mounted) return;
+      setState(() => _hintBusy = false);
+      if (earned) _grantHint();
+    } else {
+      _grantHint();
     }
-    setState(() => _hintBusy = true);
-    final earned = await RewardedAdManager.showForReward();
-    if (!mounted) return;
+    RewardedAdManager.loadAd(); // warm the next one up
+  }
+
+  void _grantHint() {
+    if (_hintUsed) return;
     setState(() {
-      _hintBusy = false;
-      if (earned) {
-        _hintUsed = true;
-        final wrong = [
-          for (var i = 0; i < _q.options.length; i++)
-            if (i != _q.correctIndex) i,
-        ]..shuffle();
-        _hidden.addAll(wrong.take(2)); // remove two wrong options
-      }
+      _hintUsed = true;
+      final wrong = [
+        for (var i = 0; i < _q.options.length; i++)
+          if (i != _q.correctIndex) i,
+      ]..shuffle();
+      _hidden.addAll(wrong.take(2)); // remove two wrong options
     });
   }
 
@@ -112,13 +116,18 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
       });
       _persist(); // save progress so the round is resumable
     } else {
-      if (widget.isDaily) await QuizService.recordDailyComplete();
-      await QuizService.clearSession(); // round done — nothing to resume
+      // Never let a storage hiccup swallow the results screen.
+      try {
+        if (widget.isDaily) await QuizService.recordDailyComplete();
+        await QuizService.clearSession(); // round done — nothing to resume
+      } catch (_) {}
       if (!mounted) return;
       setState(() => _finished = true);
-      // One capped interstitial at the natural end of a session (never
-      // mid-question). The manager enforces its own frequency cap.
-      InterstitialAdManager.maybeShow();
+      // One capped interstitial at the natural end of a session — fired AFTER
+      // the results paint so it never pre-empts the results screen.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => InterstitialAdManager.maybeShow(),
+      );
     }
   }
 

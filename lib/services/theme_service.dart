@@ -21,11 +21,12 @@ class ThemeService {
 
   static const _storageKey = 'app_theme_mode_v1';
 
-  // Default to LIGHT on a fresh install (founder's call). Users can switch to
-  // Dark / System via Settings -> Appearance, and that choice persists.
-  static ThemeMode _current = ThemeMode.light;
+  // Default to SYSTEM on a fresh install — the app matches the phone's
+  // light/dark setting until the user explicitly picks Light or Dark in
+  // Settings -> Appearance, after which that choice persists.
+  static ThemeMode _current = ThemeMode.system;
   static final ValueNotifier<ThemeMode> _notifier =
-      ValueNotifier(ThemeMode.light);
+      ValueNotifier(ThemeMode.system);
   static bool _initialized = false;
 
   /// Read the saved choice once at startup. Cheap secure-storage read;
@@ -59,7 +60,7 @@ class ThemeService {
       case 'system':
         return ThemeMode.system;
       default:
-        return ThemeMode.light;
+        return ThemeMode.system;
     }
   }
 

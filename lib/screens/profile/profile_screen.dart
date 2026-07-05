@@ -458,11 +458,6 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                 onTap: () => Navigator.pop(ctx, 'settings'),
               ),
               _MoreMenuRow(
-                icon: Icons.notifications_outlined,
-                label: 'Notifications',
-                onTap: () => Navigator.pop(ctx, 'notifications'),
-              ),
-              _MoreMenuRow(
                 icon: Icons.feedback_outlined,
                 label: 'Send feedback',
                 onTap: () => Navigator.pop(ctx, 'feedback'),

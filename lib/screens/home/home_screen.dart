@@ -125,6 +125,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     super.initState();
     // (Entrance animation now lives in _buildScrollableContent's
     // StaggeredReveal sections — no screen-level controller needed.)
+    // Paint cached unread badges instantly so the notification bell + chat
+    // bubble don't flash 0 → n on every open. Refreshed by the loads below.
+    _hydrateBadgesFromCache();
     // Today's devotion — paint the cached copy instantly (survives a slow /
     // offline open since the card is pinned to the top), then refresh.
     _devotion = DevotionService.cachedToday();
@@ -281,9 +284,39 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
         _unreadMessages = unread;
         _pendingFriendRequests = pending;
       });
+      _cacheBadges();
     } catch (_) {
       // Silent — badge accuracy is best-effort.
     }
+  }
+
+  static const _badgeCacheKey = 'home_badges_v1';
+
+  /// Paint the last-known unread counts instantly on the next home open so the
+  /// bell + chat bubble don't flash 0 first. Cleared on sign-out with the rest
+  /// of the user cache.
+  void _hydrateBadgesFromCache() {
+    final raw = CacheService.readStringStale(_badgeCacheKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      _unreadNotifications = (m['n'] as num?)?.toInt() ?? 0;
+      _unreadMessages = (m['m'] as num?)?.toInt() ?? 0;
+      _pendingFriendRequests = (m['r'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      // Corrupt cache — ignore; the live load will set the real counts.
+    }
+  }
+
+  void _cacheBadges() {
+    unawaited(CacheService.writeString(
+      _badgeCacheKey,
+      jsonEncode({
+        'n': _unreadNotifications,
+        'm': _unreadMessages,
+        'r': _pendingFriendRequests,
+      }),
+    ));
   }
 
   Future<void> _bootstrap() async {
@@ -385,6 +418,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       });
       // Best-effort cache write — failures here must never surface.
       unawaited(_writeCache(events, churches, feedPosts));
+      _cacheBadges();
     } catch (_) {
       if (!mounted) return;
       // Network failed. If we haven't hydrated from cache yet (e.g.

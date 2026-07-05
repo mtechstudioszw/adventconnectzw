@@ -11,6 +11,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/screen_shell.dart';
+import '../../widgets/connection_error_view.dart';
 import '../../widgets/verified_tick.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
@@ -142,7 +143,7 @@ class _MemberDirectoryScreenState extends State<MemberDirectoryScreen> {
         child: Center(child: BrandSpinner(size: 30)),
       );
     }
-    if (_error != null) return ErrorBanner(message: _error!);
+    if (_error != null) return ConnectionErrorView(onRetry: _load);
     if (_entries.isEmpty) {
       return EmptyStateCard(
         icon: Icons.people_outline,

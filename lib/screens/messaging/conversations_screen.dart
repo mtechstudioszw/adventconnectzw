@@ -1739,7 +1739,8 @@ class _ConversationTile extends StatelessWidget {
   final InboxReactionPreview? reactionPreview;
 
   String _reactionPreviewLabel(InboxReactionPreview r) {
-    if (r.reactorIsMe) return 'You reacted ${r.emoji}';
+    // Only ever someone ELSE's reaction (the RPC excludes the caller's own),
+    // so your own reactions never hijack your preview — WhatsApp behaviour.
     if (r.onMyMessage) return 'Reacted ${r.emoji} to your message';
     return 'Reacted ${r.emoji} to a message';
   }
@@ -1915,7 +1916,13 @@ class _ConversationTile extends StatelessWidget {
                           // viewer sent it (patch_075 surfaces its real
                           // delivered/read state): ✓ sent, ✓✓ delivered,
                           // ✓✓ blue read (blue only in 1:1, like in-chat).
-                          if (isLastFromMe && !conversation.isSelfChat) ...[
+                          // Never on a placeholder ("Say hello") or a reaction
+                          // preview — those aren't messages the viewer sent.
+                          if (isLastFromMe &&
+                              !conversation.isSelfChat &&
+                              reactionPreview == null &&
+                              !previewCleared &&
+                              conversation.lastMessage.isNotEmpty) ...[
                             Icon(
                               (conversation.lastDelivered ||
                                       conversation.lastRead)

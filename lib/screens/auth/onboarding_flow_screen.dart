@@ -48,6 +48,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
 
   // ---------------- profile step ----------------
   final _nameController = TextEditingController();
+  final _surnameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _bioController = TextEditingController();
   String? _profilePhotoUrl;
@@ -81,7 +82,12 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     // Prefill from whatever metadata signUp already attached so the
     // user never re-types what we already know.
     final meta = AuthService.currentUser?.userMetadata ?? const {};
-    _nameController.text = (meta['full_name'] as String?) ?? '';
+    // Split the stored full name into first + surname for the two fields.
+    final fullName = ((meta['full_name'] as String?) ?? '').trim();
+    final nameParts = fullName.split(RegExp(r'\s+'));
+    _nameController.text = nameParts.isNotEmpty ? nameParts.first : '';
+    _surnameController.text =
+        nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
     _usernameController.text = (meta['username'] as String?) ?? '';
     _bioController.text = (meta['bio'] as String?) ?? '';
     _profilePhotoUrl = meta['profile_photo_url'] as String?;
@@ -94,6 +100,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
   void dispose() {
     _page.dispose();
     _nameController.dispose();
+    _surnameController.dispose();
     _usernameController.dispose();
     _bioController.dispose();
     super.dispose();
@@ -126,14 +133,23 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
   Future<void> _saveAndNext() async {
     setState(() => _error = null);
     if (_index == 1) {
-      final name = _nameController.text.trim();
-      // Real first name + surname, junk-filtered — this is where Google
-      // sign-ups get caught (they skip the email signup form).
-      final nameErr = NameValidator.fullName(_nameController.text);
-      if (nameErr != null) {
-        setState(() => _error = nameErr);
+      // Real first name + surname, both junk-filtered — this is where Google
+      // sign-ups get caught (they skip the signup form) and nobody can bypass
+      // it by leaving one blank or typing a number.
+      final firstErr =
+          NameValidator.namePart(_nameController.text, 'First name');
+      if (firstErr != null) {
+        setState(() => _error = firstErr);
         return;
       }
+      final surnameErr =
+          NameValidator.namePart(_surnameController.text, 'Surname');
+      if (surnameErr != null) {
+        setState(() => _error = surnameErr);
+        return;
+      }
+      final name =
+          NameValidator.combine(_nameController.text, _surnameController.text);
       final username = _usernameController.text.trim();
       final usernameErr = NameValidator.username(username);
       if (usernameErr != null) {
@@ -297,6 +313,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
       _WelcomePage(onContinue: () => _go(1)),
       _ProfilePage(
         nameController: _nameController,
+        surnameController: _surnameController,
         usernameController: _usernameController,
         bioController: _bioController,
         photoUrl: _profilePhotoUrl,
@@ -765,6 +782,7 @@ class _WelcomePage extends StatelessWidget {
 class _ProfilePage extends StatelessWidget {
   const _ProfilePage({
     required this.nameController,
+    required this.surnameController,
     required this.usernameController,
     required this.bioController,
     required this.photoUrl,
@@ -778,6 +796,7 @@ class _ProfilePage extends StatelessWidget {
   });
 
   final TextEditingController nameController;
+  final TextEditingController surnameController;
   final TextEditingController usernameController;
   final TextEditingController bioController;
   final String? photoUrl;
@@ -845,7 +864,13 @@ class _ProfilePage extends StatelessWidget {
           _GlowField(
             controller: nameController,
             icon: Icons.person_outline,
-            hint: 'Display name',
+            hint: 'First name',
+          ),
+          const SizedBox(height: 14),
+          _GlowField(
+            controller: surnameController,
+            icon: Icons.badge_outlined,
+            hint: 'Surname',
           ),
           const SizedBox(height: 14),
           _GlowField(

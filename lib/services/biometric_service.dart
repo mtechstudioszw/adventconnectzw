@@ -16,6 +16,16 @@ class BiometricService {
   static final LocalAuthentication _auth = LocalAuthentication();
   static const _enabledKey = 'biometric_enabled';
 
+  // In-memory mirror of the stored flag so the Settings toggle paints the
+  // right state instantly instead of flashing off → on after the async read.
+  // Populated by the first isEnabled() (the splash calls it at startup) and
+  // kept in sync by setEnabled().
+  static bool? _enabledCache;
+
+  /// Last-known enabled state, available synchronously. Null until the first
+  /// read/write this launch.
+  static bool? get enabledCached => _enabledCache;
+
   /// Whether the device has fingerprint / face hardware enrolled. False
   /// on emulators with nothing enrolled — don't show the toggle.
   static Future<bool> isAvailable() async {
@@ -32,7 +42,9 @@ class BiometricService {
 
   static Future<bool> isEnabled() async {
     final raw = await SecureStorageService.read(_enabledKey);
-    return raw == 'true';
+    final enabled = raw == 'true';
+    _enabledCache = enabled;
+    return enabled;
   }
 
   /// Prompt the user, then persist the choice. Returns true on success.
@@ -40,6 +52,7 @@ class BiometricService {
   static Future<bool> setEnabled(bool enabled) async {
     if (!enabled) {
       await SecureStorageService.write(_enabledKey, 'false');
+      _enabledCache = false;
       return true;
     }
     try {
@@ -52,6 +65,7 @@ class BiometricService {
       );
       if (ok) {
         await SecureStorageService.write(_enabledKey, 'true');
+        _enabledCache = true;
       }
       return ok;
     } on PlatformException catch (e) {

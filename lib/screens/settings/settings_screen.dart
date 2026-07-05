@@ -39,7 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _ytAutoplayNext = YoutubePrefs.autoplayNext;
   bool _isSuperAdmin = false;
   bool _biometricAvailable = false;
-  bool _biometricEnabled = false;
+  bool _biometricEnabled = BiometricService.enabledCached ?? false;
   bool _biometricBusy = false;
 
   @override

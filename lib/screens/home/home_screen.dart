@@ -1969,24 +1969,31 @@ class _SabbathChipState extends State<_SabbathChip> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                AppColors.goldAccent.withValues(alpha: 0.55),
-                AppColors.goldAccent.withValues(alpha: 0.30),
+                AppColors.goldAccent,
+                AppColors.goldAccent.withValues(alpha: 0.80),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.goldAccent, width: 1.2),
+            border: Border.all(
+              color: AppColors.goldAccent.withValues(alpha: 0.9),
+              width: 1.2,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.auto_awesome, size: 13, color: AppColors.white),
+              const Icon(
+                Icons.auto_awesome,
+                size: 13,
+                color: AppColors.darkNavy,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Happy Sabbath',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.white,
+                  color: AppColors.darkNavy,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.4,
@@ -2006,10 +2013,10 @@ class _SabbathChipState extends State<_SabbathChip> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.goldAccent.withValues(alpha: 0.20),
+          color: AppColors.goldAccent.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: AppColors.goldAccent.withValues(alpha: 0.45),
+            color: AppColors.goldAccent,
             width: 1,
           ),
         ),
@@ -2019,13 +2026,13 @@ class _SabbathChipState extends State<_SabbathChip> {
             const Icon(
               Icons.brightness_3,
               size: 13,
-              color: AppColors.goldAccent,
+              color: AppColors.darkNavy,
             ),
             const SizedBox(width: 6),
             Text(
               'Sabbath in ${_format(remaining)}',
               style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.white,
+                color: AppColors.darkNavy,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.3,

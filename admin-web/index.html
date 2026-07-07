@@ -156,6 +156,7 @@
         <a data-tab="youtube">📺 YouTube</a>
         <a data-tab="feedback">💬 Feedback <span class="badge" id="b-feedback" style="display:none"></span></a>
         <a data-tab="insights">📈 Insights</a>
+        <a data-tab="usage">📊 Usage</a>
         <a data-tab="users">👤 Users</a>
         <a data-tab="broadcast">📣 Broadcast</a>
       </nav>
@@ -277,7 +278,7 @@ $("nav").addEventListener("click", (e) => {
 function switchTab(tab) {
   document.querySelectorAll("#nav a").forEach(a =>
     a.classList.toggle("active", a.dataset.tab === tab));
-  ({ overview, sellers, reports, news, events, jobs, churches, churchadmins, youtube, feedback, insights, users, broadcast }[tab] || overview)();
+  ({ overview, sellers, reports, news, events, jobs, churches, churchadmins, youtube, feedback, insights, usage, users, broadcast }[tab] || overview)();
 }
 
 async function refreshBadges() {
@@ -796,6 +797,45 @@ async function insights() {
   } catch (err) { view().innerHTML = head("User insights","") + errBox(err); }
 }
 
+async function usage() {
+  view().innerHTML = head("App usage", "How members are actually using Advent Connect.") + loading();
+  try {
+    const s = await rpc("admin_usage_stats");
+    const tile = (label, val, sub) => `
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px">
+        <div class="meta" style="margin-bottom:4px">${esc(label)}</div>
+        <div style="font-size:26px;font-weight:800">${Number(val ?? 0).toLocaleString()}</div>
+        ${sub ? `<div class="meta">${esc(sub)}</div>` : ""}
+      </div>`;
+    const grid = (cells) => `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:18px">${cells}</div>`;
+    const sect = (t) => `<div style="font-weight:800;margin:6px 0 10px">${esc(t)}</div>`;
+    const stick1 = s.total_users ? Math.round((s.active_1d / s.total_users) * 100) : 0;
+    const stick7 = s.total_users ? Math.round((s.active_7d / s.total_users) * 100) : 0;
+    view().innerHTML = head("App usage", "How members are actually using Advent Connect.") +
+      sect("Members") + grid(
+        tile("Total members", s.total_users) +
+        tile("Active today", s.active_1d, `${stick1}% of members`) +
+        tile("Active this week", s.active_7d, `${stick7}% of members`) +
+        tile("Active this month", s.active_30d) +
+        tile("New this week", s.new_7d, `${s.new_1d} today`) +
+        tile("New this month", s.new_30d) +
+        tile("Banned", s.banned)
+      ) +
+      sect("Community & content") + grid(
+        tile("Chat messages", s.messages, `${s.conversations} conversations`) +
+        tile("Friendships", s.friendships) +
+        tile("Church follows", s.church_follows) +
+        tile("Posts", s.posts) +
+        tile("Stories", s.stories) +
+        tile("Prayers", s.prayers) +
+        tile("Events", s.events) +
+        tile("Products", s.products) +
+        tile("Jobs", s.jobs) +
+        tile("Survey responses", s.survey_responses)
+      );
+  } catch (err) { view().innerHTML = head("App usage","") + errBox(err); }
+}
+
 async function users() {
   view().innerHTML = head("Users", "Search, then ban or unban.") +
     `<div class="toolbar"><input id="uq" placeholder="Search name or email…" /><button class="btn primary" id="usearch">Search</button></div><div id="ulist"></div>`;
@@ -810,11 +850,23 @@ async function users() {
           <td>${esc(u.email || "—")}</td>
           <td class="meta">${fmtDate(u.created_at)}</td>
           <td>${u.is_banned ? `<span class="chip red">BANNED</span>` : `<span class="chip green">Active</span>`}</td>
-          <td style="white-space:nowrap">${u.is_super_admin ? "—" :
+          <td style="white-space:nowrap">
+            <button class="btn ghost" data-notify="${u.id}" data-name="${esc(u.full_name || "user")}">Notify</button>
+            ${u.is_super_admin ? "" :
             (u.is_banned
               ? `<button class="btn ghost" data-unban="${u.id}">Unban</button>`
               : `<button class="btn red" data-ban="${u.id}">Ban</button>`)}</td>
         </tr>`).join("") + `</tbody></table>`;
+      $("ulist").querySelectorAll("[data-notify]").forEach(b => b.onclick = async () => {
+        const title = await ask({ title: `Notify ${b.dataset.name}`, sub: "Step 1 of 2 — the notification TITLE.", placeholder: "e.g. A note from the Advent Connect team", okLabel: "Next" });
+        if (!title) return;
+        const msg = await ask({ title: `Notify ${b.dataset.name}`, sub: "Step 2 of 2 — the MESSAGE.", placeholder: "Write the message…", okLabel: "Send" });
+        if (!msg) return;
+        try {
+          const n = await rpc("admin_notify_user", { p_user_id: b.dataset.notify, p_title: title, p_body: msg });
+          alert(n > 0 ? "Sent ✔ — it lands in their notifications (and pushes)." : "User not found.");
+        } catch (e) { alert(e.message); }
+      });
       $("ulist").querySelectorAll("[data-ban]").forEach(b => b.onclick = async () => {
         const ok = await ask({ title: "Ban user", sub: "They'll be notified and blocked from posting.", okLabel: "Ban", okClass: "red", needText: false });
         if (!ok) return;

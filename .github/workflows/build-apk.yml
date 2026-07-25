@@ -33,6 +33,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Build #391 died with "No space left on device" — the runner
+      # couldn't even write its own diagnostic log. Nothing in the app
+      # caused it (all of assets/ is 7.8 MB): the GitHub-hosted
+      # ubuntu-latest image has grown until a Flutter + Android SDK +
+      # Gradle build no longer fits in what's left.
+      #
+      # These directories are preinstalled on the image and are useless to
+      # a Flutter Android build. Removing them reclaims ~20 GB. Each is
+      # `|| true` so a future runner image that drops one of them can't
+      # fail the build, and df is printed either side so the next person
+      # to hit this can see the real numbers instead of guessing.
+      #
+      # DO NOT add /usr/local/lib/android/sdk/ndk here. app/build.gradle.kts
+      # pins ndkVersion = "27.0.12077973", so deleting it makes Gradle
+      # either re-download several GB (defeating the point) or fail with
+      # "NDK not configured". Trading a disk error for an NDK error.
+      - name: Free up disk space
+        run: |
+          echo "=== before ==="
+          df -h /
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo rm -rf /usr/share/swift || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          docker image prune --all --force || true
+          echo "=== after ==="
+          df -h /
+
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:

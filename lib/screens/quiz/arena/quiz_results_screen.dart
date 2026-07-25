@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../config/share_config.dart';
 import '../../../models/quiz_round.dart';
 import '../../../services/ads/interstitial_ad_manager.dart';
 import '../../../services/quiz_progress_service.dart';
@@ -9,8 +12,10 @@ import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
 import 'arena_theme.dart';
+import 'quiz_review_screen.dart';
 import 'widgets/arena_scaffold.dart';
 import 'widgets/burst_layer.dart';
+import 'widgets/quiz_share_card.dart';
 import 'widgets/xp_bar.dart';
 
 /// The payoff.
@@ -40,6 +45,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
 
   int _starsShown = 0;
   bool _celebrationDone = false;
+  bool _sharing = false;
   Timer? _starTimer;
 
   QuizRoundResult get _result => widget.result;
@@ -303,8 +309,64 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
             label: 'XP earned',
           ),
         ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatTile(
+            icon: Icons.monetization_on_rounded,
+            value: '+${_result.coinsEarned}',
+            label: 'Coins',
+          ),
+        ),
       ],
     );
+  }
+
+  Widget _buildSecondaryActions() {
+    final hasReview = _result.reviewPairs.isNotEmpty;
+    return Row(
+      children: [
+        if (hasReview)
+          Expanded(
+            child: _GhostButton(
+              icon: Icons.fact_check_outlined,
+              label: 'Review answers',
+              onTap: () {
+                QuizSfx.tap();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => QuizReviewScreen(result: _result),
+                  ),
+                );
+              },
+            ),
+          ),
+        if (hasReview) const SizedBox(width: 10),
+        Expanded(
+          child: _GhostButton(
+            icon: Icons.ios_share_rounded,
+            label: _sharing ? 'Preparing…' : 'Share',
+            onTap: _sharing ? null : _share,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _share() async {
+    setState(() => _sharing = true);
+    QuizSfx.tap();
+    final name = Supabase.instance.client.auth.currentUser?.userMetadata?[
+        'full_name'] as String?;
+    final ok = await QuizShareCard.share(context, _result, playerName: name);
+    if (!mounted) return;
+    setState(() => _sharing = false);
+    if (!ok) {
+      // Image capture can fail on odd devices — never leave the button dead.
+      await Share.share(
+        'I scored ${_result.points} points in the Advent Connect ZW '
+        'Bible Quiz!\n\n$appDownloadUrl',
+      );
+    }
   }
 
   Widget _buildBanner({
@@ -411,6 +473,8 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
             ),
           ),
           const SizedBox(height: 10),
+          _buildSecondaryActions(),
+          const SizedBox(height: 4),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(
@@ -420,6 +484,61 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Secondary action — outlined glass, so it never competes with the gold
+/// "Play again" button.
+class _GhostButton extends StatelessWidget {
+  const _GhostButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onTap == null ? 0.55 : 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Container(
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ArenaTheme.glass,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: ArenaTheme.glassBorder),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 17, color: ArenaTheme.textOnNavy),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: ArenaTheme.textOnNavy,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

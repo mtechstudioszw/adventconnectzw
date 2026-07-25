@@ -34,6 +34,8 @@ class QuizProgressService {
   static const _kMistakes = 'quiz_mistakes';
   static const _kBestPrefix = 'quiz_best_';
   static const _kLifetimePoints = 'quiz_points_total';
+  static const _kCoins = 'quiz_coins';
+  static const _kCoinsSeeded = 'quiz_coins_seeded';
 
   /// A question isn't served again for this long unless the pool runs dry.
   /// The old behaviour wiped the whole seen-list the moment it couldn't
@@ -71,6 +73,35 @@ class QuizProgressService {
 
   static Future<void> addPoints(int points) =>
       _writeInt(_kLifetimePoints, lifetimePoints() + points);
+
+  // ---- Coins --------------------------------------------------------------
+
+  static int coins() => _readInt(_kCoins);
+
+  /// Grant the starting balance the first time a player opens the arena.
+  ///
+  /// Keyed off a separate flag rather than "is the balance zero?", or a
+  /// player who legitimately spent down to nothing would be topped up again
+  /// every time they came back.
+  static Future<void> ensureStartingCoins() async {
+    if (CacheService.readPref(_kCoinsSeeded) == '1') return;
+    await CacheService.writePref(_kCoinsSeeded, '1');
+    if (coins() <= 0) await _writeInt(_kCoins, QuizCoins.startingBalance);
+  }
+
+  static Future<void> addCoins(int amount) async {
+    if (amount <= 0) return;
+    await _writeInt(_kCoins, coins() + amount);
+  }
+
+  /// Deducts [amount] if the player can afford it. Returns false (and
+  /// changes nothing) when they can't.
+  static Future<bool> spendCoins(int amount) async {
+    final balance = coins();
+    if (amount <= 0 || balance < amount) return false;
+    await _writeInt(_kCoins, balance - amount);
+    return true;
+  }
 
   // ---- Streak -------------------------------------------------------------
 
@@ -114,6 +145,18 @@ class QuizProgressService {
     if (correct) await _writeInt(_kCorrect, totalCorrect() + 1);
   }
 
+  /// Walk back a recorded answer.
+  ///
+  /// Used only by the Second Chance lifeline: the question gets re-answered,
+  /// so without this the same question would count twice against lifetime
+  /// accuracy — once wrong, once right.
+  static Future<void> undoAnswer({required bool correct}) async {
+    await _writeInt(_kAnswered, (totalAnswered() - 1).clamp(0, 1 << 31));
+    if (correct) {
+      await _writeInt(_kCorrect, (totalCorrect() - 1).clamp(0, 1 << 31));
+    }
+  }
+
   // ---- Best score per mode ------------------------------------------------
 
   static int bestScore(QuizMode mode) => _readInt('$_kBestPrefix${mode.name}');
@@ -137,9 +180,14 @@ class QuizProgressService {
     required int totalAnswered,
     required int totalCorrect,
     required int lifetimePoints,
+    required int coins,
     required Map<QuizMode, int> bestScores,
   }) async {
     await _writeInt(_kXp, xp);
+    await _writeInt(_kCoins, coins);
+    // Restored balance is authoritative — don't grant the starting coins
+    // on top of it.
+    await CacheService.writePref(_kCoinsSeeded, '1');
     await _writeInt(_kStreak, currentStreak);
     await _writeInt(_kBestStreak, bestStreak);
     await _writeInt(_kAnswered, totalAnswered);

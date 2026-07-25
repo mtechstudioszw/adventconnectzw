@@ -79,6 +79,7 @@ class QuizCloudService {
         'total_answered': QuizProgressService.totalAnswered(),
         'total_correct': QuizProgressService.totalCorrect(),
         'lifetime_points': QuizProgressService.lifetimePoints(),
+        'coins': QuizProgressService.coins(),
         'best_daily': QuizProgressService.bestScore(QuizMode.daily),
         'best_practice': QuizProgressService.bestScore(QuizMode.practice),
         'best_survival': QuizProgressService.bestScore(QuizMode.survival),
@@ -117,6 +118,7 @@ class QuizCloudService {
         totalAnswered: (row['total_answered'] as num?)?.toInt() ?? 0,
         totalCorrect: (row['total_correct'] as num?)?.toInt() ?? 0,
         lifetimePoints: (row['lifetime_points'] as num?)?.toInt() ?? 0,
+        coins: (row['coins'] as num?)?.toInt() ?? 0,
         bestScores: {
           QuizMode.daily: (row['best_daily'] as num?)?.toInt() ?? 0,
           QuizMode.practice: (row['best_practice'] as num?)?.toInt() ?? 0,

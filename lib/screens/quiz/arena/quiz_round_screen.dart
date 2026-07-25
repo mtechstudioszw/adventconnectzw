@@ -53,10 +53,24 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   int _floatKey = 0;
   Offset? _floatAt;
 
-  // 50/50 lifeline.
-  bool _hintUsed = false;
-  bool _hintBusy = false;
+  // ---- Lifelines ----------------------------------------------------------
+  /// Removed by 50/50.
   final Set<int> _hidden = {};
+
+  /// Spent on the current question — all reset by [_next].
+  final Set<Lifeline> _usedThisQuestion = {};
+
+  /// Second Chance is once per ROUND, not per question; it's the expensive
+  /// one and un-losing a Survival run repeatedly would make the mode moot.
+  bool _secondChanceUsed = false;
+  Lifeline? _lifelineBusy;
+
+  /// Mutable because Extra Time lengthens the current question's clock.
+  late int _questionSeconds = _mode.secondsPerQuestion;
+
+  /// The combo going INTO the current question, so Second Chance can put it
+  /// back rather than leaving the player revived but reset to zero.
+  late int _comboBeforeQuestion = widget.config.startCombo;
 
   // ---- Animation ----------------------------------------------------------
   late final AnimationController _timer;
@@ -158,7 +172,8 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   /// Countdown ticks in the last few seconds.
   void _onTimerTick() {
     if (_answered || !mounted) return;
-    final secondsLeft = (_remaining.value * _mode.secondsPerQuestion).ceil();
+    // _questionSeconds, not the mode default — Extra Time changes it.
+    final secondsLeft = (_remaining.value * _questionSeconds).ceil();
     if (secondsLeft <= 5 && secondsLeft > 0 && secondsLeft != _lastTickSecond) {
       _lastTickSecond = secondsLeft;
       QuizSfx.play(QuizSound.tick);
@@ -197,8 +212,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
       questionId: _question.id,
       chosenIndex: choice,
       correct: correct,
-      elapsedMs:
-          ((1 - remaining) * _mode.secondsPerQuestion * 1000).round(),
+      elapsedMs: ((1 - remaining) * _questionSeconds * 1000).round(),
       points: earned,
       comboAfter: nextCombo,
     ));
@@ -226,10 +240,14 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
       }
     }
 
-    // Sudden death.
+    // Sudden death — but never auto-end the run while a Second Chance is
+    // still on the table. That lifeline exists precisely for this moment,
+    // and ending the round from under the player would make it unusable.
     if (!correct && _mode.suddenDeath) {
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      if (mounted) _finish();
+      if (_secondChanceUsed) {
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+        if (mounted && !_finishing) _finish();
+      }
       return;
     }
 
@@ -248,11 +266,17 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     setState(() {
       _index++;
       _chosen = null;
-      _hintUsed = false;
-      _hintBusy = false;
       _hidden.clear();
+      _usedThisQuestion.clear();
+      _lifelineBusy = null;
+      _questionSeconds = _mode.secondsPerQuestion;
       _lastPoints = 0;
+      _floatAt = null;
     });
+    // Snapshot the combo so Second Chance can restore it if this question
+    // goes wrong.
+    _comboBeforeQuestion = _combo;
+    _timer.duration = Duration(seconds: _questionSeconds);
     _persist();
     _startQuestion();
   }
@@ -276,11 +300,18 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
 
     var leveledUp = false;
     var isNewBest = false;
+    var coins = QuizCoins.forRound(total);
     try {
+      final wasFirstDailyToday =
+          _mode == QuizMode.daily && !QuizProgressService.playedToday();
       if (_mode == QuizMode.daily) {
         await QuizProgressService.recordDailyComplete();
+        // Only the first daily of the day pays the bonus — replays don't.
+        if (wasFirstDailyToday) coins += QuizCoins.dailyBonus;
       }
       leveledUp = await QuizProgressService.addXp(xp);
+      if (leveledUp) coins += QuizCoins.levelUpBonus;
+      await QuizProgressService.addCoins(coins);
       await QuizProgressService.addPoints(total);
       isNewBest = await QuizProgressService.recordScore(_mode, total);
       await QuizProgressService.clearSession();
@@ -292,14 +323,17 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
       mode: _mode,
       title: widget.config.title,
       answers: List.of(_answers),
+      questions: List.of(_questions),
       points: total,
       bonusPoints: bonus,
       bestCombo: _bestCombo,
       xpEarned: xp,
+      coinsEarned: coins,
       newLevel: QuizProgressService.level(),
       leveledUp: leveledUp,
       streak: QuizProgressService.currentStreak(),
       isNewBestScore: isNewBest,
+      challengeId: widget.config.challengeId,
     );
 
     // Fire-and-forget: the results screen must never wait on the network.
@@ -326,35 +360,125 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     );
   }
 
-  /// Opt-in rewarded lifeline: remove two wrong answers.
-  ///
-  /// A missing ad must NEVER block the hint — poor fill or an offline
-  /// player would otherwise just see the lifeline do nothing.
-  Future<void> _useHint() async {
-    if (_hintUsed || _answered || _hintBusy) return;
-    if (RewardedAdManager.isReady) {
-      setState(() => _hintBusy = true);
-      final earned = await RewardedAdManager.showForReward();
-      if (!mounted) return;
-      setState(() => _hintBusy = false);
-      if (earned) _grantHint();
-    } else {
-      _grantHint();
+  // ---- Lifelines ----------------------------------------------------------
+
+  bool _lifelineAvailable(Lifeline lifeline) {
+    if (_usedThisQuestion.contains(lifeline)) return false;
+    switch (lifeline) {
+      case Lifeline.secondChance:
+        // Offered only in response to a wrong answer, once per round.
+        return !_secondChanceUsed &&
+            _answered &&
+            !_question.isCorrect(_chosen!);
+      case Lifeline.fiftyFifty:
+        return !_answered && _hidden.isEmpty;
+      case Lifeline.skip:
+        return !_answered;
+      case Lifeline.extraTime:
+        // Pointless once the clock is already empty.
+        return !_answered && _remaining.value > 0.02;
     }
-    RewardedAdManager.loadAd();
   }
 
-  void _grantHint() {
-    if (_hintUsed) return;
+  /// Pay for [lifeline] with coins, or offer a rewarded ad when the player
+  /// can't afford it.
+  ///
+  /// A missing ad must NEVER hard-block a lifeline — poor fill or an
+  /// offline player would just see the button do nothing, which is the
+  /// exact complaint the old 50/50 generated. If there's no ad to show,
+  /// the lifeline is granted anyway.
+  Future<void> _useLifeline(Lifeline lifeline) async {
+    if (_lifelineBusy != null || !_lifelineAvailable(lifeline)) return;
+
+    final paid = await QuizProgressService.spendCoins(lifeline.cost);
+    if (!paid) {
+      if (RewardedAdManager.isReady) {
+        setState(() => _lifelineBusy = lifeline);
+        final earned = await RewardedAdManager.showForReward();
+        if (!mounted) return;
+        setState(() => _lifelineBusy = null);
+        RewardedAdManager.loadAd();
+        if (!earned) return;
+      } else {
+        RewardedAdManager.loadAd();
+      }
+    }
+
+    if (!mounted) return;
     QuizSfx.tap();
+    _usedThisQuestion.add(lifeline);
+    switch (lifeline) {
+      case Lifeline.fiftyFifty:
+        _applyFiftyFifty();
+      case Lifeline.skip:
+        _applySkip();
+      case Lifeline.extraTime:
+        _applyExtraTime();
+      case Lifeline.secondChance:
+        _applySecondChance();
+    }
+  }
+
+  void _applyFiftyFifty() {
     setState(() {
-      _hintUsed = true;
       final wrong = [
         for (var i = 0; i < _question.options.length; i++)
           if (i != _question.correctIndex) i,
       ]..shuffle();
       _hidden.addAll(wrong.take(2));
     });
+  }
+
+  /// Skips without recording an answer at all — a paid skip shouldn't dent
+  /// your accuracy, and the combo deliberately survives.
+  void _applySkip() {
+    if (_index >= _questions.length - 1) {
+      _finish();
+      return;
+    }
+    _next();
+  }
+
+  void _applyExtraTime() {
+    final secondsLeft = _remaining.value * _questionSeconds;
+    final newTotal = _questionSeconds + LifelineInfo.extraSeconds;
+    setState(() => _questionSeconds = newTotal);
+    _timer.duration = Duration(seconds: newTotal);
+    // Rebase the controller so the ring keeps the time it had, plus ten.
+    _timer.value =
+        (1 - ((secondsLeft + LifelineInfo.extraSeconds) / newTotal))
+            .clamp(0.0, 1.0);
+    _timer.forward();
+  }
+
+  /// Undo a wrong answer and re-open the question.
+  ///
+  /// The wrong answer is removed from [_answers] and the lifetime accuracy
+  /// stat is walked back too — otherwise a revived question would be
+  /// counted twice, once wrong and once right.
+  void _applySecondChance() {
+    final chosen = _chosen;
+    if (chosen == null) return;
+    _answers.removeWhere((a) => a.questionId == _question.id);
+    unawaited(QuizProgressService.undoAnswer(correct: false));
+    if (_mode.tracksMistakes) {
+      unawaited(QuizProgressService.clearMistake(_question.id));
+    }
+
+    setState(() {
+      _secondChanceUsed = true;
+      _chosen = null;
+      // Put back the streak they had walking into this question, rather
+      // than reviving them onto a zeroed combo.
+      _combo = _comboBeforeQuestion;
+      _flashColor = ArenaTheme.correctOnNavy;
+      _lastPoints = 0;
+      _floatAt = null;
+      // The answer they just tried is off the table — that's the mercy.
+      _hidden.add(chosen);
+    });
+    _entrance.forward(from: 0.55);
+    _timer.forward();
   }
 
   Future<void> _confirmQuit() async {
@@ -469,8 +593,10 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
                   tooltip: 'Leave round',
                   onTap: _confirmQuit,
                 ),
-                const SizedBox(width: 10),
-                ScorePill(points: _points),
+                const SizedBox(width: 8),
+                ScorePill(points: _points, compact: true),
+                const SizedBox(width: 6),
+                _buildCoinPill(),
                 const Spacer(),
                 ComboMeter(combo: _combo),
                 const SizedBox(width: 10),
@@ -478,8 +604,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
                   remaining: _mode.roundSeconds != null
                       ? _roundRemaining
                       : _remaining,
-                  totalSeconds: _mode.roundSeconds ??
-                      _mode.secondsPerQuestion,
+                  totalSeconds: _mode.roundSeconds ?? _questionSeconds,
                   frozen: _answered && _mode.roundSeconds == null,
                 ),
               ],
@@ -497,7 +622,9 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
       children: [
         _buildQuestionCard(),
-        const SizedBox(height: 18),
+        const SizedBox(height: 12),
+        _buildLifelines(),
+        const SizedBox(height: 14),
         for (var i = 0; i < _question.options.length; i++)
           AnswerTile(
             // Keyed per question so tiles rebuild fresh each time rather
@@ -519,6 +646,41 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
           ),
         if (_answered) _buildExplanation(),
       ],
+    );
+  }
+
+  /// The lifeline strip.
+  ///
+  /// Second Chance is the odd one out: it only appears *after* a wrong
+  /// answer, so it's the one lifeline that can be offered at the exact
+  /// moment a Survival run would otherwise end.
+  Widget _buildLifelines() {
+    final available = [
+      for (final lifeline in Lifeline.values)
+        if (_lifelineAvailable(lifeline)) lifeline,
+    ];
+    if (available.isEmpty) return const SizedBox.shrink();
+
+    final coins = QuizProgressService.coins();
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: available.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final lifeline = available[i];
+          final affordable = coins >= lifeline.cost;
+          final busy = _lifelineBusy == lifeline;
+          return _LifelineChip(
+            lifeline: lifeline,
+            affordable: affordable,
+            busy: busy,
+            highlight: lifeline == Lifeline.secondChance,
+            onTap: _lifelineBusy != null ? null : () => _useLifeline(lifeline),
+          );
+        },
+      ),
     );
   }
 
@@ -598,31 +760,6 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
                 fontSize: 19,
               ),
             ),
-            if (!_answered && !_hintUsed) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _hintBusy ? null : _useHint,
-                  icon: _hintBusy
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: ArenaTheme.gold,
-                          ),
-                        )
-                      : const Icon(Icons.lightbulb_outline, size: 17),
-                  label: const Text('50/50 lifeline'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: ArenaTheme.gold,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -721,6 +858,32 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     );
   }
 
+  Widget _buildCoinPill() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: ArenaTheme.glass,
+        borderRadius: BorderRadius.circular(ArenaTheme.radiusPill),
+        border: Border.all(color: ArenaTheme.glassBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.monetization_on_rounded,
+              size: 14, color: ArenaTheme.gold),
+          const SizedBox(width: 4),
+          Text(
+            '${QuizProgressService.coins()}',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: ArenaTheme.goldBright,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNextButton() {
     final isLast = _index >= _questions.length - 1;
     final ended = _mode.suddenDeath && !_question.isCorrect(_chosen!);
@@ -739,6 +902,111 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
               : Icons.arrow_forward_rounded,
           gold: ended || isLast,
           onTap: ended ? _finish : _next,
+        ),
+      ),
+    );
+  }
+}
+
+/// One lifeline button.
+///
+/// Shows the coin price when the player can afford it, and switches to an
+/// explicit "watch ad" affordance when they can't — so the trade is always
+/// visible before they tap, never a surprise.
+class _LifelineChip extends StatelessWidget {
+  const _LifelineChip({
+    required this.lifeline,
+    required this.affordable,
+    required this.busy,
+    required this.onTap,
+    this.highlight = false,
+  });
+
+  final Lifeline lifeline;
+  final bool affordable;
+  final bool busy;
+  final bool highlight;
+  final VoidCallback? onTap;
+
+  IconData get _icon => switch (lifeline) {
+        Lifeline.fiftyFifty => Icons.filter_2_rounded,
+        Lifeline.skip => Icons.skip_next_rounded,
+        Lifeline.extraTime => Icons.more_time_rounded,
+        Lifeline.secondChance => Icons.favorite_rounded,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = highlight ? ArenaTheme.gold : ArenaTheme.textOnNavy;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(ArenaTheme.radiusPill),
+        onTap: busy ? null : onTap,
+        child: Tooltip(
+          message: lifeline.description,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: highlight
+                  ? ArenaTheme.gold.withValues(alpha: 0.16)
+                  : ArenaTheme.glass,
+              borderRadius: BorderRadius.circular(ArenaTheme.radiusPill),
+              border: Border.all(
+                color: highlight
+                    ? ArenaTheme.gold.withValues(alpha: 0.55)
+                    : ArenaTheme.glassBorder,
+              ),
+              boxShadow: highlight
+                  ? ArenaTheme.glow(ArenaTheme.gold, strength: 0.45)
+                  : null,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (busy)
+                  const SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: ArenaTheme.gold,
+                    ),
+                  )
+                else
+                  Icon(_icon, size: 16, color: accent),
+                const SizedBox(width: 7),
+                Text(
+                  lifeline.label,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                if (affordable)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.monetization_on_rounded,
+                          size: 12, color: ArenaTheme.gold),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${lifeline.cost}',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: ArenaTheme.gold,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  const Icon(Icons.play_circle_outline_rounded,
+                      size: 14, color: ArenaTheme.gold),
+              ],
+            ),
+          ),
         ),
       ),
     );

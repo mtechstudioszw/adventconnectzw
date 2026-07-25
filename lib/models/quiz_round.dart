@@ -105,19 +105,30 @@ class QuizRoundResult {
     required this.mode,
     required this.title,
     required this.answers,
+    required this.questions,
     required this.points,
     required this.bonusPoints,
     required this.bestCombo,
     required this.xpEarned,
+    required this.coinsEarned,
     required this.newLevel,
     required this.leveledUp,
     required this.streak,
     required this.isNewBestScore,
+    this.challengeId,
   });
 
   final QuizMode mode;
   final String title;
   final List<QuizAnswer> answers;
+
+  /// Every question served this round, so the results screen can show what
+  /// you actually got wrong. [answers] alone only carries ids — and a
+  /// generated question has no server row to look the text back up from.
+  final List<QuizQuestion> questions;
+
+  /// Set when this round settled a head-to-head challenge.
+  final String? challengeId;
 
   /// Total points including [bonusPoints].
   final int points;
@@ -126,6 +137,7 @@ class QuizRoundResult {
   final int bonusPoints;
   final int bestCombo;
   final int xpEarned;
+  final int coinsEarned;
   final int newLevel;
   final bool leveledUp;
   final int streak;
@@ -133,6 +145,16 @@ class QuizRoundResult {
 
   int get total => answers.length;
   int get correctCount => answers.where((a) => a.correct).length;
+
+  /// Pairs each answer with the question it was given for, in play order.
+  /// Skipped questions have no answer and are deliberately absent.
+  List<(QuizQuestion, QuizAnswer)> get reviewPairs {
+    final byId = {for (final q in questions) q.id: q};
+    return [
+      for (final answer in answers)
+        if (byId[answer.questionId] != null) (byId[answer.questionId]!, answer),
+    ];
+  }
 
   /// 0–100. Guards the empty round (Speed with zero answers).
   int get accuracyPct =>
@@ -273,6 +295,63 @@ class QuizScoring {
   }
 }
 
+/// Paid helps, bought with coins.
+///
+/// Each costs coins; when the player can't afford one, the round offers a
+/// rewarded ad instead so a lifeline is never hard-gated behind a balance
+/// (and the ad is opt-in, never forced).
+enum Lifeline { fiftyFifty, skip, extraTime, secondChance }
+
+extension LifelineInfo on Lifeline {
+  String get label => switch (this) {
+        Lifeline.fiftyFifty => '50/50',
+        Lifeline.skip => 'Skip',
+        Lifeline.extraTime => '+10s',
+        Lifeline.secondChance => 'Second chance',
+      };
+
+  String get description => switch (this) {
+        Lifeline.fiftyFifty => 'Removes two wrong answers.',
+        Lifeline.skip => 'Skips this question — your streak survives.',
+        Lifeline.extraTime => 'Adds ten seconds to the clock.',
+        Lifeline.secondChance =>
+          'Undo a wrong answer and try the question again.',
+      };
+
+  int get cost => switch (this) {
+        Lifeline.fiftyFifty => 30,
+        Lifeline.skip => 20,
+        Lifeline.extraTime => 15,
+        Lifeline.secondChance => 50,
+      };
+
+  /// Seconds granted by [Lifeline.extraTime].
+  static const int extraSeconds = 10;
+}
+
+/// Coin economy.
+///
+/// Tuned so a good round roughly pays for one lifeline: a strong
+/// 10-question round scores ~5,700 points → 57 coins, against a 30-coin
+/// 50/50. Generous enough to use them, tight enough that they're a choice.
+class QuizCoins {
+  QuizCoins._();
+
+  /// New players start with enough to try every lifeline once.
+  static const int startingBalance = 100;
+
+  /// Points-to-coins divisor for a finished round.
+  static const int pointsPerCoin = 100;
+
+  /// Bonus for completing the Daily Challenge.
+  static const int dailyBonus = 25;
+
+  /// Bonus on each level up.
+  static const int levelUpBonus = 50;
+
+  static int forRound(int points) => points ~/ pointsPerCoin;
+}
+
 /// Everything the round screen needs to run a game.
 class QuizRoundConfig {
   const QuizRoundConfig({
@@ -280,10 +359,15 @@ class QuizRoundConfig {
     required this.questions,
     required this.title,
     this.category,
+    this.challengeId,
     this.startIndex = 0,
     this.startPoints = 0,
     this.startCombo = 0,
   });
+
+  /// Set when this round is answering a head-to-head challenge, so the
+  /// score can be submitted against it when the round ends.
+  final String? challengeId;
 
   final QuizMode mode;
   final List<QuizQuestion> questions;

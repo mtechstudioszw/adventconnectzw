@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/quiz_question_model.dart';
 import '../../../models/quiz_round.dart';
+import '../../../services/quiz_challenge_service.dart';
 import '../../../services/quiz_cloud_service.dart';
 import '../../../services/quiz_progress_service.dart';
 import '../../../services/quiz_service.dart';
@@ -12,6 +13,7 @@ import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../widgets/motion/brand_spinner.dart';
 import 'arena_theme.dart';
+import 'quiz_challenge_screen.dart';
 import 'quiz_leaderboard_screen.dart';
 import 'quiz_results_screen.dart';
 import 'quiz_round_screen.dart';
@@ -41,6 +43,11 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
   late Future<List<String>> _categories;
   bool _busy = false;
 
+  /// Set while a "challenge a friend" round is being played — the challenge
+  /// is only created once there's a real score to challenge with.
+  QuizOpponent? _pendingChallengeTo;
+  int _incomingChallenges = 0;
+
   @override
   void initState() {
     super.initState();
@@ -55,7 +62,12 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     unawaited(QuizService.warm());
     unawaited(QuizCloudService.restoreIfEmpty().then((restored) {
       if (restored && mounted) setState(() {});
+      // After a restore the cloud balance wins; otherwise this grants the
+      // starting coins on a genuinely new player's first visit.
+      return QuizProgressService.ensureStartingCoins()
+          .then((_) => mounted ? setState(() {}) : null);
     }));
+    _refreshChallenges();
   }
 
   @override
@@ -112,16 +124,89 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
 
     if (result == null) return; // quit mid-round
 
+    // Answering a challenge: submit before the results screen, so the
+    // outcome is already settled by the time they look at it.
+    if (config.challengeId != null) {
+      await QuizChallengeService.submit(
+        challengeId: config.challengeId!,
+        points: result.points,
+        correct: result.correctCount,
+      );
+      if (!mounted) return;
+    }
+
     final again = await Navigator.of(context).push<QuizMode>(
       MaterialPageRoute(builder: (_) => QuizResultsScreen(result: result)),
     );
     if (!mounted) return;
     setState(() {});
 
+    // A fresh round is offered as a challenge — you can only challenge
+    // someone with a score you've actually just set.
+    if (config.challengeId == null && _pendingChallengeTo != null) {
+      final opponent = _pendingChallengeTo!;
+      _pendingChallengeTo = null;
+      // Captured before the await — the analyzer is right that `context`
+      // shouldn't be reached for across an async gap.
+      final messenger = ScaffoldMessenger.of(context);
+      final sent = await QuizChallengeService.create(
+        opponentId: opponent.userId,
+        result: result,
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(sent
+              ? 'Challenge sent to ${opponent.name}.'
+              : 'Could not send the challenge. Try again.'),
+        ),
+      );
+      setState(() {});
+      return;
+    }
+
     // Replay the same kind of round, topic included.
     if (again != null) {
       await _play(again, category: config.category);
     }
+  }
+
+  /// Pick a friend, then play a round that becomes the challenge.
+  Future<void> _startChallenge() async {
+    final opponent = await Navigator.of(context).push<QuizOpponent>(
+      MaterialPageRoute(builder: (_) => const QuizOpponentPickerScreen()),
+    );
+    if (!mounted || opponent == null) return;
+    _pendingChallengeTo = opponent;
+    await _play(QuizMode.practice);
+  }
+
+  /// Play a challenge someone sent you — the exact same questions they got.
+  Future<void> _playChallenge(QuizChallenge challenge) async {
+    if (challenge.questions.isEmpty) return;
+    await _runRound(
+      QuizRoundConfig(
+        mode: QuizMode.practice,
+        questions: challenge.questions,
+        title: 'vs ${challenge.otherName}',
+        challengeId: challenge.id,
+      ),
+    );
+  }
+
+  Future<void> _openChallenges() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => QuizChallengesScreen(onPlay: _playChallenge),
+      ),
+    );
+    if (mounted) _refreshChallenges();
+  }
+
+  void _refreshChallenges() {
+    QuizChallengeService.incoming().then((list) {
+      if (mounted) setState(() => _incomingChallenges = list.length);
+    });
   }
 
   Future<void> _resume(Map<String, dynamic> session) async {
@@ -312,9 +397,9 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
               ),
               Expanded(
                 child: _MiniStat(
-                  icon: Icons.help_outline_rounded,
-                  value: '${QuizProgressService.totalAnswered()}',
-                  label: 'answered',
+                  icon: Icons.monetization_on_rounded,
+                  value: '${QuizProgressService.coins()}',
+                  label: 'coins',
                 ),
               ),
             ],
@@ -484,6 +569,11 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
         badge: mistakes > 0 ? '$mistakes' : null,
         enabled: mistakes > 0,
         onTap: () => _play(QuizMode.mistakes),
+      ),
+      _ChallengeTile(
+        incoming: _incomingChallenges,
+        onChallenge: _startChallenge,
+        onOpen: _openChallenges,
       ),
     ];
 
@@ -690,6 +780,117 @@ class _ModeTile extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Two actions in one tile: challenge someone new, or answer the ones
+/// waiting for you. The badge is the hook — an unanswered challenge is the
+/// strongest reason to reopen the arena.
+class _ChallengeTile extends StatelessWidget {
+  const _ChallengeTile({
+    required this.incoming,
+    required this.onChallenge,
+    required this.onOpen,
+  });
+
+  final int incoming;
+  final VoidCallback onChallenge;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final waiting = incoming > 0;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: ArenaTheme.tileRadius,
+        onTap: () {
+          QuizSfx.tap();
+          waiting ? onOpen() : onChallenge();
+        },
+        onLongPress: onOpen,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: waiting
+                ? ArenaTheme.gold.withValues(alpha: 0.14)
+                : ArenaTheme.glass,
+            borderRadius: ArenaTheme.tileRadius,
+            border: Border.all(
+              color: waiting
+                  ? ArenaTheme.gold.withValues(alpha: 0.55)
+                  : ArenaTheme.glassBorder,
+            ),
+            boxShadow:
+                waiting ? ArenaTheme.glow(ArenaTheme.gold, strength: 0.5) : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: ArenaTheme.gold.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.sports_kabaddi_rounded,
+                        size: 18, color: ArenaTheme.gold),
+                  ),
+                  const Spacer(),
+                  if (waiting)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: ArenaTheme.gold,
+                        borderRadius:
+                            BorderRadius.circular(ArenaTheme.radiusPill),
+                      ),
+                      child: Text(
+                        '$incoming',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: ArenaTheme.canvasTop,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                waiting ? 'Challenges' : 'Challenge a friend',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleSmall.copyWith(
+                  color: ArenaTheme.textOnNavy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                waiting
+                    ? '$incoming waiting for you'
+                    : 'Same questions. Higher score wins.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: waiting
+                      ? ArenaTheme.gold
+                      : ArenaTheme.textFaintOnNavy,
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+            ],
           ),
         ),
       ),

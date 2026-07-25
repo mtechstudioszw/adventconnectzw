@@ -4,9 +4,9 @@ import '../../../services/quiz_cloud_service.dart';
 import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
-import '../../../widgets/cached_image.dart';
 import '../../../widgets/motion/brand_spinner.dart';
 import 'arena_theme.dart';
+import 'quiz_challenge_screen.dart' show QuizAvatar;
 import 'widgets/arena_scaffold.dart';
 
 /// Weekly (and all-time) standings.
@@ -167,7 +167,12 @@ class _QuizLeaderboardScreenState extends State<QuizLeaderboardScreen> {
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
         itemCount: _entries.length,
-        itemBuilder: (context, i) => _LeaderRow(entry: _entries[i]),
+        itemBuilder: (context, i) => _LeaderRow(
+          entry: _entries[i],
+          // Crowned only on the all-time board — being top of one quiet
+          // week shouldn't make you King of Quiz.
+          isKing: _entries[i].rank == 1 && _periodIndex == 2,
+        ),
       ),
     );
   }
@@ -227,9 +232,13 @@ class _QuizLeaderboardScreenState extends State<QuizLeaderboardScreen> {
 }
 
 class _LeaderRow extends StatelessWidget {
-  const _LeaderRow({required this.entry});
+  const _LeaderRow({required this.entry, required this.isKing});
 
   final QuizLeaderboardEntry entry;
+
+  /// True for #1 — the reigning King of Quiz, crowned rather than merely
+  /// listed first.
+  final bool isKing;
 
   /// Gold, silver, bronze for the podium; glass for everyone else.
   Color get _rankColor => switch (entry.rank) {
@@ -243,105 +252,123 @@ class _LeaderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final podium = entry.rank <= 3;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
+      padding: EdgeInsets.only(bottom: isKing ? 12 : 9),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        padding: EdgeInsets.symmetric(
+          horizontal: 13,
+          vertical: isKing ? 15 : 11,
+        ),
         decoration: BoxDecoration(
-          color: entry.isMe
-              ? ArenaTheme.gold.withValues(alpha: 0.13)
-              : ArenaTheme.glass,
+          gradient: isKing
+              ? LinearGradient(
+                  colors: [
+                    ArenaTheme.gold.withValues(alpha: 0.26),
+                    ArenaTheme.gold.withValues(alpha: 0.07),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: isKing
+              ? null
+              : entry.isMe
+                  ? ArenaTheme.gold.withValues(alpha: 0.13)
+                  : ArenaTheme.glass,
           borderRadius: ArenaTheme.tileRadius,
           border: Border.all(
-            color: entry.isMe
-                ? ArenaTheme.gold.withValues(alpha: 0.5)
+            color: isKing || entry.isMe
+                ? ArenaTheme.gold.withValues(alpha: isKing ? 0.75 : 0.5)
                 : ArenaTheme.glassBorder,
+            width: isKing ? 1.6 : 1,
           ),
+          boxShadow:
+              isKing ? ArenaTheme.glow(ArenaTheme.gold, strength: 0.9) : null,
         ),
-        child: Row(
+        child: Column(
           children: [
-            SizedBox(
-              width: 30,
-              child: podium
-                  ? Icon(Icons.emoji_events_rounded,
-                      size: 21, color: _rankColor)
-                  : Text(
-                      '${entry.rank}',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: _rankColor,
+            if (isKing)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.workspace_premium_rounded,
+                        size: 16, color: ArenaTheme.goldBright),
+                    const SizedBox(width: 6),
+                    Text(
+                      'KING OF QUIZ',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: ArenaTheme.goldBright,
                         fontWeight: FontWeight.w800,
+                        letterSpacing: 2,
+                        fontSize: 11,
                       ),
                     ),
-            ),
-            const SizedBox(width: 10),
-            _Avatar(url: entry.photoUrl, name: entry.name),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      entry.isMe ? 'You' : entry.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: ArenaTheme.textOnNavy,
-                        fontWeight:
-                            entry.isMe ? FontWeight.w800 : FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  if (entry.isVerified) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.verified_rounded,
-                        size: 14, color: ArenaTheme.gold),
                   ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${entry.points}',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: ArenaTheme.goldBright,
-                fontWeight: FontWeight.w800,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+            Row(
+              children: [
+                SizedBox(
+                  width: 30,
+                  child: podium
+                      ? Icon(Icons.emoji_events_rounded,
+                          size: isKing ? 25 : 21, color: _rankColor)
+                      : Text(
+                          '${entry.rank}',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: _rankColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 10),
+                QuizAvatar(
+                  url: entry.photoUrl,
+                  name: entry.name,
+                  size: isKing ? 44 : 34,
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          entry.isMe ? 'You' : entry.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: ArenaTheme.textOnNavy,
+                            fontSize: isKing ? 15.5 : 14,
+                            fontWeight: entry.isMe || isKing
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (entry.isVerified) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.verified_rounded,
+                            size: 14, color: ArenaTheme.gold),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${entry.points}',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: ArenaTheme.goldBright,
+                    fontSize: isKing ? 16 : 14,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.url, required this.name});
-
-  final String? url;
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
-    return ClipOval(
-      child: SizedBox(
-        width: 34,
-        height: 34,
-        child: (url == null || url!.isEmpty)
-            ? ColoredBox(
-                color: ArenaTheme.glassStrong,
-                child: Center(
-                  child: Text(
-                    initial,
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: ArenaTheme.textOnNavy,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              )
-            : CachedImage(url!, fit: BoxFit.cover),
       ),
     );
   }

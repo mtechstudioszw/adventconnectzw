@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import 'admin_quiz_reports_screen.dart';
 
 /// Super-admin "Manage Quiz" — add / edit / delete Bible-quiz questions
 /// (patch_147). Gated server-side by RLS (super admin only).
@@ -88,6 +89,17 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
           'Manage Quiz',
           style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 19),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Reported questions',
+            icon: const Icon(Icons.flag_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const AdminQuizReportsScreen(),
+              ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.primaryBlue,

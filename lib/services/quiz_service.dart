@@ -4,20 +4,38 @@ import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/quiz_question_model.dart';
+import '../models/quiz_round.dart';
 import 'cache_service.dart';
 import 'connectivity_service.dart';
+import 'quiz_generator_service.dart';
+import 'quiz_progress_service.dart';
 
-/// Bible Quiz data + local progress (patch_147). Questions are admin-curated
-/// and cached for offline play; streaks/scores are stored locally for the MVP.
+/// Quiz question supply.
+///
+/// Two sources, deliberately blended:
+/// * **curated** rows in Supabase — doctrine, Adventist history, the Spirit
+///   of Prophecy: everything a generator can't write; and
+/// * **generated** questions from the bundled KJV
+///   ([QuizGenerator]) — an endless supply of scripture questions so the
+///   bank never runs dry between admin uploads.
+///
+/// Local player state lives in [QuizProgressService]; this class is purely
+/// about *which questions to serve*.
 class QuizService {
   QuizService._();
   static final SupabaseClient _client = Supabase.instance.client;
 
   static const _cacheKey = 'quiz_questions_v1';
-  static const _kStreak = 'quiz_streak';
-  static const _kLastDay = 'quiz_last_day';
-  static const _kBestStreak = 'quiz_best_streak';
   static List<QuizQuestion>? _mem;
+
+  /// A topic with fewer than this many curated questions isn't worth
+  /// offering as its own round — you'd see the same question every time.
+  /// (Baptism and Sanctuary each shipped with exactly one.)
+  static const int minCategorySize = 5;
+
+  /// Share of a mixed round that comes from the generator. Curated stays
+  /// the majority so rounds keep their doctrinal centre of gravity.
+  static const double generatedShare = 0.4;
 
   /// All published questions, cached (memory → Hive → network).
   static Future<List<QuizQuestion>> all() async {
@@ -51,54 +69,116 @@ class QuizService {
 
   static void invalidate() => _mem = null;
 
+  /// Topics for the lobby: curated categories with enough questions to make
+  /// a real round, plus the generator's endless ones.
   static Future<List<String>> categories() async {
     final list = await all();
-    final set = <String>{for (final q in list) q.category};
-    final sorted = set.toList()..sort();
-    return sorted;
-  }
-
-  /// Today's Daily Challenge: a deterministic set of [count] questions seeded by
-  /// the date, so every player gets the same daily set and can't reshuffle.
-  static Future<List<QuizQuestion>> dailySet({int count = 5}) async {
-    final list = await all();
-    if (list.length <= count) return List.of(list)..shuffle(_dayRng());
-    final pool = List.of(list);
-    pool.shuffle(_dayRng());
-    return pool.take(count).toList();
-  }
-
-  /// A practice round that ROTATES: prefers questions the player hasn't seen
-  /// recently, so tapping "play again" keeps serving fresh questions until the
-  /// pool is exhausted, then cycles. [category] limits to one topic.
-  static Future<List<QuizQuestion>> practiceSet({
-    String? category,
-    int count = 10,
-  }) async {
-    final list = await all();
-    final pool = category == null
-        ? List.of(list)
-        : list.where((q) => q.category == category).toList();
-    if (pool.isEmpty) return const [];
-
-    var seen = _seenIds();
-    var unseen = pool.where((q) => !seen.contains(q.id)).toList();
-    // Not enough fresh questions left in this pool → reset the "seen" marks
-    // for this pool so we start cycling through it again.
-    if (unseen.length < count) {
-      final poolIds = pool.map((q) => q.id).toSet();
-      seen = seen.where((id) => !poolIds.contains(id)).toSet();
-      _writeSeen(seen);
-      unseen = List.of(pool);
+    final counts = <String, int>{};
+    for (final question in list) {
+      counts[question.category] = (counts[question.category] ?? 0) + 1;
     }
-    unseen.shuffle();
-    return unseen.take(count).toList();
+    final curated = [
+      for (final entry in counts.entries)
+        if (entry.value >= minCategorySize) entry.key,
+    ]..sort();
+    // Deduped: 'Bible Basics' is both a curated category AND one the
+    // generator can write, so a naive concat listed it twice in the lobby.
+    return <String>{...QuizGenerator.categories, ...curated}.toList();
   }
 
-  static Random _dayRng() {
+  // ---- Round building -----------------------------------------------------
+
+  /// Build the question list for a round.
+  ///
+  /// The Daily Challenge is seeded by the date so every player gets the
+  /// same set and can't reshuffle it — which is also why it can't consult
+  /// the local seen-list (that would make it device-specific).
+  static Future<List<QuizQuestion>> buildRound({
+    required QuizMode mode,
+    String? category,
+  }) async {
+    if (mode == QuizMode.mistakes) {
+      final missed = QuizProgressService.mistakes();
+      return (missed.toList()..shuffle()).take(mode.questionCount).toList();
+    }
+
+    final count = mode.questionCount;
+    if (mode == QuizMode.daily) return _dailyRound(count);
+
+    // Can the generator write questions for this topic? 'Scripture' is
+    // generator-only (no curated rows), 'Bible Basics' exists in both — so
+    // picking that topic must still mix in its 30-odd curated questions
+    // rather than serving generated ones exclusively.
+    final generatorSupports =
+        category != null && QuizGenerator.categories.contains(category);
+
+    final pool = await _curatedPool(category);
+    final wantGenerated = (category == null || generatorSupports)
+        ? (count * generatedShare).round()
+        : 0;
+    final wantCurated = count - wantGenerated;
+
+    final curated = QuizProgressService.pickFresh(pool, wantCurated);
+    // A thin topic (or an empty cache offline) is topped up from the
+    // generator rather than served short or repeated.
+    final shortfall = count - curated.length;
+    final generated = shortfall <= 0
+        ? const <QuizQuestion>[]
+        : await QuizGenerator.generate(
+            count: shortfall,
+            // Asking for a topic the generator can't write (say 'Sabbath')
+            // would spin through its attempt budget and return nothing,
+            // leaving a short round. Fall back to any topic instead — this
+            // only bites when the curated cache is empty offline, and a
+            // full round of scripture beats an empty one.
+            category: generatorSupports ? category : null,
+          );
+
+    final round = [...curated, ...generated]..shuffle();
+    return round.take(count).toList();
+  }
+
+  /// Today's set — identical on every device, curated-first.
+  static Future<List<QuizQuestion>> _dailyRound(int count) async {
     final now = DateTime.now();
     final seed = now.year * 10000 + now.month * 100 + now.day;
-    return Random(seed);
+
+    final pool = await all();
+    final wantGenerated = (count * generatedShare).round();
+    final wantCurated = count - wantGenerated;
+
+    // A seeded shuffle is only reproducible if the INPUT order is too, and
+    // `all()` selects with no ORDER BY — PostgREST makes no ordering
+    // promise, and the offline cache can differ from a fresh fetch. Sorting
+    // by numeric id first is what actually makes "everyone gets the same
+    // daily set" true rather than merely intended.
+    final curated = List.of(pool)
+      ..sort((a, b) =>
+          (int.tryParse(a.id) ?? 0).compareTo(int.tryParse(b.id) ?? 0));
+    curated.shuffle(Random(seed));
+    final picked = curated.take(wantCurated).toList();
+
+    final generated = await QuizGenerator.generate(
+      count: count - picked.length,
+      seed: seed,
+    );
+
+    final round = [...picked, ...generated]..shuffle(Random(seed + 1));
+    return round.take(count).toList();
+  }
+
+  static Future<List<QuizQuestion>> _curatedPool(String? category) async {
+    final list = await all();
+    if (category == null) return List.of(list);
+    return list.where((q) => q.category == category).toList();
+  }
+
+  /// Warm both sources so the lobby's Start button is instant.
+  static Future<void> warm() async {
+    await Future.wait([
+      all().then((_) {}),
+      QuizGenerator.warm(),
+    ]);
   }
 
   // ---- Admin (super admin only via RLS) ------------------------------------
@@ -129,10 +209,12 @@ class QuizService {
       'question': question.trim(),
       'options': options,
       'correct_index': correctIndex,
-      'explanation':
-          (explanation == null || explanation.trim().isEmpty) ? null : explanation.trim(),
-      'reference':
-          (reference == null || reference.trim().isEmpty) ? null : reference.trim(),
+      'explanation': (explanation == null || explanation.trim().isEmpty)
+          ? null
+          : explanation.trim(),
+      'reference': (reference == null || reference.trim().isEmpty)
+          ? null
+          : reference.trim(),
       'category': category.trim().isEmpty ? 'General' : category.trim(),
       'difficulty': difficulty,
       'is_published': true,
@@ -150,157 +232,21 @@ class QuizService {
     invalidate();
   }
 
-  // ---- Streak (local) ------------------------------------------------------
-
-  static String _todayKey() {
-    final n = DateTime.now();
-    return '${n.year}-${n.month}-${n.day}';
-  }
-
-  static int currentStreak() =>
-      int.tryParse(CacheService.readPref(_kStreak) ?? '') ?? 0;
-
-  static int bestStreak() =>
-      int.tryParse(CacheService.readPref(_kBestStreak) ?? '') ?? 0;
-
-  /// True once today's Daily Challenge has been completed.
-  static bool playedToday() =>
-      CacheService.readPref(_kLastDay) == _todayKey();
-
-  /// Record completion of today's Daily Challenge and advance the streak
-  /// (resets to 1 if a day was missed). No-op if already played today.
-  static Future<void> recordDailyComplete() async {
-    if (playedToday()) return;
-    final last = CacheService.readPref(_kLastDay);
-    final y = DateTime.now().subtract(const Duration(days: 1));
-    final yesterday = '${y.year}-${y.month}-${y.day}';
-    final next = (last == yesterday) ? currentStreak() + 1 : 1;
-    await CacheService.writePref(_kStreak, next.toString());
-    await CacheService.writePref(_kLastDay, _todayKey());
-    if (next > bestStreak()) {
-      await CacheService.writePref(_kBestStreak, next.toString());
-    }
-  }
-
-  // ---- Seen-question rotation (local) --------------------------------------
-
-  static const _kSeen = 'quiz_seen_ids';
-
-  static Set<String> _seenIds() {
-    final raw = CacheService.readPref(_kSeen);
-    if (raw == null) return <String>{};
-    try {
-      return (jsonDecode(raw) as List).map((e) => e.toString()).toSet();
-    } catch (_) {
-      return <String>{};
-    }
-  }
-
-  static void _writeSeen(Set<String> ids) {
-    CacheService.writePref(_kSeen, jsonEncode(ids.toList())).ignore();
-  }
-
-  /// Remember that [questions] were just played, so the next round rotates to
-  /// fresh ones. Called by the play screen when a round loads.
-  static void markSeen(Iterable<QuizQuestion> questions) {
-    final set = _seenIds()..addAll(questions.map((q) => q.id));
-    _writeSeen(set);
-  }
-
-  // ---- Rating / lifetime stats (local) -------------------------------------
-
-  static const _kAnswered = 'quiz_total_answered';
-  static const _kCorrect = 'quiz_total_correct';
-
-  static int totalAnswered() =>
-      int.tryParse(CacheService.readPref(_kAnswered) ?? '') ?? 0;
-
-  static int totalCorrect() =>
-      int.tryParse(CacheService.readPref(_kCorrect) ?? '') ?? 0;
-
-  /// Lifetime accuracy as a 0–100 percentage (0 when nothing answered yet).
-  static int accuracyPct() {
-    final a = totalAnswered();
-    if (a == 0) return 0;
-    return (totalCorrect() / a * 100).round();
-  }
-
-  /// A friendly rank that grows with how many questions the player has gotten
-  /// right — the visible "rating".
-  static String ratingLabel() {
-    final c = totalCorrect();
-    if (c >= 400) return 'Master';
-    if (c >= 150) return 'Teacher';
-    if (c >= 50) return 'Scholar';
-    if (c >= 10) return 'Student';
-    return 'Beginner';
-  }
-
-  /// 1–5 stars derived from lifetime accuracy, for a quick visual rating.
-  static int ratingStars() {
-    if (totalAnswered() < 5) return 0; // not enough data yet
-    final p = accuracyPct();
-    if (p >= 90) return 5;
-    if (p >= 75) return 4;
-    if (p >= 60) return 3;
-    if (p >= 40) return 2;
-    return 1;
-  }
-
-  /// Record one answered question (correct or not) toward the lifetime rating.
-  static Future<void> recordAnswer(bool correct) async {
-    await CacheService.writePref(_kAnswered, (totalAnswered() + 1).toString());
-    if (correct) {
-      await CacheService.writePref(_kCorrect, (totalCorrect() + 1).toString());
-    }
-  }
-
-  // ---- Resume an interrupted round (local) ---------------------------------
-
-  static const _kSession = 'quiz_session';
-
-  /// Rebuild questions from saved ids, preserving order. Skips any that no
-  /// longer exist (e.g. the admin deleted one).
-  static Future<List<QuizQuestion>> questionsByIds(List<String> ids) async {
-    final byId = {for (final q in await all()) q.id: q};
-    return [
-      for (final id in ids)
-        if (byId[id] != null) byId[id]!,
-    ];
-  }
-
-  /// Persist the in-progress round so the player can resume after leaving.
-  static Future<void> saveSession({
-    required List<String> ids,
-    required int index,
-    required int score,
-    required String title,
+  /// Player-reported bad question. Generated questions have no row, so the
+  /// id is stored as text and the admin sees the rendered question.
+  static Future<void> reportQuestion({
+    required QuizQuestion question,
+    String? reason,
   }) async {
-    await CacheService.writePref(
-      _kSession,
-      jsonEncode({
-        'ids': ids,
-        'index': index,
-        'score': score,
-        'title': title,
-      }),
-    );
-  }
-
-  /// The saved in-progress round, or null. Shape:
-  /// `{ids: [...], index, score, title}`.
-  static Map<String, dynamic>? loadSession() {
-    final raw = CacheService.readPref(_kSession);
-    if (raw == null) return null;
     try {
-      final m = jsonDecode(raw) as Map<String, dynamic>;
-      final ids = (m['ids'] as List?) ?? const [];
-      if (ids.isEmpty) return null;
-      return m;
+      await _client.from('quiz_reports').insert({
+        'question_id': question.id,
+        'is_generated': QuizGenerator.isGenerated(question.id),
+        'question_text': question.question,
+        'reason': reason,
+      });
     } catch (_) {
-      return null;
+      // Reporting is a courtesy — never surface a failure mid-round.
     }
   }
-
-  static Future<void> clearSession() => CacheService.writePref(_kSession, '');
 }

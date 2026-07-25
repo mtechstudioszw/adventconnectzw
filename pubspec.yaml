@@ -160,8 +160,13 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/
-    # Offline KJV Bible (public domain) for the Library's Bible tab.
+    # Offline KJV Bible (public domain) for the Library's Bible tab. Also
+    # feeds the Quiz Arena's procedural question generator.
     - assets/bible/
+    # Quiz Arena sound effects. Synthesized mono 16-bit WAVs (~160 KB the
+    # lot) — deliberately not mp3 so playback starts with no decode delay,
+    # which matters for a tap-response tick. Muteable in the arena.
+    - assets/sounds/quiz/
     # Bundled Google Fonts (Poppins + story fonts). google_fonts loads these
     # local files instead of fetching at runtime, so text never paints blank
     # while a font downloads (critical on slow networks) and the app works

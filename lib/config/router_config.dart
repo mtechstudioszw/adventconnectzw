@@ -33,7 +33,8 @@ import '../screens/watch/channel_screen.dart';
 import '../screens/watch/video_player_screen.dart';
 import '../models/youtube_channel.dart';
 import '../models/youtube_video.dart';
-import '../screens/quiz/quiz_home_screen.dart';
+import '../screens/quiz/arena/quiz_lobby_screen.dart';
+import '../screens/quiz/arena/widgets/arena_page_route.dart';
 import '../screens/profile/blocked_users_screen.dart';
 import '../screens/profile/member_directory_screen.dart';
 import '../screens/profile/my_directory_profile_screen.dart';
@@ -575,7 +576,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/quiz',
       name: 'quiz',
-      builder: (context, state) => const QuizHomeScreen(),
+      // pageBuilder (not builder) so the Quiz Arena gets its own opening
+      // transition instead of the app-wide fade-through — see arenaPage().
+      pageBuilder: (context, state) => arenaPage<void>(
+        key: state.pageKey,
+        child: const QuizLobbyScreen(),
+      ),
     ),
     GoRoute(
       path: '/watch',

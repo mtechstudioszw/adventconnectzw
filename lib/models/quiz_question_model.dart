@@ -22,6 +22,23 @@ class QuizQuestion {
 
   bool isCorrect(int chosen) => chosen == correctIndex;
 
+  /// Round-trips a question through local storage.
+  ///
+  /// Needed because "Fix Your Mistakes" has to replay questions the player
+  /// got wrong, and a generated question has no row in Supabase to look up
+  /// again — so the whole thing is cached locally when it's missed. Keys
+  /// match the `quiz_questions` column names so [fromJson] reads both.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'question': question,
+        'options': options,
+        'correct_index': correctIndex,
+        'category': category,
+        'difficulty': difficulty,
+        'explanation': explanation,
+        'reference': reference,
+      };
+
   factory QuizQuestion.fromJson(Map<String, dynamic> json) {
     final raw = json['options'];
     final opts = raw is List

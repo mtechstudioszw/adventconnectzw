@@ -1,90 +1,157 @@
 # Advent Connect ZW — Session resume brief
 
-**Repo:** `C:\Users\micha\Desktop\advent_connect_zw` · **Branch:** `main` · **Remote:** `https://github.com/mtechstudioszw/adventconnectzw`
+**Repo:** `C:\Users\j\Desktop\advent_connect_zw\adventconnectzw` · **Remote:**
+`https://github.com/mtechstudioszw/adventconnectzw`
 
-## Where we are
+> This file replaced the old Stage-19/20 brief, which was stale (that work
+> shipped long ago — the app is at v1.3.0+1032 with Quiz Arena already live).
 
-- All 20 build stages from `ADVENT_CONNECT_ZW_MASTER_REFERENCE_V4 (1).md` are coded. Stage 20 is the **final** stage in that doc — there is no Stage 21.
-- The app **compiles clean** (`flutter analyze` → No issues found).
-- User has been testing on **Chrome** (`flutter run -d chrome`). Android build is blocked by a Gradle download issue — see Blockers below.
-- 2,600 churches CSV has already been imported into Supabase by the user.
+---
 
-## Recent commits (latest first)
+## What landed last session (Library redesign)
 
-- `f15f028` Shrink event card + event hero + home church row
-- `a0b0c30` Skip AdMob entirely on unsupported platforms (web/desktop)
-- `f468d87` Fix AdsService: pass required dismissal callback to UMP consent form
-- `7798f71` Release prep + UI polish: signing, AdMob env, UMP consent, launcher icons
-- `b3febe2` Finish Stage 20 wire-ups: home cache, message outbox, distance chip
+The whole **Library** was rebuilt from 4 tabs to **5**, and the home launcher
+was reworked. `flutter analyze lib/` is **clean** — the only 4 remaining
+issues are pre-existing and unrelated (event_details_screen, push_service,
+date_format).
 
-## What landed last session
+### 1. Music — background playback restored + "Adventist Spotify" rebuild
 
-**Stage 20 wire-ups**
-- **Home feed cache** in `lib/screens/home/home_screen.dart`. Writes `{events, churches}` to Hive key `home_feed` after successful load; hydrates from cache on cold start when offline or when network fetch fails.
-- **Offline message outbox** in `lib/services/messaging_service.dart`. Hive box `message_outbox_v1`. New `OutboxQueuedException` thrown when offline; `startOutboxFlusher()` subscribes to `ConnectivityService.onChanged` and drains on reconnect. Booted from `main.dart`. `chat_screen` shows "You're offline. We'll send this when you reconnect." snackbar.
-- **Distance chip on church cards** — `ChurchCard.distanceLabel` (optional). Computed by `churches_screen._distanceLabelFor()` using `LocationService.formatDistance`.
+**The important fix:** `just_audio_background` had been deliberately removed
+because it threw `_audioHandler has not been initialized`. It is back and
+working. Two rules must never be broken again:
 
-**Release plumbing (no real values plugged in yet)**
-- `android/app/build.gradle.kts` reads `android/key.properties` at config time. Uses real keystore for release when present, falls back to debug key when absent. Also injects `admobAndroidAppId` into `AndroidManifest.xml` via `manifestPlaceholders["admobAppId"]`.
-- `ads_service.dart` — production banner IDs come from `--dart-define=ADMOB_ANDROID_BANNER` / `ADMOB_IOS_BANNER`. UMP consent (`ConsentInformation` + `ConsentForm.loadAndShowConsentFormIfRequired`) runs before `MobileAds.instance.initialize()`.
-- `scripts/build_release.ps1` + `.sh` — one-shot wrappers around `flutter build appbundle --release --obfuscate --split-debug-info=build/debug-info` with the dart-defines.
-- `pubspec.yaml` gained `flutter_launcher_icons: ^0.14.4` (dev dep) + config block with navy `#0D1B3E` adaptive background. Needs `flutter pub get` before use.
-- `.gitignore` excludes `android/key.properties`, `*.jks`, `*.keystore`.
-- New: `android/key.properties.example`, `assets/icon/README.md`, `scripts/build_release.*`.
+- `JustAudioBackground.init()` must complete **before the first AudioPlayer is
+  constructed**. `MusicPlayerService.player` is now a lazy getter, and
+  `ensureInitialized()` is awaited in `main()`'s `Future.wait` before
+  `runApp`.
+- **Every** `AudioSource` needs a `MediaItem` tag or it throws at load.
 
-**UI fixes from user testing**
-- Home screen "Discover churches" section: converted from a 2-col grid to a **horizontal-scroll row** of 150-wide tiles, height 160. Mirrors the Events row right above it. (Earlier `childAspectRatio` tweaks were superseded.)
-- `EventCard` (Events tab list) rewritten as a **compact horizontal card** (76×76 thumbnail with date pill overlay + title + date/time + location + RSVP), matching `ChurchCard`. Per-card height ~320 → ~110.
-- Event details hero: `AspectRatio(1) → SizedBox(height: 260)`. Same fix pattern as church details.
-- Church details hero: `AspectRatio(1.0) → SizedBox(height: 180)` (was eating half the screen).
-- Prayer screen: removed `_PostPrayerSheet` (simplified modal) and `_ShareFab` (floating pill that overlapped the gold FAB). Both entry points now route to the full `post_prayer` screen.
+`ensureInitialized()` is timeboxed to 6s and never throws — on failure
+`backgroundReady` stays false and playback degrades to plain in-app audio
+rather than refusing to play. Keep that fallback.
 
-**Web-runtime fixes (Chrome testing)**
-- `AdsService.initialize()` and `.bannerUnitId()` short-circuit when not on Android/iOS. `google_mobile_ads` has no web/desktop implementation; calling UMP methods there throws `MissingPluginException` asynchronously which a try/catch around a void-returning method can't intercept. `_isAdMobSupported` getter handles both `kIsWeb` and the `dart:io` `Platform` throw on non-mobile.
-- `ConsentForm.loadAndShowConsentFormIfRequired` requires a dismissal callback (`OnConsentFormDismissedListener`) — calling it with no args was the original build error. Now passes a debugPrint-only listener.
+New files:
+- `lib/services/music_download_service.dart` — REAL offline downloads to
+  app-support dir with progress + index (the old Download button only opened
+  a share sheet; downloaded tracks now play from disk with no network).
+- `lib/services/music_prefs_service.dart` — liked tracks, recently played,
+  playlists, speed, resume-queue.
+- `lib/screens/library/widgets/music_visuals.dart` — artwork, blurred
+  backdrop, animated equalizer bars, `formatDuration`.
+- `lib/screens/library/widgets/full_player_screen.dart` — blurred cover
+  backdrop, drag-down dismiss, scrub bar, ±15s, speed, **sleep timer**, queue
+  sheet, download, share.
+- `lib/screens/library/widgets/now_playing_bar.dart` — mini player with
+  progress hairline, swipe-up to open, swipe-down to stop.
 
-**Analyze fixes (already merged)**
-- `analytics_service.dart messageSent` — `{'source': ?source}` (null-aware on value, not key).
-- `connectivity_service.dart _sub` — documented + `// ignore: unused_field`.
-- `shimmer_loaders.dart` — `(_, __)` → `(_, _)`.
-- `church_model.dart copyWith` was dropping lat/lng — fixed.
-- `messaging_service.dart` — dropped redundant `package:hive/hive.dart` import.
+**The mini player now lives at the Library SHELL level** (`library_screen.dart`),
+so playback controls follow you across every tab. `MusicTab` deliberately does
+NOT render its own — two bars would stack. `AudioBibleScreen` renders one
+because it's standalone.
 
-## Blockers (user action items — code can't fix)
+### 2. Hymnal — now genuinely 100% offline
 
-1. **Crashlytics buildtools jar** — first Android build needs to download `firebase-crashlytics-buildtools-3.0.2.jar` from `dl.google.com`. User's connection times out / DNS misses. **Needs one trip to a faster connection**, after which it caches forever.
-2. **Upload keystore** — `keytool -genkey -v -keystore upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`. Then `cp android/key.properties.example android/key.properties` and fill in.
-3. **AdMob app + 5 banner ad units** (Home, Churches, Events, Marketplace, Jobs). Copy IDs into `key.properties` (app id) and pass to `build_release` script via env (banner id).
-4. **Launcher icon** — 1024×1024 `assets/icon/app_icon.png` + `app_icon_foreground.png`. Then `dart run flutter_launcher_icons`.
-5. **Google sign-in OAuth clients** on Google Cloud Console: Web (for Chrome) + Android (debug + release SHA-1). Paste into Supabase Auth → Google provider. Until then the Continue-with-Google button errors with "OAuth client not found".
-6. **Privacy Policy + Terms** hosted publicly — Play Store listing requires URLs.
-7. **iOS `GADApplicationIdentifier`** in `ios/Runner/Info.plist` is still the test ID — swap manually before any iOS release build (Android is automated, iOS is not).
+Root cause of the "hymnal says something when on WiFi" bug: `HymnService.all()`
+hit Supabase on every open and showed spinners/errors.
 
-## User memory + non-obvious context
+- All **995 hymns exported to `assets/hymns/hymns.json`** (781 KB — 300 Kristu
+  MuNzwiyo + 695 SDA Hymnal). Regenerate with
+  `dart run scripts/export_hymns.dart` after adding hymns in Supabase.
+- Read path (`cached`/`all`/`search`) **never touches the network** and cannot
+  fail. Pull-to-refresh is the only network path and is **silent on failure**.
+- Reader rebuilt: `parseStanzas()` turns the raw lyrics blob into numbered
+  verses + a gold-ruled CHORUS block, plus focus (dark paper) mode, text-size
+  sheet, favourites, swipe between hymns.
 
-- **Bandwidth is limited.** Do NOT run `flutter pub get` / `pod install` without asking — see `~/.claude/projects/.../memory/feedback_network.md`.
-- **CLAUDE.md is authoritative** for colors, fonts, layout. Note the recent UI fixes softened the "all uploaded images square" rule for the detail hero only — list/grid thumbnails still respect it.
-- **Crashlytics SDK at runtime** still works on debug — only the **buildtools Gradle plugin** is the issue.
-- **The `_useTest` flag in `ads_service.dart` is `kDebugMode`-only.** Release builds use the production ID (which defaults to the test ID if `--dart-define` is missed). Safe by design.
-- **`unawaited` everywhere matters** — Hive flush, cache write, audio-stop on dispose. Don't await them on hot paths.
-- **`OutboxQueuedException`** is a soft success — `chat_screen` clears the input on this, only the generic catch shows a failure snackbar.
-- **`google_sign_in 6.3.0`** still has the v6 API (`signIn()` / `.authentication`) — v7 hasn't been adopted, don't rewrite to the v7 shape.
+### 3. Sabbath School — new tab
 
-## Suggested next builds (in priority order)
+Content comes from **Adventech's public API** (`sabbath-school.adventech.io`,
+the same feed the official app uses) — zero data entry.
 
-1. **Once user has cleared blockers 1–6:** produce the first signed `.aab` via `.\scripts\build_release.ps1`, upload to Play Console internal track, smoke-test on a real device. *No code work, but verify the script actually runs end-to-end.*
-2. **iOS xcconfig setup** so `GADApplicationIdentifier` injects from build time too (mirror what we did on Android via `manifestPlaceholders`).
-3. **Notification trigger sweep** — walk Part 23 of the master ref and confirm every listed trigger has a sender. Likely gaps: event reminders, RSVP confirmation, urgent banner push.
-4. **Admin Dashboard** (Part 37) — separate web codebase (Retool first, Next.js later). Build only after the app has real users.
-5. **Beta launch instrumentation** — feature flags, in-app feedback form, version-update gate.
+- **~90 languages, Shona (`sn`) is the DEFAULT.** English is one tap away.
+- `lib/services/sabbath_school_service.dart` — quarterlies → lessons → days →
+  content, all write-through cached to Hive. `downloadLesson()` pre-fetches a
+  whole week for offline.
+- `lib/screens/library/widgets/ss_html_text.dart` — native renderer for the
+  lesson HTML subset (`h1-h6, p, blockquote, a, em, strong, sup, small, hr,
+  br, li`). **No HTML package added.** Inline `<a class="verse">` references
+  are TAPPABLE and open the passage from the day's own bundled verse map
+  (works offline).
+- Progress, per-day notes and "continue reading" in
+  `lib/services/sabbath_school_prefs.dart`.
 
-## What NOT to redo
+### 4. Bible — rebuilt + multi-translation
 
-- `flutter pub get` — packages are installed.
-- Stage 20 wire-ups (cache / outbox / distance) — done and committed.
-- Analyze cleanup — clean.
-- Dependency version research — `google_sign_in 6.3.0`, `image_cropper 8.1.0`, `connectivity_plus 6.1.5`, `hive 2.2.3`, `hive_flutter 1.1.0`, `local_auth 2.3.0`, `geolocator 13.0.4`, `google_mobile_ads 5.3.1`, `shimmer 3.0.0` all verified.
-- The simplified `_PostPrayerSheet` — deleted intentionally; all entry points must go to `post_prayer` (Title + Privacy + Urgent).
-- The old full-bleed `EventCard` with 16:9 cover and big body — the compact horizontal version is intentional; don't restore the photo card style for the list view.
-- The home churches 2-col `GridView` — replaced by a horizontal `ListView.separated`. Don't put it back as a grid.
-- `AdsService._isAdMobSupported` — keep the guard. Any AdMob call on web/desktop will async-throw `MissingPluginException`.
+- **Chapter continuum**: `PageView` over all 1,189 chapters, so swiping past
+  Genesis 50 rolls into Exodus 1.
+- **Multi-verse selection** with a contextual action bar (highlight / bookmark
+  / copy / note / share) — the biggest gap vs other Bible apps.
+- **Verse of the Day** (deterministic from day-of-year, no server) + reading
+  **streak**.
+- **Share as IMAGE** — `widgets/verse_share_card.dart` renders a branded 1:1
+  card via `RepaintBoundary.toImage` with 4 styles; falls back to text share
+  on any failure.
+- Reading themes (Auto / Light / Sepia / Dark) independent of app theme,
+  focus mode, book-search + OT/NT grid, chapter grid sheet.
+- **Translations** (`bible.helloao.org`, cached per chapter):
+  KJV (bundled, always offline), **Shona `sna_bib`**, **Hebrew `heb_wlc`**
+  (RTL handled), Greek `grc_byz` / `grc_sbl` / `grc_gtr`, Septuagint
+  `grc_bre`, and **BSB which is the only one with narrated chapter audio**
+  (3 narrators) — audio plays through `MusicPlayerService`, so it gets
+  background + lock-screen controls for free.
+- **Cinematic switcher**: `widgets/translation_picker.dart` — blurred
+  full-screen overlay, staggered cards each showing its own script glyph
+  (א, Ω, Σ, S, K), chosen card pulses, then `TranslationCrossfade` dissolves
+  the passage into the new language.
+- Translations that lack a book (Greek NT has no Genesis) show an explicit
+  message + "Change translation", never an empty chapter.
+
+### 5. EGW — bookshelf
+
+- `lib/screens/library/egw_tab.dart` — cover grid (2:3) / list toggle,
+  **continue-reading hero with live progress**, search, Saved shelf, progress
+  rings, generated spine-style cover when a book has no artwork.
+- `PdfProgress` helper added to `pdf_viewer_screen.dart` persists the page
+  COUNT (not just last page) so the shelf can show "Page 42 of 380".
+
+### 6. Home screen
+
+- Library chips are now **5**, mapping 1:1 to the Library tabs
+  (0=Bible, 1=Sabbath School, 2=Hymnal, 3=EGW, 4=Music).
+- **Quiz moved out of the chip row into its own `_QuizCard`.** It was a sixth
+  48dp chip; six chips left ~48dp each on a 360dp screen. Deliberately styled
+  as a LIGHT card, not another navy gradient — the devotion card directly
+  above already uses `appBarGradient` + gold, and a second identical slab read
+  as a duplicate.
+- ⚠️ **`_QuizCard` is the ONLY entry point to `/quiz` in the entire app.**
+  Do not remove it without adding another.
+
+---
+
+## NOT yet done / next steps
+
+1. **Never built or run.** `flutter analyze` is clean (a full type-check), but
+   `flutter build apk` has **not** completed successfully — the attempt was
+   stopped mid-run. **First job next session: build and run on device.**
+2. Blockers found by `flutter doctor`:
+   - Android **cmdline-tools missing** → Android Studio → SDK Manager → SDK
+     Tools → "Android SDK Command-line Tools (latest)".
+   - **Android licenses not accepted** → `flutter doctor --android-licenses`.
+   - **Windows Developer Mode off** → `start ms-settings:developers` (Flutter
+     needs symlink support for plugins).
+   - Device `R9ZX90858DT` is connected but **not authorized** — accept the USB
+     debugging prompt on the phone.
+3. First Android build still needs `firebase-crashlytics-buildtools-3.0.2.jar`
+   from `dl.google.com`; this has timed out on slow connections before.
+4. **Not yet verified on a real device:** the media notification actually
+   appearing, Hebrew RTL rendering, verse-image share on Android 13+, and
+   Sabbath School Shona content.
+
+## Things NOT to redo
+
+- `flutter pub get` — done, deps resolved.
+- The hymn export — `assets/hymns/hymns.json` is committed.
+- Removing `just_audio_background` — it is correctly wired now, see above.
+- Putting Quiz back as a 6th chip.
+- Adding an HTML package for Sabbath School — `ss_html_text.dart` handles it.

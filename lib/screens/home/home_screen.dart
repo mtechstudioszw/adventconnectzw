@@ -928,6 +928,15 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                     padding: EdgeInsets.symmetric(horizontal: 16),
                     child: _LibraryChips(),
                   ),
+                  // Quiz Arena. Was a 48dp chip in the row above until Sabbath
+                  // School took that slot; as the app's headline game it earns
+                  // a real card, and this is its ONLY entry point — don't
+                  // remove it without adding another.
+                  const SizedBox(height: 10),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: _QuizCard(),
+                  ),
                 ],
               ),
             ),
@@ -3523,18 +3532,112 @@ class _DevotionCard extends StatelessWidget {
   }
 }
 
+/// Quiz Arena entry point, sitting under the Library chips.
+///
+/// This is the ONLY route into `/quiz` from the UI — it replaced the old
+/// sixth Library chip. A wide card also lets the Arena actually sell itself
+/// instead of hiding behind a 10pt label.
+class _QuizCard extends StatelessWidget {
+  const _QuizCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    // Deliberately a LIGHT card, not another navy gradient slab: the devotion
+    // card directly above already uses appBarGradient + gold, and stacking a
+    // second identical hero reads as a duplicate rather than a hierarchy.
+    // Matching the chips' surface makes the chips + this card read as one
+    // launcher block, and full width already gives Quiz far more presence
+    // than the 48dp chip it replaced.
+    return PressEffect(
+      pressedScale: 0.97,
+      child: GestureDetector(
+        onTap: () => context.pushNamed('quiz'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: palette.divider),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(Icons.quiz_rounded,
+                    color: AppColors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Quiz Arena',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: palette.text,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      'Test your Bible knowledge',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  'Play',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Premium launcher chips under the devotion card → open the Library to a
-/// specific tab (0=Bible, 1=Hymnal, 2=EGW, 3=Music).
+/// specific tab (0=Bible, 1=Sabbath School, 2=Hymnal, 3=EGW, 4=Music).
 class _LibraryChips extends StatelessWidget {
   const _LibraryChips();
 
-  // Tab index, or -1 for the Bible Quiz (its own /quiz route).
+  // Library tab index. Maps 1:1 onto LibraryScreen's TabBar order — keep the
+  // two in sync.
+  //
+  // Quiz used to live here as a sixth chip with index -1. It moved out to its
+  // own card ([_QuizCard]) when Sabbath School was added: six chips left each
+  // one ~48dp on a 360dp screen, and the Quiz Arena is a headline feature that
+  // was being advertised by the smallest tap target on the page.
   static const _items = <(String, IconData, int)>[
     ('Bible', Icons.menu_book_rounded, 0),
-    ('Hymnal', Icons.queue_music_rounded, 1),
-    ('EGW', Icons.auto_stories_rounded, 2),
-    ('Music', Icons.headphones_rounded, 3),
-    ('Quiz', Icons.quiz_rounded, -1),
+    ('Sabbath', Icons.school_rounded, 1),
+    ('Hymnal', Icons.queue_music_rounded, 2),
+    ('EGW', Icons.auto_stories_rounded, 3),
+    ('Music', Icons.headphones_rounded, 4),
   ];
 
   @override
@@ -3548,9 +3651,8 @@ class _LibraryChips extends StatelessWidget {
             child: PressEffect(
               pressedScale: 0.93,
               child: GestureDetector(
-                onTap: () => _items[i].$3 == -1
-                    ? context.pushNamed('quiz')
-                    : context.pushNamed('library', extra: _items[i].$3),
+                onTap: () =>
+                    context.pushNamed('library', extra: _items[i].$3),
                 // Compact chips (12->9 vertical, smaller icon/label) so
                 // the Library row doesn't crowd the prayer bubble.
                 child: Container(
@@ -3568,12 +3670,21 @@ class _LibraryChips extends StatelessWidget {
                         size: 19,
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _items[i].$1,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: palette.text,
-                          fontSize: 10,
+                      // Six chips share this row now (Sabbath School was
+                      // added), so at 360dp each gets ~48dp. FittedBox
+                      // scales the longest labels down instead of letting
+                      // them overflow or ellipsize to "Sabb…".
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          _items[i].$1,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: palette.text,
+                            fontSize: 10,
+                          ),
                         ),
                       ),
                     ],
@@ -3633,7 +3744,7 @@ class _HomeMusicStripState extends State<_HomeMusicStrip> {
               ),
               const Spacer(),
               GestureDetector(
-                onTap: () => context.pushNamed('library', extra: 3),
+                onTap: () => context.pushNamed('library', extra: 4),
                 child: Text(
                   'See all',
                   style: AppTextStyles.labelMedium.copyWith(
@@ -3655,7 +3766,7 @@ class _HomeMusicStripState extends State<_HomeMusicStrip> {
             itemBuilder: (context, i) {
               final item = _items[i];
               return GestureDetector(
-                onTap: () => context.pushNamed('library', extra: 3),
+                onTap: () => context.pushNamed('library', extra: 4),
                 child: Container(
                   width: 130,
                   decoration: BoxDecoration(

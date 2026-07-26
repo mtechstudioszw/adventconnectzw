@@ -569,7 +569,8 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/library',
       name: 'library',
-      // extra is an optional int initial tab (0=Bible,1=Hymnal,2=EGW,3=Music).
+      // extra is an optional int initial tab
+      // (0=Bible, 1=Sabbath School, 2=Hymnal, 3=EGW, 4=Music).
       builder: (context, state) =>
           LibraryScreen(initialTab: state.extra is int ? state.extra as int : 0),
     ),

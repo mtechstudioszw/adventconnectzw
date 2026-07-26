@@ -136,4 +136,78 @@ class BiblePrefsService {
 
   static Future<void> setLastPosition(int book, int chapter) =>
       CacheService.writePref(_kLastPos, '$book:$chapter');
+
+  // ---- Reading theme ------------------------------------------------------
+
+  static const _kTheme = 'bible_theme_v1';
+
+  /// Paper for the reader, independent of the app's light/dark setting — a
+  /// reader wants sepia at night even when the rest of the app is light.
+  static BibleReadingTheme readingTheme() {
+    return switch (CacheService.readPref(_kTheme)) {
+      'sepia' => BibleReadingTheme.sepia,
+      'dark' => BibleReadingTheme.dark,
+      'light' => BibleReadingTheme.light,
+      _ => BibleReadingTheme.system,
+    };
+  }
+
+  static Future<void> setReadingTheme(BibleReadingTheme theme) async {
+    await CacheService.writePref(_kTheme, theme.name);
+    _bump();
+  }
+
+  // ---- Reading streak -----------------------------------------------------
+
+  static const _kStreak = 'bible_streak_v1'; // "count:yyyy-mm-dd"
+
+  static String _today() {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${now.year}-${two(now.month)}-${two(now.day)}';
+  }
+
+  /// Consecutive days with at least one chapter opened. Resets when a day is
+  /// skipped — read today to keep it alive.
+  static int streak() {
+    final raw = CacheService.readPref(_kStreak);
+    if (raw == null) return 0;
+    final parts = raw.split(':');
+    if (parts.length != 2) return 0;
+    final count = int.tryParse(parts[0]) ?? 0;
+    final last = DateTime.tryParse(parts[1]);
+    if (last == null) return 0;
+    final today = DateTime.tryParse(_today());
+    if (today == null) return count;
+    final gap = today.difference(last).inDays;
+    // 0 = already counted today, 1 = still unbroken until midnight.
+    return gap <= 1 ? count : 0;
+  }
+
+  /// Called when a chapter is opened. Increments once per calendar day.
+  static Future<void> noteReadToday() async {
+    final raw = CacheService.readPref(_kStreak);
+    final today = _today();
+    if (raw != null) {
+      final parts = raw.split(':');
+      if (parts.length == 2) {
+        if (parts[1] == today) return; // already counted
+        final count = int.tryParse(parts[0]) ?? 0;
+        final last = DateTime.tryParse(parts[1]);
+        final todayDate = DateTime.tryParse(today);
+        if (last != null && todayDate != null) {
+          final gap = todayDate.difference(last).inDays;
+          final next = gap == 1 ? count + 1 : 1;
+          await CacheService.writePref(_kStreak, '$next:$today');
+          _bump();
+          return;
+        }
+      }
+    }
+    await CacheService.writePref(_kStreak, '1:$today');
+    _bump();
+  }
 }
+
+/// Paper options for the Bible reader.
+enum BibleReadingTheme { system, light, sepia, dark }

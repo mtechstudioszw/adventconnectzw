@@ -163,6 +163,11 @@ flutter:
     # Offline KJV Bible (public domain) for the Library's Bible tab. Also
     # feeds the Quiz Arena's procedural question generator.
     - assets/bible/
+    # Bundled Hymnal (Kristu MuNzwiyo + SDA Hymnal, ~995 hymns / 781 KB).
+    # The Hymnal tab reads THIS, never the network, so it works on a fresh
+    # install in airplane mode. Regenerate after adding hymns in Supabase:
+    #   dart run scripts/export_hymns.dart
+    - assets/hymns/
     # Quiz Arena sound effects. Synthesized mono 16-bit WAVs (~160 KB the
     # lot) — deliberately not mp3 so playback starts with no decode delay,
     # which matters for a tap-response tick. Muteable in the arena.

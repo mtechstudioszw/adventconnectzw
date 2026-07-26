@@ -1,29 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 
-import '../../config/share_config.dart';
-import '../../models/library_item_model.dart';
-import '../../services/library_service.dart';
+import '../../services/hymn_service.dart';
+import '../../services/music_player_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/cached_image.dart';
 import 'bible_tab.dart';
+import 'egw_tab.dart';
 import 'hymnal_tab.dart';
 import 'music_tab.dart';
-import 'pdf_viewer_screen.dart';
-import '../../widgets/motion/branded_refresh_indicator.dart';
-import '../../widgets/motion/brand_spinner.dart';
-import '../../widgets/motion/pressable.dart';
+import 'sabbath_school_tab.dart';
+import 'widgets/now_playing_bar.dart';
 
-/// The in-app Library: Bible (offline KJV), Hymnal (searchable structured
-/// hymns), EGW Books (uploaded PDFs) and Music (background audio player).
-/// Reached from the "Bible · Hymnal · EGW · Music" launcher under the
-/// devotion card on Home.
+/// The in-app Library: Bible (bundled offline KJV), Sabbath School (Adventech
+/// lessons in ~90 languages, Shona by default), Hymnal (bundled, fully
+/// offline), EGW Books (uploaded PDFs) and Music (background audio player).
+///
+/// Reached from the "Bible · Hymnal · EGW · Music" launcher under the devotion
+/// card on Home.
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key, this.initialTab = 0});
 
-  /// 0=Bible, 1=Hymnal, 2=EGW Books, 3=Music.
+  /// 0=Bible, 1=Sabbath School, 2=Hymnal, 3=EGW Books, 4=Music.
   final int initialTab;
 
   @override
@@ -32,16 +30,24 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen>
     with SingleTickerProviderStateMixin {
+  static const _tabCount = 5;
+
   late final TabController _tabs;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(
-      length: 4,
+      length: _tabCount,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 3),
+      initialIndex: widget.initialTab.clamp(0, _tabCount - 1),
     );
+    // Parse the bundled hymnal off the critical path so swiping to the Hymnal
+    // tab is instant rather than showing a first-open spinner.
+    HymnService.warmUp();
+    // Bring back the previous session's queue so the mini player reappears
+    // where the user left it. Loads paused — never auto-plays on open.
+    MusicPlayerService.instance.restoreLastQueue();
   }
 
   @override
@@ -56,9 +62,10 @@ class _LibraryScreenState extends State<LibraryScreen>
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       // No ads anywhere in the Library. It's devotional content — Bible,
-      // hymns, EGW writings and worship music — so it stays ad-free like the
-      // prayer screens (the tester reported the bottom banner was covering the
-      // catalog). Revenue stays on the home feed, stories and detail pages.
+      // Sabbath School, hymns, EGW writings and worship music — so it stays
+      // ad-free like the prayer screens (the tester reported the bottom
+      // banner was covering the catalog). Revenue stays on the home feed,
+      // stories and detail pages.
       appBar: AppBar(
         title: Text(
           'Library',
@@ -71,250 +78,50 @@ class _LibraryScreenState extends State<LibraryScreen>
           tabAlignment: TabAlignment.start,
           indicatorColor: AppColors.primaryBlue,
           indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.label,
           labelColor: AppColors.primaryBlue,
           unselectedLabelColor: const Color(0xFF7C8698),
           labelStyle: AppTextStyles.labelMedium.copyWith(
             fontWeight: FontWeight.w700,
           ),
           tabs: const [
-            Tab(text: 'Bible'),
-            Tab(text: 'Hymnal'),
-            Tab(text: 'EGW Books'),
-            Tab(text: 'Music'),
+            Tab(icon: Icon(Icons.menu_book_rounded, size: 19), text: 'Bible'),
+            Tab(
+              icon: Icon(Icons.school_rounded, size: 19),
+              text: 'Sabbath School',
+            ),
+            Tab(icon: Icon(Icons.queue_music_rounded, size: 19), text: 'Hymnal'),
+            Tab(icon: Icon(Icons.auto_stories_rounded, size: 19), text: 'EGW'),
+            Tab(icon: Icon(Icons.headphones_rounded, size: 19), text: 'Music'),
           ],
         ),
       ),
       body: SafeArea(
         top: false,
-        child: TabBarView(
-          controller: _tabs,
-          children: const [
-            // Audio Bible lives as a button INSIDE the Bible tab, not its own
-            // tab (founder preference).
-            BibleTab(),
-            // Hymnal = structured, searchable hymns (number/title/lyrics),
-            // entered by the admin one at a time. NOT PDFs.
-            HymnalTab(),
-            _PdfLibraryTab(
-              kind: 'egw_book',
-              emptyIcon: Icons.menu_book_outlined,
-              emptyText: 'Ellen G. White books will appear here once added.',
+        child: Column(
+          children: [
+            Expanded(
+              child: TabBarView(
+                controller: _tabs,
+                children: const [
+                  // Audio Bible lives as a button INSIDE the Bible tab, not
+                  // its own tab (founder preference).
+                  BibleTab(),
+                  SabbathSchoolTab(),
+                  // Hymnal = structured, searchable hymns (number/title/
+                  // lyrics), bundled as an asset. NOT PDFs.
+                  HymnalTab(),
+                  EgwTab(),
+                  MusicTab(),
+                ],
+              ),
             ),
-            MusicTab(),
+            // Shell-level so playback controls follow the user across every
+            // tab — start a hymn, keep reading the Bible, still control it.
+            const NowPlayingBar(),
           ],
         ),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-//  PDF list tab (EGW Books) — also reusable for any uploaded-PDF kind.
-// ---------------------------------------------------------------------------
-
-class _PdfLibraryTab extends StatefulWidget {
-  const _PdfLibraryTab({
-    required this.kind,
-    required this.emptyIcon,
-    required this.emptyText,
-  });
-
-  final String kind;
-  final IconData emptyIcon;
-  final String emptyText;
-
-  @override
-  State<_PdfLibraryTab> createState() => _PdfLibraryTabState();
-}
-
-class _PdfLibraryTabState extends State<_PdfLibraryTab>
-    with AutomaticKeepAliveClientMixin {
-  late Future<List<LibraryItem>> _future;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = LibraryService.fetchItems(widget.kind);
-  }
-
-  Future<void> _refresh() async {
-    final items = LibraryService.fetchItems(widget.kind);
-    setState(() => _future = items);
-    await items;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return BrandedRefreshIndicator(
-      color: AppColors.primaryBlue,
-      onRefresh: _refresh,
-      child: FutureBuilder<List<LibraryItem>>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: BrandSpinner(size: 30));
-          }
-          final items = snap.data ?? const [];
-          if (items.isEmpty) {
-            return _EmptyState(icon: widget.emptyIcon, text: widget.emptyText);
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, i) {
-              final item = items[i];
-              return _LibraryCard(
-                item: item,
-                leadingIcon: Icons.picture_as_pdf_outlined,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        PdfViewerScreen(title: item.title, url: item.fileUrl),
-                  ),
-                ),
-                onShare: () => Share.share(
-                  '${item.title}'
-                  '${(item.author ?? '').isNotEmpty ? ' by ${item.author}' : ''}'
-                  '\n\nReading on Advent Connect ZW — get the app:\n$appDownloadUrl',
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _LibraryCard extends StatelessWidget {
-  const _LibraryCard({
-    required this.item,
-    required this.leadingIcon,
-    required this.onTap,
-    this.onShare,
-  });
-
-  final LibraryItem item;
-  final IconData leadingIcon;
-  final VoidCallback onTap;
-  final VoidCallback? onShare;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return PressEffect(
-      child: Material(
-        color: palette.card,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: palette.divider),
-            ),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 52,
-                    height: 52,
-                    child: (item.coverUrl != null && item.coverUrl!.isNotEmpty)
-                        ? CachedImage(item.coverUrl!, fit: BoxFit.cover)
-                        : DecoratedBox(
-                            decoration: const BoxDecoration(
-                              gradient: AppColors.primaryGradient,
-                            ),
-                            child: Icon(
-                              leadingIcon,
-                              color: AppColors.white,
-                              size: 26,
-                            ),
-                          ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleSmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          item.author,
-                          item.language,
-                        ].where((s) => s != null && s.isNotEmpty).join(' · '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: palette.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (onShare != null)
-                  IconButton(
-                    tooltip: 'Share',
-                    visualDensity: VisualDensity.compact,
-                    icon: Icon(
-                      Icons.share_outlined,
-                      color: palette.textMuted,
-                      size: 20,
-                    ),
-                    onPressed: onShare,
-                  ),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right, color: palette.textMuted),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        const SizedBox(height: 100),
-        Icon(icon, size: 60, color: palette.textMuted),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),
-          ),
-        ),
-      ],
     );
   }
 }

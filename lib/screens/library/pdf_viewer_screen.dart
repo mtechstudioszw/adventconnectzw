@@ -13,6 +13,43 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
+/// Shared keys + helpers for per-book reading progress.
+///
+/// Lives here (next to the writer) so the Library bookshelf and the reader
+/// can never drift apart on key naming.
+class PdfProgress {
+  PdfProgress._();
+
+  static String _hash(String url) => sha1.convert(url.codeUnits).toString();
+
+  /// Last page the reader stopped on (0-based).
+  static String lastPageKey(String url) => 'pdf_page:${_hash(url)}';
+
+  /// Total pages, learned the first time the book renders.
+  static String pageCountKey(String url) => 'pdf_pages:${_hash(url)}';
+
+  /// Reading progress 0.0–1.0, or null when the book was never opened.
+  static double? progressFor(String url) {
+    final page = int.tryParse(CacheService.readPref(lastPageKey(url)) ?? '');
+    final total = int.tryParse(CacheService.readPref(pageCountKey(url)) ?? '');
+    if (page == null || total == null || total <= 1) return null;
+    return ((page + 1) / total).clamp(0.0, 1.0);
+  }
+
+  /// "Page 42 of 380", or null when never opened.
+  static String? positionLabel(String url) {
+    final page = int.tryParse(CacheService.readPref(lastPageKey(url)) ?? '');
+    final total = int.tryParse(CacheService.readPref(pageCountKey(url)) ?? '');
+    if (page == null) return null;
+    if (total == null || total <= 0) return 'Page ${page + 1}';
+    return 'Page ${page + 1} of $total';
+  }
+
+  /// True once the book has been opened at least once.
+  static bool hasStarted(String url) =>
+      CacheService.readPref(lastPageKey(url)) != null;
+}
+
 /// Full-screen in-app PDF reader for Library hymnals + EGW books.
 ///
 /// The PDF lives in the public `library` storage bucket. `flutter_pdfview`
@@ -41,8 +78,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   // Per-document last-page key, so reopening a book continues where you left
   // off (resume reading — a basic-feeling reader was the tester's complaint).
-  String get _pageKey =>
-      'pdf_page:${sha1.convert(widget.url.codeUnits)}';
+  String get _pageKey => PdfProgress.lastPageKey(widget.url);
 
   @override
   void initState() {
@@ -234,8 +270,17 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   // Resume where the reader left off last time.
                   defaultPage: _resumePage,
                   onViewCreated: (c) => _ctrl = c,
-                  onRender: (pages) =>
-                      setState(() => _pages = pages ?? 0),
+                  onRender: (pages) {
+                    setState(() => _pages = pages ?? 0);
+                    // Persist the length too, so the Library bookshelf can
+                    // show "page 42 of 380" progress without opening the file.
+                    if (pages != null && pages > 0) {
+                      CacheService.writePref(
+                        PdfProgress.pageCountKey(widget.url),
+                        pages.toString(),
+                      );
+                    }
+                  },
                   onPageChanged: (page, _) {
                     setState(() => _current = page ?? 0);
                     // Remember the page so the next open resumes here.

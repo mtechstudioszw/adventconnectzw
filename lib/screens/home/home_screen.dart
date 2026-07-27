@@ -134,6 +134,11 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   bool _endOfFeed = false;
   int _pagesLoaded = 0;
 
+  /// Batches "I've seen this" writes. A card marks itself locally as it
+  /// builds; this flushes the whole buffer in one request a few seconds
+  /// later, so a fast scroll past 30 posts costs one round-trip, not 30.
+  Timer? _seenFlush;
+
   /// True once we've auto-loaded our cellular allowance and need a tap.
   bool get _needsManualLoad =>
       !ConnectivityService.isWifi && _pagesLoaded >= _autoPagesOnCellular;
@@ -285,6 +290,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     _authSub?.cancel();
     _unreadRefreshDebounce?.cancel();
     _msgActivitySub?.cancel();
+    _seenFlush?.cancel();
+    // Leaving Home shouldn't lose the buffer — flush what's pending.
+    unawaited(FeedService.flushSeen());
     _scroll.dispose();
     super.dispose();
   }
@@ -401,6 +409,11 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
           if (f.isAccepted) friendIds.add(other);
         }
       }
+
+      // Seen history has to land BEFORE the feed request, because the
+      // ranking reads it synchronously while sorting.
+      await FeedService.fetchSeenPostIds();
+      if (!mounted) return;
 
       // Tier 1: what the user actually came for.
       final results = await Future.wait([
@@ -566,6 +579,20 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     if (!_scroll.hasClients) return;
     final pos = _scroll.position;
     if (pos.pixels >= pos.maxScrollExtent - 900) _loadMore();
+  }
+
+  /// Records a post as seen and schedules a batched write.
+  ///
+  /// Called from [_SeenReporter.initState], i.e. exactly when the sliver
+  /// creates the card's element — which is when it's genuinely approaching
+  /// the viewport, not when the widget object was constructed.
+  void _noteSeen(String postId) {
+    FeedService.markSeen(postId);
+    _seenFlush?.cancel();
+    _seenFlush = Timer(
+      const Duration(seconds: 3),
+      () => unawaited(FeedService.flushSeen()),
+    );
   }
 
   /// Tapping the already-active Home tab returns to the top.
@@ -1710,10 +1737,14 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       final post = _posts[i];
       children.add(
         // Fades in and rises as it scrolls into view. In a lazy sliver the
-        // card is built just before it becomes visible, so a mount-triggered
-        // reveal IS a scroll-triggered one — no visibility detector needed.
-        StaggeredReveal(
-          key: ValueKey('post_${post.id}'),
+        // card's ELEMENT is created just before it becomes visible, so a
+        // mount-triggered reveal IS a scroll-triggered one — and that same
+        // moment is when _SeenReporter records the view.
+        _SeenReporter(
+          key: ValueKey('seen_${post.id}'),
+          postId: post.id,
+          onSeen: _noteSeen,
+          child: StaggeredReveal(
           rise: 16,
           child: RepaintBoundary(
             child: PostCard(
@@ -1734,6 +1765,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
               onStoryRingTapped: () => _onAuthorStoryRing(post),
               onSaveImage: () => _savePostImage(post),
             ),
+          ),
           ),
         ),
       );
@@ -2677,6 +2709,40 @@ class _MemberAvatar extends StatelessWidget {
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
         .toUpperCase();
   }
+}
+
+/// Reports its post as seen the moment the sliver creates this element.
+///
+/// Has to be a StatefulWidget. `_buildFeedChildren` constructs every widget
+/// OBJECT up front, so hooking the constructor would mark the whole page as
+/// seen the instant it was assembled — including posts the user never
+/// scrolled to. Element creation is the part slivers actually do lazily, and
+/// `initState` is the hook for it.
+class _SeenReporter extends StatefulWidget {
+  const _SeenReporter({
+    super.key,
+    required this.postId,
+    required this.onSeen,
+    required this.child,
+  });
+
+  final String postId;
+  final void Function(String postId) onSeen;
+  final Widget child;
+
+  @override
+  State<_SeenReporter> createState() => _SeenReporterState();
+}
+
+class _SeenReporterState extends State<_SeenReporter> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onSeen(widget.postId);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Tappable search field at the top of the feed.

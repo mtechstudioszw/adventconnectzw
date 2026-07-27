@@ -41,6 +41,7 @@ class FeedService {
   ///         + 0.50 if the author is a friend
   ///         + 0.35 if the post is from a church you follow
   ///         + viewer-specific jitter (0..0.20)
+  ///         - 0.70 if already seen (sinks, never hides)
   ///         + own_post penalty (-1, so your own post sinks)
   ///
   /// The engagement CAP is load-bearing. Uncapped it reached ~1.2 while
@@ -158,6 +159,11 @@ class FeedService {
     final churchId = p.churchId;
     final churchBoost =
         (churchId != null && followedChurchIds.contains(churchId)) ? 0.35 : 0.0;
+    // Already scrolled past: SINK it, don't hide it. -0.7 is enough to lose
+    // to almost any unseen post, but a seen post with real engagement can
+    // still resurface — which is what you want when a thread gets busy after
+    // you first saw it.
+    final seenPenalty = seenPostIdsCached().contains(p.id) ? -0.70 : 0.0;
     // Including the nonce in the seed means a fresh refresh hands
     // the user a different jittered order, even on identical content.
     // Two different users still see different orders too (viewerId
@@ -170,6 +176,7 @@ class FeedService {
         friendBoost +
         churchBoost +
         jitter +
+        seenPenalty +
         ownPenalty;
   }
 
@@ -317,6 +324,78 @@ class FeedService {
   }
 
   // ---- Likes --------------------------------------------------------
+
+  // ---- Seen tracking ------------------------------------------------------
+  //
+  // Without this the feed re-served the same posts every open, and because
+  // `refreshNonce` re-jitters on each pull the user met them in a NEW order
+  // every time — which reads as "the app is random" rather than "the app is
+  // fresh". Seen posts now sink instead of disappearing, so nothing is ever
+  // unreachable; they just stop competing for the top.
+
+  static const String _viewsTable = 'post_views';
+
+  /// Ids buffered on the client until [flushSeen] writes them.
+  static final Set<String> _pendingSeen = <String>{};
+
+  /// Recently-seen ids, held in memory so ranking doesn't hit the network.
+  static Set<String> _seenCache = <String>{};
+
+  static Set<String> seenPostIdsCached() => _seenCache;
+
+  /// Loads the viewer's recent history. Bounded deliberately — a heavy user
+  /// could accumulate thousands of rows, and ranking only needs enough to
+  /// recognise "I've already scrolled past this".
+  static Future<Set<String>> fetchSeenPostIds({int limit = 400}) async {
+    final viewer = _viewerId;
+    if (viewer == null) return <String>{};
+    try {
+      final rows = await _client
+          .from(_viewsTable)
+          .select('post_id')
+          .eq('viewer_id', viewer)
+          .order('viewed_at', ascending: false)
+          .limit(limit);
+      _seenCache = {
+        for (final r in rows as List) (r as Map)['post_id'].toString(),
+      };
+      return _seenCache;
+    } catch (_) {
+      // Offline or RLS hiccup — an empty set just means nothing sinks.
+      return _seenCache;
+    }
+  }
+
+  /// Buffers a post as seen. Cheap and synchronous; call it freely from a
+  /// scroll callback. Nothing hits the network until [flushSeen].
+  static void markSeen(String postId) {
+    if (_viewerId == null) return;
+    if (_seenCache.contains(postId)) return;
+    _pendingSeen.add(postId);
+  }
+
+  /// Writes the buffer in ONE request. Batched on purpose: a naive
+  /// per-card insert would fire a write for every row that scrolls by.
+  static Future<void> flushSeen() async {
+    final viewer = _viewerId;
+    if (viewer == null || _pendingSeen.isEmpty) return;
+    final batch = List<String>.of(_pendingSeen);
+    _pendingSeen.clear();
+    // Optimistic: treat them as seen locally even if the write loses, so we
+    // don't re-buffer the same ids on the next scroll.
+    _seenCache.addAll(batch);
+    try {
+      await _client.from(_viewsTable).upsert(
+            [
+              for (final id in batch) {'post_id': id, 'viewer_id': viewer},
+            ],
+            onConflict: 'post_id,viewer_id',
+            ignoreDuplicates: true,
+          );
+    } catch (_) {
+      // Best-effort. Losing a batch costs a slightly staler feed, nothing more.
+    }
+  }
 
   /// Sets the viewer's reaction on a post, replacing any previous one.
   ///

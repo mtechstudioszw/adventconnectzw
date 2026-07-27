@@ -1,21 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../models/order_model.dart';
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
+import '../../services/order_service.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
 import '../../widgets/cached_image.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/home/section_header.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/screen_shell.dart';
+import '../marketplace/order_status_chip.dart';
 
-/// Entry point into the seller flow. Three states:
+/// Entry point into the seller flow. States:
 ///   * no seller row → CTA to set up the store
 ///   * pending / rejected → banner explaining state, no dashboard
-///   * approved → stats + product preview + management actions
+///   * approved → orders, stats, listings, store settings
+///
+/// The old version was a settings page wearing a dashboard's name: its
+/// three "stats" were two counts the seller typed in themselves plus a
+/// rating that is blank for every seller in the database. Now that orders
+/// exist, the top of the screen answers the only question a seller
+/// actually opens this for — has anyone ordered anything?
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
 
@@ -23,53 +36,38 @@ class SellerDashboardScreen extends StatefulWidget {
   State<SellerDashboardScreen> createState() => _SellerDashboardScreenState();
 }
 
-class _SellerDashboardScreenState extends State<SellerDashboardScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
+class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Seller? _seller;
   List<Product> _products = const [];
+  List<MarketOrder> _orders = const [];
   bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(
-      begin: 12,
-      end: 0,
-    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _bootstrap();
   }
 
-  @override
-  void dispose() {
-    _entrance.dispose();
-    super.dispose();
-  }
-
   Future<void> _bootstrap() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (mounted && !_loading) setState(() => _error = null);
     try {
       final seller = await SellerService.fetchMySellerProfile();
       List<Product> products = const [];
+      List<MarketOrder> orders = const [];
       if (seller != null && seller.isApproved) {
+        // Orders are non-essential to rendering the page — a failure
+        // there must not blank out the listings the seller came to see.
         products = await SellerService.fetchMyProducts();
+        try {
+          orders = await OrderService.fetchSellerOrders();
+        } catch (_) {}
       }
       if (!mounted) return;
       setState(() {
         _seller = seller;
         _products = products;
+        _orders = orders;
         _loading = false;
       });
     } catch (_) {
@@ -83,89 +81,195 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final seller = _seller;
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,
-        child: SingleChildScrollView(
+        child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
-              _buildHero(),
-              AnimatedBuilder(
-                animation: _entrance,
-                builder: (context, child) => Opacity(
-                  opacity: _fade.value,
-                  child: Transform.translate(
-                    offset: Offset(0, _slide.value),
-                    child: child,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                  child: _buildBody(),
-                ),
-              ),
-            ],
-          ),
+          padding: EdgeInsets.zero,
+          children: [
+            // Flat header, matching every other secondary screen. The old
+            // curved ClipPath hero was the one thing screen_shell.dart
+            // explicitly says not to build.
+            ScreenHero(
+              title: seller?.businessName.isNotEmpty == true
+                  ? seller!.businessName
+                  : 'Your store',
+              tagline: 'Seller dashboard',
+              subtitle: _heroSubtitle(),
+              fallbackRoute: 'profile',
+              trailing: seller?.isApproved == true
+                  ? ScreenHeroTrailing(
+                      icon: Icons.add,
+                      onTap: () async {
+                        await context.pushNamed('add_product');
+                        if (mounted) _bootstrap();
+                      },
+                    )
+                  : null,
+            ),
+            _buildBody(),
+            const SizedBox(height: AppSpace.xxl),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_loading) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 80),
-        child: Column(children: const [BrandSpinner(size: 30)]),
-      );
+  String _heroSubtitle() {
+    final seller = _seller;
+    if (seller == null) return 'Open a storefront on the marketplace.';
+    if (seller.isPending) return 'Application under review.';
+    if (seller.isFinalReviewPending) return 'Final review in progress.';
+    if (seller.isRejectedFinal) return 'Marketplace access closed.';
+    if (seller.isRejected) return 'Application needs your attention.';
+    final pending = _orders.where((o) => o.isPending).length;
+    if (pending > 0) {
+      return '$pending order${pending == 1 ? '' : 's'} waiting for you.';
     }
-    if (_error != null) {
-      return _buildErrorState();
-    }
-    if (_seller == null) {
-      return _buildEmptyState();
-    }
-    if (_seller!.isPending) {
-      return _buildPendingState(_seller!);
-    }
-    if (_seller!.isFinalReviewPending) {
-      return _buildFinalReviewState(_seller!);
-    }
-    if (_seller!.isRejectedFinal) {
-      return _buildRejectedFinalState(_seller!);
-    }
-    if (_seller!.isRejected) {
-      return _buildRejectedState(_seller!);
-    }
-    return _buildApprovedDashboard(_seller!);
+    return 'Listings, orders and store settings in one place.';
   }
 
-  Widget _buildErrorState() {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.cloud_off_outlined,
-            size: 48,
-            color: context.palette.textMuted,
+  Widget _buildBody() {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 80),
+        child: Center(child: BrandSpinner(size: 30)),
+      );
+    }
+    if (_error != null) return _pad(_ErrorCard(message: _error!));
+    final seller = _seller;
+    if (seller == null) return _pad(_buildEmptyState());
+    if (seller.isPending) return _pad(_buildPendingState(seller));
+    if (seller.isFinalReviewPending) return _pad(_buildFinalReviewState(seller));
+    if (seller.isRejectedFinal) return _pad(_buildRejectedFinalState(seller));
+    if (seller.isRejected) return _pad(_buildRejectedState(seller));
+    return _buildApprovedDashboard(seller);
+  }
+
+  Widget _pad(Widget child) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      AppSpace.lg,
+      AppSpace.md,
+      AppSpace.lg,
+      0,
+    ),
+    child: child,
+  );
+
+  Widget _buildApprovedDashboard(Seller seller) {
+    final stats = SellerService.statsFor(_products);
+    final openOrders = _orders.where((o) => o.isOpen).toList();
+    final views = _products.fold<int>(0, (sum, p) => sum + p.viewCount);
+    // Revenue counts completed orders only. Counting pending requests as
+    // money would flatter the number and mislead the seller.
+    final earned = <String, double>{};
+    for (final o in _orders.where((o) => o.isCompleted)) {
+      earned.update(
+        o.currency,
+        (v) => v + o.subtotal,
+        ifAbsent: () => o.subtotal,
+      );
+    }
+
+    var index = 0;
+    Widget reveal(Widget child) =>
+        StaggeredReveal(index: index++, child: child);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _pad(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              reveal(_StoreSummaryCard(seller: seller, showStatusChip: true)),
+              const SizedBox(height: AppSpace.lg),
+              reveal(
+                _MetricsGrid(
+                  live: stats.available,
+                  hidden: stats.hidden,
+                  views: views,
+                  openOrders: openOrders.length,
+                  earned: earned,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: context.palette.textMuted,
-            ),
+        ),
+
+        // Orders lead. This is the answer to "did anything happen?"
+        reveal(
+          _OrdersSection(
+            orders: _orders,
+            onOpen: (order) async {
+              await context.pushNamed(
+                'order_details',
+                pathParameters: {'orderId': order.id},
+                extra: order,
+              );
+              if (mounted) _bootstrap();
+            },
           ),
-        ],
-      ),
+        ),
+
+        reveal(
+          _ListingsSection(
+            products: _products,
+            onManage: () async {
+              await context.pushNamed('manage_products');
+              if (mounted) _bootstrap();
+            },
+            onAdd: () async {
+              await context.pushNamed('add_product');
+              if (mounted) _bootstrap();
+            },
+          ),
+        ),
+
+        const SizedBox(height: AppSpace.xl),
+        _pad(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              reveal(
+                _QuickActionsCard(
+                  onAdd: () async {
+                    await context.pushNamed('add_product');
+                    if (mounted) _bootstrap();
+                  },
+                  onManage: () async {
+                    await context.pushNamed('manage_products');
+                    if (mounted) _bootstrap();
+                  },
+                  onEdit: () async {
+                    await context.pushNamed('edit_store', extra: seller);
+                    if (mounted) _bootstrap();
+                  },
+                  onStorefront: () => context.pushNamed(
+                    'seller_profile',
+                    pathParameters: {'userId': seller.authUserId},
+                    extra: seller,
+                  ),
+                ),
+              ),
+              if (seller.observesSabbath) ...[
+                const SizedBox(height: AppSpace.lg),
+                reveal(
+                  _SabbathBadge(
+                    notice: seller.sabbathNoticeText ?? 'Observes the Sabbath.',
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpace.lg),
+              reveal(_DangerZoneCard(onDelete: () => _confirmDeleteStore(seller))),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -174,14 +278,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
       ),
       child: Column(
         children: [
@@ -198,7 +296,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
               size: 44,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpace.xl),
           Text(
             'Become a seller',
             textAlign: TextAlign.center,
@@ -206,24 +304,23 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.sm),
           Text(
-            'List products to the SDA community across Zimbabwe. We review applications within 1–3 days.',
+            'List products to the SDA community across Zimbabwe. We review '
+            'applications within 1–3 days.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
               color: context.palette.textMuted,
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 22),
-          _GradientButton(
+          const SizedBox(height: AppSpace.xl),
+          PrimaryGradientButton(
             label: 'Start setup',
             icon: Icons.arrow_forward,
             onTap: () async {
-              // Self-serve flow: route through the Code of Conduct
-              // gate first so the user agrees before we let them
-              // open a storefront (patch_022 enforces this at the
-              // DB layer too).
+              // Self-serve flow routes through the Code of Conduct gate
+              // first (patch_022 enforces this at the DB layer too).
               await context.pushNamed('marketplace_guidelines');
               if (mounted) _bootstrap();
             },
@@ -236,21 +333,21 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   Widget _buildPendingState(Seller seller) {
     return Column(
       children: [
-        _StatusBanner(
+        const _StatusBanner(
           tone: _BannerTone.info,
           icon: Icons.hourglass_top,
           title: 'Awaiting admin approval',
           message:
               'An admin is reviewing your store profile. You\'ll get a '
-              'notification the moment it\'s approved — usually within '
-              'a day or two. Once approved you can list products without '
-              'further per-product reviews.',
+              'notification the moment it\'s approved — usually within a day '
+              'or two. Once approved you can list products without further '
+              'per-product reviews.',
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.lg),
         _StoreSummaryCard(seller: seller),
-        const SizedBox(height: 16),
-        _ChecklistCard(
-          items: const [
+        const SizedBox(height: AppSpace.lg),
+        const _ChecklistCard(
+          items: [
             'Photo and clear business name',
             'Province + city set',
             'Phone or WhatsApp reachable',
@@ -273,14 +370,15 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
               : 'Application not approved',
           message: seller.rejectionReason?.trim().isNotEmpty == true
               ? seller.rejectionReason!
-              : 'Reach out via support if you\'d like more detail. Update your store details below and resubmit — '
+              : 'Reach out via support if you\'d like more detail. Update your '
+                    'store details below and resubmit — '
                     '${attemptsLeft == 1 ? 'this is your last chance' : '$attemptsLeft attempts remaining'} '
                     'before marketplace access is closed.',
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.lg),
         _StoreSummaryCard(seller: seller),
-        const SizedBox(height: 16),
-        _GradientButton(
+        const SizedBox(height: AppSpace.lg),
+        PrimaryGradientButton(
           label: 'Edit & resubmit',
           icon: Icons.edit_outlined,
           onTap: () async {
@@ -295,7 +393,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   Widget _buildFinalReviewState(Seller seller) {
     return Column(
       children: [
-        _StatusBanner(
+        const _StatusBanner(
           tone: _BannerTone.info,
           icon: Icons.gavel_outlined,
           title: 'Final review in progress',
@@ -304,7 +402,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
               'your updated details — you\'ll get a notification when there\'s '
               'a decision.',
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.lg),
         _StoreSummaryCard(seller: seller),
       ],
     );
@@ -313,7 +411,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
   Widget _buildRejectedFinalState(Seller seller) {
     return Column(
       children: [
-        _StatusBanner(
+        const _StatusBanner(
           tone: _BannerTone.danger,
           icon: Icons.block_outlined,
           title: 'Marketplace access closed',
@@ -322,56 +420,19 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
               'longer eligible to apply to become a marketplace seller. '
               'Please contact support if you need more information.',
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpace.lg),
         _StoreSummaryCard(seller: seller),
       ],
     );
   }
 
-  Widget _buildApprovedDashboard(Seller seller) {
-    final stats = SellerService.statsFor(_products);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _StoreSummaryCard(seller: seller, showStatusChip: true),
-        const SizedBox(height: 16),
-        _StatsRow(seller: seller, stats: stats),
-        const SizedBox(height: 16),
-        _QuickActionsCard(
-          seller: seller,
-          onAdd: () async {
-            await context.pushNamed('add_product');
-            if (mounted) _bootstrap();
-          },
-          onManage: () async {
-            await context.pushNamed('manage_products');
-            if (mounted) _bootstrap();
-          },
-          onEdit: () async {
-            await context.pushNamed('edit_store', extra: seller);
-            if (mounted) _bootstrap();
-          },
-        ),
-        const SizedBox(height: 16),
-        _RecentProductsSection(products: _products),
-        const SizedBox(height: 16),
-        if (seller.observesSabbath)
-          _SabbathBadge(
-            notice: seller.sabbathNoticeText ?? 'Observes the Sabbath.',
-          ),
-        if (seller.observesSabbath) const SizedBox(height: 16),
-        _DangerZoneCard(onDelete: () => _confirmDeleteStore(seller)),
-      ],
-    );
-  }
-
   Future<void> _confirmDeleteStore(Seller seller) async {
-    // Two-step confirm so an accidental tap can't wipe the storefront
-    // — destructive + irreversible (every product is dropped too).
+    // Two-step confirm — destructive and irreversible (every product goes
+    // with it).
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
         title: Text('Delete your store?', style: AppTextStyles.headlineSmall),
         content: Text(
           '"${seller.businessName}" and every product you\'ve listed will be '
@@ -386,9 +447,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: ctx.palette.text,
-              ),
+              style: AppTextStyles.labelMedium.copyWith(color: ctx.palette.text),
             ),
           ),
           FilledButton(
@@ -406,6 +465,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       setState(() {
         _seller = null;
         _products = const [];
+        _orders = const [];
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -429,140 +489,442 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen>
       );
     }
   }
+}
 
-  Widget _buildHero() {
-    final cover = _seller?.coverPhotoUrl;
-    final hasCover = cover != null && cover.isNotEmpty;
-    return ClipPath(
-      clipper: _HeroClipper(),
-      child: Stack(
+/// Four tiles, because a seller's questions are "is anyone buying?",
+/// "is anyone looking?", "what's live?" and "what have I made?".
+class _MetricsGrid extends StatelessWidget {
+  const _MetricsGrid({
+    required this.live,
+    required this.hidden,
+    required this.views,
+    required this.openOrders,
+    required this.earned,
+  });
+
+  final int live;
+  final int hidden;
+  final int views;
+  final int openOrders;
+  final Map<String, double> earned;
+
+  @override
+  Widget build(BuildContext context) {
+    final earnedLabel = earned.isEmpty
+        ? '—'
+        : earned.entries
+              .map((e) => formatMoney(e.value, e.key))
+              .join(' + ');
+    return Row(
+      children: [
+        Expanded(
+          child: _MetricTile(
+            value: '$openOrders',
+            label: 'OPEN ORDERS',
+            icon: Icons.receipt_long_outlined,
+            highlight: openOrders > 0,
+          ),
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child: _MetricTile(
+            value: earnedLabel,
+            label: 'COMPLETED',
+            icon: Icons.payments_outlined,
+          ),
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child: _MetricTile(
+            value: '$views',
+            label: 'VIEWS',
+            icon: Icons.visibility_outlined,
+          ),
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child: _MetricTile(
+            value: '$live',
+            label: 'LIVE',
+            icon: Icons.inventory_2_outlined,
+            sub: hidden > 0 ? '$hidden hidden' : null,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({
+    required this.value,
+    required this.label,
+    required this.icon,
+    this.sub,
+    this.highlight = false,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+  final String? sub;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = highlight ? AppColors.goldAccent : AppColors.primaryBlue;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.sm,
+        vertical: AppSpace.md,
+      ),
+      decoration: BoxDecoration(
+        color: highlight
+            ? AppColors.goldAccent.withValues(alpha: 0.10)
+            : context.palette.card,
+        borderRadius: AppRadius.cardAll,
+        border: highlight
+            ? Border.all(color: AppColors.goldAccent.withValues(alpha: 0.35))
+            : null,
+        boxShadow: highlight ? null : AppShadows.card(context),
+      ),
+      child: Column(
         children: [
-          // Background: cover photo when set, gradient fallback
-          Positioned.fill(
-            child: hasCover
-                ? CachedNetworkImage(
-                    imageUrl: cover,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: AppColors.appBarGradient,
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: AppColors.appBarGradient,
-                      ),
-                    ),
-                  )
-                : const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: AppColors.appBarGradient,
-                    ),
-                  ),
-          ),
-          // Dark overlay so text stays readable over bright photos
-          if (hasCover)
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.30),
-                      Colors.black.withValues(alpha: 0.65),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          // Hero content
-          SizedBox(
-            width: double.infinity,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 36),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _CircleIconButton(
-                          icon: Icons.arrow_back_ios_new,
-                          onTap: () => context.canPop()
-                              ? context.pop()
-                              : context.goNamed('profile'),
-                        ),
-                        const Spacer(),
-                        // Account-mode switching lives on the Profile tab
-                        // now — this header keeps just the add-product CTA.
-                        if (_seller != null && _seller!.isApproved) ...[
-                          _CircleIconButton(
-                            icon: Icons.add,
-                            onTap: () async {
-                              await context.pushNamed('add_product');
-                              if (mounted) _bootstrap();
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'SELLER DASHBOARD',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.white.withValues(alpha: 0.55),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.8,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _seller?.businessName.isNotEmpty == true
-                                ? _seller!.businessName
-                                : 'Your store',
-                            style: AppTextStyles.displayMedium.copyWith(
-                              color: AppColors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _heroSubtitle(),
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.white.withValues(alpha: 0.7),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+          Icon(icon, size: 16, color: accent),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: AppTextStyles.titleLarge.copyWith(
+                fontWeight: FontWeight.w800,
+                color: context.palette.text,
+                height: 1.1,
               ),
             ),
           ),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: context.palette.textMuted,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+          ),
+          if (sub != null)
+            Text(
+              sub!,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
         ],
       ),
     );
   }
+}
 
-  String _heroSubtitle() {
-    if (_seller == null) {
-      return 'Open a storefront on the marketplace.';
-    }
-    if (_seller!.isPending) return 'Application under review.';
-    if (_seller!.isFinalReviewPending) return 'Final review in progress.';
-    if (_seller!.isRejectedFinal) return 'Marketplace access closed.';
-    if (_seller!.isRejected) return 'Application needs your attention.';
-    return 'Listings, stats, and store settings in one place.';
+class _OrdersSection extends StatelessWidget {
+  const _OrdersSection({required this.orders, required this.onOpen});
+
+  final List<MarketOrder> orders;
+  final void Function(MarketOrder) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final open = orders.where((o) => o.isOpen).toList();
+    final shown = open.isNotEmpty ? open : orders;
+    return HomeSection(
+      title: 'Orders',
+      action: orders.isEmpty ? null : 'All',
+      onAction: orders.isEmpty ? null : () => context.pushNamed('my_orders'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+        child: orders.isEmpty
+            ? _EmptyPanel(
+                icon: Icons.receipt_long_outlined,
+                title: 'No orders yet',
+                message:
+                    'When someone sends an order request it lands here, with '
+                    'their name and phone number.',
+              )
+            : Column(
+                children: [
+                  for (final order in shown.take(4))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpace.md),
+                      child: _OrderRow(
+                        order: order,
+                        onTap: () => onOpen(order),
+                      ),
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _OrderRow extends StatelessWidget {
+  const _OrderRow({required this.order, required this.onTap});
+
+  final MarketOrder order;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.lg),
+        decoration: BoxDecoration(
+          color: context.palette.card,
+          borderRadius: AppRadius.lgAll,
+          boxShadow: AppShadows.card(context),
+          border: order.isPending
+              ? Border.all(color: AppColors.goldAccent.withValues(alpha: 0.4))
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    order.buyerName ?? 'A buyer',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleSmall.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                OrderStatusChip(status: order.status),
+              ],
+            ),
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              '${order.reference} · ${order.itemCount} '
+              '${order.itemCount == 1 ? 'item' : 'items'}',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    order.items.map((e) => e.titleSnapshot).join(', '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.textMuted,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  order.formatSubtotal(),
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ListingsSection extends StatelessWidget {
+  const _ListingsSection({
+    required this.products,
+    required this.onManage,
+    required this.onAdd,
+  });
+
+  final List<Product> products;
+  final VoidCallback onManage;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return HomeSection(
+      title: 'Your listings',
+      action: products.isEmpty ? null : 'Manage',
+      onAction: products.isEmpty ? null : onManage,
+      child: products.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+              child: _EmptyPanel(
+                icon: Icons.inventory_2_outlined,
+                title: 'No products yet',
+                message: 'Add your first product so buyers have something to '
+                    'find.',
+                action: PrimaryGradientButton(
+                  label: 'Add a product',
+                  icon: Icons.add,
+                  onTap: onAdd,
+                ),
+              ),
+            )
+          : SizedBox(
+              height: 168,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                itemCount: products.length,
+                separatorBuilder: (context, i) =>
+                    const SizedBox(width: AppSpace.md),
+                itemBuilder: (context, i) => _ListingChip(
+                  product: products[i],
+                  onTap: () => context.pushNamed(
+                    'product_details',
+                    pathParameters: {'id': products[i].id},
+                    extra: products[i],
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _ListingChip extends StatelessWidget {
+  const _ListingChip({required this.product, required this.onTap});
+
+  final Product product;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      child: SizedBox(
+        width: 116,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: AppRadius.cardAll,
+              child: SizedBox(
+                width: 116,
+                height: 106,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    product.firstImage.isEmpty
+                        ? DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: context.palette.cardMuted,
+                            ),
+                            child: Icon(
+                              Icons.image_outlined,
+                              color: context.palette.textMuted,
+                            ),
+                          )
+                        : CachedImage(product.firstImage, fit: BoxFit.cover),
+                    if (!product.isAvailable)
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                        ),
+                        child: Center(
+                          child: Text(
+                            product.isSold ? 'SOLD' : 'HIDDEN',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              product.formatPrice(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              product.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyPanel extends StatelessWidget {
+  const _EmptyPanel({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpace.xl),
+      decoration: BoxDecoration(
+        color: context.palette.card,
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 34, color: AppColors.primaryBlue.withValues(alpha: 0.5)),
+          const SizedBox(height: AppSpace.sm),
+          Text(
+            title,
+            style: AppTextStyles.titleSmall.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+              height: 1.5,
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(height: AppSpace.lg),
+            action!,
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -592,7 +954,7 @@ class _StatusBanner extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.lgAll,
         border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(
@@ -607,7 +969,7 @@ class _StatusBanner extends StatelessWidget {
             ),
             child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: AppSpace.md + 2),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -619,7 +981,7 @@ class _StatusBanner extends StatelessWidget {
                     color: color,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.xs),
                 Text(
                   message,
                   style: AppTextStyles.bodySmall.copyWith(
@@ -654,14 +1016,8 @@ class _StoreSummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
       ),
       child: Row(
         children: [
@@ -674,7 +1030,7 @@ class _StoreSummaryCard extends StatelessWidget {
               shape: BoxShape.circle,
               image: hasPhoto
                   ? DecorationImage(
-                      image: CachedNetworkImageProvider(photo),
+                      image: NetworkImage(photo),
                       fit: BoxFit.cover,
                     )
                   : null,
@@ -687,7 +1043,7 @@ class _StoreSummaryCard extends StatelessWidget {
                     size: 28,
                   ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: AppSpace.md + 2),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -714,7 +1070,7 @@ class _StoreSummaryCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.xs),
                 Text(
                   SellerCategory.labelFor(seller.category),
                   style: AppTextStyles.bodySmall.copyWith(
@@ -754,16 +1110,18 @@ class _StatusChip extends StatelessWidget {
       _ => AppColors.primaryBlue,
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.sm + 2,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.pillAll,
       ),
       child: Text(
         status.toUpperCase(),
         style: AppTextStyles.labelSmall.copyWith(
           color: color,
-          fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
         ),
@@ -772,139 +1130,34 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.seller, required this.stats});
-
-  final Seller seller;
-  final SellerStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _Stat(value: '${stats.available}', label: 'LIVE'),
-          _v(),
-          _Stat(value: '${stats.hidden}', label: 'HIDDEN'),
-          _v(),
-          _Stat(
-            value: seller.rating > 0 ? seller.rating.toStringAsFixed(1) : '—',
-            label: 'RATING',
-            sub: seller.ratingCount > 0
-                ? '${seller.ratingCount} ratings'
-                : null,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _v() => Builder(
-    builder: (context) =>
-        Container(width: 1, height: 36, color: context.palette.divider),
-  );
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.value, required this.label, this.sub});
-
-  final String value;
-  final String label;
-  final String? sub;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: AppTextStyles.headlineMedium.copyWith(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primaryBlue,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-          if (sub != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              sub!,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.palette.textMuted,
-                fontSize: 10.5,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
-    required this.seller,
     required this.onAdd,
     required this.onManage,
     required this.onEdit,
+    required this.onStorefront,
   });
 
-  final Seller seller;
   final VoidCallback onAdd;
   final VoidCallback onManage;
   final VoidCallback onEdit;
+  final VoidCallback onStorefront;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: AppSpace.sm,
+      ),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'QUICK ACTIONS',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(height: 12),
           _ActionRow(
             icon: Icons.add_box_outlined,
             title: 'Add a new product',
@@ -917,6 +1170,13 @@ class _QuickActionsCard extends StatelessWidget {
             title: 'Manage products',
             subtitle: 'Toggle visibility, edit, or delete.',
             onTap: onManage,
+          ),
+          const _Divider(),
+          _ActionRow(
+            icon: Icons.visibility_outlined,
+            title: 'View my storefront',
+            subtitle: 'See the page buyers see.',
+            onTap: onStorefront,
           ),
           const _Divider(),
           _ActionRow(
@@ -946,48 +1206,44 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+    return Pressable(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTextStyles.titleSmall.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+              child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+            ),
+            const SizedBox(width: AppSpace.md + 2),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.titleSmall.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.palette.textMuted,
-                      ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.textMuted,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Icon(Icons.chevron_right, color: context.palette.textMuted),
-            ],
-          ),
+            ),
+            Icon(Icons.chevron_right, color: context.palette.textMuted),
+          ],
         ),
       ),
     );
@@ -998,188 +1254,8 @@ class _Divider extends StatelessWidget {
   const _Divider();
 
   @override
-  Widget build(BuildContext context) {
-    return Divider(height: 1, color: context.palette.divider);
-  }
-}
-
-class _RecentProductsSection extends StatelessWidget {
-  const _RecentProductsSection({required this.products});
-
-  final List<Product> products;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'RECENT PRODUCTS',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.palette.textMuted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.4,
-                ),
-              ),
-              const Spacer(),
-              if (products.isNotEmpty)
-                TextButton(
-                  onPressed: () => context.pushNamed('manage_products'),
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(0, 32),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    'See all',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (products.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.inventory_2_outlined,
-                    size: 36,
-                    color: AppColors.primaryBlue.withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'No products yet',
-                    style: AppTextStyles.titleSmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Tap the + button to list your first product.',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            ...products.take(3).map((p) => _ProductPreviewRow(product: p)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProductPreviewRow extends StatelessWidget {
-  const _ProductPreviewRow({required this.product});
-
-  final Product product;
-
-  @override
-  Widget build(BuildContext context) {
-    final firstImage = product.firstImage;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: 52,
-              height: 52,
-              color: context.palette.cardMuted,
-              child: firstImage.isNotEmpty
-                  ? CachedImage(
-                      firstImage,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.image_not_supported_outlined,
-                        color: context.palette.textMuted,
-                      ),
-                    )
-                  : Icon(
-                      Icons.image_outlined,
-                      color: context.palette.textMuted,
-                    ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.titleSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  product.formatPrice(),
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _AvailabilityChip(available: product.isAvailable),
-        ],
-      ),
-    );
-  }
-}
-
-class _AvailabilityChip extends StatelessWidget {
-  const _AvailabilityChip({required this.available});
-  final bool available;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = available ? AppColors.successGreen : context.palette.text;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: available ? 0.12 : 0.08),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        available ? 'LIVE' : 'HIDDEN',
-        style: AppTextStyles.labelSmall.copyWith(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      Divider(height: 1, color: context.palette.divider);
 }
 
 class _SabbathBadge extends StatelessWidget {
@@ -1190,17 +1266,17 @@ class _SabbathBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
         color: AppColors.goldAccent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.lgAll,
         border: Border.all(color: AppColors.goldAccent.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.brightness_3, color: AppColors.goldAccent, size: 20),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.md),
           Expanded(
             child: Text(
               notice,
@@ -1226,14 +1302,8 @@ class _ChecklistCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1242,22 +1312,21 @@ class _ChecklistCard extends StatelessWidget {
             'WHILE YOU WAIT',
             style: AppTextStyles.labelSmall.copyWith(
               color: context.palette.textMuted,
-              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           Text(
             'Reviewers check for:',
             style: AppTextStyles.titleSmall.copyWith(
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.sm),
           ...items.map(
             (item) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
               child: Row(
                 children: [
                   const Icon(
@@ -1265,7 +1334,7 @@ class _ChecklistCard extends StatelessWidget {
                     color: AppColors.primaryBlue,
                     size: 18,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: AppSpace.md - 2),
                   Expanded(
                     child: Text(
                       item,
@@ -1284,108 +1353,42 @@ class _ChecklistCard extends StatelessWidget {
   }
 }
 
-class _GradientButton extends StatelessWidget {
-  const _GradientButton({required this.label, required this.onTap, this.icon});
-
-  final String label;
-  final IconData? icon;
-  final VoidCallback onTap;
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message});
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.30),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+        color: context.palette.card,
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.cloud_off_outlined,
+            size: 48,
+            color: context.palette.textMuted,
+          ),
+          const SizedBox(height: AppSpace.md),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: context.palette.textMuted,
+            ),
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    fontSize: 15,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                if (icon != null) ...[
-                  const SizedBox(width: 8),
-                  Icon(icon, color: AppColors.white, size: 18),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
 
-class _HeroClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 28);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 28,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
-          ),
-          child: Icon(icon, color: AppColors.white, size: 18),
-        ),
-      ),
-    );
-  }
-}
-
-/// Destructive "danger zone" footer for the approved dashboard. Lives
-/// below the recent-products card so a seller has to scroll past
-/// everything else before they reach Delete — and the row uses the
-/// outlined red treatment so it visually reads as "stop, are you sure"
-/// before the confirm dialog also asks.
+/// Destructive footer. Sits below everything else so a seller has to
+/// scroll past their whole store before they reach Delete.
 class _DangerZoneCard extends StatelessWidget {
   const _DangerZoneCard({required this.onDelete});
 
@@ -1394,18 +1397,11 @@ class _DangerZoneCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.lgAll,
         border: Border.all(color: AppColors.red.withValues(alpha: 0.25)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1414,21 +1410,20 @@ class _DangerZoneCard extends StatelessWidget {
             'DANGER ZONE',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.red,
-              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            'Delete this store and every product you\'ve listed. This '
-            'cannot be undone.',
+            'Delete this store and every product you\'ve listed. This cannot '
+            'be undone.',
             style: AppTextStyles.bodySmall.copyWith(
               color: context.palette.textMuted,
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           OutlinedButton.icon(
             onPressed: onDelete,
             icon: const Icon(Icons.delete_outline, size: 18),
@@ -1436,9 +1431,9 @@ class _DangerZoneCard extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.red,
               side: const BorderSide(color: AppColors.red),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.md + 2),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppRadius.buttonAll,
               ),
             ),
           ),

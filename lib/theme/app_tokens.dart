@@ -54,6 +54,7 @@ class AppRadius {
   /// Fully rounded — pills, avatars, chips.
   static const double pill = 100;
 
+  static final BorderRadius smAll = BorderRadius.circular(sm);
   static final BorderRadius buttonAll = BorderRadius.circular(button);
   static final BorderRadius cardAll = BorderRadius.circular(card);
   static final BorderRadius lgAll = BorderRadius.circular(lg);

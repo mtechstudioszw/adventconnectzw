@@ -53,6 +53,7 @@ import '../models/event_model.dart';
 import '../models/job_model.dart';
 import '../models/message_model.dart';
 import '../models/prayer_model.dart';
+import '../models/order_model.dart';
 import '../models/product_model.dart';
 import '../models/seller_model.dart';
 import '../screens/events/event_details_screen.dart';
@@ -67,6 +68,9 @@ import '../screens/legal/terms_screen.dart';
 import '../screens/marketplace/add_product_screen.dart';
 import '../screens/marketplace/category_screen.dart';
 import '../screens/marketplace/marketplace_screen.dart';
+import '../screens/marketplace/cart_screen.dart';
+import '../screens/marketplace/my_orders_screen.dart';
+import '../screens/marketplace/order_details_screen.dart';
 import '../screens/marketplace/product_details_screen.dart';
 import '../screens/messaging/chat_privacy_screen.dart';
 import '../screens/messaging/chat_screen.dart';
@@ -403,6 +407,33 @@ final GoRouter appRouter = GoRouter(
               builder: (context, state) => CategoryScreen(
                 categoryId: state.pathParameters['id'],
               ),
+            ),
+          ],
+        ),
+        // Declared BEFORE ':id' — both would match '/marketplace/cart',
+        // and the literal segment has to win.
+        GoRoute(
+          path: 'cart',
+          name: 'cart',
+          builder: (context, state) => const CartScreen(),
+        ),
+        GoRoute(
+          path: 'orders',
+          name: 'my_orders',
+          builder: (context, state) => const MyOrdersScreen(),
+          routes: [
+            GoRoute(
+              path: ':orderId',
+              name: 'order_details',
+              builder: (context, state) {
+                final initial = state.extra is MarketOrder
+                    ? state.extra as MarketOrder
+                    : null;
+                return OrderDetailsScreen(
+                  orderId: state.pathParameters['orderId'] ?? '',
+                  initialOrder: initial,
+                );
+              },
             ),
           ],
         ),

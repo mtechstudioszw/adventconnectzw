@@ -29,6 +29,25 @@ class SellerService {
     return Seller.fromJson(row);
   }
 
+  /// Approved, active storefronts for the buyer-facing shops rail.
+  ///
+  /// Ordered by rating then recency so a new marketplace still shows
+  /// somebody, and capped because the rail is a taster — the full list
+  /// lives behind "See all".
+  static Future<List<Seller>> fetchApprovedSellers({int limit = 12}) async {
+    final rows = await _client
+        .from(_sellersTable)
+        .select()
+        .eq('status', 'approved')
+        .eq('is_active', true)
+        .order('rating', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return (rows as List)
+        .map((row) => Seller.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Public list of an approved seller's available products. Hidden
   /// rows are filtered out — buyers shouldn't see paused listings.
   static Future<List<Product>> fetchPublicProductsByAuthUserId(

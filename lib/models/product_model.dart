@@ -14,6 +14,12 @@ class Product {
     this.sellerVerified = false,
     this.isAvailable = true,
     this.status = 'available',
+    this.subcategory,
+    this.condition,
+    this.province,
+    this.location,
+    this.viewCount = 0,
+    this.isFeatured = false,
   });
 
   final String id;
@@ -31,7 +37,28 @@ class Product {
   final String status;
   final DateTime createdAt;
 
+  // Columns the sellers already fill in during add_product but that no
+  // screen used to read. Surfaced on the details screen.
+  final String? subcategory;
+  final String? condition;
+  final String? province;
+  final String? location;
+  final int viewCount;
+  final bool isFeatured;
+
   String get firstImage => imageUrls.isEmpty ? '' : imageUrls.first;
+
+  bool get isSold => status == 'sold';
+  bool get isReserved => status == 'reserved';
+
+  /// "Harare, Mashonaland East" — whichever parts the seller filled in.
+  String? get locationLine {
+    final parts = [
+      location?.trim(),
+      province?.trim(),
+    ].where((s) => s != null && s.isNotEmpty).toList();
+    return parts.isEmpty ? null : parts.join(', ');
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) {
     final raw = json['image_urls'];
@@ -60,6 +87,12 @@ class Product {
       imageUrls: images,
       status: status,
       isAvailable: status == 'available',
+      subcategory: json['subcategory'] as String?,
+      condition: json['condition'] as String?,
+      province: json['province'] as String?,
+      location: json['location'] as String?,
+      viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
+      isFeatured: json['is_featured'] == true,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );
@@ -80,6 +113,12 @@ class Product {
         'category': category,
         'image_urls': imageUrls,
         'status': status,
+        'subcategory': subcategory,
+        'condition': condition,
+        'province': province,
+        'location': location,
+        'view_count': viewCount,
+        'is_featured': isFeatured,
         'created_at': createdAt.toIso8601String(),
       };
 

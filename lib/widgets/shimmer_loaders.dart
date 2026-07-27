@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../theme/app_palette.dart';
+import '../theme/app_tokens.dart';
+import 'marketplace/product_tile.dart';
 
 /// Premium shimmer placeholders so list screens never show a bare
 /// spinner (Part 3 of the master reference). Three shapes cover every
@@ -75,15 +77,14 @@ class ShimmerLoaders {
   }
 
   /// Two-column product grid skeleton.
+  ///
+  /// Borrows [ProductTile.gridDelegate] so the skeleton and the grid it
+  /// stands in for cannot describe different shapes — they had already
+  /// drifted apart once.
   static Widget productGrid({int count = 6}) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.72,
-      ),
+      gridDelegate: ProductTile.gridDelegate,
       itemCount: count,
       itemBuilder: (context, index) => _ProductSkeleton(),
     );
@@ -250,12 +251,55 @@ class _PersonSkeleton extends StatelessWidget {
 class _ProductSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    // Mirrors ProductTile's silhouette: a 3:4 photo block, then price and
+    // title bars on the background. A single filled rectangle no longer
+    // resembles what loads in behind it.
     return Shimmer.fromColors(
       baseColor: ShimmerLoaders.baseColor(context),
       highlightColor: ShimmerLoaders.highlightColor(context),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Container(color: context.palette.card),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 3 / 4,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.palette.card,
+                borderRadius: AppRadius.lgAll,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          _Bar(width: 62, height: 14, palette: context.palette.card),
+          const SizedBox(height: 6),
+          _Bar(width: double.infinity, height: 10, palette: context.palette.card),
+          const SizedBox(height: 4),
+          _Bar(width: 90, height: 10, palette: context.palette.card),
+        ],
+      ),
+    );
+  }
+}
+
+class _Bar extends StatelessWidget {
+  const _Bar({
+    required this.width,
+    required this.height,
+    required this.palette,
+  });
+
+  final double width;
+  final double height;
+  final Color palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: palette,
+        borderRadius: AppRadius.smAll,
       ),
     );
   }

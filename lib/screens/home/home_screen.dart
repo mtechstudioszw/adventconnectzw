@@ -63,7 +63,7 @@ import '../../widgets/home/today_card.dart';
 import '../library/widgets/now_playing_bar.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/job_card.dart';
-import '../../widgets/product_card.dart';
+import '../../widgets/marketplace/product_tile.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/live_banner.dart';
@@ -1403,11 +1403,14 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   }
 
   /// Horizontal rail of marketplace products for the mixed home feed.
-  /// ProductCard is built to stretch in a grid, so each is width-boxed
-  /// to behave like the events / prayers rails.
+  /// [ProductTile] sizes itself from its width, so each is width-boxed to
+  /// behave like the events / prayers rails.
+  ///
+  /// Uses the same tile as every marketplace surface — a product should
+  /// not change shape depending on which screen you meet it on.
   Widget _buildProductsRow() {
     return SizedBox(
-      height: 252,
+      height: 268,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1416,13 +1419,12 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
         itemBuilder: (context, i) {
           final p = _products[i];
           return SizedBox(
-            width: 168,
-            child: ProductCard(
+            width: 156,
+            child: ProductTile(
               product: p,
               // Matches the tag on the detail carousel's first image, so the
               // photo expands into the detail screen instead of the page
-              // simply replacing itself. ProductCard already supported this
-              // — Home just never passed a tag.
+              // simply replacing itself.
               heroTag: 'product_image_${p.id}',
               onTap: () => context.pushNamed(
                 'product_details',

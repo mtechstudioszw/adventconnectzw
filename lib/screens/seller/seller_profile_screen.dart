@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -8,25 +9,39 @@ import '../../config/share_config.dart';
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/marketplace_service.dart';
+import '../../services/messaging_service.dart';
 import '../../services/seller_rating_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
 import '../../widgets/full_image_viewer.dart';
-import '../../widgets/product_card.dart';
-import '../../widgets/rate_seller_sheet.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/home/section_header.dart';
+import '../../widgets/marketplace/cart_badge_button.dart';
+import '../../widgets/marketplace/product_tile.dart';
+import '../../widgets/marketplace/safety_card.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/rate_seller_sheet.dart';
+import '../../widgets/screen_shell.dart';
 
-/// Public storefront view. Buyers reach this from product_details → tap
-/// seller, or from any future "Featured sellers" surface. Shows store
-/// profile, badges, contact actions and the seller's live products.
+/// Public storefront.
 ///
-/// Owner-side concerns (editing, hidden products, dashboard) live in
-/// `seller_dashboard_screen` — this screen is read-only.
+/// Reordered so the goods come first. The old page opened with a centred
+/// avatar and then six stacked cards — identity, owner, contact, sabbath,
+/// about, delivery — before a buyer reached a single product. A shop
+/// window shows stock, not paperwork, so products now sit directly under
+/// the header and everything else moves below them.
+///
+/// The grid is a real [SliverGrid]. It used to be a `shrinkWrap` GridView
+/// with `NeverScrollableScrollPhysics` inside a `SliverToBoxAdapter`,
+/// which built and laid out every product — and fired every image request
+/// — on first paint, with no recycling.
 class SellerProfileScreen extends StatefulWidget {
   const SellerProfileScreen({
     super.key,
@@ -34,34 +49,28 @@ class SellerProfileScreen extends StatefulWidget {
     this.initialSeller,
   });
 
-  /// The seller's auth user id (= products.seller_id). Required because
-  /// links land here via a path param.
+  /// The seller's auth user id (= products.seller_id).
   final String authUserId;
 
-  /// Optional pre-fetched seller, e.g. passed via go_router `extra`
-  /// from product_details. Avoids a fetch flash on first paint.
+  /// Optional pre-fetched seller passed via go_router `extra`. Avoids a
+  /// fetch flash on first paint.
   final Seller? initialSeller;
 
   @override
   State<SellerProfileScreen> createState() => _SellerProfileScreenState();
 }
 
-class _SellerProfileScreenState extends State<SellerProfileScreen>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
-
+class _SellerProfileScreenState extends State<SellerProfileScreen> {
   Seller? _seller;
   PublicUserProfile? _owner;
   List<Product> _products = const [];
   List<SellerRating> _reviews = const [];
   SellerRating? _myReview;
+  Set<String> _savedIds = <String>{};
   bool _loading = true;
   String? _error;
 
-  /// True when the signed-in user is a different person from this
-  /// seller — only then do we show the "Rate this seller" CTA.
+  /// Only show the rating CTA to someone who isn't this seller.
   bool get _canRate {
     final me = AuthService.currentUser;
     final seller = _seller;
@@ -69,26 +78,16 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     return seller.authUserId.isNotEmpty && me.id != seller.authUserId;
   }
 
+  bool get _isOwner =>
+      AuthService.currentUser?.id == _seller?.authUserId &&
+      _seller?.authUserId.isNotEmpty == true;
+
   @override
   void initState() {
     super.initState();
     _seller = widget.initialSeller;
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(
-      begin: 12,
-      end: 0,
-    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _bootstrap();
-  }
-
-  @override
-  void dispose() {
-    _entrance.dispose();
-    super.dispose();
+    _loadSaved();
   }
 
   Future<void> _bootstrap() async {
@@ -110,8 +109,8 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         _owner = results[2] as PublicUserProfile?;
         _loading = false;
       });
-      // Ratings depend on the seller row's BIGSERIAL id, so they
-      // happen in a second pass once the seller has loaded.
+      // Ratings key off the seller row's BIGSERIAL id, so they need the
+      // seller to have loaded first.
       if (seller != null) _loadRatings(seller.id);
     } catch (_) {
       if (!mounted) return;
@@ -134,8 +133,45 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         _myReview = results[1] as SellerRating?;
       });
     } catch (_) {
-      // Reviews are non-essential — fail silently rather than blocking
-      // the profile screen from rendering.
+      // Reviews are non-essential — never block the storefront on them.
+    }
+  }
+
+  Future<void> _loadSaved() async {
+    try {
+      final ids = await MarketplaceService.fetchSavedProductIds();
+      if (mounted) setState(() => _savedIds = ids);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleSave(Product product) async {
+    final was = _savedIds.contains(product.id);
+    setState(() {
+      _savedIds = was
+          ? ({..._savedIds}..remove(product.id))
+          : {..._savedIds, product.id};
+    });
+    try {
+      if (was) {
+        await MarketplaceService.unsaveProduct(product.id);
+      } else {
+        await MarketplaceService.saveProduct(product.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _savedIds = was
+            ? {..._savedIds, product.id}
+            : ({..._savedIds}..remove(product.id));
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sign in to save listings.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
     }
   }
 
@@ -146,9 +182,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
       builder: (ctx) => RateSellerSheet(
         sellerId: seller.id,
         sellerName: seller.businessName,
@@ -156,10 +190,6 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
       ),
     );
     if (!mounted) return;
-    // result==null can mean two things: the sheet was dismissed
-    // without saving, OR the user removed their review. We can tell
-    // them apart by comparing to _myReview's previous state, but
-    // either way a refresh keeps the UI honest.
     await _bootstrap();
     if (result != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -174,18 +204,12 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     }
   }
 
-  /// Share the seller's storefront via the seller-share Open Graph
-  /// Edge Function — gives a thumbnail + title preview on
-  /// WhatsApp / Facebook / X, deep-links into the app, falls back
-  /// to the GitHub Releases APK.
   Future<void> _shareSeller() async {
     final seller = _seller;
     if (seller == null) return;
     final name = seller.businessName.trim().isNotEmpty
         ? seller.businessName.trim()
         : 'this seller';
-    // seller-share Edge Function keys on auth_user_id and emits the
-    // store's cover/logo as og:image for a rich preview.
     final shareUrl = sellerShareUrl(seller.authUserId);
     final text = 'Check out $name on Advent Connect ZW marketplace:\n$shareUrl';
     try {
@@ -203,7 +227,12 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     }
   }
 
-  Future<void> _openWhatsApp(String number) async {
+  Future<void> _openWhatsApp() async {
+    final seller = _seller;
+    if (seller == null) return;
+    final number = seller.whatsapp?.trim().isNotEmpty == true
+        ? seller.whatsapp!
+        : seller.phone;
     final digits = number.replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) return;
     final uri = Uri.parse('https://wa.me/$digits');
@@ -225,12 +254,15 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     }
   }
 
-  Future<void> _callPhone(String number) async {
+  Future<void> _callPhone() async {
+    final number = _seller?.phone ?? '';
     final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
     if (cleaned.isEmpty) return;
-    final uri = Uri.parse('tel:$cleaned');
     try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final ok = await launchUrl(
+        Uri.parse('tel:$cleaned'),
+        mode: LaunchMode.externalApplication,
+      );
       if (!ok) throw Exception('launch failed');
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: number));
@@ -247,13 +279,54 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     }
   }
 
+  /// Opens a chat with the shop directly.
+  ///
+  /// This replaces a button whose entire behaviour was showing a snackbar
+  /// telling the user that messaging only works from a product page.
+  Future<void> _messageSeller() async {
+    final seller = _seller;
+    if (seller == null || seller.authUserId.isEmpty) return;
+    if (_isOwner) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This is your own store.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: seller.authUserId,
+        otherUserName: seller.businessName,
+        source: 'marketplace',
+        isBusiness: true,
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      ChatLaunchIntent.set(draft: 'Hi ${seller.businessName}, ');
+      if (!mounted) return;
+      context.pushNamed('chat', pathParameters: {'id': convo.id}, extra: convo);
+    } catch (_) {
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not open the chat. Try WhatsApp instead.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
+  }
+
   void _showReport() {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: context.palette.sheet,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
       builder: (ctx) => _ReportSheet(
         sellerName: _seller?.businessName ?? 'this seller',
         onSubmit: (reason) async {
@@ -264,38 +337,39 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     );
   }
 
-  /// Reports route to the admin's WhatsApp (with email fallback) until
-  /// the admin dashboard ships. The pre-filled message includes seller
-  /// name + reason + reporter id so we can act on it from the inbox.
+  /// Reports route to the admin's WhatsApp (email fallback) until the
+  /// admin dashboard ships.
   Future<void> _sendReportToAdmin(String reason) async {
     final seller = _seller;
     if (seller == null) return;
     final me = AuthService.currentUser;
-    final reporterId = me?.id ?? 'anonymous';
     final body =
-        'Report: ${seller.businessName}\nReason: $reason\nSeller id: ${seller.authUserId}\nReporter: $reporterId';
+        'Report: ${seller.businessName}\nReason: $reason\n'
+        'Seller id: ${seller.authUserId}\nReporter: ${me?.id ?? 'anonymous'}';
 
     const adminPhone = '263778092494';
     const adminEmail = 'adventconnectzw@gmail.com';
 
-    final waUri = Uri.parse(
-      'https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}',
-    );
     try {
-      final ok = await launchUrl(waUri, mode: LaunchMode.externalApplication);
+      final ok = await launchUrl(
+        Uri.parse('https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}'),
+        mode: LaunchMode.externalApplication,
+      );
       if (ok) return;
     } catch (_) {}
 
-    final mailUri = Uri(
-      scheme: 'mailto',
-      path: adminEmail,
-      queryParameters: {
-        'subject': 'Marketplace report: ${seller.businessName}',
-        'body': body,
-      },
-    );
     try {
-      final ok = await launchUrl(mailUri, mode: LaunchMode.externalApplication);
+      final ok = await launchUrl(
+        Uri(
+          scheme: 'mailto',
+          path: adminEmail,
+          queryParameters: {
+            'subject': 'Marketplace report: ${seller.businessName}',
+            'body': body,
+          },
+        ),
+        mode: LaunchMode.externalApplication,
+      );
       if (ok) return;
     } catch (_) {}
 
@@ -313,6 +387,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final seller = _seller;
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       body: BrandedRefreshIndicator(
@@ -320,6 +395,16 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
         onRefresh: _bootstrap,
         child: _buildBody(),
       ),
+      // Contact is pinned rather than buried in a card halfway down —
+      // reaching the shop is the whole point of the page.
+      bottomNavigationBar: seller == null || _isOwner
+          ? null
+          : _ContactBar(
+              seller: seller,
+              onWhatsApp: _openWhatsApp,
+              onCall: _callPhone,
+              onMessage: _messageSeller,
+            ),
       // No ad here (user decision 2026-07-02): a banner under a seller's
       // own storefront cheapened the page and competed with their goods.
     );
@@ -329,123 +414,138 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     if (_loading && _seller == null) {
       return Stack(
         children: [
-          _buildHero(),
+          _buildHeader(),
           const Positioned.fill(child: Center(child: BrandSpinner(size: 30))),
         ],
       );
     }
-    if (_seller == null) {
-      return SingleChildScrollView(
+    final seller = _seller;
+    if (seller == null) {
+      return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          children: [
-            _buildHero(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-              child: _ErrorCard(message: _error ?? 'Seller not found.'),
-            ),
-          ],
-        ),
+        children: [
+          _buildHeader(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+            child: _ErrorCard(message: _error ?? 'Seller not found.'),
+          ),
+        ],
       );
     }
-    final seller = _seller!;
+
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        SliverToBoxAdapter(child: _buildHero()),
+        SliverToBoxAdapter(child: _buildHeader()),
+        SliverToBoxAdapter(child: _IdentityStrip(seller: seller)),
+
         SliverToBoxAdapter(
-          child: AnimatedBuilder(
-            animation: _entrance,
-            builder: (context, child) => Opacity(
-              opacity: _fade.value,
-              child: Transform.translate(
-                offset: Offset(0, _slide.value),
-                child: child,
-              ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: AppSpace.xl),
+            child: SectionHeader(
+              title: _products.isEmpty
+                  ? 'Products'
+                  : '${_products.length} ${_products.length == 1 ? 'product' : 'products'}',
             ),
+          ),
+        ),
+
+        if (_products.isEmpty)
+          SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _IdentityCard(seller: seller, productCount: _products.length),
-                  if (_owner != null) ...[
-                    const SizedBox(height: 12),
-                    _OwnerBadge(
-                      owner: _owner!,
-                      fallbackName: seller.contactName,
-                      onTap: () => context.pushNamed(
-                        'user_profile',
-                        pathParameters: {'userId': _owner!.id},
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  _ContactRow(
-                    seller: seller,
-                    onWhatsApp: () => _openWhatsApp(
-                      (seller.whatsapp?.trim().isNotEmpty == true
-                          ? seller.whatsapp
-                          : seller.phone)!,
-                    ),
-                    onCall: () => _callPhone(seller.phone),
-                    onMessage: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'In-app messaging opens once you start a conversation from a product.',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.white,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  if (seller.observesSabbath) ...[
-                    const SizedBox(height: 16),
-                    _SabbathBadge(
-                      notice:
-                          seller.sabbathNoticeText?.trim().isNotEmpty == true
-                          ? seller.sabbathNoticeText!
-                          : 'This seller observes the Sabbath. Response times may be slower Friday sundown to Saturday sundown.',
-                    ),
-                  ],
-                  if (seller.description?.trim().isNotEmpty == true) ...[
-                    const SizedBox(height: 16),
-                    _AboutCard(text: seller.description!),
-                  ],
-                  if (seller.offersDelivery) ...[
-                    const SizedBox(height: 16),
-                    _DeliveryCard(
-                      area: seller.deliveryArea,
-                      fee: seller.deliveryFee,
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  _ProductsSection(
-                    products: _products,
-                    onTap: (p) => context.pushNamed(
-                      'product_details',
-                      pathParameters: {'id': p.id},
-                      extra: p,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _ReviewsSection(
-                    reviews: _reviews,
-                    average: seller.rating,
-                    totalCount: seller.ratingCount,
-                    myReview: _myReview,
-                    canRate: _canRate,
-                    onRate: _openRateSheet,
-                  ),
-                  const SizedBox(height: 20),
-                  _ReportButton(onTap: _showReport),
-                  const SizedBox(height: 16),
-                  _SafetyCard(),
-                ],
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.md,
+                AppSpace.lg,
+                0,
               ),
+              child: _EmptyProducts(),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.md,
+              AppSpace.lg,
+              0,
+            ),
+            sliver: SliverGrid(
+              gridDelegate: ProductTile.gridDelegate,
+              delegate: SliverChildBuilderDelegate((context, i) {
+                final p = _products[i];
+                final tile = ProductTile(
+                  product: p,
+                  saved: _isOwner ? null : _savedIds.contains(p.id),
+                  onToggleSave: () => _toggleSave(p),
+                  onTap: () => context.pushNamed(
+                    'product_details',
+                    pathParameters: {'id': p.id},
+                    extra: p,
+                  ),
+                );
+                if (i >= 6) return tile;
+                return StaggeredReveal(index: i, rise: 20, child: tile);
+              }, childCount: _products.length),
+            ),
+          ),
+
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.xl,
+              AppSpace.lg,
+              AppSpace.xxl,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (seller.observesSabbath) ...[
+                  _SabbathBadge(
+                    notice: seller.sabbathNoticeText?.trim().isNotEmpty == true
+                        ? seller.sabbathNoticeText!
+                        : 'This seller observes the Sabbath. Response times '
+                              'may be slower Friday sundown to Saturday '
+                              'sundown.',
+                  ),
+                  const SizedBox(height: AppSpace.lg),
+                ],
+                if (seller.description?.trim().isNotEmpty == true) ...[
+                  _AboutCard(text: seller.description!),
+                  const SizedBox(height: AppSpace.lg),
+                ],
+                if (seller.offersDelivery) ...[
+                  _DeliveryCard(
+                    area: seller.deliveryArea,
+                    fee: seller.deliveryFee,
+                  ),
+                  const SizedBox(height: AppSpace.lg),
+                ],
+                if (_owner != null) ...[
+                  _OwnerBadge(
+                    owner: _owner!,
+                    fallbackName: seller.contactName,
+                    onTap: () => context.pushNamed(
+                      'user_profile',
+                      pathParameters: {'userId': _owner!.id},
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.lg),
+                ],
+                _ReviewsSection(
+                  reviews: _reviews,
+                  average: seller.rating,
+                  totalCount: seller.ratingCount,
+                  myReview: _myReview,
+                  canRate: _canRate,
+                  onRate: _openRateSheet,
+                ),
+                const SizedBox(height: AppSpace.lg),
+                _ReportButton(onTap: _showReport),
+                const SizedBox(height: AppSpace.lg),
+                const MarketplaceSafetyCard(),
+              ],
             ),
           ),
         ),
@@ -453,135 +553,143 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
     );
   }
 
-  Widget _buildHero() {
+  /// Cover photo with the logo breaking its bottom edge — the same shape
+  /// language as the shops rail on the marketplace tab, so a shop looks
+  /// like itself wherever you meet it.
+  Widget _buildHeader() {
     final seller = _seller;
     final photo = seller?.profilePhotoUrl;
     final cover = seller?.coverPhotoUrl;
     final hasPhoto = photo != null && photo.isNotEmpty;
     final hasCover = cover != null && cover.isNotEmpty;
-    return Stack(
-      children: [
-        // Cover photo banner (or gradient fallback) sits behind the
-        // hero content; a translucent dark overlay keeps the white
-        // text + circle avatar legible no matter how bright the cover.
-        Positioned.fill(
-          child: hasCover
-              ? GestureDetector(
-                  onTap: () => FullImageViewer.show(context, cover),
-                  child: CachedNetworkImage(
-                    imageUrl: cover,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: AppColors.appBarGradient,
-                      ),
+
+    return SizedBox(
+      height: 260,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 200,
+            child: hasCover
+                ? GestureDetector(
+                    onTap: () => FullImageViewer.show(context, cover),
+                    child: CachedNetworkImage(
+                      imageUrl: cover,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => const _CoverFallback(),
+                      errorWidget: (context, url, error) =>
+                          const _CoverFallback(),
                     ),
-                    errorWidget: (context, url, error) => const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: AppColors.appBarGradient,
-                      ),
-                    ),
+                  )
+                : const _CoverFallback(),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: 200,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.35),
+                      Colors.black.withValues(alpha: 0.15),
+                    ],
                   ),
-                )
-              : const DecoratedBox(
-                  decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-                ),
-        ),
-        if (hasCover)
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.30),
-                    Colors.black.withValues(alpha: 0.65),
-                  ],
                 ),
               ),
             ),
           ),
-        SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.md,
+                AppSpace.sm,
+                AppSpace.md,
+                0,
+              ),
+              child: Row(
+                children: [
+                  _GlassIconButton(
+                    icon: Icons.arrow_back,
+                    onTap: () => context.canPop()
+                        ? context.pop()
+                        : context.goNamed('marketplace'),
+                  ),
+                  const Spacer(),
+                  _GlassIconButton(
+                    icon: Icons.share_outlined,
+                    onTap: _shareSeller,
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  CartBadgeButton(onTap: () => context.pushNamed('cart')),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: AppSpace.lg,
+            right: AppSpace.lg,
+            top: 152,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Row(
-                  children: [
-                    _CircleIconButton(
-                      icon: Icons.arrow_back_ios_new,
-                      onTap: () => context.canPop()
-                          ? context.pop()
-                          : context.goNamed('marketplace'),
-                    ),
-                    const Spacer(),
-                    _CircleIconButton(
-                      icon: Icons.share_outlined,
-                      onTap: _shareSeller,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Center(
-                  child: GestureDetector(
-                    onTap: hasPhoto
-                        ? () => FullImageViewer.show(context, photo)
-                        : null,
-                    child: Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        gradient: hasPhoto ? null : AppColors.primaryGradient,
-                        color: hasPhoto ? AppColors.lightGrey : null,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.white, width: 4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.30),
-                            blurRadius: 16,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                        image: hasPhoto
-                            ? DecorationImage(
-                                image: CachedNetworkImageProvider(photo),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
+                GestureDetector(
+                  onTap: hasPhoto
+                      ? () => FullImageViewer.show(context, photo)
+                      : null,
+                  child: Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      gradient: hasPhoto ? null : AppColors.primaryGradient,
+                      color: hasPhoto ? AppColors.lightGrey : null,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: context.palette.scaffoldBg,
+                        width: 4,
                       ),
-                      child: hasPhoto
-                          ? null
-                          : const Icon(
-                              Icons.storefront,
-                              color: AppColors.white,
-                              size: 42,
-                            ),
+                      image: hasPhoto
+                          ? DecorationImage(
+                              image: CachedNetworkImageProvider(photo),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
                     ),
+                    child: hasPhoto
+                        ? null
+                        : const Icon(
+                            Icons.storefront,
+                            color: AppColors.white,
+                            size: 36,
+                          ),
                   ),
                 ),
-                const SizedBox(height: 14),
-                Center(
+                const SizedBox(width: AppSpace.md),
+                Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.only(bottom: AppSpace.sm),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Flexible(
                               child: Text(
                                 seller?.businessName ?? 'Loading…',
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.displayMedium.copyWith(
-                                  color: AppColors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.15,
+                                style: AppTextStyles.headlineSmall.copyWith(
+                                  color: context.palette.text,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
@@ -591,21 +699,21 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
                               const Icon(
                                 Icons.verified,
                                 color: AppColors.goldAccent,
-                                size: 18,
+                                size: 16,
                               ),
                             ],
                           ],
                         ),
-                        if (seller != null) ...[
-                          const SizedBox(height: 6),
+                        if (seller != null)
                           Text(
                             SellerCategory.labelFor(seller.category),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.white.withValues(alpha: 0.75),
+                              color: context.palette.textMuted,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
                       ],
                     ),
                   ),
@@ -613,161 +721,116 @@ class _SellerProfileScreenState extends State<SellerProfileScreen>
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoverFallback extends StatelessWidget {
+  const _CoverFallback();
+
+  @override
+  Widget build(BuildContext context) => const DecoratedBox(
+    decoration: BoxDecoration(gradient: AppColors.appBarGradient),
+  );
+}
+
+/// Rating · location · member-since on one line. The old version was a
+/// full card with three big stat columns; at 0 reviews it was three
+/// em-dashes taking up a screen of height.
+class _IdentityStrip extends StatelessWidget {
+  const _IdentityStrip({required this.seller});
+
+  final Seller seller;
+
+  @override
+  Widget build(BuildContext context) {
+    final place = [
+      seller.city,
+      seller.province,
+    ].where((s) => s != null && s.isNotEmpty).join(', ');
+    final bits = <Widget>[];
+
+    if (seller.ratingCount > 0) {
+      bits.add(
+        _Bit(
+          icon: Icons.star_rounded,
+          iconColor: AppColors.goldAccent,
+          text:
+              '${seller.rating.toStringAsFixed(1)} · ${seller.ratingCount} '
+              '${seller.ratingCount == 1 ? 'review' : 'reviews'}',
+        ),
+      );
+    } else {
+      bits.add(
+        const _Bit(icon: Icons.fiber_new_rounded, text: 'New shop'),
+      );
+    }
+    if (place.isNotEmpty) {
+      bits.add(_Bit(icon: Icons.place_outlined, text: place));
+    }
+    if (seller.createdAt != null) {
+      bits.add(
+        _Bit(
+          icon: Icons.event_outlined,
+          text: 'Since ${_monthYear(seller.createdAt!)}',
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        0,
+      ),
+      child: Wrap(
+        spacing: AppSpace.lg,
+        runSpacing: AppSpace.sm,
+        children: bits,
+      ),
+    );
+  }
+
+  static String _monthYear(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.year}';
+  }
+}
+
+class _Bit extends StatelessWidget {
+  const _Bit({required this.icon, required this.text, this.iconColor});
+
+  final IconData icon;
+  final String text;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: iconColor ?? context.palette.textMuted),
+        const SizedBox(width: AppSpace.xs + 1),
+        Text(
+          text,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: context.palette.text,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
   }
 }
 
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.seller, required this.productCount});
-
-  final Seller seller;
-  final int productCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final cityLine = [
-      seller.city,
-      seller.province,
-    ].where((s) => s != null && s.isNotEmpty).join(', ');
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          if (cityLine.isNotEmpty)
-            Row(
-              children: [
-                const Icon(
-                  Icons.place_outlined,
-                  size: 18,
-                  color: AppColors.primaryBlue,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    cityLine,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.text,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          if (cityLine.isNotEmpty) const SizedBox(height: 14),
-          Row(
-            children: [
-              _Stat(value: '$productCount', label: 'PRODUCTS'),
-              _v(),
-              _Stat(
-                value: seller.rating > 0
-                    ? seller.rating.toStringAsFixed(1)
-                    : '—',
-                label: 'RATING',
-                sub: seller.ratingCount > 0
-                    ? '${seller.ratingCount} reviews'
-                    : 'No reviews yet',
-              ),
-              _v(),
-              _Stat(value: _memberSince(seller.createdAt), label: 'SINCE'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _v() => Builder(
-    builder: (context) => Container(
-      width: 1,
-      height: 38,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: context.palette.divider,
-    ),
-  );
-
-  String _memberSince(DateTime? createdAt) {
-    if (createdAt == null) return '—';
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[createdAt.month - 1]} ${createdAt.year}';
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.value, required this.label, this.sub});
-
-  final String value;
-  final String label;
-  final String? sub;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: AppTextStyles.headlineMedium.copyWith(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: AppColors.primaryBlue,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-          if (sub != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              sub!,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.palette.textMuted,
-                fontSize: 10.5,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ContactRow extends StatelessWidget {
-  const _ContactRow({
+class _ContactBar extends StatelessWidget {
+  const _ContactBar({
     required this.seller,
     required this.onWhatsApp,
     required this.onCall,
@@ -786,133 +849,149 @@ class _ContactRow extends StatelessWidget {
         seller.phone.trim().isNotEmpty;
     final hasPhone = seller.phone.trim().isNotEmpty;
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: AppShadows.floating(context),
       ),
-      child: Row(
-        children: [
-          if (hasWhatsApp) ...[
-            Expanded(
-              child: _PrimaryAction(
-                icon: Icons.chat_outlined,
-                label: 'WhatsApp',
-                onTap: onWhatsApp,
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
-          if (hasPhone)
-            _SecondaryAction(
-              icon: Icons.call_outlined,
-              tooltip: 'Call',
-              onTap: onCall,
-            ),
-          if (hasPhone) const SizedBox(width: 10),
-          _SecondaryAction(
-            icon: Icons.mail_outline,
-            tooltip: 'Message',
-            onTap: onMessage,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            AppSpace.md,
+            AppSpace.lg,
+            AppSpace.md,
           ),
-        ],
+          child: Row(
+            children: [
+              if (hasPhone) ...[
+                _IconAction(icon: Icons.call_outlined, onTap: onCall),
+                const SizedBox(width: AppSpace.sm),
+              ],
+              _IconAction(icon: Icons.forum_outlined, onTap: onMessage),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Pressable(
+                  onTap: hasWhatsApp ? onWhatsApp : onMessage,
+                  haptics: true,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: AppRadius.buttonAll,
+                      boxShadow: AppShadows.glow(context),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          hasWhatsApp
+                              ? Icons.chat_rounded
+                              : Icons.forum_outlined,
+                          color: AppColors.white,
+                          size: 18,
+                        ),
+                        const SizedBox(width: AppSpace.sm),
+                        Text(
+                          hasWhatsApp ? 'WhatsApp this shop' : 'Message',
+                          style: AppTextStyles.buttonText.copyWith(
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _PrimaryAction extends StatelessWidget {
-  const _PrimaryAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
+class _IconAction extends StatelessWidget {
+  const _IconAction({required this.icon, required this.onTap});
   final IconData icon;
-  final String label;
   final VoidCallback onTap;
 
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.92,
+      child: Container(
+        width: 48,
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: AppRadius.buttonAll,
+          border: Border.all(color: context.palette.divider),
+        ),
+        child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+      ),
+    );
+  }
+}
+
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.9,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.38),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: AppColors.white, size: 20),
+      ),
+    );
+  }
+}
+
+class _EmptyProducts extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.30),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+        color: context.palette.card,
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.shopping_bag_outlined,
+            size: 38,
+            color: AppColors.primaryBlue.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: AppSpace.md - 2),
+          Text(
+            'No live products',
+            style: AppTextStyles.titleSmall.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            'Check back soon — this seller hasn\'t listed anything yet.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+            ),
           ),
         ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: AppColors.white, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    fontSize: 14,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SecondaryAction extends StatelessWidget {
-  const _SecondaryAction({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppColors.primaryBlue.withValues(alpha: 0.35),
-              ),
-            ),
-            child: Icon(icon, color: AppColors.primaryBlue, size: 20),
-          ),
-        ),
       ),
     );
   }
@@ -926,17 +1005,17 @@ class _SabbathBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
         color: AppColors.goldAccent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadius.lgAll,
         border: Border.all(color: AppColors.goldAccent.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.brightness_3, color: AppColors.goldAccent, size: 20),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -948,7 +1027,7 @@ class _SabbathBadge extends StatelessWidget {
                     color: AppColors.goldAccent,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.xs),
                 Text(
                   notice,
                   style: AppTextStyles.bodySmall.copyWith(
@@ -976,14 +1055,8 @@ class _AboutCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -992,12 +1065,11 @@ class _AboutCard extends StatelessWidget {
             'ABOUT',
             style: AppTextStyles.labelSmall.copyWith(
               color: context.palette.textMuted,
-              fontSize: 10.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpace.md - 2),
           Text(
             text,
             style: AppTextStyles.bodyMedium.copyWith(
@@ -1020,13 +1092,11 @@ class _DeliveryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
         color: AppColors.primaryBlue.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.primaryBlue.withValues(alpha: 0.18),
-        ),
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1044,7 +1114,7 @@ class _DeliveryCard extends StatelessWidget {
               size: 20,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1056,7 +1126,7 @@ class _DeliveryCard extends StatelessWidget {
                     color: AppColors.primaryBlue,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.xs),
                 if (area?.trim().isNotEmpty == true)
                   Text(
                     'Area: $area',
@@ -1090,96 +1160,6 @@ class _DeliveryCard extends StatelessWidget {
   }
 }
 
-class _ProductsSection extends StatelessWidget {
-  const _ProductsSection({required this.products, required this.onTap});
-
-  final List<Product> products;
-  final ValueChanged<Product> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            children: [
-              Text(
-                'PRODUCTS',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.palette.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.4,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${products.length}',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.primaryBlue,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        if (products.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: context.palette.card,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.shopping_bag_outlined,
-                  size: 38,
-                  color: AppColors.primaryBlue.withValues(alpha: 0.5),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'No live products',
-                  style: AppTextStyles.titleSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Check back soon — this seller hasn\'t listed anything yet.',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.palette.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: products.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 14,
-              crossAxisSpacing: 14,
-              childAspectRatio: 0.72,
-            ),
-            itemBuilder: (context, i) {
-              final p = products[i];
-              return ProductCard(product: p, onTap: () => onTap(p));
-            },
-          ),
-      ],
-    );
-  }
-}
-
 class _ReportButton extends StatelessWidget {
   const _ReportButton({required this.onTap});
 
@@ -1187,82 +1167,71 @@ class _ReportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.flag_outlined, color: AppColors.red, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Report this seller',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.red,
-                  fontWeight: FontWeight.w700,
-                ),
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          vertical: AppSpace.md + 2,
+          horizontal: AppSpace.lg,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: AppRadius.buttonAll,
+          border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.flag_outlined, color: AppColors.red, size: 18),
+            const SizedBox(width: AppSpace.sm),
+            Text(
+              'Report this seller',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.red,
+                fontWeight: FontWeight.w700,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _SafetyCard extends StatelessWidget {
+class _ErrorCard extends StatelessWidget {
+  const _ErrorCard({required this.message});
+
+  final String message;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpace.xl),
       decoration: BoxDecoration(
-        color: AppColors.darkNavy.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.darkNavy.withValues(alpha: 0.12)),
+        color: context.palette.card,
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.shield_outlined,
-              color: AppColors.primaryBlue,
-              size: 18,
+          Icon(
+            Icons.storefront_outlined,
+            size: 48,
+            color: context.palette.textMuted,
+          ),
+          const SizedBox(height: AppSpace.md),
+          Text(
+            'Seller not found',
+            style: AppTextStyles.titleMedium.copyWith(
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Stay safe',
-                  style: AppTextStyles.titleSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Meet in a public place. Inspect items before paying. Never send money in advance to people you don\'t trust. Advent Connect ZW is not a party to any transaction.',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.palette.text,
-                    height: 1.5,
-                  ),
-                ),
-              ],
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+              height: 1.5,
             ),
           ),
         ],
@@ -1271,152 +1240,107 @@ class _SafetyCard extends StatelessWidget {
   }
 }
 
-class _ReportSheet extends StatefulWidget {
-  const _ReportSheet({required this.sellerName, required this.onSubmit});
+class _OwnerBadge extends StatelessWidget {
+  const _OwnerBadge({
+    required this.owner,
+    required this.onTap,
+    this.fallbackName,
+  });
 
-  final String sellerName;
-  final void Function(String reason) onSubmit;
+  final PublicUserProfile owner;
+  final String? fallbackName;
+  final VoidCallback onTap;
 
-  @override
-  State<_ReportSheet> createState() => _ReportSheetState();
-}
-
-class _ReportSheetState extends State<_ReportSheet> {
-  static const _reasons = [
-    'Scam or fraud',
-    'Counterfeit goods',
-    'Inappropriate content',
-    'Harassment or abuse',
-    'Doesn\'t belong on the marketplace',
-    'Other',
-  ];
-
-  String? _selected;
+  String get _displayName {
+    final raw = owner.fullName.trim();
+    if (raw.isNotEmpty && raw.toLowerCase() != 'member') return raw;
+    final fb = fallbackName?.trim();
+    if (fb != null && fb.isNotEmpty) return fb;
+    return 'a verified member';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    final photo = owner.profilePhotoUrl;
+    final hasPhoto = photo != null && photo.isNotEmpty;
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md,
+          vertical: AppSpace.md - 2,
+        ),
+        decoration: BoxDecoration(
+          color: context.palette.card,
+          borderRadius: AppRadius.cardAll,
+          border: Border.all(
+            color: AppColors.primaryBlue.withValues(alpha: 0.18),
+          ),
+        ),
+        child: Row(
           children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: context.palette.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                gradient: hasPhoto ? null : AppColors.primaryGradient,
+                color: hasPhoto ? AppColors.lightGrey : null,
+                shape: BoxShape.circle,
+                image: hasPhoto
+                    ? DecorationImage(
+                        image: CachedNetworkImageProvider(photo),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
+              alignment: Alignment.center,
+              child: hasPhoto
+                  ? null
+                  : const Icon(Icons.person, color: AppColors.white, size: 18),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Report ${widget.sellerName}',
-              style: AppTextStyles.headlineSmall.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Reports are reviewed by the Advent Connect ZW team.',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.palette.textMuted,
-              ),
-            ),
-            const SizedBox(height: 18),
-            for (final r in _reasons)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: InkWell(
-                  onTap: () => setState(() => _selected = r),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _selected == r
-                          ? AppColors.primaryBlue.withValues(alpha: 0.08)
-                          : context.palette.chipBg,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _selected == r
-                            ? AppColors.primaryBlue
-                            : Colors.transparent,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _selected == r
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_off,
-                          color: _selected == r
-                              ? AppColors.primaryBlue
-                              : context.palette.textMuted,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            r,
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: _selected == r
-                                  ? AppColors.primaryBlue
-                                  : context.palette.text,
-                              fontWeight: _selected == r
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
+            const SizedBox(width: AppSpace.md - 2),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'OWNED BY',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: context.palette.textMuted,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
                     ),
                   ),
-                ),
-              ),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.30),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleSmall.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (owner.isVerified) ...[
+                        const SizedBox(width: AppSpace.xs),
+                        const Icon(
+                          Icons.verified,
+                          size: 14,
+                          color: AppColors.goldAccent,
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _selected == null
-                      ? null
-                      : () => widget.onSubmit(_selected!),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Opacity(
-                    opacity: _selected == null ? 0.6 : 1,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Center(
-                        child: Text(
-                          'Submit report',
-                          style: AppTextStyles.buttonText.copyWith(
-                            fontSize: 14,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: context.palette.textMuted,
             ),
           ],
         ),
@@ -1444,78 +1368,49 @@ class _ReviewsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            children: [
-              Text(
-                'REVIEWS',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.palette.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.4,
-                ),
-              ),
-              const Spacer(),
-              if (totalCount > 0)
-                Text(
-                  '$totalCount',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.palette.card,
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'REVIEWS',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: context.palette.textMuted,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          _RatingSummary(average: average, totalCount: totalCount),
+          if (canRate) ...[
+            const SizedBox(height: AppSpace.md + 2),
+            _RateCta(
+              isEditing: myReview != null,
+              myStars: myReview?.rating ?? 0,
+              onTap: onRate,
+            ),
+          ],
+          if (reviews.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Divider(height: 1, color: context.palette.divider),
+            const SizedBox(height: AppSpace.md),
+            for (final r in reviews) ...[
+              _ReviewRow(review: r),
+              if (r != reviews.last)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
+                  child: Divider(height: 1, color: context.palette.divider),
                 ),
             ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _RatingSummary(average: average, totalCount: totalCount),
-              if (canRate) ...[
-                const SizedBox(height: 14),
-                _RateCta(
-                  isEditing: myReview != null,
-                  myStars: myReview?.rating ?? 0,
-                  onTap: onRate,
-                ),
-              ],
-              if (reviews.isNotEmpty) ...[
-                const SizedBox(height: 18),
-                const Divider(height: 1, color: Color(0x14000000)),
-                const SizedBox(height: 12),
-                for (final r in reviews) ...[
-                  _ReviewRow(review: r),
-                  if (r != reviews.last)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Divider(height: 1, color: Color(0x10000000)),
-                    ),
-                ],
-              ],
-            ],
-          ),
-        ),
-      ],
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1530,24 +1425,22 @@ class _RatingSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasRatings = totalCount > 0;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           hasRatings ? average.toStringAsFixed(1) : '—',
           style: AppTextStyles.displayMedium.copyWith(
-            color: AppColors.primaryBlue,
-            fontSize: 32,
-            fontWeight: FontWeight.w700,
+            color: context.palette.text,
+            fontWeight: FontWeight.w800,
             height: 1,
           ),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: AppSpace.md + 2),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _StarStrip(value: average),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpace.xs),
               Text(
                 hasRatings
                     ? '$totalCount ${totalCount == 1 ? 'review' : 'reviews'}'
@@ -1606,64 +1499,63 @@ class _RateCta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: AppColors.primaryBlue.withValues(alpha: 0.06),
-            border: Border.all(
-              color: AppColors.primaryBlue.withValues(alpha: 0.25),
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.md + 2,
+          vertical: AppSpace.md,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: AppRadius.buttonAll,
+          color: AppColors.primaryBlue.withValues(alpha: 0.06),
+          border: Border.all(
+            color: AppColors.primaryBlue.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.rate_review_outlined,
+              color: AppColors.primaryBlue,
+              size: 20,
             ),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.rate_review_outlined,
-                color: AppColors.primaryBlue,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isEditing ? 'Update your review' : 'Rate this seller',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w700,
-                      ),
+            const SizedBox(width: AppSpace.md - 2),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isEditing ? 'Update your review' : 'Rate this seller',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
                     ),
-                    if (isEditing) ...[
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Text(
-                            'You gave them',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: context.palette.textMuted,
-                            ),
+                  ),
+                  if (isEditing) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          'You gave them',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: context.palette.textMuted,
                           ),
-                          const SizedBox(width: 6),
-                          _StarStrip(value: myStars.toDouble(), size: 13),
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(width: 6),
+                        _StarStrip(value: myStars.toDouble(), size: 13),
+                      ],
+                    ),
                   ],
-                ),
+                ],
               ),
-              const Icon(
-                Icons.chevron_right,
-                color: AppColors.primaryBlue,
-                size: 22,
-              ),
-            ],
-          ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.primaryBlue,
+              size: 22,
+            ),
+          ],
         ),
       ),
     );
@@ -1688,7 +1580,6 @@ class _ReviewRow extends StatelessWidget {
               _relative(review.createdAt),
               style: AppTextStyles.labelSmall.copyWith(
                 color: context.palette.textMuted,
-                fontSize: 11,
               ),
             ),
           ],
@@ -1709,10 +1600,7 @@ class _ReviewRow extends StatelessWidget {
 
   String _relative(DateTime t) {
     final diff = DateTime.now().difference(t);
-    if (diff.inDays >= 30) {
-      final months = (diff.inDays / 30).floor();
-      return '${months}mo ago';
-    }
+    if (diff.inDays >= 30) return '${(diff.inDays / 30).floor()}mo ago';
     if (diff.inDays >= 1) return '${diff.inDays}d ago';
     if (diff.inHours >= 1) return '${diff.inHours}h ago';
     if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
@@ -1720,185 +1608,122 @@ class _ReviewRow extends StatelessWidget {
   }
 }
 
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message});
+class _ReportSheet extends StatefulWidget {
+  const _ReportSheet({required this.sellerName, required this.onSubmit});
 
-  final String message;
+  final String sellerName;
+  final void Function(String reason) onSubmit;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.storefront_outlined,
-            size: 48,
-            color: context.palette.textMuted,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Seller not found',
-            style: AppTextStyles.titleMedium.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: context.palette.textMuted,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  State<_ReportSheet> createState() => _ReportSheetState();
 }
 
-class _OwnerBadge extends StatelessWidget {
-  const _OwnerBadge({
-    required this.owner,
-    required this.onTap,
-    this.fallbackName,
-  });
+class _ReportSheetState extends State<_ReportSheet> {
+  static const _reasons = [
+    'Scam or fraud',
+    'Counterfeit goods',
+    'Inappropriate content',
+    'Harassment or abuse',
+    'Doesn\'t belong on the marketplace',
+    'Other',
+  ];
 
-  final PublicUserProfile owner;
-  final String? fallbackName;
-  final VoidCallback onTap;
-
-  String get _displayName {
-    final raw = owner.fullName.trim();
-    if (raw.isNotEmpty && raw.toLowerCase() != 'member') return raw;
-    final fb = fallbackName?.trim();
-    if (fb != null && fb.isNotEmpty) return fb;
-    return 'a verified member';
-  }
+  String? _selected;
 
   @override
   Widget build(BuildContext context) {
-    final photo = owner.profilePhotoUrl;
-    final hasPhoto = photo != null && photo.isNotEmpty;
-    return Material(
-      color: context.palette.card,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.primaryBlue.withValues(alpha: 0.18),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
                 decoration: BoxDecoration(
-                  gradient: hasPhoto ? null : AppColors.primaryGradient,
-                  color: hasPhoto ? AppColors.lightGrey : null,
-                  shape: BoxShape.circle,
-                  image: hasPhoto
-                      ? DecorationImage(
-                          image: CachedNetworkImageProvider(photo),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
+                  color: context.palette.divider,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                alignment: Alignment.center,
-                child: hasPhoto
-                    ? null
-                    : const Icon(
-                        Icons.person,
-                        color: AppColors.white,
-                        size: 18,
-                      ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'OWNED BY',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: context.palette.textMuted,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.4,
+            ),
+            const SizedBox(height: AppSpace.lg),
+            Text(
+              'Report ${widget.sellerName}',
+              style: AppTextStyles.headlineSmall.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              'Reports are reviewed by the Advent Connect ZW team.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+            const SizedBox(height: 18),
+            for (final r in _reasons)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                child: Pressable(
+                  onTap: () => setState(() => _selected = r),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.lg,
+                      vertical: AppSpace.md + 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _selected == r
+                          ? AppColors.primaryBlue.withValues(alpha: 0.08)
+                          : context.palette.chipBg,
+                      borderRadius: AppRadius.buttonAll,
+                      border: Border.all(
+                        color: _selected == r
+                            ? AppColors.primaryBlue
+                            : Colors.transparent,
+                        width: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Row(
+                    child: Row(
                       children: [
-                        Flexible(
+                        Icon(
+                          _selected == r
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_off,
+                          color: _selected == r
+                              ? AppColors.primaryBlue
+                              : context.palette.textMuted,
+                          size: 20,
+                        ),
+                        const SizedBox(width: AppSpace.md),
+                        Expanded(
                           child: Text(
-                            _displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleSmall.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13.5,
+                            r,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: _selected == r
+                                  ? AppColors.primaryBlue
+                                  : context.palette.text,
+                              fontWeight: _selected == r
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             ),
                           ),
                         ),
-                        if (owner.isVerified) ...[
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.verified,
-                            size: 14,
-                            color: AppColors.goldAccent,
-                          ),
-                        ],
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: context.palette.textMuted,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
-          ),
-          child: Icon(icon, color: AppColors.white, size: 18),
+            const SizedBox(height: AppSpace.sm),
+            PrimaryGradientButton(
+              label: 'Submit report',
+              onTap: _selected == null
+                  ? null
+                  : () => widget.onSubmit(_selected!),
+            ),
+          ],
         ),
       ),
     );

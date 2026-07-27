@@ -6,7 +6,7 @@ import '../../services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/product_card.dart';
+import '../../widgets/marketplace/product_tile.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
@@ -149,15 +149,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: _products.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 14,
-        crossAxisSpacing: 14,
-        childAspectRatio: 0.72,
-      ),
+      gridDelegate: ProductTile.gridDelegate,
       itemBuilder: (context, i) {
         final p = _products[i];
-        final card = ProductCard(
+        final tile = ProductTile(
           product: p,
           heroTag: 'product_image_${p.id}',
           onTap: () => context.pushNamed(
@@ -166,8 +161,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
             extra: p,
           ),
         );
-        if (i >= 6) return card;
-        return StaggeredReveal(index: i, rise: 20, child: card);
+        if (i >= 6) return tile;
+        return StaggeredReveal(index: i, rise: 20, child: tile);
       },
     );
   }

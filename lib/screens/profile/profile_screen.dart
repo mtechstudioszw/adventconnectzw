@@ -585,7 +585,9 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
             viewerId: viewerId,
             onLikeToggled: () => _toggleLike(post),
             onCommentsTapped: () => _openComments(post),
-            onImageTapped: () async {
+            onImageTapped: (index) async {
+              // Multi-photo posts hand back the tapped index; this screen
+              // still opens the first photo full-screen.
               final url = post.imageUrl;
               if (url == null || url.isEmpty) return;
               await PostImageViewer.show(
@@ -610,7 +612,10 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
       _myPosts = _myPosts
           .map(
             (p) => p.id == post.id
-                ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+                ? p.copyWith(
+                    viewerReaction: newLiked ? PostReaction.like : null,
+                    likeCount: newCount,
+                  )
                 : p,
           )
           .toList();
@@ -628,7 +633,7 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
             .map(
               (p) => p.id == post.id
                   ? p.copyWith(
-                      viewerLiked: post.viewerLiked,
+                      viewerReaction: post.viewerReaction,
                       likeCount: post.likeCount,
                     )
                   : p,

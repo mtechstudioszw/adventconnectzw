@@ -1,0 +1,652 @@
+import 'dart:ui' show ImageFilter, lerpDouble;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
+
+import '../../services/sabbath_service.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
+import '../../theme/app_palette.dart';
+import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
+import '../cached_image.dart';
+import '../motion/pressable.dart';
+
+/// Set false if the frosted header ever janks on low-end hardware.
+///
+/// True device-tier detection needs a plugin we don't ship, so the blur is
+/// gated on two cheap proxies instead: it only composites once the header is
+/// actually collapsing (at rest it costs nothing), and it turns itself off
+/// when the OS "remove animations" flag is set.
+const bool kHomeHeaderBlur = true;
+
+/// What the header's status line is currently saying.
+enum SabbathPhase { inSabbath, approaching, ordinary }
+
+/// Sabbath state resolved once per build, so the header isn't recomputing
+/// a NOAA sunset equation inside three different widgets.
+@immutable
+class SabbathStatus {
+  const SabbathStatus({
+    required this.phase,
+    this.until,
+    this.sundown,
+  });
+
+  final SabbathPhase phase;
+
+  /// Time remaining until the phase flips (Sabbath starts, or ends).
+  final Duration? until;
+
+  /// The actual sundown instant, for showing a real clock time.
+  final DateTime? sundown;
+
+  bool get isSabbath => phase == SabbathPhase.inSabbath;
+
+  /// Resolves the current phase.
+  ///
+  /// The celebration ("Sabata yakanaka") always shows — being inside the
+  /// Sabbath is the app acknowledging the day, not a widget. The COUNTDOWN
+  /// stays gated on the user's Settings opt-in, because that genuinely is
+  /// the countdown feature they may have switched off.
+  factory SabbathStatus.resolve() {
+    final now = DateTime.now().toUtc();
+    final end = SabbathService.currentSabbathEnd();
+    if (end != null) {
+      return SabbathStatus(
+        phase: SabbathPhase.inSabbath,
+        until: end.difference(now),
+        sundown: end,
+      );
+    }
+    if (SabbathService.isEnabled()) {
+      final start = SabbathService.nextSabbathStart();
+      if (start != null && !start.difference(now).isNegative) {
+        return SabbathStatus(
+          phase: SabbathPhase.approaching,
+          until: start.difference(now),
+          sundown: start,
+        );
+      }
+    }
+    return const SabbathStatus(phase: SabbathPhase.ordinary);
+  }
+}
+
+/// Home's collapsing "sanctuary" header.
+///
+/// Everything animates as a pure function of [shrinkOffset] rather than
+/// flipping at a threshold, so the header tracks the finger and reverses
+/// exactly when you scroll back up.
+///
+/// On Sabbath (Friday sundown → Saturday sundown) the whole bar adopts a
+/// warm sundown gradient and the greeting becomes "Sabata yakanaka". That is
+/// the ONE gold moment on this screen — see CLAUDE.md's one-highlight rule.
+class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
+  HomeHeaderDelegate({
+    required this.topInset,
+    required this.greeting,
+    required this.firstName,
+    required this.initials,
+    required this.photoUrl,
+    required this.unreadNotifications,
+    required this.sabbath,
+    required this.onAvatarTap,
+    required this.onSearchTap,
+    required this.onBellTap,
+  });
+
+  final double topInset;
+  final String greeting;
+  final String firstName;
+  final String initials;
+  final String? photoUrl;
+  final int unreadNotifications;
+  final SabbathStatus sabbath;
+  final VoidCallback onAvatarTap;
+  final VoidCallback onSearchTap;
+  final VoidCallback onBellTap;
+
+  // Body heights excluding the status-bar inset. Expanded carries the
+  // greeting + status line; collapsed is a single wordmark bar.
+  static const double _expandedBody = 108;
+  static const double _collapsedBody = 56;
+
+  @override
+  double get maxExtent => topInset + _expandedBody;
+
+  @override
+  double get minExtent => topInset + _collapsedBody;
+
+  @override
+  bool shouldRebuild(covariant HomeHeaderDelegate old) =>
+      old.topInset != topInset ||
+      old.greeting != greeting ||
+      old.firstName != firstName ||
+      old.initials != initials ||
+      old.photoUrl != photoUrl ||
+      old.unreadNotifications != unreadNotifications ||
+      old.sabbath.phase != sabbath.phase ||
+      old.sabbath.until != sabbath.until;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
+    final range = maxExtent - minExtent;
+    final t = range <= 0 ? 0.0 : (shrinkOffset / range).clamp(0.0, 1.0);
+    final palette = context.palette;
+    final isSabbath = sabbath.isSabbath;
+
+    // Sabbath sundown gradient, blended from two palette colours so we stay
+    // inside the approved scheme rather than inventing a warm hue.
+    final sundownEnd = Color.lerp(
+      AppColors.darkNavy,
+      AppColors.goldAccent,
+      0.38,
+    )!;
+    final onHeader = isSabbath ? AppColors.white : palette.text;
+    final onHeaderMuted = isSabbath
+        ? AppColors.white.withValues(alpha: 0.78)
+        : palette.textMuted;
+
+    // Heights add up to exactly the current body height (4px slack when
+    // expanded) so the header can never overflow mid-scroll.
+    final rowHeight = lerpDouble(48, 40, t)!;
+    final gap = (1 - t) * AppSpace.xs;
+    final statusHeight = (1 - t) * 32;
+    final bottomPad = lerpDouble(AppSpace.md, AppSpace.sm, t)!;
+
+    Widget header = Stack(
+      fit: StackFit.expand,
+      children: [
+        _Background(
+          t: t,
+          isSabbath: isSabbath,
+          sundownEnd: sundownEnd,
+          palette: palette,
+        ),
+        SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.sm,
+              AppSpace.md,
+              bottomPad,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: rowHeight,
+                  child: Row(
+                    children: [
+                      _Avatar(
+                        size: lerpDouble(44, 34, t)!,
+                        initials: initials,
+                        photoUrl: photoUrl,
+                        highlight: isSabbath,
+                        onTap: onAvatarTap,
+                      ),
+                      const SizedBox(width: AppSpace.md),
+                      Expanded(
+                        child: _TitleBlock(
+                          t: t,
+                          greeting: greeting,
+                          firstName: firstName,
+                          onHeader: onHeader,
+                          onHeaderMuted: onHeaderMuted,
+                        ),
+                      ),
+                      _HeaderIcon(
+                        icon: Icons.search_rounded,
+                        onTap: onSearchTap,
+                        isSabbath: isSabbath,
+                        tooltip: 'Search',
+                      ),
+                      const SizedBox(width: AppSpace.sm),
+                      _HeaderIcon(
+                        icon: Icons.notifications_none_rounded,
+                        onTap: onBellTap,
+                        isSabbath: isSabbath,
+                        badge: unreadNotifications,
+                        tooltip: 'Notifications',
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: gap),
+                SizedBox(
+                  height: statusHeight,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.topLeft,
+                      minHeight: 0,
+                      maxHeight: 32,
+                      child: Opacity(
+                        opacity: (1 - t * 1.8).clamp(0.0, 1.0),
+                        child: _StatusLine(
+                          sabbath: sabbath,
+                          color: onHeaderMuted,
+                          accent: isSabbath
+                              ? AppColors.goldAccent
+                              : AppColors.primaryBlue,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+
+    // Status-bar icons must flip to light over the Sabbath gradient.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final lightIcons = isSabbath || dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            lightIcons ? Brightness.light : Brightness.dark,
+        statusBarBrightness: lightIcons ? Brightness.dark : Brightness.light,
+      ),
+      child: header,
+    );
+  }
+}
+
+class _Background extends StatelessWidget {
+  const _Background({
+    required this.t,
+    required this.isSabbath,
+    required this.sundownEnd,
+    required this.palette,
+  });
+
+  final double t;
+  final bool isSabbath;
+  final Color sundownEnd;
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final blurring = kHomeHeaderBlur && t > 0.05 && AppMotion.enabled(context);
+
+    Widget surface = DecoratedBox(
+      decoration: BoxDecoration(
+        color: isSabbath ? null : palette.scaffoldBg.withValues(alpha: 0.86),
+        gradient: isSabbath
+            ? LinearGradient(
+                colors: [AppColors.darkNavy, sundownEnd],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+      ),
+    );
+
+    if (blurring) {
+      surface = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18 * t, sigmaY: 18 * t),
+        child: surface,
+      );
+    }
+
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          surface,
+          // Soft top-left bloom — reads as depth without adding a colour.
+          IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(-0.7, -0.9),
+                  radius: 1.1,
+                  colors: [
+                    AppColors.white.withValues(alpha: isSabbath ? 0.12 : 0.06),
+                    AppColors.white.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Hairline that fades in only once the bar is fully collapsed, so
+          // the content below reads as scrolling *under* the header.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Opacity(
+              opacity: ((t - 0.7) / 0.3).clamp(0.0, 1.0),
+              child: Container(height: 1, color: palette.divider),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Crossfades the expanded greeting against the collapsed wordmark inside a
+/// fixed box, so the row height never depends on which one is showing.
+class _TitleBlock extends StatelessWidget {
+  const _TitleBlock({
+    required this.t,
+    required this.greeting,
+    required this.firstName,
+    required this.onHeader,
+    required this.onHeaderMuted,
+  });
+
+  final double t;
+  final String greeting;
+  final String firstName;
+  final Color onHeader;
+  final Color onHeaderMuted;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          // Expanded: eyebrow + name. Fades out over the first ~55%.
+          Opacity(
+            opacity: (1 - t * 1.8).clamp(0.0, 1.0),
+            child: Transform.translate(
+              offset: Offset(0, -8 * t),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    greeting.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: onHeaderMuted,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    firstName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.headlineMedium.copyWith(
+                      color: onHeader,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Collapsed: wordmark. Fades in over the last ~45%.
+          Opacity(
+            opacity: ((t - 0.55) / 0.45).clamp(0.0, 1.0),
+            child: Text(
+              'Advent Connect',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleLarge.copyWith(
+                color: onHeader,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The live line under the greeting. Always populated: Sabbath celebration,
+/// then the opt-in countdown, then today's date as the resting state.
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({
+    required this.sabbath,
+    required this.color,
+    required this.accent,
+  });
+
+  final SabbathStatus sabbath;
+  final Color color;
+  final Color accent;
+
+  static const _weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  static const _months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  static String _clock(DateTime utc) {
+    final local = utc.toLocal();
+    final h = local.hour.toString().padLeft(2, '0');
+    final m = local.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  static String _remaining(Duration d) {
+    if (d.inDays >= 1) return '${d.inDays}d ${d.inHours.remainder(24)}h';
+    if (d.inHours >= 1) return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
+    return '${d.inMinutes}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (IconData icon, String text) = switch (sabbath.phase) {
+      SabbathPhase.inSabbath => (
+          Icons.auto_awesome_rounded,
+          sabbath.sundown == null
+              ? 'Sabata yakanaka'
+              : 'Sabata yakanaka · ends ${_clock(sabbath.sundown!)}',
+        ),
+      SabbathPhase.approaching => (
+          Icons.brightness_3_rounded,
+          sabbath.sundown == null
+              ? 'Sabata soon'
+              : 'Sabata in ${_remaining(sabbath.until!)}'
+                  ' · sundown ${_clock(sabbath.sundown!)}',
+        ),
+      SabbathPhase.ordinary => (
+          Icons.calendar_today_rounded,
+          () {
+            final now = DateTime.now();
+            return '${_weekdays[now.weekday - 1]}, '
+                '${now.day} ${_months[now.month - 1]}';
+          }(),
+        ),
+    };
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: accent),
+        const SizedBox(width: AppSpace.xs + 2),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.caption.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({
+    required this.size,
+    required this.initials,
+    required this.photoUrl,
+    required this.highlight,
+    required this.onTap,
+  });
+
+  final double size;
+  final String initials;
+  final String? photoUrl;
+  final bool highlight;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = photoUrl;
+    final fallback = Text(
+      initials,
+      style: AppTextStyles.titleMedium.copyWith(
+        color: AppColors.white,
+        fontWeight: FontWeight.w700,
+        fontSize: size * 0.36,
+      ),
+    );
+    return Semantics(
+      button: true,
+      label: 'Your profile',
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.92,
+        child: Container(
+          width: size,
+          height: size,
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            // A gold ring on Sabbath, otherwise nothing — the avatar sits on
+            // the flat scaffold and doesn't need a permanent ring.
+            border: highlight
+                ? Border.all(color: AppColors.goldAccent, width: 1.6)
+                : null,
+          ),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              shape: BoxShape.circle,
+            ),
+            child: url == null || url.isEmpty
+                ? fallback
+                : CachedImage(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => fallback,
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderIcon extends StatelessWidget {
+  const _HeaderIcon({
+    required this.icon,
+    required this.onTap,
+    required this.isSabbath,
+    required this.tooltip,
+    this.badge = 0,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isSabbath;
+  final String tooltip;
+  final int badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final chip = isSabbath
+        ? AppColors.white.withValues(alpha: 0.16)
+        : (dark ? context.palette.cardMuted : const Color(0xFFE4E9F2));
+    final fg = isSabbath ? AppColors.white : context.palette.text;
+
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: badge > 0 ? '$tooltip, $badge unread' : tooltip,
+        child: Pressable(
+          onTap: onTap,
+          pressedScale: 0.88,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: chip, shape: BoxShape.circle),
+                alignment: Alignment.center,
+                child: Icon(icon, color: fg, size: 20),
+              ),
+              if (badge > 0)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 17,
+                      minHeight: 17,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.red,
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(
+                        color: isSabbath
+                            ? AppColors.darkNavy
+                            : context.palette.scaffoldBg,
+                        width: 1.5,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      badge > 99 ? '99+' : '$badge',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

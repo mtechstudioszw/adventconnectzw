@@ -52,6 +52,7 @@ class QuizSfx {
   QuizSfx._();
 
   static const _kMuted = 'quiz_sfx_muted';
+  static const _kHaptics = 'quiz_haptics_off';
 
   static final Map<QuizSound, AudioPlayer> _players = {};
   static bool _initialised = false;
@@ -61,6 +62,18 @@ class QuizSfx {
   static bool _muted = false;
 
   static bool get muted => _muted;
+
+  /// Haptics are opt-OUT: on by default, because the tap tick is a core part
+  /// of how the arena feels. Stored inverted (`quiz_haptics_off`) so an
+  /// absent pref means "on".
+  static bool _hapticsOff = false;
+
+  static bool get hapticsEnabled => !_hapticsOff;
+
+  static Future<void> setHapticsEnabled(bool value) async {
+    _hapticsOff = !value;
+    await CacheService.writePref(_kHaptics, value ? '0' : '1');
+  }
 
   static AudioContext get _context => AudioContext(
         android: const AudioContextAndroid(
@@ -84,6 +97,7 @@ class QuizSfx {
     if (_initialised || _initialising) return;
     _initialising = true;
     _muted = CacheService.readPref(_kMuted) == '1';
+    _hapticsOff = CacheService.readPref(_kHaptics) == '1';
     try {
       for (final sound in QuizSound.values) {
         final player = AudioPlayer(playerId: 'quiz_${sound.name}');
@@ -150,14 +164,17 @@ class QuizSfx {
   // platform-appropriate impact.
 
   static void hapticTap() {
+    if (_hapticsOff) return;
     HapticFeedback.selectionClick();
   }
 
   static void hapticCorrect() {
+    if (_hapticsOff) return;
     HapticFeedback.mediumImpact();
   }
 
   static void hapticWrong() {
+    if (_hapticsOff) return;
     if (Platform.isAndroid) {
       HapticFeedback.vibrate();
     } else {
@@ -166,6 +183,7 @@ class QuizSfx {
   }
 
   static void hapticCombo() {
+    if (_hapticsOff) return;
     HapticFeedback.heavyImpact();
   }
 

@@ -48,7 +48,17 @@ Success Green:  #2E7D32  // Status badges ONLY
 
 \- \*\*App bar:\*\* Dark Navy #0D1B3E with gradient
 
-\- \*\*All uploaded images:\*\* Square via AspectRatio(1.0)
+\- \*\*Uploaded images:\*\* Square via AspectRatio(1.0) — avatars, church logos,
+
+  product and event covers. \*\*EXCEPTION (2026-07-27, founder-approved):\*\*
+
+  home-feed POST media is full-bleed at its natural aspect ratio, clamped to
+
+  4:5..1.91:1. Forcing 1:1 centre-cropped portrait photos through people's
+
+  heads, and the inset frame read as a card inside a card. See
+
+  lib/widgets/home/post\_card.dart — do not "fix" it back to square.
 
 \- \*\*SafeArea:\*\* Every scaffold must wrap content in SafeArea (iOS notch)
 

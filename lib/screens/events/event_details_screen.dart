@@ -253,7 +253,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
         SizedBox(
           width: double.infinity,
           height: 260,
-          child: _CoverImage(url: event.coverPhotoUrl),
+          // Receiving end of the Hero on Home's event cards — the cover
+          // expands into this screen rather than the page swapping under it.
+          child: Hero(
+            tag: 'event_cover_${event.id}',
+            child: _CoverImage(url: event.coverPhotoUrl),
+          ),
         ),
         Positioned.fill(
           child: IgnorePointer(

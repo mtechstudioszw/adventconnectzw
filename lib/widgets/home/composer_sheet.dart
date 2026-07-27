@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../motion/brand_spinner.dart';
 import '../../models/post_model.dart';
 import '../../models/story_model.dart';
+import '../../services/cache_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
@@ -47,28 +51,175 @@ class _PostComposer extends StatefulWidget {
 }
 
 class _PostComposerState extends State<_PostComposer> {
+  /// Matches the `posts_body_check` constraint in Supabase
+  /// (`char_length(body) <= 2000`). Without this the insert simply failed
+  /// with a generic "Could not publish", and because nothing was saved the
+  /// member lost everything they'd typed.
+  static const int _maxBody = 2000;
+
+  /// Show the counter only once it's actually relevant.
+  static const int _counterFrom = 1800;
+
+  /// Cap on photos per post. The DB check allows 10; the product decision is
+  /// 4, which is what fits a 2×2 grid without the card dominating the feed.
+  static const int _maxPhotos = 4;
+
   final _controller = TextEditingController();
-  String? _imageUrl;
+  final List<String> _photos = [];
   bool _uploadingImage = false;
   bool _publishing = false;
   PostVisibility _visibility = PostVisibility.public;
+  Timer? _draftDebounce;
+
+  /// Church updates keep their own draft so a half-written church notice
+  /// can't overwrite a half-written personal post.
+  String get _draftKey =>
+      'composer_draft_v1${widget.churchId == null ? '' : ':${widget.churchId}'}';
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreDraft();
+    _controller.addListener(_onBodyChanged);
+  }
 
   @override
   void dispose() {
+    _draftDebounce?.cancel();
+    _controller.removeListener(_onBodyChanged);
     _controller.dispose();
     super.dispose();
   }
 
+  /// Autosave is the real safety net, not the discard prompt.
+  ///
+  /// A modal sheet can go away in ways we don't control — swipe-down, an
+  /// incoming call, the OS killing the app in the background. Persisting on
+  /// every keystroke (debounced) means the text survives all of them, and
+  /// the confirm dialog is just a courtesy on top.
+  void _onBodyChanged() {
+    setState(() {}); // keeps the Post button + counter live
+    _draftDebounce?.cancel();
+    _draftDebounce = Timer(const Duration(milliseconds: 400), _saveDraft);
+  }
+
+  void _restoreDraft() {
+    final raw = CacheService.readStringStale(_draftKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      final body = (m['body'] as String?) ?? '';
+      final photos = <String>[
+        // 'images' is the current shape; 'image' is a single-photo draft
+        // written before multi-photo landed.
+        if (m['images'] is List)
+          for (final u in m['images'] as List)
+            if (u != null && u.toString().isNotEmpty) u.toString(),
+        if (m['image'] is String && (m['image'] as String).isNotEmpty)
+          m['image'] as String,
+      ];
+      if (body.isEmpty && photos.isEmpty) return;
+      _controller.text = body;
+      _photos
+        ..clear()
+        ..addAll(photos.take(_maxPhotos));
+    } catch (_) {
+      // Corrupt draft — start clean rather than block the composer.
+    }
+  }
+
+  void _saveDraft() {
+    final body = _controller.text;
+    if (body.trim().isEmpty && _photos.isEmpty) {
+      unawaited(CacheService.deletePref(_draftKey));
+      return;
+    }
+    unawaited(
+      CacheService.writeString(
+        _draftKey,
+        jsonEncode({'body': body, 'images': _photos}),
+      ),
+    );
+  }
+
+  void _clearDraft() {
+    _draftDebounce?.cancel();
+    unawaited(CacheService.deletePref(_draftKey));
+  }
+
+  bool get _hasContent =>
+      _controller.text.trim().isNotEmpty || _photos.isNotEmpty;
+
+  /// Confirms before throwing away work. Returns true if it's OK to close.
+  Future<bool> _confirmDiscard() async {
+    if (!_hasContent) return true;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.palette.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Keep this post?',
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          "We've saved it as a draft — it'll be here when you come back.",
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: context.palette.textMuted,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('discard'),
+            child: Text(
+              'Discard',
+              style: AppTextStyles.buttonText.copyWith(
+                color: AppColors.red,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop('keep'),
+            child: Text(
+              'Keep draft',
+              style: AppTextStyles.buttonText.copyWith(
+                color: AppColors.primaryBlue,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (choice == 'discard') {
+      _clearDraft();
+      return true;
+    }
+    if (choice == 'keep') {
+      _saveDraft();
+      return true;
+    }
+    // Dismissed the dialog itself — stay in the composer.
+    return false;
+  }
+
   Future<void> _pickImage() async {
     if (_uploadingImage || _publishing) return;
+    if (_photos.length >= _maxPhotos) return;
     setState(() => _uploadingImage = true);
     try {
       final url = await StorageService.pickAndUploadPostPhoto();
       if (!mounted) return;
       setState(() {
-        _imageUrl = url ?? _imageUrl;
+        if (url != null && url.isNotEmpty && !_photos.contains(url)) {
+          _photos.add(url);
+        }
         _uploadingImage = false;
       });
+      // Persist immediately — an uploaded photo is real work already spent.
+      _saveDraft();
     } catch (_) {
       if (!mounted) return;
       setState(() => _uploadingImage = false);
@@ -85,16 +236,19 @@ class _PostComposerState extends State<_PostComposer> {
 
   Future<void> _publish() async {
     final body = _controller.text.trim();
-    if (body.isEmpty && (_imageUrl == null || _imageUrl!.isEmpty)) return;
+    if (body.isEmpty && _photos.isEmpty) return;
     setState(() => _publishing = true);
     try {
       final post = await FeedService.createPost(
         body: body.isEmpty ? null : body,
-        imageUrl: _imageUrl,
+        imageUrls: _photos,
         visibility: _visibility,
         churchId: widget.churchId,
       );
       if (!mounted) return;
+      // Only drop the draft once the insert actually succeeded — a failed
+      // publish must leave the text exactly where it was.
+      _clearDraft();
       Navigator.of(context).pop(post);
     } catch (_) {
       if (!mounted) return;
@@ -121,9 +275,20 @@ class _PostComposerState extends State<_PostComposer> {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final hasContent = _controller.text.trim().isNotEmpty ||
-        (_imageUrl != null && _imageUrl!.isNotEmpty);
-    return Padding(
+    final hasContent = _hasContent;
+    return PopScope(
+      // Intercept the back button so a half-written post asks first. Swipe-
+      // to-dismiss is still allowed — the autosaved draft covers that path.
+      canPop: !hasContent,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        // Resolve the navigator BEFORE awaiting, so we're not reaching
+        // through a BuildContext that may be gone by the time the dialog
+        // closes.
+        final navigator = Navigator.of(context);
+        if (await _confirmDiscard()) navigator.pop();
+      },
+      child: Padding(
       padding: EdgeInsets.only(bottom: bottom),
       child: Container(
         decoration: BoxDecoration(
@@ -202,12 +367,39 @@ class _PostComposerState extends State<_PostComposer> {
                   controller: _controller,
                   minLines: 4,
                   maxLines: 8,
+                  // Enforced here so the member is stopped AT the limit,
+                  // instead of the database rejecting the insert afterwards
+                  // with an unexplained "Could not publish".
+                  maxLength: _maxBody,
                   textCapitalization: TextCapitalization.sentences,
                   autofocus: true,
                   style: AppTextStyles.bodyMedium.copyWith(
                     fontSize: 15,
                     color: context.palette.text,
                   ),
+                  buildCounter: (
+                    context, {
+                    required currentLength,
+                    required isFocused,
+                    required maxLength,
+                  }) {
+                    // Silent until it's nearly full — a counter on an empty
+                    // box just nags.
+                    if (currentLength < _counterFrom) return null;
+                    final left = (maxLength ?? _maxBody) - currentLength;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12, bottom: 6),
+                      child: Text(
+                        '$left left',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: left <= 50
+                              ? AppColors.red
+                              : context.palette.textMuted,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    );
+                  },
                   decoration: InputDecoration(
                     hintText: 'What\'s on your mind today?',
                     hintStyle: AppTextStyles.bodyMedium.copyWith(
@@ -217,49 +409,103 @@ class _PostComposerState extends State<_PostComposer> {
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.all(14),
                   ),
-                  onChanged: (_) => setState(() {}),
+                  // The controller listener already rebuilds + autosaves.
                 ),
               ),
-              if (_imageUrl != null && _imageUrl!.isNotEmpty) ...[
+              if (_photos.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: AspectRatio(
-                    aspectRatio: 1.0,
-                    child: Stack(
-                      fit: StackFit.expand,
+                // Square thumbnails in a wrap: one photo reads as a single
+                // preview, four tile into a 2x2 without any special-casing.
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final single = _photos.length == 1;
+                    final size = single
+                        ? constraints.maxWidth
+                        : (constraints.maxWidth - 8) / 2;
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        CachedImage(_imageUrl!, fit: BoxFit.cover),
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Material(
-                            color: Colors.black.withValues(alpha: 0.55),
-                            shape: const CircleBorder(),
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: () => setState(() => _imageUrl = null),
-                              child: const Padding(
-                                padding: EdgeInsets.all(6),
-                                child: Icon(
-                                  Icons.close,
-                                  size: 18,
-                                  color: AppColors.white,
-                                ),
+                        for (var i = 0; i < _photos.length; i++)
+                          SizedBox(
+                            width: size,
+                            height: size,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  CachedImage(_photos[i], fit: BoxFit.cover),
+                                  Positioned(
+                                    top: 6,
+                                    right: 6,
+                                    child: Material(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                      shape: const CircleBorder(),
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () {
+                                          setState(() => _photos.removeAt(i));
+                                          _saveDraft();
+                                        },
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(6),
+                                          child: Icon(
+                                            Icons.close,
+                                            size: 16,
+                                            color: AppColors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  // Order matters — the first photo is what
+                                  // lands in `image_url` and is all a v1.3.0
+                                  // client will ever see.
+                                  if (i == 0 && _photos.length > 1)
+                                    Positioned(
+                                      left: 6,
+                                      bottom: 6,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.55,
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          'Cover',
+                                          style: AppTextStyles.labelSmall
+                                              .copyWith(
+                                            color: AppColors.white,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
-                        ),
                       ],
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ],
               const SizedBox(height: 12),
               Row(
                 children: [
                   TextButton.icon(
-                    onPressed: _uploadingImage ? null : _pickImage,
+                    onPressed: _uploadingImage || _photos.length >= _maxPhotos
+                        ? null
+                        : _pickImage,
                     icon: _uploadingImage
                         ? const SizedBox(
                             width: 16,
@@ -270,12 +516,16 @@ class _PostComposerState extends State<_PostComposer> {
                             ),
                           )
                         : const Icon(
-                            Icons.image_outlined,
+                            Icons.add_photo_alternate_outlined,
                             color: AppColors.primaryBlue,
                             size: 20,
                           ),
                     label: Text(
-                      _imageUrl == null ? 'Add a photo' : 'Replace photo',
+                      _photos.isEmpty
+                          ? 'Add a photo'
+                          : _photos.length >= _maxPhotos
+                              ? 'Max $_maxPhotos photos'
+                              : 'Add another (${_photos.length}/$_maxPhotos)',
                       style: AppTextStyles.buttonText.copyWith(
                         color: AppColors.primaryBlue,
                         fontWeight: FontWeight.w600,
@@ -288,6 +538,7 @@ class _PostComposerState extends State<_PostComposer> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

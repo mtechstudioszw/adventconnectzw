@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
 
 /// "Invite friends" prompt that sits on the home feed and helps the app
 /// grow when the social graph is still empty. Always visible — the
@@ -33,15 +34,11 @@ class InviteFriendsCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: context.palette.divider),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        // Palette-aware: a flat black shadow is invisible on the dark
+        // scaffold, which left cards with no separation in dark mode.
+        boxShadow: AppShadows.card(context),
       ),
       child: Row(
         children: [

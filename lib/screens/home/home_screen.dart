@@ -40,18 +40,27 @@ import '../../services/rating_prompt_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/urgent_banner_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
 import '../../widgets/ads/native_ad_card.dart';
 import '../../widgets/home/advent_chat_bubble.dart';
-import '../../widgets/screen_shell.dart';
 import '../../widgets/home/comments_sheet.dart';
+import '../../widgets/home/composer_entry.dart';
 import '../../widgets/home/composer_sheet.dart';
+import '../../widgets/home/create_sheet.dart';
 import '../../widgets/home/featured_church_events.dart';
+import '../../widgets/home/home_header.dart';
+import '../../widgets/home/library_tiles.dart';
+import '../../widgets/home/music_card.dart';
+import '../../widgets/home/section_header.dart';
 import '../../widgets/home/signup_survey_sheet.dart';
 import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
+import '../../widgets/home/today_card.dart';
+import '../library/widgets/now_playing_bar.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/job_card.dart';
 import '../../widgets/product_card.dart';
@@ -96,6 +105,8 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   Set<String> _viewedStoryIds = const {};
   List<Product> _products = const [];
   List<Job> _jobs = const [];
+  // Individual tracks interleaved into the feed, one card each.
+  List<LibraryItem> _music = const [];
   // Watch (YouTube): the current live stream for the LIVE banner + a page
   // of recent videos interleaved into the feed as individual cards.
   YoutubeVideo? _liveVideo;
@@ -111,6 +122,22 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   // already swiped one away.
   final Set<String> _dismissedBannerIds = <String>{};
   bool _loading = true;
+
+  // ---- Endless scroll ----------------------------------------------------
+  // Wi-Fi loads forever; on mobile data we auto-load [_autoPagesOnCellular]
+  // pages and then wait for an explicit tap, so an idle scroll can't quietly
+  // eat someone's bundle. Same principle as Watch's "Wi-Fi only previews".
+  static const int _pageSize = 15;
+  static const int _autoPagesOnCellular = 2;
+  final ScrollController _scroll = ScrollController();
+  bool _loadingMore = false;
+  bool _endOfFeed = false;
+  int _pagesLoaded = 0;
+
+  /// True once we've auto-loaded our cellular allowance and need a tap.
+  bool get _needsManualLoad =>
+      !ConnectivityService.isWifi && _pagesLoaded >= _autoPagesOnCellular;
+
   StreamSubscription<AuthState>? _authSub;
   // Realtime watcher on messages so the chat-bubble badge clears
   // when the user reads messages inside the chat and bounces back
@@ -187,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Row(
           children: [
             const Icon(
@@ -233,7 +260,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.button),
               ),
             ),
             child: const Text('Update now'),
@@ -258,6 +285,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     _authSub?.cancel();
     _unreadRefreshDebounce?.cancel();
     _msgActivitySub?.cancel();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -319,6 +347,19 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     ));
   }
 
+  /// Loads Home in tiers instead of one 17-call `Future.wait`.
+  ///
+  /// The old version awaited every endpoint before a single `setState`, so
+  /// one slow query (jobs, marketplace) held the entire screen hostage and
+  /// everything painted at once or not at all. Now:
+  ///
+  ///   cache  → paints instantly, offline included
+  ///   tier 0 → the tiny social sets the feed ranking needs
+  ///   tier 1 → feed + stories + badges; clears the skeleton
+  ///   tier 2 → discovery rails, each landing into its own section
+  ///
+  /// Tier 2 failures are swallowed per-tier: a dead marketplace must never
+  /// blank the feed.
   Future<void> _bootstrap() async {
     // Refresh Watch content (live banner + feed videos) on pull-to-refresh.
     unawaited(_loadWatch());
@@ -328,33 +369,106 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     if (_loading) {
       _hydrateFromCache();
     }
+    // A refresh restarts pagination — otherwise "load more" would keep
+    // paging from the old cursor into content the new sort already returned.
+    _pagesLoaded = 0;
+    _endOfFeed = false;
 
+    final viewerId = AuthService.currentUser?.id;
+    await _loadCritical(viewerId);
+    if (!mounted) return;
+    unawaited(_loadSecondary(viewerId));
+  }
+
+  /// Tier 0 + 1. Awaited, because it owns the skeleton→content moment.
+  Future<void> _loadCritical(String? viewerId) async {
     try {
-      final results = await Future.wait([
-        EventService.fetchEvents(upcomingOnly: true),
-        ChurchService.fetchChurches(),
+      // Tier 0: the two small queries the ranking needs. Cheap, and the
+      // cache is already on screen while they run.
+      final social = await Future.wait([
+        FeedService.fetchMyFriendships(),
         ChurchService.fetchUserFollowedChurchIds(),
-        EventService.fetchUserRsvpedEventIds(),
-        NotificationService.unreadCount(),
-        UrgentBannerService.fetchActive(),
-        DirectoryService.fetchSuggestedMembers(),
+      ]);
+      if (!mounted) return;
+      final friendships = social[0] as List<Friendship>;
+      final followedChurchIds = social[1] as Set<String>;
+      final friendsByUser = <String, Friendship>{};
+      final friendIds = <String>{};
+      if (viewerId != null) {
+        for (final f in friendships) {
+          final other = f.otherUserId(viewerId);
+          friendsByUser[other] = f;
+          if (f.isAccepted) friendIds.add(other);
+        }
+      }
+
+      // Tier 1: what the user actually came for.
+      final results = await Future.wait([
         // The pull-to-refresh nonce reshuffles the personalised
         // jitter so each refresh hands the user a visibly different
         // feed order, even on identical content. Without it the
         // sort was stable per session and refresh felt like a
         // no-op.
         FeedService.fetchFeed(
+          limit: _pageSize,
           refreshNonce: DateTime.now().millisecondsSinceEpoch,
+          friendIds: friendIds,
+          followedChurchIds: followedChurchIds,
         ),
         FeedService.fetchStories(),
-        FeedService.fetchMyFriendships(),
+        FeedService.fetchMyViewedStoryIds(),
+        NotificationService.unreadCount(),
+        UrgentBannerService.fetchActive(),
+      ]);
+      if (!mounted) return;
+      // Hide the viewer's own posts from the home feed — they already
+      // see them in the Profile → Posts tab. Treating "home" as a feed
+      // of *other* people's content matches what users expect from a
+      // social timeline.
+      final feedPosts = (results[0] as List<Post>)
+          .where((p) => viewerId == null || p.authorId != viewerId)
+          .toList();
+      setState(() {
+        _friendshipsByUser = friendsByUser;
+        _followedChurchIds = followedChurchIds;
+        _posts = feedPosts;
+        _stories = results[1] as List<Story>;
+        _viewedStoryIds = results[2] as Set<String>;
+        _unreadNotifications = results[3] as int;
+        _banner = results[4] as UrgentBanner?;
+        _pagesLoaded = 1;
+        _endOfFeed = (results[0] as List<Post>).length < _pageSize;
+        _loading = false;
+      });
+      _cacheBadges();
+    } catch (_) {
+      if (!mounted) return;
+      // Network failed. If we haven't hydrated from cache yet (e.g.
+      // because we were online when _bootstrap started), try now.
+      if (_posts.isEmpty && _events.isEmpty) {
+        _hydrateFromCache();
+      }
+      setState(() => _loading = false);
+    }
+  }
+
+  /// Tier 2: everything that decorates the feed. Never awaited by the
+  /// caller, and each group is independently guarded so one dead endpoint
+  /// only costs its own rail.
+  Future<void> _loadSecondary(String? viewerId) async {
+    try {
+      final results = await Future.wait([
+        EventService.fetchEvents(upcomingOnly: true),
+        ChurchService.fetchChurches(),
+        EventService.fetchUserRsvpedEventIds(),
+        DirectoryService.fetchSuggestedMembers(),
         FeedService.pendingRequestCount(),
         MessagingService.fetchConversations(),
         AdventNewsService.fetchTopNews(limit: 3),
         PrayerService.fetchPrayers(),
         MarketplaceService.fetchProducts(),
         JobService.fetchJobs(),
-        FeedService.fetchMyViewedStoryIds(),
+        LibraryService.fetchItems('music'),
       ]);
       if (!mounted) return;
       // Drop events whose start time is more than a few hours in the
@@ -362,72 +476,112 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       // so today's already-ended events would otherwise still appear
       // on the home screen until midnight rolls over.
       final now = DateTime.now();
-      final stillUpcoming = (results[0] as List<Event>)
+      final events = (results[0] as List<Event>)
           .where(
             (e) => e.startsAt.isAfter(now.subtract(const Duration(hours: 6))),
           )
+          .take(8)
           .toList();
-      final events = stillUpcoming.take(8).toList();
       // Show a per-user RANDOM selection of churches (stable for a given user,
       // but different between users) instead of the same alphabetical first-6
       // for everyone — so smaller/newer churches also get discovered.
       final allChurches = List<Church>.of(results[1] as List<Church>);
-      allChurches.shuffle(
-        Random((AuthService.currentUser?.id ?? 'guest').hashCode),
-      );
+      allChurches.shuffle(Random((viewerId ?? 'guest').hashCode));
       final churches = allChurches.take(6).toList();
-      final friendships = results[9] as List<Friendship>;
-      final viewerId = AuthService.currentUser?.id;
-      final friendsByUser = <String, Friendship>{};
-      if (viewerId != null) {
-        for (final f in friendships) {
-          friendsByUser[f.otherUserId(viewerId)] = f;
-        }
-      }
-      final conversations = results[11] as List<Conversation>;
-      int unreadMessages = 0;
-      for (final c in conversations) {
+      var unreadMessages = 0;
+      for (final c in results[5] as List<Conversation>) {
         unreadMessages += c.unreadCount;
       }
-      // Hide the viewer's own posts from the home feed — they already
-      // see them in the Profile → Posts tab. Treating "home" as a feed
-      // of *other* people's content matches what users expect from a
-      // social timeline.
-      final feedPosts = (results[7] as List<Post>)
-          .where((p) => viewerId == null || p.authorId != viewerId)
-          .toList();
       setState(() {
         _events = events;
         _churches = churches;
-        _followedChurchIds = results[2] as Set<String>;
-        _rsvpedEventIds = results[3] as Set<String>;
-        _unreadNotifications = results[4] as int;
-        _banner = results[5] as UrgentBanner?;
-        _suggestedMembers = results[6] as List<MemberDirectoryEntry>;
-        _posts = feedPosts;
-        _stories = results[8] as List<Story>;
-        _viewedStoryIds = results[16] as Set<String>;
-        _friendshipsByUser = friendsByUser;
-        _pendingFriendRequests = results[10] as int;
+        _rsvpedEventIds = results[2] as Set<String>;
+        _suggestedMembers = results[3] as List<MemberDirectoryEntry>;
+        _pendingFriendRequests = results[4] as int;
         _unreadMessages = unreadMessages;
-        _topNews = results[12] as List<AdventNews>;
-        _prayers = (results[13] as List<Prayer>).take(5).toList();
-        _products = (results[14] as List<Product>).take(10).toList();
-        _jobs = (results[15] as List<Job>).take(8).toList();
-        _loading = false;
+        _topNews = results[6] as List<AdventNews>;
+        _prayers = (results[7] as List<Prayer>).take(5).toList();
+        _products = (results[8] as List<Product>).take(10).toList();
+        _jobs = (results[9] as List<Job>).take(8).toList();
+        // Shuffled per refresh so the same few tracks don't lead the feed
+        // every single time.
+        _music = (List<LibraryItem>.of(results[10] as List<LibraryItem>)
+              ..shuffle())
+            .take(8)
+            .toList();
       });
       // Best-effort cache write — failures here must never surface.
-      unawaited(_writeCache(events, churches, feedPosts));
+      unawaited(_writeCache(events, churches, _posts));
       _cacheBadges();
     } catch (_) {
-      if (!mounted) return;
-      // Network failed. If we haven't hydrated from cache yet (e.g.
-      // because we were online when _bootstrap started), try now.
-      if (_events.isEmpty && _churches.isEmpty) {
-        _hydrateFromCache();
-      }
-      setState(() => _loading = false);
+      // Decorative content — the feed is already on screen.
     }
+  }
+
+  /// Fetches the next page using a keyset cursor (the oldest post we hold).
+  /// Offset paging would be unsafe under the personalised ranking — see the
+  /// note on [FeedService.fetchFeed].
+  Future<void> _loadMore() async {
+    if (_loadingMore || _endOfFeed || _posts.isEmpty) return;
+    setState(() => _loadingMore = true);
+    final viewerId = AuthService.currentUser?.id;
+    try {
+      var oldest = _posts.first.createdAt;
+      for (final p in _posts) {
+        if (p.createdAt.isBefore(oldest)) oldest = p.createdAt;
+      }
+      final friendIds = <String>{
+        for (final e in _friendshipsByUser.entries)
+          if (e.value.isAccepted) e.key,
+      };
+      final page = await FeedService.fetchFeed(
+        limit: _pageSize,
+        friendIds: friendIds,
+        followedChurchIds: _followedChurchIds,
+        before: oldest,
+      );
+      if (!mounted) return;
+      final existing = _posts.map((p) => p.id).toSet();
+      final fresh = page
+          .where((p) => !existing.contains(p.id))
+          .where((p) => viewerId == null || p.authorId != viewerId)
+          .toList();
+      setState(() {
+        _posts = [..._posts, ...fresh];
+        _pagesLoaded++;
+        // Judge "the end" on what the server returned, not on what survived
+        // our own filtering — a page of nothing but the viewer's own posts
+        // isn't the end of the feed.
+        _endOfFeed = page.length < _pageSize;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  /// Auto-paging trigger. Honours the cellular allowance.
+  void _maybeAutoLoadMore() {
+    if (_needsManualLoad || _loadingMore || _endOfFeed) return;
+    if (!_scroll.hasClients) return;
+    final pos = _scroll.position;
+    if (pos.pixels >= pos.maxScrollExtent - 900) _loadMore();
+  }
+
+  /// Tapping the already-active Home tab returns to the top.
+  void _scrollToTop() {
+    if (!_scroll.hasClients) return;
+    final distance = _scroll.offset;
+    if (distance <= 0) return;
+    _scroll.animateTo(
+      0,
+      // Scale with distance so a short hop isn't sluggish, capped so a
+      // 200-post scroll doesn't take forever.
+      duration: Duration(
+        milliseconds: (distance / 6).clamp(220, 600).round(),
+      ),
+      curve: AppMotion.ease,
+    );
   }
 
   Future<void> _writeCache(
@@ -505,12 +659,15 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     }
   }
 
+  /// Shona greeting — this is a Zimbabwean app, so the default language is
+  /// Shona and English is the alternate. Section titles stay English; only
+  /// the greeting is localised for now.
   String _greeting() {
+    if (SabbathService.isSabbathNow()) return 'Sabata yakanaka';
     final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    if (h < 22) return 'Good evening';
-    return 'Good night';
+    if (h < 12) return 'Mangwanani';
+    if (h < 17) return 'Masikati';
+    return 'Manheru';
   }
 
   String _firstName() {
@@ -632,7 +789,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.sheet),
+        ),
       ),
       builder: (ctx) => SafeArea(
         top: false,
@@ -679,7 +838,10 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       _posts = _posts
           .map(
             (p) => p.id == post.id
-                ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+                ? p.copyWith(
+                    viewerReaction: newLiked ? PostReaction.like : null,
+                    likeCount: newCount,
+                  )
                 : p,
           )
           .toList();
@@ -698,7 +860,51 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
             .map(
               (p) => p.id == post.id
                   ? p.copyWith(
-                      viewerLiked: post.viewerLiked,
+                      viewerReaction: post.viewerReaction,
+                      likeCount: post.likeCount,
+                    )
+                  : p,
+            )
+            .toList();
+      });
+    }
+  }
+
+  /// Sets or clears the viewer's reaction, optimistically.
+  ///
+  /// The count only moves when the viewer goes from none→some or some→none;
+  /// switching Like→Amen replaces the row in place (composite PK), so the
+  /// total is unchanged.
+  Future<void> _setReaction(Post post, PostReaction? next) async {
+    final had = post.viewerReaction != null;
+    final has = next != null;
+    final delta = (has ? 1 : 0) - (had ? 1 : 0);
+    final newCount = (post.likeCount + delta).clamp(0, 1 << 30);
+    setState(() {
+      _posts = _posts
+          .map(
+            (p) => p.id == post.id
+                ? p.copyWith(viewerReaction: next, likeCount: newCount)
+                : p,
+          )
+          .toList();
+    });
+    try {
+      if (next == null) {
+        await FeedService.removeReaction(post.id);
+      } else {
+        await FeedService.reactToPost(post.id, next);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      // Revert. Note this is exactly the path that made an offline like
+      // silently un-fill — the outbox in phase 2 replaces it with a queue.
+      setState(() {
+        _posts = _posts
+            .map(
+              (p) => p.id == post.id
+                  ? p.copyWith(
+                      viewerReaction: post.viewerReaction,
                       likeCount: post.likeCount,
                     )
                   : p,
@@ -765,8 +971,18 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: NotificationListener<UserScrollNotification>(
-        onNotification: handleNavScroll,
+      // The nav is a floating island now, so the feed runs full-height and
+      // scrolls UNDER its frosted glass. The last sliver reserves 96dp so
+      // nothing important ends up trapped beneath it.
+      extendBody: true,
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (note) {
+          if (note is UserScrollNotification) handleNavScroll(note);
+          if (note is ScrollUpdateNotification) _maybeAutoLoadMore();
+          // Never swallow the notification — LiveBanner and the nav both
+          // listen further up.
+          return false;
+        },
         child: Stack(
           children: [
             _buildScrollableContent(),
@@ -774,37 +990,88 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
             // badge). The old Prayer quick-access bubble that stacked on top
             // was removed — Prayer is reached from the Stories section link
             // and the Prayer tab.
+            //
+            // It now rides away with the bottom nav instead of sitting over
+            // the feed while you read.
             Positioned(
-              right: 16,
-              bottom: 24,
-              child: AdventChatBubble(
-                hasUnread: _hasUnreadChat,
-                unreadCount: _chatBadgeCount,
-                onTap: () async {
-                  await context.pushNamed('messages');
-                  // Returning from the inbox refreshes the badge — covers the
-                  // case where the user read every unread message inside the
-                  // chat and the FAB would otherwise stay red until the next
-                  // realtime activity event.
-                  if (mounted) await _refreshUnreadBadge();
-                },
+              right: AppSpace.lg,
+              bottom: AppSpace.xl,
+              child: AnimatedSlide(
+                offset: navVisible ? Offset.zero : const Offset(1.4, 0),
+                duration: AppMotion.maybe(context, AppMotion.standard),
+                curve: AppMotion.easeOut,
+                child: AnimatedOpacity(
+                  opacity: navVisible ? 1 : 0,
+                  duration: AppMotion.maybe(context, AppMotion.quick),
+                  child: AdventChatBubble(
+                    hasUnread: _hasUnreadChat,
+                    unreadCount: _chatBadgeCount,
+                    onTap: () async {
+                      await context.pushNamed('messages');
+                      // Returning from the inbox refreshes the badge — covers
+                      // the case where the user read every unread message
+                      // inside the chat and the FAB would otherwise stay red
+                      // until the next realtime activity event.
+                      if (mounted) await _refreshUnreadBadge();
+                    },
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
-      bottomNavigationBar: HideOnScroll(
-        visible: navVisible,
-        child: const MainBottomNav(
-          currentIndex: 0,
-          // No chat badge on the Profile tab — the floating Advent Chat
-          // bubble (bottom-right) already surfaces unread counts, and
-          // tapping Profile doesn't actually take the user to messages,
-          // which made the badge misleading ("6 unread shown but
-          // nothing in profile when I open it").
-        ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Now-playing sits ABOVE the nav and deliberately OUTSIDE
+          // HideOnScroll — the tabs may slide away while you read, but
+          // transport controls for something that's actually playing must
+          // not. Self-hides to zero height when no queue is loaded.
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
+            child: NowPlayingBar(),
+          ),
+          HideOnScroll(
+            visible: navVisible,
+            child: MainBottomNav(
+              currentIndex: 0,
+              // Tapping Home while already on Home returns to the top — the
+              // only way back up from an endless feed.
+              onReselect: _scrollToTop,
+              // No chat badge on the Profile tab — the floating Advent Chat
+              // bubble (bottom-right) already surfaces unread counts, and
+              // tapping Profile doesn't actually take the user to messages,
+              // which made the badge misleading ("6 unread shown but
+              // nothing in profile when I open it").
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  /// Routes a pick from the create chooser to the right composer or screen.
+  Future<void> _handleCreate(CreateKind kind) async {
+    switch (kind) {
+      case CreateKind.post:
+        await _openPostComposer();
+      case CreateKind.story:
+        await _openStoryComposer();
+      case CreateKind.event:
+        await context.pushNamed('post_event');
+      case CreateKind.prayer:
+        await context.pushNamed('post_prayer');
+      case CreateKind.news:
+        await context.pushNamed('post_news');
+      case CreateKind.notice:
+        await context.pushNamed('post_notice');
+      case CreateKind.job:
+        await context.pushNamed('post_job');
+      case CreateKind.product:
+        await context.pushNamed('add_product');
+    }
+    if (mounted) _bootstrap();
   }
 
   Future<void> _loadWatch() async {
@@ -830,21 +1097,45 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   );
 
   Widget _buildScrollableContent() {
-    // Staggered entrance: each section fades in and rises ~70ms after
-    // the previous one, so Home assembles itself instead of appearing as
-    // one block — this is the receiving end of the profile-setup
-    // completion handoff.
+    // CustomScrollView, not SingleChildScrollView + Column. The old version
+    // laid out EVERY post, rail, video and ad before the first frame —
+    // hundreds of widgets on open. Slivers build them as they approach the
+    // viewport, which is the single biggest reason Home now scrolls smoothly
+    // on a mid-range Android.
+    //
+    // Staggered entrance: each top section fades in and rises ~70ms after the
+    // previous one, so Home assembles itself instead of appearing as one
+    // block. Feed cards reuse the same widget with no delay — in a lazy
+    // sliver, "on mount" IS "on scroll into view".
     return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
       onRefresh: _bootstrap,
-      child: SingleChildScrollView(
+      child: CustomScrollView(
+        controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            StaggeredReveal(index: 0, rise: 16, child: _buildHeader()),
-            StaggeredReveal(
-              index: 1,
+        slivers: [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: HomeHeaderDelegate(
+              topInset: MediaQuery.paddingOf(context).top,
+              greeting: _greeting(),
+              firstName: _firstName(),
+              initials: _initials(),
+              photoUrl: _profilePhotoUrl(),
+              unreadNotifications: _unreadNotifications,
+              sabbath: SabbathStatus.resolve(),
+              onAvatarTap: () => context.goNamed('profile'),
+              onSearchTap: () => context.pushNamed('search'),
+              onBellTap: () async {
+                await context.pushNamed('notification_centre');
+                if (mounted) _bootstrap();
+              },
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: StaggeredReveal(
+              index: 0,
+              rise: 16,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -852,9 +1143,11 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                   LiveBanner(live: _liveVideo, onTap: _openVideo),
                   if (_banner != null &&
                       !_dismissedBannerIds.contains(_banner!.id)) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpace.lg),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpace.lg,
+                      ),
                       child: _UrgentBannerCard(
                         banner: _banner!,
                         onDismiss: () => setState(
@@ -863,234 +1156,86 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                       ),
                     ),
                   ],
-                  // What's on your mind + Stories + Devotion always sit at
-                  // the top, right under the header. Everything else (news,
-                  // product pick, the feed) follows.
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _ComposerEntry(
-                      photoUrl: _viewerPhotoUrl(),
-                      name: _displayFullName(),
-                      onTap: _openPostComposer,
-                    ),
+                  const SizedBox(height: AppSpace.lg),
+                  // A real search field, not just the header icon. Search was
+                  // discoverable only as a small glyph competing with the
+                  // bell; a field states plainly that the app is searchable.
+                  // It scrolls away with the content rather than occupying
+                  // permanent header space.
+                  _SearchPill(onTap: () => context.pushNamed('search')),
+                  const SizedBox(height: AppSpace.md),
+                  ComposerEntry(
+                    photoUrl: _viewerPhotoUrl(),
+                    name: _displayFullName(),
+                    onCreate: _handleCreate,
                   ),
                 ],
               ),
             ),
-            StaggeredReveal(
+          ),
+          SliverToBoxAdapter(
+            child: StaggeredReveal(
+              index: 1,
+              child: HomeSection(
+                title: 'Stories',
+                action: 'Prayer',
+                onAction: () => context.pushNamed('prayer'),
+                child: StoriesRail(
+                  stories: _stories,
+                  viewerId: AuthService.currentUser?.id ?? '',
+                  viewerName: _displayFullName(),
+                  viewerPhotoUrl: _viewerPhotoUrl(),
+                  onAddStory: _openStoryComposer,
+                  onAuthorTapped: (_, list) => _openStoryViewer(list),
+                  viewedStoryIds: _allViewedIds,
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: StaggeredReveal(
               index: 2,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 16),
-                  _buildSectionHeader(
-                    'Stories',
-                    'Prayer',
-                    onAction: () => context.pushNamed('prayer'),
-                  ),
-                  const SizedBox(height: 10),
-                  StoriesRail(
-                    stories: _stories,
-                    viewerId: AuthService.currentUser?.id ?? '',
-                    viewerName: _displayFullName(),
-                    viewerPhotoUrl: _viewerPhotoUrl(),
-                    onAddStory: _openStoryComposer,
-                    onAuthorTapped: (_, list) => _openStoryViewer(list),
-                    viewedStoryIds: _allViewedIds,
-                  ),
+                  const SizedBox(height: AppSpace.xl),
+                  // Devotion + Sabbath School + hymn / music / EGW of the
+                  // day. Self-hides only if every source is empty, which the
+                  // bundled hymnal makes very unlikely.
+                  TodayCard(devotion: _devotion),
+                  const SizedBox(height: AppSpace.lg),
+                  // Library launcher. This is the ONLY route into /quiz —
+                  // see LibraryTiles before reordering it.
+                  const LibraryTiles(),
                 ],
               ),
             ),
-            StaggeredReveal(
+          ),
+          // Official church-posted events, featured prominently with the
+          // church's name + gold tick. Self-hides when there are none.
+          const SliverToBoxAdapter(
+            child: StaggeredReveal(
               index: 3,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Devotion CARD depends on the network fetch — only show it
-                  // when we have it.
-                  if (_devotion != null) ...[
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _DevotionCard(
-                        devotion: _devotion!,
-                        onOpenLibrary: () => context.pushNamed('library'),
-                      ),
-                    ),
-                  ],
-                  // Library chips (Bible / Hymnal / EGW / Music) are static
-                  // navigation — ALWAYS show them, even on poor network when
-                  // the devotion fetch fails (previously they were nested in
-                  // the devotion block and vanished with it).
-                  const SizedBox(height: 12),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: _LibraryChips(),
-                  ),
-                  // Quiz Arena. Was a 48dp chip in the row above until Sabbath
-                  // School took that slot; as the app's headline game it earns
-                  // a real card, and this is its ONLY entry point — don't
-                  // remove it without adding another.
-                  const SizedBox(height: 10),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: _QuizCard(),
-                  ),
-                ],
-              ),
-            ),
-            // Official church-posted events, featured prominently with the
-            // church's name + gold tick. Self-hides when there are none.
-            const StaggeredReveal(
-              index: 4,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: 16),
+                  SizedBox(height: AppSpace.lg),
                   FeaturedChurchEvents(),
-                  SizedBox(height: 6),
                 ],
               ),
             ),
-            // Advent News + Music now live INSIDE the shuffled discovery
-            // feed (see _buildDiscoveryCards) so their position varies
-            // per user instead of being pinned to the same spot here.
-            // _buildFeedList() is now a Facebook-style mixed feed:
-            // posts intercalated with discovery cards (suggested
-            // people, events, prayer prompt, churches, invite
-            // friends, quick stats). The standalone sections that
-            // used to live below this point were folded into the
-            // feed so the user gets one continuous scroll instead
-            // of jumping between mode-locked panels.
-            StaggeredReveal(index: 5, child: _buildFeedList()),
-            const SizedBox(height: 24),
-            // Bottom padding so the floating chat bubble + plus FAB
-            // don't sit on top of the last bit of feed content.
-            const SizedBox(height: 96),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    // Slim compact bar: avatar + greeting + Sabbath chip on a single navy
-    // row. Replaces the old 240px header + floating welcome card, which
-    // repeated the user's name three times and pushed Stories/Devotion down.
-    final photoUrl = _profilePhotoUrl();
-    return FlatStatusBar(
-      child: Container(
-        color: context.palette.scaffoldBg,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(-0.6, -0.8),
-                      radius: 1.0,
-                      colors: [
-                        AppColors.white.withValues(alpha: 0.07),
-                        AppColors.white.withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 12, 26),
-                child: Row(
-                  children: [
-                    // Tapping the avatar jumps to the profile screen — same
-                    // affordance the old welcome card had.
-                    GestureDetector(
-                      onTap: () => context.goNamed('profile'),
-                      child: Container(
-                        width: 46,
-                        height: 46,
-                        clipBehavior: Clip.antiAlias,
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(
-                          gradient: AppColors.primaryGradient,
-                          shape: BoxShape.circle,
-                        ),
-                        child: photoUrl == null
-                            ? Text(
-                                _initials(),
-                                style: AppTextStyles.titleLarge.copyWith(
-                                  color: AppColors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
-                              )
-                            : CachedImage(
-                                photoUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Text(
-                                      _initials(),
-                                      style: AppTextStyles.titleLarge.copyWith(
-                                        color: AppColors.white,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _greeting().toUpperCase(),
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: context.palette.textMuted,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Hello, ${_firstName()}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.headlineLarge.copyWith(
-                              color: context.palette.text,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const _SabbathChip(),
-                        ],
-                      ),
-                    ),
-                    _HeaderIconButton(
-                      icon: Icons.search,
-                      onTap: () => context.pushNamed('search'),
-                    ),
-                    const SizedBox(width: 8),
-                    _NotificationBell(
-                      unread: _unreadNotifications,
-                      onTap: () async {
-                        await context.pushNamed('notification_centre');
-                        if (mounted) _bootstrap();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+          // Advent News + Music live INSIDE the shuffled discovery feed
+          // (see _buildDiscoveryCards) so their position varies per user
+          // instead of being pinned to the same spot here. The feed is a
+          // Facebook-style mix: posts intercalated with discovery cards,
+          // Watch videos and sponsored slots, in one continuous scroll.
+          _buildFeedSliver(),
+          SliverToBoxAdapter(child: _buildFeedFooter()),
+          // Bottom padding so the floating chat bubble + bottom nav
+          // don't sit on top of the last bit of feed content.
+          const SliverToBoxAdapter(child: SizedBox(height: 96)),
+        ],
       ),
     );
   }
@@ -1120,57 +1265,6 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     final raw = (meta['profile_photo_url'] as String?)?.trim();
     if (raw == null || raw.isEmpty) return null;
     return raw;
-  }
-
-  Widget _buildSectionHeader(
-    String title,
-    String? action, {
-    VoidCallback? onAction,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: AppTextStyles.headlineMedium.copyWith(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.1,
-              ),
-            ),
-          ),
-          if (action != null)
-            TextButton(
-              onPressed: onAction,
-              style: TextButton.styleFrom(
-                minimumSize: const Size(0, 32),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    action,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: AppColors.primaryBlue,
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
   }
 
   Widget _buildQuickStats() {
@@ -1298,6 +1392,11 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
             width: 168,
             child: ProductCard(
               product: p,
+              // Matches the tag on the detail carousel's first image, so the
+              // photo expands into the detail screen instead of the page
+              // simply replacing itself. ProductCard already supported this
+              // — Home just never passed a tag.
+              heroTag: 'product_image_${p.id}',
               onTap: () => context.pushNamed(
                 'product_details',
                 pathParameters: {'id': p.id},
@@ -1389,35 +1488,193 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     );
   }
 
-  Widget _buildFeedList() {
-    // Shimmering post-shaped skeletons (avatar + name + tall media
-    // block) that crossfade into the real feed — replaces the old flat
-    // grey boxes that snapped to content.
-    return ContentReveal(
-      loading: _loading && _posts.isEmpty,
-      skeleton: ShimmerLoaders.postColumn(count: 2),
-      child: _buildFeedListContent(),
-    );
-  }
-
-  Widget _buildFeedListContent() {
-    if (_posts.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-        child: GestureDetector(
-          onTap: _openPostComposer,
-          behavior: HitTestBehavior.opaque,
-          child: Text(
-            'No updates yet — tap to share something.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: context.palette.textMuted,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
+  /// The feed, as a lazy sliver.
+  ///
+  /// `SliverChildBuilderDelegate` only creates elements and render objects
+  /// for cards near the viewport, so a 200-post feed costs the same on open
+  /// as a 15-post one. Keep-alives are off so scrolled-past cards release
+  /// their image decodes instead of pinning them for the session.
+  Widget _buildFeedSliver() {
+    if (_loading && _posts.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.only(top: AppSpace.lg),
+          child: ShimmerLoaders.postColumn(count: 3),
         ),
       );
     }
+    if (_posts.isEmpty) {
+      return SliverToBoxAdapter(child: _buildEmptyFeed());
+    }
+    final children = _buildFeedChildren();
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, i) => children[i],
+        childCount: children.length,
+        addAutomaticKeepAlives: false,
+      ),
+    );
+  }
+
+  /// Day-one state. A brand-new member with no friends and no followed
+  /// churches used to get one line of italic text as their entire first
+  /// impression of the app.
+  Widget _buildEmptyFeed() {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.xl,
+        AppSpace.lg,
+        AppSpace.lg,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.xl),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: palette.divider),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.groups_outlined,
+                color: AppColors.primaryBlue,
+                size: 34,
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            Text(
+              'Your feed starts here',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.headlineSmall.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              'Follow a church or add a few friends and their updates will '
+              'appear here. Or be the first to share something.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.textMuted,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.goNamed('churches'),
+                    icon: const Icon(Icons.church_outlined, size: 18),
+                    label: const Text('Find churches'),
+                  ),
+                ),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _handleCreate(CreateKind.post),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                    ),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('Post'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// End-of-feed affordance: a spinner while paging, a tap target when the
+  /// cellular allowance is used up, or the caught-up marker.
+  Widget _buildFeedFooter() {
+    if (_posts.isEmpty) return const SizedBox.shrink();
+    final palette = context.palette;
+    if (_loadingMore) {
+      // Post-shaped shimmer rather than a spinner: the next page arrives
+      // into the shape it will occupy, so nothing jumps when it lands.
+      return ShimmerLoaders.postColumn(count: 1);
+    }
+    if (_endOfFeed) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.xl),
+        child: Column(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.successGreen.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_rounded,
+                color: AppColors.successGreen,
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: AppSpace.md),
+            Text(
+              "You're all caught up",
+              style: AppTextStyles.titleSmall.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              "You've seen everything new.",
+              style: AppTextStyles.caption.copyWith(color: palette.textMuted),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_needsManualLoad) {
+      // On mobile data we stop auto-paging after the allowance so an idle
+      // scroll can't quietly eat someone's bundle — they choose to spend it.
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          AppSpace.lg,
+          AppSpace.lg,
+          AppSpace.xl,
+        ),
+        child: Column(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _loadMore,
+              icon: const Icon(Icons.expand_more_rounded, size: 20),
+              label: const Text('Load more posts'),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              "You're on mobile data",
+              style: AppTextStyles.caption.copyWith(color: palette.textMuted),
+            ),
+          ],
+        ),
+      );
+    }
+    // Auto-paging is about to fire — hold the space so the scroll doesn't
+    // jump when the next page lands.
+    return const SizedBox(height: 80);
+  }
+
+  List<Widget> _buildFeedChildren() {
     final viewerId = AuthService.currentUser?.id;
     final cachedAt = CacheService.cachedAt('home_feed');
     final discoveryCards = _buildDiscoveryCards();
@@ -1448,25 +1705,36 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     var cardIdx = 0;
     var adsInserted = 0;
     var videoIdx = 0;
+    var musicIdx = 0;
     for (var i = 0; i < _posts.length; i++) {
       final post = _posts[i];
       children.add(
-        PostCard(
-          post: post,
-          viewerId: viewerId,
-          onLikeToggled: () => _toggleLike(post),
-          onCommentsTapped: () => _openComments(post),
-          onImageTapped: () => _openImageViewer(post),
-          onEdit: () => _editPost(post),
-          onDelete: () => _confirmDeletePost(post),
-          onToggleVisibility: () => _togglePostVisibility(post),
-          onReport: () => _reportPost(post),
-          onAuthorTapped: () => _openAuthorProfile(post),
-          onAuthorAvatarTapped: () => _previewAuthor(post),
-          hasStory: _authorHasStory(post.authorId),
-          storyViewed: _authorStoryViewed(post.authorId),
-          onStoryRingTapped: () => _onAuthorStoryRing(post),
-          onSaveImage: () => _savePostImage(post),
+        // Fades in and rises as it scrolls into view. In a lazy sliver the
+        // card is built just before it becomes visible, so a mount-triggered
+        // reveal IS a scroll-triggered one — no visibility detector needed.
+        StaggeredReveal(
+          key: ValueKey('post_${post.id}'),
+          rise: 16,
+          child: RepaintBoundary(
+            child: PostCard(
+              post: post,
+              viewerId: viewerId,
+              onLikeToggled: () => _toggleLike(post),
+              onReactionSelected: (r) => _setReaction(post, r),
+              onCommentsTapped: () => _openComments(post),
+              onImageTapped: (index) => _openImageViewer(post, index),
+              onEdit: () => _editPost(post),
+              onDelete: () => _confirmDeletePost(post),
+              onToggleVisibility: () => _togglePostVisibility(post),
+              onReport: () => _reportPost(post),
+              onAuthorTapped: () => _openAuthorProfile(post),
+              onAuthorAvatarTapped: () => _previewAuthor(post),
+              hasStory: _authorHasStory(post.authorId),
+              storyViewed: _authorStoryViewed(post.authorId),
+              onStoryRingTapped: () => _onAuthorStoryRing(post),
+              onSaveImage: () => _savePostImage(post),
+            ),
+          ),
         ),
       );
       if ((i + 1) % _discoveryEveryNPosts == 0 &&
@@ -1478,6 +1746,10 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       if ((i + 1) % _videoEveryNPosts == 0 && videoIdx < _homeVideos.length) {
         final v = _homeVideos[videoIdx++];
         children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
+      }
+      // One track at a time, same treatment as the videos.
+      if ((i + 1) % _musicEveryNPosts == 0 && musicIdx < _music.length) {
+        children.add(HomeMusicCard(item: _music[musicIdx++]));
       }
       // Sponsored native ad after every _adEveryNPosts posts, capped at
       // _maxFeedAds per render so we don't fire dozens of ad requests on
@@ -1496,23 +1768,28 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       final v = _homeVideos[videoIdx++];
       children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
     }
-    return Column(children: children);
+    return children;
   }
 
-  // Cadence for the Facebook-style mixed feed. Smaller = more
-  // discovery cards interrupting posts; larger = posts feel more
-  // continuous. 3 lands close to what Instagram does for sponsored
-  // breakers.
-  static const _discoveryEveryNPosts = 3;
+  // Interruption cadence for the mixed feed. These were 3 / 4 / 6 with a cap
+  // of 4, which meant twelve posts carried NINE interruptions — four
+  // discovery cards, three videos and two ads. Relaxed so the scroll reads
+  // as a feed with breaks rather than breaks with a feed.
+  //
+  // Smaller = more interruption; larger = posts feel more continuous.
+  static const _discoveryEveryNPosts = 5;
 
   // Cadence for individual YouTube video cards interleaved into the feed.
-  static const _videoEveryNPosts = 4;
+  static const _videoEveryNPosts = 8;
 
-  // Sponsored native-ad cadence in the home feed. First ad after ~6 posts,
-  // then every 6, capped per render so a long scroll doesn't spawn dozens
-  // of ad requests.
-  static const _adEveryNPosts = 6;
-  static const _maxFeedAds = 4;
+  // Individual music tracks, offset from the video cadence so a track and a
+  // video never land back to back.
+  static const _musicEveryNPosts = 6;
+
+  // Sponsored native-ad cadence. Capped per render so a long scroll doesn't
+  // spawn dozens of ad requests. Deliberately a revenue trade for feel.
+  static const _adEveryNPosts = 8;
+  static const _maxFeedAds = 3;
 
   /// Maps an onboarding-interest label (the user-facing strings from
   /// _PersonalizationPage._interestOptions) to the discovery slot
@@ -1557,9 +1834,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
         ),
       );
     }
-    discoverable.add(
-      const _DiscoverySlot(key: 'music', widget: _HomeMusicStrip()),
-    );
+    // Music is NO LONGER a discovery rail. Ten tracks crowded into one
+    // horizontal strip scrolled past as a blur; each track now gets its own
+    // card interleaved into the feed (see _musicEveryNPosts).
     if (_hasNonFriendSuggestions) {
       discoverable.add(
         _DiscoverySlot(
@@ -1700,16 +1977,10 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     String? action,
     VoidCallback? onAction,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 16),
-        _buildSectionHeader(title, action, onAction: onAction),
-        const SizedBox(height: 12),
-        child,
-        const SizedBox(height: 8),
-      ],
-    );
+    // Routes through the one shared HomeSection so discovery rails keep the
+    // same header grammar and vertical rhythm as everything else on Home.
+    return HomeSection(title: title, action: action, onAction: onAction,
+        child: child);
   }
 
   Future<void> _savePostImage(Post post) async {
@@ -1773,13 +2044,19 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     );
   }
 
-  Future<void> _openImageViewer(Post post) async {
-    final url = post.imageUrl;
-    if (url == null || url.isEmpty) return;
+  Future<void> _openImageViewer(Post post, [int index = 0]) async {
+    final images = post.imageUrls;
+    if (images.isEmpty) return;
+    final safe = index.clamp(0, images.length - 1);
     await PostImageViewer.show(
       context,
-      imageUrl: url,
-      heroTag: 'post_image_${post.id}',
+      imageUrl: images[safe],
+      // Only the first photo carries the shared tag in the card. Deeper
+      // pages get their own unique tag so two Heroes never claim the same
+      // one — with no counterpart it simply cross-fades instead of flying.
+      heroTag: safe == 0
+          ? 'post_image_${post.id}'
+          : 'post_image_${post.id}_$safe',
     );
   }
 
@@ -2018,7 +2295,7 @@ class _SabbathChipState extends State<_SabbathChip> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             border: Border.all(
               color: AppColors.goldAccent.withValues(alpha: 0.9),
               width: 1.2,
@@ -2037,7 +2314,7 @@ class _SabbathChipState extends State<_SabbathChip> {
                 'Happy Sabbath',
                 style: AppTextStyles.labelSmall.copyWith(
                   color: AppColors.darkNavy,
-                  fontSize: 11.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.4,
                 ),
@@ -2057,7 +2334,7 @@ class _SabbathChipState extends State<_SabbathChip> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: AppColors.goldAccent.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
             color: AppColors.goldAccent,
             width: 1,
@@ -2076,7 +2353,7 @@ class _SabbathChipState extends State<_SabbathChip> {
               'Sabbath in ${_format(remaining)}',
               style: AppTextStyles.labelSmall.copyWith(
                 color: AppColors.darkNavy,
-                fontSize: 11.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.3,
               ),
@@ -2127,23 +2404,17 @@ class _SuggestedMemberTile extends StatelessWidget {
               : 'Adventist member');
     return Material(
       color: context.palette.card,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       elevation: 0,
       child: InkWell(
         onTap: onOpenProfile,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: Ink(
           decoration: BoxDecoration(
             color: context.palette.card,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: context.palette.divider),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            boxShadow: AppShadows.card(context),
           ),
           padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
           child: Column(
@@ -2164,7 +2435,7 @@ class _SuggestedMemberTile extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: AppTextStyles.titleMedium.copyWith(
                         fontWeight: FontWeight.w700,
-                        fontSize: 13.5,
+                        fontSize: 14,
                       ),
                     ),
                   ),
@@ -2179,7 +2450,7 @@ class _SuggestedMemberTile extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodySmall.copyWith(
                   color: context.palette.textMuted,
-                  fontSize: 11.5,
+                  fontSize: 12,
                 ),
               ),
               const Spacer(),
@@ -2195,7 +2466,7 @@ class _SuggestedMemberTile extends StatelessWidget {
                     'View profile',
                     style: AppTextStyles.labelMedium.copyWith(
                       color: AppColors.primaryBlue,
-                      fontSize: 11.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2263,13 +2534,13 @@ class _GradientPill extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: BoxDecoration(
               gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -2313,13 +2584,13 @@ class _OutlinePill extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 7),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
               border: Border.all(color: color.withValues(alpha: 0.35)),
             ),
             child: Row(
@@ -2408,6 +2679,65 @@ class _MemberAvatar extends StatelessWidget {
   }
 }
 
+/// Tappable search field at the top of the feed.
+///
+/// Looks like an input but is a button — tapping opens the real search
+/// screen. A dummy field beats a live one here: it costs no focus node or
+/// keyboard handling in the feed, and search has its own screen with
+/// filters and history already.
+class _SearchPill extends StatelessWidget {
+  const _SearchPill({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+      child: Semantics(
+        button: true,
+        label: 'Search Advent Connect',
+        child: Pressable(
+          onTap: onTap,
+          pressedScale: 0.985,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.md,
+              vertical: AppSpace.md,
+            ),
+            decoration: BoxDecoration(
+              color: palette.card,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: palette.divider),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.search_rounded,
+                  size: 20,
+                  color: palette.textMuted,
+                ),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: Text(
+                    'Search people, churches, events…',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _UrgentBannerCard extends StatelessWidget {
   const _UrgentBannerCard({required this.banner, required this.onDismiss});
 
@@ -2420,7 +2750,7 @@ class _UrgentBannerCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
       decoration: BoxDecoration(
         color: AppColors.red.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: AppColors.red.withValues(alpha: 0.35)),
       ),
       child: Row(
@@ -2463,7 +2793,7 @@ class _UrgentBannerCard extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.red.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                         child: Text(
                           banner.conference!.toUpperCase(),
@@ -2494,73 +2824,6 @@ class _UrgentBannerCard extends StatelessWidget {
             visualDensity: VisualDensity.compact,
             onPressed: onDismiss,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell({required this.unread, required this.onTap});
-
-  final int unread;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressEffect(
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Circular frosted chip — matches the search button so the
-          // header icons read as one family.
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              customBorder: const CircleBorder(),
-              child: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? context.palette.cardMuted
-                      : const Color(0xFFE4E9F2),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.notifications_none_rounded,
-                  color: context.palette.text,
-                  size: 21,
-                ),
-              ),
-            ),
-          ),
-          if (unread > 0)
-            Positioned(
-              top: -3,
-              right: -3,
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.red,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: context.palette.scaffoldBg, width: 1.5),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  unread > 99 ? '99+' : '$unread',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.white,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                    height: 1.0,
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -2602,21 +2865,15 @@ class _HomeEventCard extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             child: Container(
               decoration: BoxDecoration(
                 color: context.palette.card,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                boxShadow: AppShadows.card(context),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -2624,9 +2881,16 @@ class _HomeEventCard extends StatelessWidget {
                       children: [
                         AspectRatio(
                           aspectRatio: 16 / 9,
-                          child: _CoverImage(
-                            url: event.coverPhotoUrl,
-                            fallbackIcon: Icons.event,
+                          // Flies into the event detail screen's 260px
+                          // header. Only THIS rail tags event covers —
+                          // FeaturedChurchEvents deliberately doesn't, since
+                          // two Heroes sharing a tag on one screen throws.
+                          child: Hero(
+                            tag: 'event_cover_${event.id}',
+                            child: _CoverImage(
+                              url: event.coverPhotoUrl,
+                              fallbackIcon: Icons.event,
+                            ),
                           ),
                         ),
                         Positioned.fill(
@@ -2656,7 +2920,7 @@ class _HomeEventCard extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.15),
@@ -2703,7 +2967,7 @@ class _HomeEventCard extends StatelessWidget {
                               ),
                               decoration: BoxDecoration(
                                 color: AppColors.successGreen,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(AppRadius.sm),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -2740,7 +3004,7 @@ class _HomeEventCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.titleMedium.copyWith(
-                              fontSize: 12.5,
+                              fontSize: 13,
                               fontWeight: FontWeight.w700,
                               height: 1.2,
                             ),
@@ -2763,7 +3027,7 @@ class _HomeEventCard extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color: context.palette.textMuted,
-                                    fontSize: 10.5,
+                                    fontSize: 11,
                                   ),
                                 ),
                               ),
@@ -2801,20 +3065,14 @@ class _HomeChurchTile extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.10),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              boxShadow: AppShadows.card(context),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -2867,13 +3125,13 @@ class _HomeChurchTile extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.successGreen,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                         child: Text(
                           'FOLLOWING',
                           style: AppTextStyles.labelSmall.copyWith(
                             color: AppColors.white,
-                            fontSize: 8.5,
+                            fontSize: 9,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.1,
                           ),
@@ -3005,7 +3263,7 @@ class _PrayerHomeCard extends StatelessWidget {
         width: 260,
         child: Material(
           color: context.palette.card,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
@@ -3021,7 +3279,7 @@ class _PrayerHomeCard extends StatelessWidget {
                         height: 34,
                         decoration: BoxDecoration(
                           color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                         child: const Icon(
                           Icons.front_hand_outlined,
@@ -3051,7 +3309,7 @@ class _PrayerHomeCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: context.palette.textMuted,
-                        fontSize: 12.5,
+                        fontSize: 13,
                         height: 1.4,
                       ),
                     ),
@@ -3095,14 +3353,8 @@ class _PrayersEmpty extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppShadows.card(context),
       ),
       child: Row(
         children: [
@@ -3111,7 +3363,7 @@ class _PrayersEmpty extends StatelessWidget {
             height: 48,
             decoration: BoxDecoration(
               color: AppColors.primaryBlue.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.button),
             ),
             child: const Icon(
               Icons.volunteer_activism_outlined,
@@ -3162,38 +3414,6 @@ class _PrayersEmpty extends StatelessWidget {
   }
 }
 
-class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? context.palette.cardMuted
-                  : const Color(0xFFE4E9F2),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: context.palette.text, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CompactStatTile extends StatelessWidget {
   const _CompactStatTile({
     required this.icon,
@@ -3214,20 +3434,14 @@ class _CompactStatTile extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.button),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             decoration: BoxDecoration(
               color: context.palette.card,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.button),
               border: Border.all(color: context.palette.divider),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              boxShadow: AppShadows.card(context),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -3251,110 +3465,9 @@ class _CompactStatTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.labelSmall.copyWith(
                       color: context.palette.textMuted,
-                      fontSize: 11.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ComposerEntry extends StatelessWidget {
-  const _ComposerEntry({
-    required this.photoUrl,
-    required this.name,
-    required this.onTap,
-  });
-
-  final String? photoUrl;
-  final String name;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final initial = name.trim().isEmpty
-        ? '?'
-        : name.trim().substring(0, 1).toUpperCase();
-    return PressEffect(
-      child: Material(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(28),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(28),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: context.palette.card,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: context.palette.divider),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: photoUrl == null || photoUrl!.isEmpty
-                      ? Text(
-                          initial,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: AppColors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
-                        )
-                      : CachedImage(
-                          photoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Text(
-                            initial,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: AppColors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'What\'s on your mind?',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.textMuted,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.edit_outlined,
-                    size: 16,
-                    color: AppColors.primaryBlue,
                   ),
                 ),
               ],
@@ -3383,7 +3496,7 @@ class _EmptyTile extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: context.palette.divider),
       ),
       child: Row(
@@ -3433,473 +3546,181 @@ class _DiscoverySlot {
 /// out to /news for the full list. Pinned at the very top of the
 /// home feed so members see "what's trending in the Adventist
 /// community in Zimbabwe" before scrolling through user posts.
-/// Home card: today's devotion — a KJV verse + an Ellen G. White quote.
-/// The whole card is tappable and opens the Library (Bible tab).
-class _DevotionCard extends StatelessWidget {
-  const _DevotionCard({required this.devotion, required this.onOpenLibrary});
-  final Devotion devotion;
-  final VoidCallback onOpenLibrary;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onOpenLibrary,
-      child: Container(
-        width: double.infinity,
-        // Slightly tighter than before (14/12) — the card was tall
-        // enough to collide with the floating prayer bubble.
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: AppColors.appBarGradient,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.darkNavy.withValues(alpha: 0.25),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.auto_stories_outlined,
-                  color: AppColors.goldAccent,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  "TODAY'S DEVOTION",
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.goldAccent,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.5,
-                    fontSize: 9.5,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 9),
-            Text(
-              '"${devotion.bibleText}"',
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.white,
-                height: 1.45,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              devotion.bibleRef,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: AppColors.white.withValues(alpha: 0.85),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Divider(
-                color: AppColors.white.withValues(alpha: 0.18),
-                height: 1,
-              ),
-            ),
-            Text(
-              devotion.egwQuote,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.white.withValues(alpha: 0.92),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '— Ellen G. White, ${devotion.egwSource}',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.white.withValues(alpha: 0.7),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Quiz Arena entry point, sitting under the Library chips.
+/// The Marketplace Pick — one product, given real presence.
 ///
-/// This is the ONLY route into `/quiz` from the UI — it replaced the old
-/// sixth Library chip. A wide card also lets the Arena actually sell itself
-/// instead of hiding behind a 10pt label.
-class _QuizCard extends StatelessWidget {
-  const _QuizCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    // Deliberately a LIGHT card, not another navy gradient slab: the devotion
-    // card directly above already uses appBarGradient + gold, and stacking a
-    // second identical hero reads as a duplicate rather than a hierarchy.
-    // Matching the chips' surface makes the chips + this card read as one
-    // launcher block, and full width already gives Quiz far more presence
-    // than the 48dp chip it replaced.
-    return PressEffect(
-      pressedScale: 0.97,
-      child: GestureDetector(
-        onTap: () => context.pushNamed('quiz'),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          decoration: BoxDecoration(
-            color: palette.card,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: palette.divider),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: const Icon(Icons.quiz_rounded,
-                    color: AppColors.white, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Quiz Arena',
-                      style: AppTextStyles.labelMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: palette.text,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      'Test your Bible knowledge',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: palette.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Text(
-                  'Play',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Premium launcher chips under the devotion card → open the Library to a
-/// specific tab (0=Bible, 1=Sabbath School, 2=Hymnal, 3=EGW, 4=Music).
-class _LibraryChips extends StatelessWidget {
-  const _LibraryChips();
-
-  // Library tab index. Maps 1:1 onto LibraryScreen's TabBar order — keep the
-  // two in sync.
-  //
-  // Quiz used to live here as a sixth chip with index -1. It moved out to its
-  // own card ([_QuizCard]) when Sabbath School was added: six chips left each
-  // one ~48dp on a 360dp screen, and the Quiz Arena is a headline feature that
-  // was being advertised by the smallest tap target on the page.
-  static const _items = <(String, IconData, int)>[
-    ('Bible', Icons.menu_book_rounded, 0),
-    ('Sabbath', Icons.school_rounded, 1),
-    ('Hymnal', Icons.queue_music_rounded, 2),
-    ('EGW', Icons.auto_stories_rounded, 3),
-    ('Music', Icons.headphones_rounded, 4),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Row(
-      children: [
-        for (var i = 0; i < _items.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: PressEffect(
-              pressedScale: 0.93,
-              child: GestureDetector(
-                onTap: () =>
-                    context.pushNamed('library', extra: _items[i].$3),
-                // Compact chips (12->9 vertical, smaller icon/label) so
-                // the Library row doesn't crowd the prayer bubble.
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  decoration: BoxDecoration(
-                    color: palette.card,
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: palette.divider),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        _items[i].$2,
-                        color: AppColors.primaryBlue,
-                        size: 19,
-                      ),
-                      const SizedBox(height: 4),
-                      // Six chips share this row now (Sabbath School was
-                      // added), so at 360dp each gets ~48dp. FittedBox
-                      // scales the longest labels down instead of letting
-                      // them overflow or ellipsize to "Sabb…".
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          _items[i].$1,
-                          maxLines: 1,
-                          softWrap: false,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: palette.text,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// Horizontal strip of recent Library music on the home feed. Hidden when
-/// there's no music yet. Tapping opens the Library Music tab.
-class _HomeMusicStrip extends StatefulWidget {
-  const _HomeMusicStrip();
-
-  @override
-  State<_HomeMusicStrip> createState() => _HomeMusicStripState();
-}
-
-class _HomeMusicStripState extends State<_HomeMusicStrip> {
-  List<LibraryItem> _items = const [];
-
-  @override
-  void initState() {
-    super.initState();
-    LibraryService.fetchItems('music').then((m) {
-      if (mounted) setState(() => _items = m.take(10).toList());
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_items.isEmpty) return const SizedBox.shrink();
-    final palette = context.palette;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.headphones_rounded,
-                color: AppColors.primaryBlue,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Music',
-                style: AppTextStyles.titleMedium.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () => context.pushNamed('library', extra: 4),
-                child: Text(
-                  'See all',
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 152,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, i) {
-              final item = _items[i];
-              return GestureDetector(
-                onTap: () => context.pushNamed('library', extra: 4),
-                child: Container(
-                  width: 130,
-                  decoration: BoxDecoration(
-                    color: palette.card,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: palette.divider),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                        child: SizedBox(
-                          height: 96,
-                          width: double.infinity,
-                          child:
-                              (item.coverUrl != null &&
-                                  item.coverUrl!.isNotEmpty)
-                              ? CachedImage(item.coverUrl!, fit: BoxFit.cover)
-                              : const DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: AppColors.primaryGradient,
-                                  ),
-                                  child: Icon(
-                                    Icons.music_note_rounded,
-                                    color: AppColors.white,
-                                    size: 34,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Text(
-                            item.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.labelMedium.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: palette.text,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// A single random marketplace product, showcased on Home (separate from
-/// the products discovery row). Tapping opens the product.
+/// This used to be a 104px thumbnail beside two lines of text, which read as
+/// a list row rather than a curated choice. A "pick" has to look picked: the
+/// product photo goes full-bleed at 4:3, the price sits large over a scrim,
+/// and the seller gets a line. Same slot in the feed, ten times the presence.
 class _FeaturedProductCard extends StatelessWidget {
   const _FeaturedProductCard({required this.product, required this.onTap});
+
   final Product product;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final img = product.firstImage;
-    return Material(
-      color: context.palette.card,
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      child: InkWell(
-        onTap: onTap,
-        child: Row(
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.985,
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          boxShadow: AppShadows.card(context),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              width: 104,
-              height: 104,
-              child: img.isNotEmpty
-                  ? CachedImage(img, fit: BoxFit.cover)
-                  : Container(
+            AspectRatio(
+              aspectRatio: 4 / 3,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (img.isEmpty)
+                    Container(
                       color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                      alignment: Alignment.center,
                       child: const Icon(
                         Icons.shopping_bag_outlined,
                         color: AppColors.primaryBlue,
+                        size: 44,
+                      ),
+                    )
+                  else
+                    CachedImage(img, fit: BoxFit.cover),
+                  // Scrim so the price and title stay readable on any photo.
+                  IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.30),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.72),
+                          ],
+                          stops: const [0.0, 0.42, 1.0],
+                        ),
                       ),
                     ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'MARKETPLACE PICK',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.goldAccent,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                        fontSize: 10,
+                  ),
+                  Positioned(
+                    top: AppSpace.md,
+                    left: AppSpace.md,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpace.md,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.storefront_rounded,
+                            size: 13,
+                            color: AppColors.white,
+                          ),
+                          const SizedBox(width: AppSpace.xs + 1),
+                          Text(
+                            'MARKETPLACE PICK',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      product.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleSmall.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  ),
+                  Positioned(
+                    left: AppSpace.lg,
+                    right: AppSpace.lg,
+                    bottom: AppSpace.md,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          product.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.headlineSmall.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpace.xs),
+                        Text(
+                          product.formatPrice(),
+                          style: AppTextStyles.headlineMedium.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      product.formatPrice(),
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Icon(
-                Icons.chevron_right,
-                color: context.palette.textMuted,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.md,
+                AppSpace.md,
+                AppSpace.md,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.person_outline,
+                    size: 16,
+                    color: palette.textMuted,
+                  ),
+                  const SizedBox(width: AppSpace.sm - 2),
+                  Flexible(
+                    child: Text(
+                      product.sellerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  ),
+                  if (product.sellerVerified) ...[
+                    const SizedBox(width: AppSpace.xs),
+                    const Icon(
+                      Icons.verified,
+                      size: 14,
+                      color: AppColors.goldAccent,
+                    ),
+                  ],
+                  const Spacer(),
+                  Text(
+                    'View item',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: AppColors.primaryBlue,
+                  ),
+                ],
               ),
             ),
           ],
@@ -3934,7 +3755,7 @@ class _AdventNewsHeroState extends State<_AdventNewsHero> {
     if (items.isEmpty) return const SizedBox.shrink();
     return Material(
       color: context.palette.card,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
       child: Column(
@@ -4000,7 +3821,7 @@ class _AdventNewsHeroState extends State<_AdventNewsHero> {
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
                 color: AppColors.goldAccent,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -4027,13 +3848,13 @@ class _AdventNewsHeroState extends State<_AdventNewsHero> {
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Text(
                 item.category.label.toUpperCase(),
                 style: AppTextStyles.labelSmall.copyWith(
                   color: AppColors.white,
-                  fontSize: 9.5,
+                  fontSize: 10,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.2,
                 ),
@@ -4067,7 +3888,7 @@ class _AdventNewsHeroState extends State<_AdventNewsHero> {
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.white.withValues(alpha: 0.88),
                     height: 1.35,
-                    fontSize: 12.5,
+                    fontSize: 13,
                   ),
                 ),
               ],
@@ -4103,7 +3924,7 @@ class _AdventNewsHeroState extends State<_AdventNewsHero> {
               style: AppTextStyles.labelMedium.copyWith(
                 color: AppColors.primaryBlue,
                 fontWeight: FontWeight.w800,
-                fontSize: 12.5,
+                fontSize: 13,
               ),
             ),
             const SizedBox(width: 2),

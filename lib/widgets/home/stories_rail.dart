@@ -23,7 +23,7 @@ Color _storyBg(String? hex) {
 ///   - top-left: floating circular avatar (ringed for unread, dim
 ///     for read)
 ///   - bottom-left: author name in white on top of the gradient
-class StoriesRail extends StatelessWidget {
+class StoriesRail extends StatefulWidget {
   const StoriesRail({
     super.key,
     required this.stories,
@@ -49,7 +49,24 @@ class StoriesRail extends StatelessWidget {
   final Set<String> viewedStoryIds;
 
   @override
+  State<StoriesRail> createState() => _StoriesRailState();
+}
+
+class _StoriesRailState extends State<StoriesRail> {
+  /// Drives the parallax — story art travels slower than the card carrying
+  /// it, which is what reads as depth rather than a flat filmstrip.
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final stories = widget.stories;
+    final viewerId = widget.viewerId;
     // Group by author so each member surfaces once even if they posted
     // multiple stories in the last 24h. Viewer's own stories surface
     // on the leading "Your story" card.
@@ -60,7 +77,7 @@ class StoriesRail extends StatelessWidget {
     final ownStories = byAuthor.remove(viewerId);
 
     bool authorViewed(String id) =>
-        byAuthor[id]!.every((s) => viewedStoryIds.contains(s.id));
+        byAuthor[id]!.every((s) => widget.viewedStoryIds.contains(s.id));
     // Unviewed authors first, then viewed — like WhatsApp's status list.
     final otherAuthors = byAuthor.keys.toList()
       ..sort((a, b) {
@@ -87,19 +104,21 @@ class StoriesRail extends StatelessWidget {
     return SizedBox(
       height: 200,
       child: ListView.builder(
+        controller: _scroll,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         itemCount: otherAuthors.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
             return _YourStoryCard(
-              viewerName: viewerName,
-              viewerPhotoUrl: viewerPhotoUrl,
+              viewerName: widget.viewerName,
+              viewerPhotoUrl: widget.viewerPhotoUrl,
               ownStories: ownStories,
-              onAdd: onAddStory,
+              onAdd: widget.onAddStory,
               onView: ownStories == null
                   ? null
-                  : () => onAuthorTapped(viewerId, playOrder(ownStories)),
+                  : () =>
+                      widget.onAuthorTapped(viewerId, playOrder(ownStories)),
             );
           }
           final authorId = otherAuthors[index - 1];
@@ -108,7 +127,10 @@ class StoriesRail extends StatelessWidget {
           return _FriendStoryCard(
             story: preview,
             viewed: authorViewed(authorId),
-            onTap: () => onAuthorTapped(authorId, reelFrom(index - 1)),
+            scroll: _scroll,
+            index: index,
+            onTap: () =>
+                widget.onAuthorTapped(authorId, reelFrom(index - 1)),
           );
         },
       ),
@@ -299,12 +321,26 @@ class _FriendStoryCard extends StatelessWidget {
   const _FriendStoryCard({
     required this.story,
     required this.onTap,
+    required this.scroll,
+    required this.index,
     this.viewed = false,
   });
 
   final Story story;
   final VoidCallback onTap;
   final bool viewed;
+
+  /// The rail's controller and this card's slot, used to work out how far
+  /// the card has travelled across the viewport.
+  final ScrollController scroll;
+  final int index;
+
+  /// Card width + its horizontal padding, i.e. the pitch between cards.
+  static const double _pitch = 116 + 10;
+
+  /// How much slower the art moves than the card. 0 = locked to the card
+  /// (no depth), 1 = pinned to the screen (seasick).
+  static const double _depth = 0.15;
 
   @override
   Widget build(BuildContext context) {
@@ -322,6 +358,11 @@ class _FriendStoryCard extends StatelessWidget {
                 children: [
                   // Layer 1: full-bleed story image, OR a coloured text
                   // status preview.
+                  //
+                  // Photos get parallax: the art slides at (1 - _depth) of
+                  // the card's speed, so it appears to sit behind the frame.
+                  // Text statuses are a flat colour, so there's nothing to
+                  // parallax and they skip the extra rebuilds entirely.
                   if (story.isText)
                     Container(
                       color: _storyBg(story.backgroundColor),
@@ -340,11 +381,32 @@ class _FriendStoryCard extends StatelessWidget {
                       ),
                     )
                   else
-                    CachedImage(
-                      story.mediaUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          Container(color: AppColors.darkNavy),
+                    AnimatedBuilder(
+                      animation: scroll,
+                      builder: (context, child) {
+                        var shift = 0.0;
+                        if (scroll.hasClients &&
+                            scroll.position.haveDimensions) {
+                          // Distance of this card from the rail's left edge,
+                          // in card-pitches. Clamped so a card far off-screen
+                          // doesn't slide its art out of its own frame.
+                          final delta =
+                              (index * _pitch) - scroll.offset;
+                          shift = (delta * _depth).clamp(-18.0, 18.0);
+                        }
+                        return Transform.translate(
+                          offset: Offset(shift, 0),
+                          // Overscale so the translated art still covers the
+                          // frame at the extremes instead of showing a gap.
+                          child: Transform.scale(scale: 1.18, child: child),
+                        );
+                      },
+                      child: CachedImage(
+                        story.mediaUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            Container(color: AppColors.darkNavy),
+                      ),
                     ),
                   // Dark gradient to keep the name legible.
                   IgnorePointer(

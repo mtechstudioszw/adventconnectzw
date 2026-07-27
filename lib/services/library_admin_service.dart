@@ -127,6 +127,7 @@ class LibraryAdminService {
     required String fileName,
     String? author,
     String? language,
+    String? coverUrl,
     int sortOrder = 0,
     bool isPublished = true,
   }) async {
@@ -153,9 +154,22 @@ class LibraryAdminService {
       'author': (author == null || author.trim().isEmpty) ? null : author.trim(),
       'language':
           (language == null || language.trim().isEmpty) ? null : language.trim(),
+      // Without this every track rendered a generic gradient tile — all 10
+      // rows on the shelf had a null cover because nothing could set one.
+      if (coverUrl != null && coverUrl.trim().isNotEmpty)
+        'cover_url': coverUrl.trim(),
       'sort_order': sortOrder,
       'is_published': isPublished,
     });
+  }
+
+  /// Sets (or clears) the cover on an item that already exists — needed to
+  /// backfill the tracks uploaded before covers were supported.
+  static Future<void> setCover(String id, String? coverUrl) async {
+    await _client.from('library_items').update({
+      'cover_url':
+          (coverUrl == null || coverUrl.trim().isEmpty) ? null : coverUrl.trim(),
+    }).eq('id', id);
   }
 
   static Future<void> deleteItem(String id) async {

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/hymn_model.dart';
 import '../../models/library_item_model.dart';
 import '../../services/library_admin_service.dart';
+import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -704,6 +705,8 @@ class _UploadSheetState extends State<_UploadSheet> {
   final _author = TextEditingController();
   String? _path;
   String? _fileName;
+  String? _coverUrl;
+  bool _pickingCover = false;
   bool _saving = false;
 
   @override
@@ -711,6 +714,24 @@ class _UploadSheetState extends State<_UploadSheet> {
     _title.dispose();
     _author.dispose();
     super.dispose();
+  }
+
+  /// Picks + crops + uploads cover art, returning the public URL. Square,
+  /// same treatment as every other artwork in the app.
+  Future<void> _pickCover() async {
+    setState(() => _pickingCover = true);
+    try {
+      final url = await StorageService.pickAndUploadLibraryCover();
+      if (!mounted) return;
+      setState(() {
+        if (url != null && url.isNotEmpty) _coverUrl = url;
+        _pickingCover = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _pickingCover = false);
+      _toast(context, 'Cover upload failed: $e');
+    }
   }
 
   Future<void> _pick() async {
@@ -750,6 +771,7 @@ class _UploadSheetState extends State<_UploadSheet> {
         filePath: _path!,
         fileName: _fileName!,
         author: _author.text,
+        coverUrl: _coverUrl,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -802,6 +824,41 @@ class _UploadSheetState extends State<_UploadSheet> {
                 _fileName ?? widget.pickLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Cover art. Optional, but without it the item renders a plain
+            // gradient tile everywhere it appears — feed card, Today card,
+            // player. Every existing row was uploaded before this existed.
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _coverUrl == null
+                    ? AppColors.primaryBlue
+                    : AppColors.successGreen,
+                side: BorderSide(
+                  color: _coverUrl == null
+                      ? AppColors.primaryBlue
+                      : AppColors.successGreen,
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: _saving || _pickingCover ? null : _pickCover,
+              icon: _pickingCover
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    )
+                  : Icon(
+                      _coverUrl == null
+                          ? Icons.image_outlined
+                          : Icons.check_circle_outline,
+                    ),
+              label: Text(
+                _coverUrl == null ? 'Add cover art (optional)' : 'Cover added',
               ),
             ),
             const SizedBox(height: 14),

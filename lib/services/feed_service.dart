@@ -36,14 +36,27 @@ class FeedService {
   /// score so two users on the same content pool don't see the same
   /// feed order. No ML — just transparent weights:
   ///
-  ///   score = recency_decay
-  ///         + log(1 + likes + 2*comments) * 0.30   (engagement)
+  ///   score = recency_decay                          (1.0 → 0, ~0.5 at 24h)
+  ///         + min(log(1 + likes + 2*comments) * 0.30, 0.55)   (engagement)
+  ///         + 0.50 if the author is a friend
+  ///         + 0.35 if the post is from a church you follow
   ///         + viewer-specific jitter (0..0.20)
   ///         + own_post penalty (-1, so your own post sinks)
   ///
-  /// After scoring we apply a diversity pass that prevents 3+
-  /// consecutive posts from the same author — splits clusters by
-  /// pushing later posts down the list.
+  /// The engagement CAP is load-bearing. Uncapped it reached ~1.2 while
+  /// recency maxes at 1.0, so a 3-day-old post with 50 likes (0.25 + 1.18)
+  /// outranked a brand-new one (1.00 + 0) and the feed felt stale. Capped at
+  /// 0.55 popularity can promote a post but never beat freshness outright.
+  ///
+  /// [friendIds] and [followedChurchIds] are passed in rather than fetched
+  /// here — Home already loads both, and re-querying them per page would
+  /// cost two extra round-trips on every scroll.
+  ///
+  /// Pagination is KEYSET, not offset: pass the oldest `createdAt` you
+  /// already hold as [before]. Offset paging is unsafe under this ranking
+  /// because page 2 would re-rank a different window and duplicate or drop
+  /// posts. The trade-off is that ranking is per-page rather than global,
+  /// which is how real feeds do it anyway.
   ///
   /// The optional [refreshNonce] reshuffles the jitter component on
   /// each pull-to-refresh so the same user sees a different ordering
@@ -51,23 +64,27 @@ class FeedService {
   /// content pool. Caller passes `DateTime.now().millisecondsSinceEpoch`
   /// (or any monotonically-changing int) from their refresh handler.
   static Future<List<Post>> fetchFeed({
-    int limit = 40,
+    int limit = 15,
     int refreshNonce = 0,
+    Set<String> friendIds = const {},
+    Set<String> followedChurchIds = const {},
+    DateTime? before,
   }) async {
     final viewer = _viewerId;
     // Over-fetch so the re-rank has actual signal to work with.
     final overfetch = limit * 2;
-    final response = await _client
-        .from(_postsTable)
-        .select(
+    var query = _client.from(_postsTable).select(
           '*, '
           'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
-            'churches(name, profile_photo_url), '
-          'post_likes(user_id), '
+          'churches(name, profile_photo_url), '
+          'post_likes(user_id, reaction), '
           'post_comments(id)',
-        )
-        .order('created_at', ascending: false)
-        .limit(overfetch);
+        );
+    if (before != null) {
+      query = query.lt('created_at', before.toUtc().toIso8601String());
+    }
+    final response =
+        await query.order('created_at', ascending: false).limit(overfetch);
     final posts = (response as List)
         .map((row) => Post.fromJson(
               row as Map<String, dynamic>,
@@ -77,11 +94,14 @@ class FeedService {
     if (viewer == null || posts.length <= 1) {
       return posts.take(limit).toList();
     }
-    posts.sort(
-      (a, b) => _personalisedScore(b, viewer, refreshNonce).compareTo(
-        _personalisedScore(a, viewer, refreshNonce),
-      ),
-    );
+    double score(Post p) => _personalisedScore(
+          p,
+          viewer,
+          refreshNonce,
+          friendIds: friendIds,
+          followedChurchIds: followedChurchIds,
+        );
+    posts.sort((a, b) => score(b).compareTo(score(a)));
     return _diversify(posts).take(limit).toList();
   }
 
@@ -98,7 +118,7 @@ class FeedService {
           '*, '
           'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
             'churches(name, profile_photo_url), '
-          'post_likes(user_id), '
+          'post_likes(user_id, reaction), '
           'post_comments(id)',
         )
         .eq('author_id', authorId)
@@ -111,14 +131,33 @@ class FeedService {
   }
 
   /// Composite ranking score — higher = nearer the top of the feed.
-  /// Pure function of post + viewer id + refresh nonce.
-  static double _personalisedScore(Post p, String viewerId, int nonce) {
+  /// Pure function of post + viewer id + refresh nonce + social sets.
+  static double _personalisedScore(
+    Post p,
+    String viewerId,
+    int nonce, {
+    Set<String> friendIds = const {},
+    Set<String> followedChurchIds = const {},
+  }) {
     final ageHours =
         DateTime.now().difference(p.createdAt).inHours.toDouble();
     // Smooth decay: 1.0 at 0h, ~0.5 at 24h, ~0.25 at 72h.
     final recency = 1.0 / (1.0 + (ageHours / 24.0));
-    final engagement =
-        math.log(1 + p.likeCount + (p.commentCount * 2)) * 0.30;
+    // CAPPED. Uncapped this reached ~1.2 while recency maxes at 1.0, so a
+    // 72h-old post with 50 likes (0.25 + 1.18 = 1.43) beat a brand-new one
+    // (1.00 + 0) — the measured reason the feed felt stale. At 0.55,
+    // popularity can promote a post but never outrank freshness outright.
+    final engagement = math.min(
+      math.log(1 + p.likeCount + (p.commentCount * 2)) * 0.30,
+      0.55,
+    );
+    // Social signal. Previously absent entirely — a friend's post ranked
+    // identically to a stranger's, which is the biggest single reason the
+    // feed felt impersonal. Both sets are passed in by the caller.
+    final friendBoost = friendIds.contains(p.authorId) ? 0.50 : 0.0;
+    final churchId = p.churchId;
+    final churchBoost =
+        (churchId != null && followedChurchIds.contains(churchId)) ? 0.35 : 0.0;
     // Including the nonce in the seed means a fresh refresh hands
     // the user a different jittered order, even on identical content.
     // Two different users still see different orders too (viewerId
@@ -126,7 +165,12 @@ class FeedService {
     final seed = '${viewerId}_${p.id}_$nonce'.hashCode.abs();
     final jitter = ((seed % 1000) / 1000.0) * 0.20;
     final ownPenalty = p.authorId == viewerId ? -1.0 : 0.0;
-    return recency + engagement + jitter + ownPenalty;
+    return recency +
+        engagement +
+        friendBoost +
+        churchBoost +
+        jitter +
+        ownPenalty;
   }
 
   /// Prevent the top of the feed from being dominated by a single
@@ -152,9 +196,18 @@ class FeedService {
     return out;
   }
 
+  /// Creates a post.
+  ///
+  /// [imageUrls] carries every photo, first-first. `image_url` is ALWAYS
+  /// written with the first one as well, for two reasons: `posts_check`
+  /// requires `body IS NOT NULL OR image_url IS NOT NULL`, so a photo-only
+  /// post would be rejected outright without it; and clients still on v1.3.0
+  /// only know about that column, so this is what keeps new posts visible to
+  /// them. Never drop it.
   static Future<Post> createPost({
     String? body,
     String? imageUrl,
+    List<String> imageUrls = const [],
     PostVisibility visibility = PostVisibility.public,
     String? churchId,
   }) async {
@@ -163,9 +216,14 @@ class FeedService {
       throw const AuthException('Sign in to post.');
     }
     final cleanBody = body?.trim();
-    if ((cleanBody == null || cleanBody.isEmpty) &&
-        (imageUrl == null || imageUrl.isEmpty)) {
-      throw ArgumentError('Either body or imageUrl must be non-empty.');
+    // Collapse the single + multi arguments into one ordered, de-duped list.
+    final photos = <String>{
+      if (imageUrl != null && imageUrl.trim().isNotEmpty) imageUrl.trim(),
+      for (final u in imageUrls)
+        if (u.trim().isNotEmpty) u.trim(),
+    }.toList();
+    if ((cleanBody == null || cleanBody.isEmpty) && photos.isEmpty) {
+      throw ArgumentError('Either body or a photo must be provided.');
     }
     final inserted = await PostLimitError.guard(
       PostSection.feedPost,
@@ -174,8 +232,8 @@ class FeedService {
           .insert({
             'author_id': user.id,
             if (cleanBody != null && cleanBody.isNotEmpty) 'body': cleanBody,
-            if (imageUrl != null && imageUrl.isNotEmpty)
-              'image_url': imageUrl,
+            if (photos.isNotEmpty) 'image_url': photos.first,
+            if (photos.isNotEmpty) 'image_urls': photos,
             'visibility': visibility == PostVisibility.friendsOnly
                 ? 'friends_only'
                 : 'public',
@@ -188,7 +246,7 @@ class FeedService {
             '*, '
             'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
             'churches(name, profile_photo_url), '
-            'post_likes(user_id), '
+            'post_likes(user_id, reaction), '
             'post_comments(id)',
           )
           .single(),
@@ -211,7 +269,7 @@ class FeedService {
           '*, '
           'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
             'churches(name, profile_photo_url), '
-          'post_likes(user_id), '
+          'post_likes(user_id, reaction), '
           'post_comments(id)',
         )
         .ilike('body', '%$term%')
@@ -251,7 +309,7 @@ class FeedService {
           '*, '
           'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
             'churches(name, profile_photo_url), '
-          'post_likes(user_id), '
+          'post_likes(user_id, reaction), '
           'post_comments(id)',
         )
         .single();
@@ -260,19 +318,25 @@ class FeedService {
 
   // ---- Likes --------------------------------------------------------
 
-  static Future<void> likePost(String postId) async {
+  /// Sets the viewer's reaction on a post, replacing any previous one.
+  ///
+  /// `post_likes` has a (post_id, user_id) primary key, so one row per person
+  /// per post — switching from Like to Amen updates in place rather than
+  /// adding a second row. `ignoreDuplicates` must stay FALSE here or the
+  /// upsert would silently keep the old reaction.
+  static Future<void> reactToPost(String postId, PostReaction reaction) async {
     final user = _client.auth.currentUser;
     if (user == null) {
-      throw const AuthException('Sign in to like.');
+      throw const AuthException('Sign in to react.');
     }
     await _client.from(_likesTable).upsert(
-      {'post_id': postId, 'user_id': user.id},
+      {'post_id': postId, 'user_id': user.id, 'reaction': reaction.wire},
       onConflict: 'post_id,user_id',
-      ignoreDuplicates: true,
     );
   }
 
-  static Future<void> unlikePost(String postId) async {
+  /// Removes the viewer's reaction entirely.
+  static Future<void> removeReaction(String postId) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
     await _client
@@ -281,6 +345,13 @@ class FeedService {
         .eq('post_id', postId)
         .eq('user_id', user.id);
   }
+
+  /// Back-compat wrappers so the profile screens' plain like toggles keep
+  /// working without knowing about reaction types.
+  static Future<void> likePost(String postId) =>
+      reactToPost(postId, PostReaction.like);
+
+  static Future<void> unlikePost(String postId) => removeReaction(postId);
 
   // ---- Comments -----------------------------------------------------
 

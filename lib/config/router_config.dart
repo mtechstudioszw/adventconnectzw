@@ -25,7 +25,7 @@ import '../screens/churches/suggest_church_screen.dart';
 import '../screens/churches/suggest_edit_screen.dart';
 import '../screens/home/post_notice_screen.dart';
 import '../screens/home/search_screen.dart';
-import '../screens/library/library_screen.dart';
+import '../screens/library/library_boot_screen.dart';
 import '../screens/watch/watch_screen.dart';
 import '../screens/watch/saved_videos_screen.dart';
 import '../screens/watch/channels_screen.dart';
@@ -33,7 +33,7 @@ import '../screens/watch/channel_screen.dart';
 import '../screens/watch/video_player_screen.dart';
 import '../models/youtube_channel.dart';
 import '../models/youtube_video.dart';
-import '../screens/quiz/arena/quiz_lobby_screen.dart';
+import '../screens/quiz/arena/quiz_boot_screen.dart';
 import '../screens/quiz/arena/widgets/arena_page_route.dart';
 import '../screens/profile/blocked_users_screen.dart';
 import '../screens/profile/member_directory_screen.dart';
@@ -571,17 +571,24 @@ final GoRouter appRouter = GoRouter(
       name: 'library',
       // extra is an optional int initial tab
       // (0=Bible, 1=Sabbath School, 2=Hymnal, 3=EGW, 4=Music).
-      builder: (context, state) =>
-          LibraryScreen(initialTab: state.extra is int ? state.extra as int : 0),
+      //
+      // LibraryBootScreen is a GATE that warms the bundled Bible + hymnal
+      // and then swaps itself for LibraryScreen in place — no extra route.
+      builder: (context, state) => LibraryBootScreen(
+        initialTab: state.extra is int ? state.extra as int : 0,
+      ),
     ),
     GoRoute(
       path: '/quiz',
       name: 'quiz',
       // pageBuilder (not builder) so the Quiz Arena gets its own opening
       // transition instead of the app-wide fade-through — see arenaPage().
+      // QuizBootScreen is a GATE, not an extra route: it warms the question
+      // index + sound effects, then crossfades into the lobby in place, so
+      // the back stack is unchanged.
       pageBuilder: (context, state) => arenaPage<void>(
         key: state.pageKey,
-        child: const QuizLobbyScreen(),
+        child: const QuizBootScreen(),
       ),
     ),
     GoRoute(

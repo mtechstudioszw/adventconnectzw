@@ -615,7 +615,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 viewerId: _viewerId,
                 onLikeToggled: () => _toggleLike(post),
                 onCommentsTapped: () => _openComments(post),
-                onImageTapped: () => _openImage(post),
+                onImageTapped: (_) => _openImage(post),
               ),
           ],
         ),
@@ -632,7 +632,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       _posts = _posts
           .map(
             (p) => p.id == post.id
-                ? p.copyWith(viewerLiked: newLiked, likeCount: newCount)
+                ? p.copyWith(
+                    viewerReaction: newLiked ? PostReaction.like : null,
+                    likeCount: newCount,
+                  )
                 : p,
           )
           .toList();
@@ -650,7 +653,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             .map(
               (p) => p.id == post.id
                   ? p.copyWith(
-                      viewerLiked: post.viewerLiked,
+                      viewerReaction: post.viewerReaction,
                       likeCount: post.likeCount,
                     )
                   : p,

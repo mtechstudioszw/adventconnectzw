@@ -102,6 +102,24 @@ class StorageService {
       );
 
   /// Home-feed post photo. Free aspect, up to 1600 wide, ~600KB target.
+  /// Cover art for a Library item — album art for music, a jacket for an EGW
+  /// book. Square 1:1 like other artwork, output 800x800 so it still looks
+  /// sharp behind the full-screen player, at ~150 KB.
+  ///
+  /// Lands in the public `library` bucket alongside the media it belongs to.
+  static Future<String?> pickAndUploadLibraryCover() => _pickAndUpload(
+        bucket: 'library',
+        maxWidth: 1600,
+        imageQuality: 85,
+        crop: const _CropSpec(
+          ratioX: 1,
+          ratioY: 1,
+          outputWidth: 800,
+          outputQuality: 82,
+          title: 'Crop cover art',
+        ),
+      );
+
   static Future<String?> pickAndUploadPostPhoto() => _pickAndUpload(
         bucket: 'post_photos',
         maxWidth: 1600,

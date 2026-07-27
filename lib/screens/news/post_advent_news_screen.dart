@@ -13,6 +13,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/preview_sheet.dart';
+import 'advent_news_screen.dart' show NewsHeroCard;
 
 /// In-app posting flow for Advent News. Open to any signed-in
 /// member (patch_030) — the gate on the Advent News screen is now
@@ -95,6 +97,34 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
     // Dismiss the keyboard so it doesn't linger over the screen we return
     // to after posting.
     FocusManager.instance.primaryFocus?.unfocus();
+
+    // Preview against the real list card. News leads with a cover crop and
+    // a two-line summary — the form shows neither.
+    final confirmed = await showEntityPreview(
+      context,
+      title: 'How this story will look',
+      confirmLabel: _isEdit ? 'Save changes' : 'Publish',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: NewsHeroCard(
+          item: AdventNews(
+            // Never persisted — the real id comes from the insert.
+            id: widget.existing?.id ?? 'preview',
+            title: _titleController.text.trim(),
+            summary: _summaryController.text.trim(),
+            body: _bodyController.text.trim(),
+            publishedAt: DateTime.now(),
+            coverPhotoUrl: _coverPhotoUrl,
+            category: _category,
+            sourceUrl: _sourceUrlController.text.trim(),
+            sourceLabel: _sourceLabelController.text.trim(),
+          ),
+          onTap: () {},
+        ),
+      ),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() => _saving = true);
     try {
       final result = _isEdit

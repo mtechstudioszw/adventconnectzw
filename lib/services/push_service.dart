@@ -144,6 +144,25 @@ Future<void> _renderIncomingChat(
   final largeIcon = isConversation
       ? await _largeIconFromUrl('${data['sender_photo'] ?? ''}')
       : null;
+
+  // A live/new-video push carries the broadcast's own frame, the way
+  // YouTube's does. The system renders `notification.image` itself when the
+  // app is backgrounded; in the FOREGROUND we render the banner ourselves,
+  // so the picture has to be attached here or it silently disappears.
+  final imageUrl = refType == 'video'
+      ? (notif?.android?.imageUrl ?? notif?.apple?.imageUrl ??
+          '${data['image'] ?? ''}')
+      : null;
+  final bigPicture = await _largeIconFromUrl(imageUrl);
+  final style = bigPicture == null
+      ? null
+      : BigPictureStyleInformation(
+          bigPicture,
+          contentTitle: title,
+          summaryText: body,
+          hideExpandedLargeIcon: true,
+        );
+
   final id =
       refId.isNotEmpty ? refId.hashCode : (notif?.hashCode ?? title.hashCode);
   await plugin.show(
@@ -159,6 +178,7 @@ Future<void> _renderIncomingChat(
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
         largeIcon: largeIcon,
+        styleInformation: style,
         actions: isConversation
             ? <AndroidNotificationAction>[
                 const AndroidNotificationAction(

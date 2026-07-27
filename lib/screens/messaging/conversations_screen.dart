@@ -25,6 +25,7 @@ import 'chat_search_delegate.dart';
 import '../../theme/app_motion.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
+import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/shimmer_loaders.dart';
@@ -45,7 +46,8 @@ enum _ConversationsTab { chats, stories }
 /// WhatsApp-style quick filter chips on the Chats tab.
 enum _ChatFilter { all, unread, groups }
 
-class _ConversationsScreenState extends State<ConversationsScreen> {
+class _ConversationsScreenState extends State<ConversationsScreen>
+    with NavVisibilityMixin {
   List<Conversation> _conversations = [];
   Map<String, ConversationState> _convStates = const {};
   Map<String, InboxReactionPreview> _reactionPreviews = const {};
@@ -402,8 +404,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         !isChurchDefault(c) && (_convStates[c.id]?.pinned ?? false);
     final churchDefaults = list.where(isChurchDefault).toList();
     final pinned = list.where(userPinned).toList();
-    final rest =
-        list.where((c) => !isChurchDefault(c) && !userPinned(c)).toList();
+    final rest = list
+        .where((c) => !isChurchDefault(c) && !userPinned(c))
+        .toList();
     return [...churchDefaults, ...pinned, ...rest];
   }
 
@@ -800,9 +803,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
       // Advent Chat is a top-level tab now (it replaced Churches), so the
-      // inbox carries the island like every other tab destination.
-      bottomNavigationBar: const MainBottomNav(
-        currentIndex: MainBottomNav.chatIndex,
+      // inbox carries the island like every other tab destination — and
+      // hides it on scroll the way the others do.
+      bottomNavigationBar: HideOnScroll(
+        visible: navVisible,
+        child: const MainBottomNav(currentIndex: MainBottomNav.chatIndex),
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primaryBlue,
@@ -825,12 +830,15 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           ),
           _buildTabBar(),
           Expanded(
-            child: BrandedRefreshIndicator(
-              color: AppColors.primaryBlue,
-              onRefresh: _bootstrap,
-              // Entrance now happens per-tile (StaggeredReveal in
-              // _conversationListView) instead of one block fade.
-              child: _buildTabPager(),
+            child: NotificationListener<UserScrollNotification>(
+              onNotification: handleNavScroll,
+              child: BrandedRefreshIndicator(
+                color: AppColors.primaryBlue,
+                onRefresh: _bootstrap,
+                // Entrance now happens per-tile (StaggeredReveal in
+                // _conversationListView) instead of one block fade.
+                child: _buildTabPager(),
+              ),
             ),
           ),
         ],
@@ -883,15 +891,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 6, 8, 10),
+          // Chat is a root tab, so there is nowhere to go "back" TO — the
+          // arrow was left over from when it was pushed from Home. Tabs
+          // don't carry one; the island is the way between them.
+          padding: const EdgeInsets.fromLTRB(16, 6, 8, 10),
           child: Row(
             children: [
-              _CircleIconButton(
-                icon: Icons.arrow_back,
-                onTap: () =>
-                    context.canPop() ? context.pop() : context.goNamed('home'),
-              ),
-              const SizedBox(width: 6),
               Text(
                 'Advent Chat',
                 style: AppTextStyles.titleLarge.copyWith(
@@ -1700,9 +1705,7 @@ class _TabPill extends StatelessWidget {
                 width: selected ? 32 : 0,
                 decoration: const BoxDecoration(
                   color: AppColors.primaryBlue,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(3),
-                  ),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
                 ),
               ),
             ],
@@ -1948,15 +1951,15 @@ class _ConversationTile extends StatelessWidget {
                               (reactionPreview != null && !previewCleared)
                                   ? _reactionPreviewLabel(reactionPreview!)
                                   : (previewCleared ||
-                                          conversation.lastMessage.isEmpty)
-                                      ? (conversation.isChurchChannel
-                                            ? 'Church announcements appear here'
-                                            : 'Say hello')
-                                      : (isLastFromMe
-                                            ? _selfSystemLabel(
-                                                conversation.lastMessage,
-                                              )
-                                            : conversation.lastMessage),
+                                        conversation.lastMessage.isEmpty)
+                                  ? (conversation.isChurchChannel
+                                        ? 'Church announcements appear here'
+                                        : 'Say hello')
+                                  : (isLastFromMe
+                                        ? _selfSystemLabel(
+                                            conversation.lastMessage,
+                                          )
+                                        : conversation.lastMessage),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.bodySmall.copyWith(

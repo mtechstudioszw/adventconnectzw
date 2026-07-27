@@ -25,6 +25,7 @@ import 'services/theme_service.dart';
 import 'theme/app_text_styles.dart';
 import 'theme/app_theme.dart';
 import 'widgets/offline_banner.dart';
+import 'widgets/global_media_bars.dart';
 import 'widgets/voice_mini_bar.dart';
 
 void main() async {
@@ -451,6 +452,12 @@ class _AdventConnectAppState extends State<AdventConnectApp>
               const Align(
                 alignment: Alignment.topCenter,
                 child: VoiceMiniBar(),
+              ),
+              // Docked video + music bars — whatever is still playing stays
+              // reachable from anywhere, above the navigation island.
+              const Align(
+                alignment: Alignment.bottomCenter,
+                child: GlobalMediaBars(),
               ),
             ],
           ),

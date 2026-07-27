@@ -166,6 +166,15 @@ class MusicPlayerService {
   /// rebuild (the mini bar lives above the navigator).
   final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
+  /// True while the full player is on screen.
+  ///
+  /// The mini bar is mounted app-wide now, which puts it above every route
+  /// — including the full player it expands into. Same pattern as
+  /// `VoicePlayerService.openChatId`: the screen that would be duplicated
+  /// announces itself, and the global bar stands down.
+  static final ValueNotifier<bool> fullPlayerOpen =
+      ValueNotifier<bool>(false);
+
   /// The currently-playing item, derived from the player's current index.
   LibraryItem? get current {
     final i = player.currentIndex;

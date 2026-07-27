@@ -10,6 +10,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/event_card.dart';
+import '../../widgets/preview_sheet.dart';
 import '../widgets/post_form_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -216,6 +218,38 @@ class _PostEventScreenState extends State<PostEventScreen>
         return;
       }
     }
+
+    // Preview before it goes out. An event card leads with a date block
+    // and a cover crop — neither of which the form shows you.
+    final confirmed = await showEntityPreview(
+      context,
+      title: 'How your event will look',
+      confirmLabel: widget.isEditing ? 'Save changes' : 'Post it',
+      child: EventCard(
+        event: Event(
+          // Never persisted — the real id comes from the insert.
+          id: widget.existing?.id ?? 'preview',
+          title: _titleController.text.trim(),
+          eventDate: _startDate!,
+          eventTime: _formatTime(_startTime!),
+          endDate: _endDate,
+          endTime: _endTime == null ? null : _formatTime(_endTime!),
+          rsvpCount: widget.existing?.rsvpCount ?? 0,
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          location: _venueController.text.trim().isEmpty
+              ? null
+              : _venueController.text.trim(),
+          coverPhotoUrl: _coverPhotoUrl,
+          capacity: int.tryParse(_capacityController.text),
+          createdAt: DateTime.now(),
+        ),
+        isGoing: false,
+        onTap: () {},
+      ),
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() => _saving = true);
     try {

@@ -112,6 +112,37 @@ async function livePoll(sb): Promise<string[]> {
   const ids = (vids ?? []).map((v: any) => v.video_id);
   if (ids.length) await fetchAndUpsertVideos(sb, API_KEY, ids);
 
+  // Reap dead "upcoming" rows.
+  //
+  // YouTube never clears live_status on a scheduled stream that doesn't
+  // air, and when the broadcast is deleted or made private the API stops
+  // returning it at all — so the refresh above can never correct it and
+  // the row stays 'upcoming' forever. Every one of the 27 rows found on
+  // 2026-07-27 was stale, the newest scheduled for June 2024, which is
+  // what the Upcoming rail was advertising as "about to start".
+  //
+  // A 12-hour grace period is well clear of the longest plausible
+  // overrun, so anything past it never started.
+  // Two shapes of dead row, both seen in production on 2026-07-27:
+  // 27 with a start time in the past, and 6 with no start time at all
+  // (a "scheduled" broadcast YouTube never gave a date). The second kind
+  // can never render a countdown, so it is judged on published_at.
+  const deadline = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+  let reaped = 0;
+  for (const filter of ["scheduled", "unscheduled"] as const) {
+    let q = sb
+      .from("youtube_videos")
+      .update({ live_status: "none", kind: "video" })
+      .eq("live_status", "upcoming");
+    q = filter === "scheduled"
+      ? q.lt("scheduled_start_at", deadline)
+      : q.is("scheduled_start_at", null).lt("published_at", deadline);
+    const { data: stale, error: staleErr } = await q.select("video_id");
+    if (staleErr) log.push(`reap ${filter} upcoming: ${staleErr.message}`);
+    else reaped += (stale ?? []).length;
+  }
+  if (reaped) log.push(`reaped ${reaped} stale upcoming`);
+
   // Recompute each channel's denormalised live flag from the videos table.
   const { data: liveVids } = await sb
     .from("youtube_videos").select("channel_id, video_id, title, channel_title")

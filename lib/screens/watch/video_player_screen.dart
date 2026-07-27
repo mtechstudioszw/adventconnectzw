@@ -8,14 +8,19 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../../models/youtube_video.dart';
+import '../../services/ads/interstitial_ad_manager.dart';
+import '../../services/mini_player_service.dart';
 import '../../services/youtube_prefs.dart';
 import '../../services/youtube_service.dart';
 import '../../services/verse_ref_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/pressable.dart';
 import '../../widgets/youtube/live_chat_panel.dart';
+import '../../widgets/youtube/watch_cards.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../../widgets/motion/brand_spinner.dart';
 
@@ -69,6 +74,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     super.initState();
     _video = widget.initialVideo;
     _scroll.addListener(_onScroll);
+    _maybeShowInterstitial();
     // The app is locked to portrait globally; allow landscape WHILE the
     // player is open so the YouTube fullscreen button can rotate. Restored
     // to portrait-only in dispose.
@@ -82,8 +88,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Future<void> _init() async {
+    // Opening a video always dismisses the docked bar — two players would
+    // otherwise talk over each other. If the bar was showing THIS video,
+    // its position wins over the database's (which only gets written
+    // every 10s, so it lags by up to ten seconds).
+    final mini = MiniPlayerService.instance;
+    int? handoff;
+    if (mini.isActive) {
+      final sameVideo = mini.video?.videoId == widget.videoId;
+      final at = await mini.takeOver();
+      if (sameVideo) handoff = at;
+    }
+
     _video ??= await YoutubeService.fetchVideo(widget.videoId);
-    final resume = await YoutubeService.resumePosition(widget.videoId);
+    final resume =
+        handoff ?? await YoutubeService.resumePosition(widget.videoId);
     final saved = await YoutubeService.fetchBookmarkIds();
 
     final controller = YoutubePlayerController.fromVideoId(
@@ -104,14 +123,39 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
     _armLoadWatchdog();
 
+    final subs = YoutubeService.cachedSubscriptionIds();
+
     if (!mounted) return;
     setState(() {
       _controller = controller;
       _saved = saved.contains(widget.videoId);
+      _subscribed = subs.contains(_video?.channelId ?? '');
       _ready = true;
+    });
+    // Correct the follow state from the server without blocking first paint.
+    YoutubeService.fetchSubscriptionIds().then((ids) {
+      if (!mounted) return;
+      setState(() => _subscribed = ids.contains(_video?.channelId ?? ''));
     });
     _loadUpNext();
     _parseVerses();
+  }
+
+  /// How many videos have been opened this session — drives the ad cadence.
+  static int _opensThisSession = 0;
+
+  /// The Watch tab used to fire a full-screen interstitial the moment you
+  /// opened it, which landed on the exact moment the tab needs to feel
+  /// instant. It now runs here instead, on every third video, where an ad
+  /// break is a convention people already accept. Still globally capped by
+  /// InterstitialAdManager, and the player itself stays ad-free once the
+  /// video is up.
+  void _maybeShowInterstitial() {
+    _opensThisSession++;
+    if (_opensThisSession % 3 != 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      InterstitialAdManager.maybeShow();
+    });
   }
 
   Future<void> _parseVerses() async {
@@ -143,11 +187,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _ended = true;
       _saveProgress(completed: true);
       if (YoutubePrefs.autoplayNext && _upNext.isNotEmpty) {
-        _switchTo(_upNext.first);
+        _startAutoplayCountdown();
       }
     } else if (s == PlayerState.playing) {
       _ended = false;
+      _cancelAutoplayCountdown();
     }
+    _wasPlaying = s == PlayerState.playing || s == PlayerState.buffering;
     // Force landscape + immersive when the player enters fullscreen (the
     // bare YoutubePlayer overlay doesn't rotate on its own with the app's
     // portrait lock); restore on exit.
@@ -192,12 +238,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _controller?.loadVideoById(videoId: v.videoId);
   }
 
+  /// Last position we managed to read, in seconds. [dispose] can't await
+  /// the controller, so the docked bar resumes from here.
+  int _lastPosition = 0;
+
+  /// Whether playback was running when we last heard from the player —
+  /// leaving a PAUSED video shouldn't start a bar playing behind you.
+  bool _wasPlaying = false;
+
   Future<void> _saveProgress({bool completed = false}) async {
     final c = _controller;
     final v = _video;
     if (c == null || v == null) return;
     try {
       final pos = await c.currentTime;
+      _lastPosition = pos.round();
       await YoutubeService.recordProgress(
         v.videoId,
         positionSeconds: pos.round(),
@@ -232,8 +287,50 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
+  // -------------------------- Autoplay countdown ----------------------
+  /// Seconds left before the next video starts itself. Null when no
+  /// countdown is running.
+  int? _autoplayIn;
+  Timer? _autoplayTimer;
+
+  static const _autoplaySeconds = 5;
+
+  /// A visible, cancellable run-up to the next video.
+  ///
+  /// Autoplay used to swap videos the instant one ended, which is how you
+  /// end up three sermons deep without meaning to. Five seconds and a
+  /// Cancel makes it the viewer's choice — and the countdown card is also
+  /// what tells them a next video exists at all.
+  void _startAutoplayCountdown() {
+    _autoplayTimer?.cancel();
+    setState(() => _autoplayIn = _autoplaySeconds);
+    _autoplayTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      final left = (_autoplayIn ?? 1) - 1;
+      if (left <= 0) {
+        t.cancel();
+        final next = _upNext.isNotEmpty ? _upNext.first : null;
+        setState(() => _autoplayIn = null);
+        if (next != null) _switchTo(next);
+      } else {
+        setState(() => _autoplayIn = left);
+      }
+    });
+  }
+
+  void _cancelAutoplayCountdown() {
+    if (_autoplayTimer == null && _autoplayIn == null) return;
+    _autoplayTimer?.cancel();
+    _autoplayTimer = null;
+    if (_autoplayIn != null && mounted) setState(() => _autoplayIn = null);
+  }
+
   /// Swap the playing video in place (tap an up-next card or autoplay-next).
   Future<void> _switchTo(YoutubeVideo next) async {
+    _cancelAutoplayCountdown();
     await _saveProgress();
     setState(() {
       _video = next;
@@ -252,11 +349,116 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
+  /// End-screen: what's next, how long until it starts, and a way out.
+  Widget _autoplayOverlay(YoutubeVideo next) {
+    final left = _autoplayIn ?? 0;
+    return Container(
+      color: AppColors.darkNavy.withValues(alpha: 0.90),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Row(
+        children: [
+          // Ring that drains as the countdown runs.
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                TweenAnimationBuilder<double>(
+                  key: ValueKey(left),
+                  tween: Tween(
+                    begin: left / _autoplaySeconds,
+                    end: (left - 1) / _autoplaySeconds,
+                  ),
+                  duration: const Duration(seconds: 1),
+                  builder: (_, value, _) => SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: CircularProgressIndicator(
+                      value: value.clamp(0.0, 1.0),
+                      strokeWidth: 3,
+                      backgroundColor: AppColors.white.withValues(alpha: 0.22),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                Text(
+                  '$left',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Up next',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.white.withValues(alpha: 0.65),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  next.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _EndScreenButton(
+                      label: 'Play now',
+                      filled: true,
+                      onTap: () => _switchTo(next),
+                    ),
+                    const SizedBox(width: 8),
+                    _EndScreenButton(
+                      label: 'Cancel',
+                      filled: false,
+                      onTap: _cancelAutoplayCountdown,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _toggleSave() async {
     final v = _video;
     if (v == null) return;
     setState(() => _saved = !_saved);
     await YoutubeService.setBookmarked(v.videoId, _saved);
+  }
+
+  /// Whether the viewer follows this video's channel (patch_164).
+  bool _subscribed = false;
+
+  Future<void> _toggleSubscribe() async {
+    final v = _video;
+    if (v == null || v.channelId.isEmpty) return;
+    final next = !_subscribed;
+    setState(() => _subscribed = next);
+    await YoutubeService.setSubscribed(v.channelId, next);
   }
 
   Future<void> _shareMoment() async {
@@ -283,7 +485,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void dispose() {
     _saveProgress();
+    // Leaving mid-sermon docks it rather than stopping it. Only when it
+    // was actually playing — and the service itself refuses live streams,
+    // which have no position worth carrying.
+    final v = _video;
+    if (v != null && _wasPlaying && !_ended) {
+      MiniPlayerService.instance.dock(v, atSeconds: _lastPosition);
+    }
     _loadTimer?.cancel();
+    _autoplayTimer?.cancel();
     _progressTimer?.cancel();
     _sub?.cancel();
     _controller?.close();
@@ -345,6 +555,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             children: [
               YoutubePlayer(controller: _controller!, aspectRatio: 16 / 9),
               if (!_playerStarted) Positioned.fill(child: _loadingOverlay()),
+              if (_autoplayIn != null && _upNext.isNotEmpty)
+                Positioned.fill(child: _autoplayOverlay(_upNext.first)),
               Positioned(
                 left: 4,
                 top: MediaQuery.of(context).padding.top + 4,
@@ -530,50 +742,77 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       children: [
         if (v != null) ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.lg,
+              AppSpace.lg,
+              0,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (v.isLive) ...[
+                  const LivePill(),
+                  const SizedBox(height: AppSpace.sm),
+                ],
+                // The title gets the screen's strongest type. It used to
+                // share a row with the LIVE pill, which squeezed it into a
+                // narrow column beside a badge.
+                Text(
+                  v.title,
+                  style: AppTextStyles.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: palette.text,
+                    height: 1.25,
+                    fontSize: 19,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: AppSpace.sm),
                 Row(
                   children: [
-                    if (v.isLive) ...[
-                      const LivePill(),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
-                      child: Text(
-                        v.title,
-                        style: AppTextStyles.titleMedium.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: palette.text,
-                          height: 1.3,
+                    if (v.isLive)
+                      _MetaChip(
+                        icon: Icons.visibility_outlined,
+                        label: v.viewsLabel.isEmpty
+                            ? 'Live now'
+                            : v.viewsLabel.replaceAll('views', 'watching'),
+                      )
+                    else ...[
+                      if (v.viewsLabel.isNotEmpty)
+                        _MetaChip(
+                          icon: Icons.visibility_outlined,
+                          label: v.viewsLabel,
                         ),
-                      ),
-                    ),
+                      if (v.publishedLabel.isNotEmpty) ...[
+                        const SizedBox(width: AppSpace.sm),
+                        _MetaChip(
+                          icon: Icons.schedule_rounded,
+                          label: v.publishedLabel,
+                        ),
+                      ],
+                    ],
                   ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  [
-                    v.channelTitle,
-                    if (v.isLive) 'LIVE now' else v.publishedLabel,
-                    if (!v.isLive) v.viewsLabel,
-                  ].where((e) => e.isNotEmpty).join('  ·  '),
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: palette.textMuted,
-                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
+          _channelRow(v, palette),
+          const SizedBox(height: AppSpace.md),
           _actionBar(palette),
           if (_verses.isNotEmpty) _scriptureChips(palette),
           if ((v.description ?? '').trim().isNotEmpty) _description(v, palette),
-          const Divider(height: 28),
+          const SizedBox(height: AppSpace.lg),
+          Divider(height: 1, color: palette.divider),
         ],
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            AppSpace.lg,
+            AppSpace.lg,
+            AppSpace.sm,
+          ),
           child: Text(
             'Up next',
             style: AppTextStyles.titleMedium.copyWith(
@@ -595,34 +834,113 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
+  /// Who made this, and a way to follow them.
+  ///
+  /// The channel used to be one word in a grey metadata line — the single
+  /// most useful thing on the screen for finding more of what you're
+  /// watching, rendered as the least important. It gets an avatar, a tap
+  /// target through to the channel, and the Follow control.
+  Widget _channelRow(YoutubeVideo v, AppPalette palette) {
+    final url = v.channelThumbUrl;
+    final letter = v.channelTitle.trim().isEmpty
+        ? '?'
+        : v.channelTitle.trim().substring(0, 1).toUpperCase();
+    final fallback = Container(
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+      child: Text(
+        letter,
+        style: AppTextStyles.titleMedium.copyWith(
+          color: AppColors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+      child: Row(
+        children: [
+          Expanded(
+            child: Pressable(
+              onTap: v.channelId.isEmpty
+                  ? null
+                  : () => context.pushNamed(
+                        'watch_channel',
+                        pathParameters: {'channelId': v.channelId},
+                      ),
+              pressedScale: 0.98,
+              child: Row(
+                children: [
+                  ClipOval(
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: url == null || url.isEmpty
+                          ? fallback
+                          : CachedImage(
+                              url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => fallback,
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Text(
+                      v.channelTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: palette.text,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          SubscribeButton(
+            subscribed: _subscribed,
+            compact: true,
+            onTap: _toggleSubscribe,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _actionBar(AppPalette palette) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
       child: Row(
         children: [
           _action(
-            icon: _saved ? Icons.bookmark : Icons.bookmark_border,
+            icon: _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
             label: _saved ? 'Saved' : 'Save',
-            color: _saved ? AppColors.primaryBlue : palette.text,
+            active: _saved,
+            palette: palette,
             onTap: _toggleSave,
           ),
           _action(
-            icon: Icons.ios_share,
+            icon: Icons.ios_share_rounded,
             label: 'Share',
-            color: palette.text,
+            palette: palette,
             onTap: _shareMoment,
           ),
           _action(
             icon: Icons.note_alt_outlined,
             label: 'Notes',
-            color: palette.text,
+            palette: palette,
             onTap: _openNotes,
           ),
           _action(
-            icon: Icons.open_in_new,
+            icon: Icons.open_in_new_rounded,
             label: 'YouTube',
-            color: palette.text,
+            palette: palette,
             onTap: _openInYouTube,
           ),
         ],
@@ -630,27 +948,50 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
+  /// Pill action, not a bare TextButton.
+  ///
+  /// Four naked text buttons in a row read as a debug menu — nothing about
+  /// them said "tappable surface". A filled pill with a hairline edge is
+  /// the same vocabulary as the filter chips in the Watch tab.
   Widget _action({
     required IconData icon,
     required String label,
-    required Color color,
+    required AppPalette palette,
     required VoidCallback onTap,
+    bool active = false,
   }) {
+    final fg = active ? AppColors.white : palette.text;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: TextButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 20, color: color),
-        label: Text(
-          label,
-          style: AppTextStyles.bodySmall.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
+      padding: const EdgeInsets.only(right: AppSpace.sm),
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.94,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.md + 2,
+            vertical: AppSpace.sm + 1,
           ),
-        ),
-        style: TextButton.styleFrom(
-          foregroundColor: color,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? AppColors.primaryBlue : palette.chipBg,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(
+              color: active ? AppColors.primaryBlue : palette.divider,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 17, color: fg),
+              const SizedBox(width: AppSpace.xs + 2),
+              Text(
+                label,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: fg,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -827,6 +1168,82 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           _controller?.seekTo(seconds: secs.toDouble());
           Navigator.of(ctx).pop();
         },
+      ),
+    );
+  }
+}
+
+/// Quiet metadata pill — views, age — under the title.
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.sm + 2,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: palette.chipBg,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: palette.textMuted),
+          const SizedBox(width: AppSpace.xs + 1),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: palette.textMuted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small pill button used on the autoplay end screen.
+class _EndScreenButton extends StatelessWidget {
+  const _EndScreenButton({
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: filled ? AppColors.primaryBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: filled
+                ? AppColors.primaryBlue
+                : AppColors.white.withValues(alpha: 0.45),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: AppColors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }

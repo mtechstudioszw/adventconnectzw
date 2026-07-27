@@ -11,7 +11,9 @@ import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
 import '../cached_image.dart';
+import '../preview_sheet.dart';
 import 'post_preview_sheet.dart';
 import 'story_text_style.dart';
 
@@ -706,8 +708,93 @@ class _StoryComposerState extends State<_StoryComposer> {
       ? _statusText.text.trim().isNotEmpty
       : (_mediaUrl != null && _mediaUrl!.isNotEmpty);
 
+  /// The story at the shape the viewer shows it — 9:16, full-bleed.
+  ///
+  /// The composer types into a boxed field on a sheet; the viewer paints
+  /// the whole screen. A caption that fits here can still collide with
+  /// the viewer's chrome, and a photo is cropped differently, so the
+  /// preview renders the destination rather than the editor.
+  Widget _storyPreview() {
+    final bg = Color(_bgColors[_bgIndex]);
+    final fg = _storyTextColor(_bgColors[_bgIndex]);
+    return Center(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: SizedBox(
+          width: 220,
+          height: 220 * 16 / 9,
+          child: _textMode
+              ? ColoredBox(
+                  color: bg,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpace.lg),
+                    child: Center(
+                      child: Text(
+                        _statusText.text.trim(),
+                        textAlign: TextAlign.center,
+                        maxLines: 12,
+                        overflow: TextOverflow.ellipsis,
+                        style: storyFontStyle(
+                          kStoryFontKeys[_fontIndex],
+                          color: fg,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (_mediaUrl != null)
+                      CachedImage(_mediaUrl!, fit: BoxFit.cover)
+                    else
+                      const ColoredBox(color: AppColors.darkNavy),
+                    if (_caption.text.trim().isNotEmpty)
+                      Positioned(
+                        left: AppSpace.md,
+                        right: AppSpace.md,
+                        bottom: AppSpace.xl,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpace.md,
+                            vertical: AppSpace.sm,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.darkNavy.withValues(alpha: 0.55),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          child: Text(
+                            _caption.text.trim(),
+                            textAlign: TextAlign.center,
+                            maxLines: 4,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _publish() async {
     if (!_canShare) return;
+
+    final confirmed = await showEntityPreview(
+      context,
+      title: 'How your story will look',
+      confirmLabel: 'Share it',
+      canvasColor: AppColors.darkNavy,
+      child: _storyPreview(),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() => _publishing = true);
     try {
       final story = _textMode

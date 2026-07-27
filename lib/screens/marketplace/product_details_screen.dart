@@ -180,8 +180,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
     AnalyticsService.marketplaceContact(int.tryParse(widget.productId) ?? 0);
     final digits = phone.replaceAll(RegExp(r'\D'), '');
+    // Tag the actual listing, not just its title. A seller with forty
+    // products and two called "Church shoes" can't act on a name alone —
+    // the link opens the exact one, with its price and photos.
+    final product = _product;
+    final priceLine = product == null ? '' : ' (${product.formatPrice()})';
+    final link = product == null ? '' : '\n\n${productShareUrl(product.id)}';
     final message =
-        'Hi, I\'m interested in "${_product?.title ?? 'your listing'}" on Advent Connect ZW.';
+        'Hi, I\'m interested in "${product?.title ?? 'your listing'}"'
+        '$priceLine on Advent Connect ZW.$link';
     final waUri = Uri.parse(
       'https://wa.me/$digits?text=${Uri.encodeComponent(message)}',
     );

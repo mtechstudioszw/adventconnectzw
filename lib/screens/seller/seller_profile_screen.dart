@@ -235,7 +235,19 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         : seller.phone;
     final digits = number.replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) return;
-    final uri = Uri.parse('https://wa.me/$digits');
+    // Open WhatsApp with the enquiry already written.
+    //
+    // This used to be a bare wa.me/<number> — the seller received a blank
+    // chat from an unknown number with no clue which shop, listing or app
+    // it came from. The store link is what lets them answer without
+    // asking three questions first.
+    final message =
+        'Hi ${seller.contactName?.trim().isNotEmpty == true ? seller.contactName!.trim() : seller.businessName}, '
+        "I found ${seller.businessName} on Advent Connect ZW and I'd like to ask about your products."
+        '\n\n${sellerShareUrl(seller.authUserId)}';
+    final uri = Uri.parse(
+      'https://wa.me/$digits?text=${Uri.encodeComponent(message)}',
+    );
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok) throw Exception('launch failed');

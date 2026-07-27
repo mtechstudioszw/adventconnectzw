@@ -11,6 +11,8 @@ import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/marketplace/product_tile.dart';
+import '../../widgets/preview_sheet.dart';
 import '../widgets/post_form_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -137,9 +139,57 @@ class _AddProductScreenState extends State<AddProductScreen>
     super.dispose();
   }
 
+  /// The tile the marketplace grid will actually draw, built from what's
+  /// in the form right now. A listing's photo crop and how far its title
+  /// truncates are the two things sellers get wrong, and neither is
+  /// visible from the form.
+  Product _draftProduct() {
+    return Product(
+      // Never persisted — the real id comes from the insert.
+      id: widget.isEditing ? widget.initialProduct!.id : 'preview',
+      sellerId: widget.initialProduct?.sellerId ?? 'preview',
+      sellerName: widget.initialProduct?.sellerName ?? 'Your store',
+      sellerVerified: widget.initialProduct?.sellerVerified ?? false,
+      title: _titleController.text.trim(),
+      price: double.tryParse(_priceController.text) ?? 0,
+      currency: _currency,
+      category: _category,
+      description: _descriptionController.text.trim().isEmpty
+          ? null
+          : _descriptionController.text.trim(),
+      imageUrls: List.unmodifiable(_photoUrls),
+      createdAt: DateTime.now(),
+      condition: _condition,
+      province: _province,
+      location: _locationController.text.trim().isEmpty
+          ? null
+          : _locationController.text.trim(),
+    );
+  }
+
   Future<void> _save() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
+
+    // Preview before it goes live — same deal the post composer gets.
+    final confirmed = await showEntityPreview(
+      context,
+      title: widget.isEditing
+          ? 'How your listing will look'
+          : 'How your listing will look',
+      confirmLabel: widget.isEditing ? 'Save changes' : 'List it',
+      child: Padding(
+        // The grid tile is half the screen wide; showing it full-bleed
+        // would misrepresent exactly the crop it is here to check.
+        padding: const EdgeInsets.symmetric(horizontal: 90),
+        child: ProductTile(
+          product: _draftProduct(),
+          onTap: () {},
+        ),
+      ),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() => _saving = true);
     try {
       final price = double.parse(_priceController.text);

@@ -71,53 +71,63 @@ class ProductTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          AspectRatio(
-            aspectRatio: aspectRatio,
-            child: ClipRRect(
-              borderRadius: AppRadius.lgAll,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (heroTag != null)
-                    Hero(
-                      tag: heroTag!,
-                      child: _TileImage(url: product.firstImage),
-                    )
-                  else
-                    _TileImage(url: product.firstImage),
+          // Flexible, not a bare AspectRatio.
+          //
+          // The grid hands each tile a FIXED height (width / 0.56) and the
+          // 3:4 photo plus price + two title lines + the seller row landed
+          // within ~2dp of it. Any larger system font size, or a font
+          // whose metrics differ by a hair, tipped it over — which is the
+          // "BOTTOM OVERFLOWED BY 7 PIXELS" stripe.
+          //
+          // Loose-fitting the photo lets it give back the few pixels the
+          // text needs instead of the column blowing its bounds. At normal
+          // text size nothing moves; the photo keeps its 3:4.
+          Flexible(
+            child: AspectRatio(
+              aspectRatio: aspectRatio,
+              child: ClipRRect(
+                borderRadius: AppRadius.lgAll,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (heroTag != null)
+                      Hero(
+                        tag: heroTag!,
+                        child: _TileImage(url: product.firstImage),
+                      )
+                    else
+                      _TileImage(url: product.firstImage),
 
-                  // Sold / reserved dim the photo rather than hiding the
-                  // listing — scarcity is information a buyer wants.
-                  if (unavailable)
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
+                    // Sold / reserved dim the photo rather than hiding the
+                    // listing — scarcity is information a buyer wants.
+                    if (unavailable)
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                        ),
                       ),
-                    ),
-                  if (unavailable)
-                    Center(
-                      child: _StatusStamp(
-                        label: product.isSold ? 'SOLD' : 'RESERVED',
+                    if (unavailable)
+                      Center(
+                        child: _StatusStamp(
+                          label: product.isSold ? 'SOLD' : 'RESERVED',
+                        ),
                       ),
-                    ),
 
-                  if (product.isFeatured && !unavailable)
-                    const Positioned(
-                      top: AppSpace.sm,
-                      left: AppSpace.sm,
-                      child: _FeaturedPip(),
-                    ),
-
-                  if (saved != null)
-                    Positioned(
-                      top: AppSpace.xs,
-                      right: AppSpace.xs,
-                      child: _SaveHeart(
-                        saved: saved!,
-                        onTap: onToggleSave,
+                    if (product.isFeatured && !unavailable)
+                      const Positioned(
+                        top: AppSpace.sm,
+                        left: AppSpace.sm,
+                        child: _FeaturedPip(),
                       ),
-                    ),
-                ],
+
+                    if (saved != null)
+                      Positioned(
+                        top: AppSpace.xs,
+                        right: AppSpace.xs,
+                        child: _SaveHeart(saved: saved!, onTap: onToggleSave),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -180,7 +190,9 @@ class _TileImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (url.isEmpty) return const _TilePlaceholder(icon: Icons.shopping_bag_outlined);
+    if (url.isEmpty) {
+      return const _TilePlaceholder(icon: Icons.shopping_bag_outlined);
+    }
     return CachedImage(
       url,
       fit: BoxFit.cover,
@@ -199,7 +211,11 @@ class _TilePlaceholder extends StatelessWidget {
     return DecoratedBox(
       decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
       child: Center(
-        child: Icon(icon, color: AppColors.white.withValues(alpha: 0.5), size: 34),
+        child: Icon(
+          icon,
+          color: AppColors.white.withValues(alpha: 0.5),
+          size: 34,
+        ),
       ),
     );
   }

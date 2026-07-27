@@ -131,6 +131,7 @@ async function sendFcm({
   body,
   data,
   dataOnly = false,
+  imageUrl,
 }: {
   account: ServiceAccount;
   accessToken: string;
@@ -142,6 +143,10 @@ async function sendFcm({
   // then renders the notification itself with an inline Reply button + the
   // sender's photo (chat messages). When false, the system renders it.
   dataOnly?: boolean;
+  // Big-picture art. A "🔴 X is live" banner with the broadcast's own frame
+  // is the difference between a line of text and something you tap — it is
+  // what YouTube's own notifications do.
+  imageUrl?: string | null;
 }): Promise<void> {
   const url =
     `https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`;
@@ -162,6 +167,16 @@ async function sendFcm({
     message.message.android.notification = {
       channel_id: "advent_connect_zw_default",
     };
+    if (imageUrl) {
+      // `notification.image` covers Android big-picture; iOS needs the
+      // same URL echoed through APNs' fcm_options for its attachment.
+      message.message.notification.image = imageUrl;
+      message.message.android.notification.image = imageUrl;
+      message.message.apns = {
+        payload: { aps: { "mutable-content": 1 } },
+        fcm_options: { image: imageUrl },
+      };
+    }
   }
   const resp = await fetch(url, {
     method: "POST",
@@ -347,12 +362,30 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Video notifications carry the broadcast's own frame, the way YouTube's
+  // do. reference_type 'video' + reference_id = the YouTube video id, which
+  // is exactly what youtube_fanout_notification writes (patch_156).
+  let imageUrl: string | null = null;
+  if (referenceType === "video" && referenceId) {
+    try {
+      const { data: vid } = await supabase
+        .from("youtube_videos")
+        .select("thumbnail_url")
+        .eq("video_id", referenceId)
+        .maybeSingle();
+      imageUrl = (vid?.thumbnail_url as string | null) ?? null;
+    } catch (_) {
+      // best-effort; falls back to a text-only banner.
+    }
+  }
+
   try {
     const accessToken = await fetchGoogleAccessToken(account);
     await sendFcm({
       account,
       accessToken,
       deviceToken,
+      imageUrl,
       title,
       body,
       dataOnly: isConversation,

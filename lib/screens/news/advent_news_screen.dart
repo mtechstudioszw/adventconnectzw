@@ -203,7 +203,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
         // The first card renders as a hero (taller cover) — like a
         // magazine front cover. Everything else is a compact row.
         final card = i == 0
-            ? _NewsHeroCard(item: item, onTap: () => _openDetails(item))
+            ? NewsHeroCard(item: item, onTap: () => _openDetails(item))
             : _NewsRowCard(item: item, onTap: () => _openDetails(item));
         if (i >= 7) return card;
         return StaggeredReveal(index: i, rise: 18, child: card);
@@ -268,8 +268,11 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-class _NewsHeroCard extends StatelessWidget {
-  const _NewsHeroCard({required this.item, required this.onTap});
+/// The big cover-led news card used at the top of the list — and, so the
+/// composer's preview shows the real thing rather than a lookalike, by
+/// [PostAdventNewsScreen] too. Public for that reason.
+class NewsHeroCard extends StatelessWidget {
+  const NewsHeroCard({super.key, required this.item, required this.onTap});
 
   final AdventNews item;
   final VoidCallback onTap;

@@ -17,7 +17,6 @@ import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import 'widgets/music_visuals.dart';
-import 'widgets/now_playing_bar.dart';
 
 /// Full-screen Audio Bible — opened from a button inside the Bible tab
 /// (founder preference: not its own Library tab). Reuses [MusicTab] with the
@@ -36,18 +35,11 @@ class AudioBibleScreen extends StatelessWidget {
       ),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: const [
-            Expanded(
-              child: MusicTab(
-                kind: 'audio_bible',
-                emptyText: 'Audio Bible will appear here once it\'s added.',
-              ),
-            ),
-            // Standalone screen, so it carries its own mini player. Inside the
-            // Library the shell provides one instead.
-            NowPlayingBar(),
-          ],
+        // The mini player is mounted app-wide now (GlobalMediaBars), so
+        // this screen no longer carries its own — two would stack.
+        child: const MusicTab(
+          kind: 'audio_bible',
+          emptyText: 'Audio Bible will appear here once it\'s added.',
         ),
       ),
     );

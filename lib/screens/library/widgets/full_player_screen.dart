@@ -27,6 +27,19 @@ class FullPlayerScreen extends StatefulWidget {
 class _FullPlayerScreenState extends State<FullPlayerScreen> {
   final _service = MusicPlayerService.instance;
 
+  @override
+  void initState() {
+    super.initState();
+    // Stand the app-wide mini bar down while we're up.
+    MusicPlayerService.fullPlayerOpen.value = true;
+  }
+
+  @override
+  void dispose() {
+    MusicPlayerService.fullPlayerOpen.value = false;
+    super.dispose();
+  }
+
   /// Live drag offset for the pull-down-to-dismiss gesture.
   double _dragY = 0;
 

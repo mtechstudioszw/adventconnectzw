@@ -31,7 +31,10 @@ import '../screens/watch/saved_videos_screen.dart';
 import '../screens/watch/channels_screen.dart';
 import '../screens/watch/channel_screen.dart';
 import '../screens/watch/video_player_screen.dart';
+import '../screens/watch/shorts_screen.dart';
+import '../screens/watch/series_screen.dart';
 import '../models/youtube_channel.dart';
+import '../models/youtube_playlist.dart';
 import '../models/youtube_video.dart';
 import '../screens/quiz/arena/quiz_boot_screen.dart';
 import '../screens/quiz/arena/widgets/arena_page_route.dart';
@@ -643,6 +646,33 @@ final GoRouter appRouter = GoRouter(
           path: 'channels',
           name: 'watch_channels',
           builder: (context, state) => const ChannelsScreen(),
+        ),
+        GoRoute(
+          path: 'shorts',
+          name: 'watch_shorts',
+          builder: (context, state) {
+            final args = state.extra is ShortsArgs
+                ? state.extra as ShortsArgs
+                : const ShortsArgs(shorts: []);
+            return ShortsScreen(args: args);
+          },
+        ),
+        GoRoute(
+          path: 'series/:playlistId',
+          name: 'watch_series',
+          builder: (context, state) {
+            final id = state.pathParameters['playlistId'] ?? '';
+            final initial = state.extra is YoutubePlaylist
+                ? state.extra as YoutubePlaylist
+                : null;
+            final from =
+                int.tryParse(state.uri.queryParameters['from'] ?? '') ?? 0;
+            return SeriesScreen(
+              playlistId: id,
+              initial: initial,
+              fromPosition: from,
+            );
+          },
         ),
         GoRoute(
           path: 'channel/:channelId',

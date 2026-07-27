@@ -23,6 +23,33 @@ class ResumeItem {
       durationSeconds > 0 ? (positionSeconds / durationSeconds).clamp(0, 1) : 0;
 }
 
+/// How far into a series the user has got, assembled from watch history
+/// plus playlist membership — no table of its own.
+class SeriesProgress {
+  const SeriesProgress({
+    required this.playlist,
+    required this.reachedPosition,
+  });
+
+  final YoutubePlaylist playlist;
+
+  /// Zero-based position of the furthest episode they've opened.
+  final int reachedPosition;
+
+  /// One-based episode number to resume at.
+  int get nextEpisode => (reachedPosition + 2).clamp(1, playlist.itemCount);
+
+  /// Zero-based index the series screen should resume from.
+  int get nextPosition => reachedPosition + 1;
+
+  /// "Episode 4 of 36"
+  String get label => 'Episode $nextEpisode of ${playlist.itemCount}';
+
+  double get progress => playlist.itemCount <= 0
+      ? 0
+      : (nextPosition / playlist.itemCount).clamp(0, 1);
+}
+
 /// A user's timestamped sermon note (youtube_video_notes).
 class YoutubeNote {
   const YoutubeNote({
@@ -69,6 +96,9 @@ class YoutubeService {
   static const _upcomingKey = 'yt_upcoming_v1';
   static const _continueKey = 'yt_continue_v1';
   static const _savedIdsKey = 'yt_saved_ids_v1';
+  static const _shortsKey = 'yt_shorts_v1';
+  static const _seriesKey = 'yt_series_v1';
+  static const _subsKey = 'yt_subs_v1';
 
   // ----------------------------- Feed --------------------------------
   /// Newest videos for the infinite Watch / Home feed. Excludes scheduled
@@ -236,12 +266,20 @@ class YoutubeService {
   static List<YoutubeVideo> cachedLiveNow() => _cachedList(_liveNowKey);
 
   /// Scheduled-but-not-started broadcasts (Upcoming rail).
+  ///
+  /// Only broadcasts still in the FUTURE. YouTube leaves `live_status`
+  /// on 'upcoming' forever when a scheduled stream never airs, so without
+  /// this filter the rail advertised dead 2023 prayer meetings as though
+  /// they were about to start — every one of the 27 flagged rows was in
+  /// the past. A countdown to a date that has already gone is worse than
+  /// an empty rail.
   static Future<List<YoutubeVideo>> fetchUpcoming({int limit = 10}) async {
     try {
       final rows = await _c
           .from('youtube_videos')
           .select()
           .eq('live_status', 'upcoming')
+          .gt('scheduled_start_at', DateTime.now().toUtc().toIso8601String())
           .order('scheduled_start_at')
           .limit(limit);
       final list = (rows as List)
@@ -259,6 +297,231 @@ class YoutubeService {
 
   /// Cached Upcoming rail, readable synchronously for the first paint.
   static List<YoutubeVideo> cachedUpcoming() => _cachedList(_upcomingKey);
+
+  // ----------------------------- Shorts ------------------------------
+  /// Clips a minute or under — the vertical Shorts feed. Derived from
+  /// `duration_seconds`, so this costs nothing in schema: ~4.7k of the
+  /// synced videos already qualify.
+  ///
+  /// `duration_seconds > 0` matters: live and not-yet-processed rows
+  /// store 0, and those would otherwise flood the rail.
+  static Future<List<YoutubeVideo>> fetchShorts({
+    int limit = 30,
+    int offset = 0,
+  }) async {
+    try {
+      final rows = await _c
+          .from('youtube_videos')
+          .select()
+          .eq('live_status', 'none')
+          .gt('duration_seconds', 0)
+          .lte('duration_seconds', shortMaxSeconds)
+          .order('published_at', ascending: false)
+          .range(offset, offset + limit - 1)
+          .timeout(const Duration(seconds: 15));
+      final list = (rows as List)
+          .map((e) => YoutubeVideo.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (offset == 0) {
+        await CacheService.writeString(
+          _shortsKey,
+          jsonEncode(list.map((v) => v.toJson()).toList()),
+        );
+      }
+      return list;
+    } catch (_) {
+      return offset == 0 ? _cachedList(_shortsKey) : const [];
+    }
+  }
+
+  /// Cached Shorts rail, readable synchronously for the first paint.
+  static List<YoutubeVideo> cachedShorts() => _cachedList(_shortsKey);
+
+  /// Longest a clip can be and still count as a Short.
+  static const int shortMaxSeconds = 60;
+
+  // ----------------------------- Series ------------------------------
+  /// Playlists worth presenting as a bingeable series. Ordered by size —
+  /// a two-item playlist isn't a series, so [minItems] filters the noise.
+  ///
+  /// 1,424 playlists and 22,585 items have been syncing since patch_154
+  /// without any screen ever reading them.
+  static Future<List<YoutubePlaylist>> fetchSeries({
+    int limit = 40,
+    int offset = 0,
+    int minItems = 3,
+  }) async {
+    try {
+      final rows = await _c
+          .from('youtube_playlists')
+          .select()
+          .gte('item_count', minItems)
+          .order('item_count', ascending: false)
+          .range(offset, offset + limit - 1)
+          .timeout(const Duration(seconds: 15));
+      final list = (rows as List)
+          .map((e) => YoutubePlaylist.fromJson(e as Map<String, dynamic>))
+          .toList();
+      if (offset == 0) {
+        await CacheService.writeString(
+          _seriesKey,
+          jsonEncode(list.map((p) => p.toJson()).toList()),
+        );
+      }
+      return list;
+    } catch (_) {
+      if (offset != 0) return const [];
+      final raw = CacheService.readStringStale(_seriesKey);
+      if (raw == null || raw.isEmpty) return const [];
+      try {
+        return (jsonDecode(raw) as List)
+            .map((e) => YoutubePlaylist.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (_) {
+        return const [];
+      }
+    }
+  }
+
+  /// Cached series shelf, readable synchronously for the first paint.
+  static List<YoutubePlaylist> cachedSeries() {
+    final raw = CacheService.readStringStale(_seriesKey);
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      return (jsonDecode(raw) as List)
+          .map((e) => YoutubePlaylist.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// One channel's own series, for the channel page.
+  static Future<List<YoutubePlaylist>> fetchChannelSeries(
+    String channelId, {
+    int limit = 20,
+    int minItems = 3,
+  }) async {
+    try {
+      final rows = await _c
+          .from('youtube_playlists')
+          .select()
+          .eq('channel_id', channelId)
+          .gte('item_count', minItems)
+          .order('item_count', ascending: false)
+          .limit(limit);
+      return (rows as List)
+          .map((e) => YoutubePlaylist.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// One playlist's metadata (for the series screen header).
+  static Future<YoutubePlaylist?> fetchPlaylist(String playlistId) async {
+    try {
+      final row = await _c
+          .from('youtube_playlists')
+          .select()
+          .eq('playlist_id', playlistId)
+          .maybeSingle();
+      return row == null ? null : YoutubePlaylist.fromJson(row);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Series the user is partway through — "Episode 4 of 36".
+  ///
+  /// Built from data that already exists: take what they've been
+  /// watching, find which playlists those videos belong to, and report
+  /// how far in they got. No new table.
+  static Future<List<SeriesProgress>> fetchContinueSeries({
+    int limit = 6,
+  }) async {
+    final uid = _uid;
+    if (uid == null) return const [];
+    try {
+      final history = await _c
+          .from('youtube_watch_history')
+          .select('video_id, watched_at')
+          .eq('user_id', uid)
+          .order('watched_at', ascending: false)
+          .limit(40);
+      final ids = [
+        for (final r in history as List)
+          (r as Map<String, dynamic>)['video_id'].toString(),
+      ];
+      if (ids.isEmpty) return const [];
+
+      // Which series do those videos belong to, and at what position?
+      final items = await _c
+          .from('youtube_playlist_items')
+          .select('playlist_id, video_id, position')
+          .inFilter('video_id', ids);
+
+      // Keep the FURTHEST position reached in each series.
+      final bestPosition = <String, int>{};
+      for (final e in items as List) {
+        final m = e as Map<String, dynamic>;
+        final pid = m['playlist_id'].toString();
+        final pos = (m['position'] as num?)?.toInt() ?? 0;
+        if (pos > (bestPosition[pid] ?? -1)) bestPosition[pid] = pos;
+      }
+      if (bestPosition.isEmpty) return const [];
+
+      final playlists = await _c
+          .from('youtube_playlists')
+          .select()
+          .inFilter('playlist_id', bestPosition.keys.toList());
+
+      final out = <SeriesProgress>[];
+      for (final r in playlists as List) {
+        final p = YoutubePlaylist.fromJson(r as Map<String, dynamic>);
+        final reached = bestPosition[p.playlistId] ?? 0;
+        // Finished series shouldn't nag; nor should a one-item playlist.
+        if (p.itemCount < 2 || reached >= p.itemCount - 1) continue;
+        out.add(SeriesProgress(playlist: p, reachedPosition: reached));
+      }
+      out.sort((a, b) => b.playlist.itemCount.compareTo(a.playlist.itemCount));
+      return out.take(limit).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// The videos of a series from a given position onward, so "continue"
+  /// resumes at the next episode instead of episode one.
+  static Future<List<YoutubeVideo>> fetchSeriesFrom(
+    String playlistId, {
+    required int fromPosition,
+    int limit = 20,
+  }) =>
+      fetchByPlaylist(playlistId, limit: limit, offset: fromPosition);
+
+  // -------------------------- Sabbath lineup -------------------------
+  /// Worship-shaped viewing for the Sabbath hours. Nothing new is
+  /// stored — this is the existing search RPC pointed at worship
+  /// keywords, with anything short filtered out so the lineup is
+  /// services and sermons rather than clips.
+  static Future<List<YoutubeVideo>> fetchSabbathLineup({
+    int limit = 12,
+  }) async {
+    const terms = ['divine service', 'sabbath worship', 'sermon'];
+    final seen = <String>{};
+    final out = <YoutubeVideo>[];
+    for (final term in terms) {
+      final rows = await search(term, limit: limit);
+      for (final v in rows) {
+        if (v.durationSeconds <= shortMaxSeconds) continue;
+        if (!seen.add(v.videoId)) continue;
+        out.add(v);
+      }
+      if (out.length >= limit) break;
+    }
+    return out.take(limit).toList();
+  }
 
   // ---------------------------- Channels -----------------------------
   static Future<List<YoutubeChannel>> fetchChannels() async {
@@ -346,6 +609,83 @@ class YoutubeService {
     try {
       final rows = await _c.rpc('youtube_up_next', params: {
         'p_video_id': videoId,
+        'p_limit': limit,
+        'p_offset': offset,
+      });
+      return (rows as List)
+          .map((e) => YoutubeVideo.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  // ------------------------- Subscriptions ---------------------------
+  /// Channel ids the signed-in user follows (patch_164).
+  ///
+  /// Every call here degrades to the cache on failure, so the app keeps
+  /// working unchanged if patch_164 hasn't been applied yet.
+  static Future<Set<String>> fetchSubscriptionIds() async {
+    final uid = _uid;
+    if (uid == null) return <String>{};
+    try {
+      final rows = await _c
+          .from('youtube_subscriptions')
+          .select('channel_id')
+          .eq('user_id', uid);
+      final ids = {
+        for (final r in rows as List)
+          (r as Map<String, dynamic>)['channel_id'].toString(),
+      };
+      await CacheService.writeString(_subsKey, jsonEncode(ids.toList()));
+      return ids;
+    } catch (_) {
+      return cachedSubscriptionIds();
+    }
+  }
+
+  /// Cached follow list, readable synchronously for the first paint.
+  static Set<String> cachedSubscriptionIds() {
+    final raw = CacheService.readStringStale(_subsKey);
+    if (raw == null || raw.isEmpty) return <String>{};
+    try {
+      return (jsonDecode(raw) as List).map((e) => e.toString()).toSet();
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  static Future<void> setSubscribed(String channelId, bool subscribed) async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      if (subscribed) {
+        await _c.from('youtube_subscriptions').upsert(
+          {'user_id': uid, 'channel_id': channelId},
+          onConflict: 'user_id,channel_id',
+        );
+      } else {
+        await _c
+            .from('youtube_subscriptions')
+            .delete()
+            .eq('user_id', uid)
+            .eq('channel_id', channelId);
+      }
+      // Keep the synchronous cache honest so the next paint is correct.
+      final ids = cachedSubscriptionIds();
+      subscribed ? ids.add(channelId) : ids.remove(channelId);
+      await CacheService.writeString(_subsKey, jsonEncode(ids.toList()));
+    } catch (_) {/* best effort */}
+  }
+
+  /// Newest videos from the channels the user follows.
+  static Future<List<YoutubeVideo>> fetchSubscriptionFeed({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    if (_uid == null) return const [];
+    try {
+      final rows = await _c.rpc('youtube_subscription_feed', params: {
         'p_limit': limit,
         'p_offset': offset,
       });
@@ -500,6 +840,21 @@ class YoutubeService {
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Drop a video from the Keep-watching shelf without losing the fact
+  /// that it was watched — marking it complete is what the shelf already
+  /// filters on, so no new column is needed.
+  static Future<void> dismissFromContinueWatching(String videoId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      await _c
+          .from('youtube_watch_history')
+          .update({'completed': true})
+          .eq('user_id', uid)
+          .eq('video_id', videoId);
+    } catch (_) {/* best effort */}
   }
 
   /// Resume position (seconds) for one video, or 0.

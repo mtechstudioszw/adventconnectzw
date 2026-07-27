@@ -36,6 +36,12 @@ dependencies:
   # audio service in AndroidManifest, iOS UIBackgroundModes audio).
   just_audio: 0.9.42
   just_audio_background: 0.0.1-beta.13
+  # Direct (not transitive) because MusicPlayerService has to read and restore
+  # `JustAudioPlatform.instance` itself: just_audio_background swaps the
+  # platform in BEFORE it finishes initialising, so a failed init leaves the
+  # app unable to play anything until the real platform is put back. Version
+  # matches what just_audio 0.9.42 already resolves to.
+  just_audio_platform_interface: 4.6.0
 
   # In-app Library — render uploaded Hymnal / EGW-book PDFs natively
   # (Android PdfRenderer / iOS PDFKit). Lightweight. Pinned exact per

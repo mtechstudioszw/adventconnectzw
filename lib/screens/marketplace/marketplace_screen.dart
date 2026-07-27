@@ -26,7 +26,6 @@ import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/offline_inline_notice.dart';
-import '../../widgets/screen_shell.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
@@ -232,12 +231,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
       backgroundColor: context.palette.scaffoldBg,
       bottomNavigationBar: HideOnScroll(
         visible: navVisible,
-        child: Column(
+        child: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CartFloatingBar(onTap: () => context.pushNamed('cart')),
-            const AdBanner(),
-            const MainBottomNav(currentIndex: 3),
+            // The "N items · View basket" bar that used to sit here is gone.
+            // It was a persistent blue slab restating what the basket badge in
+            // the header already shows, and it ate a row of products on every
+            // marketplace screen.
+            AdBanner(),
+            MainBottomNav(currentIndex: 3),
           ],
         ),
       ),
@@ -266,8 +268,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        SliverToBoxAdapter(child: _buildHeader()),
-        SliverToBoxAdapter(child: _buildSearchBar()),
+        // Collapsing header: the title block scrolls away and the search row
+        // pins, so products climb to the top of the screen instead of sitting
+        // below a permanent block of chrome.
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _MarketHeaderDelegate(
+            topInset: MediaQuery.paddingOf(context).top,
+            controller: _searchController,
+            query: _query,
+            onQueryChanged: _onSearchChanged,
+            onClearQuery: () {
+              _searchController.clear();
+              setState(() => _query = '');
+            },
+            onCartTap: () => context.pushNamed('cart'),
+          ),
+        ),
         if (_mySeller != null)
           SliverToBoxAdapter(child: _SellerStatusBanner(seller: _mySeller!)),
         SliverToBoxAdapter(child: const _ShopJobsSegment(active: _Section.shop)),
@@ -282,12 +299,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
             padding: const EdgeInsets.only(top: AppSpace.xl),
             child: SectionHeader(
               title: _query.isEmpty ? 'Browse everything' : 'Results',
-              action: 'Categories',
-              onAction: () => context.pushNamed('categories'),
+              // The "Categories" link is gone. It opened a whole screen whose
+              // only job was a grid of the same categories the chips below
+              // already offer inline — a second way to do the same thing, one
+              // navigation deeper.
             ),
           ),
         ),
-        SliverToBoxAdapter(child: _buildCategoryStrip()),
+        // Chips pin under the header so filtering stays reachable no matter
+        // how far down the grid you are.
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _CategoryStripDelegate(child: _buildCategoryStrip()),
+        ),
 
         if (cachedAt != null && _query.isEmpty)
           SliverToBoxAdapter(
@@ -347,58 +371,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     );
   }
 
-  Widget _buildHeader() {
-    return ScreenHero(
-      title: 'Shop within the community',
-      tagline: 'Marketplace',
-      fallbackRoute: 'home',
-      trailing: CartBadgeButton(onTap: () => context.pushNamed('cart')),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpace.lg,
-        AppSpace.md,
-        AppSpace.lg,
-        AppSpace.sm,
-      ),
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onSearchChanged,
-        textInputAction: TextInputAction.search,
-        style: AppTextStyles.bodyLarge,
-        decoration: InputDecoration(
-          hintText: 'Search products and shops',
-          prefixIcon: const Icon(Icons.search, color: AppColors.primaryBlue),
-          suffixIcon: _query.isEmpty
-              ? null
-              : IconButton(
-                  icon: Icon(Icons.close, color: context.palette.textMuted),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _query = '');
-                  },
-                ),
-          filled: true,
-          fillColor: context.palette.inputFill,
-          contentPadding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
-        ),
-      ),
-    );
-  }
 
   Widget _buildShopsRail() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpace.xl),
-        SectionHeader(
-          title: 'Shops on Advent Connect',
-          action: _shops.length > 3 ? 'See all' : null,
-          onAction: () => context.pushNamed('categories'),
-        ),
+        // No "See all": it pushed the CATEGORY grid, which has nothing to do
+        // with shops. The rail already carries every approved seller and
+        // scrolls horizontally, so there is nothing hidden behind it.
+        const SectionHeader(title: 'Shops on Advent Connect'),
         const SizedBox(height: AppSpace.md),
         SizedBox(
           height: 208,
@@ -956,6 +938,195 @@ class _CategoryChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Collapsing marketplace header.
+///
+/// At rest it shows the tagline, the title and the search field. As you scroll
+/// the title block fades and shrinks away and the search row pins, so the
+/// product grid climbs to the top of the screen instead of living underneath
+/// a permanent block of chrome.
+///
+/// There is deliberately **no back button**. Marketplace is a root tab reached
+/// from the nav island — the arrow it used to carry either popped to a screen
+/// the member had never visited or, on a fresh launch with nothing to pop,
+/// silently went to Home.
+class _MarketHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _MarketHeaderDelegate({
+    required this.topInset,
+    required this.controller,
+    required this.query,
+    required this.onQueryChanged,
+    required this.onClearQuery,
+    required this.onCartTap,
+  });
+
+  final double topInset;
+  final TextEditingController controller;
+  final String query;
+  final ValueChanged<String> onQueryChanged;
+  final VoidCallback onClearQuery;
+  final VoidCallback onCartTap;
+
+  /// Title block: tagline + headline. This is what scrolls away.
+  static const double _titleBody = 58;
+
+  /// Search row + the basket button beside it. This is what pins.
+  static const double _searchBody = 60;
+
+  @override
+  double get maxExtent => topInset + _titleBody + _searchBody;
+
+  @override
+  double get minExtent => topInset + _searchBody;
+
+  @override
+  bool shouldRebuild(covariant _MarketHeaderDelegate old) =>
+      old.topInset != topInset || old.query != query;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
+    final palette = context.palette;
+    final t = _titleBody <= 0
+        ? 0.0
+        : (shrinkOffset / _titleBody).clamp(0.0, 1.0);
+
+    return Material(
+      color: palette.scaffoldBg,
+      child: Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Collapses to zero height as it fades, so the search row rides
+            // up rather than leaving a gap behind it.
+            ClipRect(
+              child: Align(
+                alignment: Alignment.topLeft,
+                heightFactor: 1 - t,
+                child: Opacity(
+                  opacity: (1 - t * 1.6).clamp(0.0, 1.0),
+                  child: SizedBox(
+                    height: _titleBody,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpace.lg,
+                        AppSpace.sm,
+                        AppSpace.lg,
+                        0,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'MARKETPLACE',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.6,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Shop within the community',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.displayMedium.copyWith(
+                              color: palette.text,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              height: _searchBody,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  AppSpace.sm,
+                  AppSpace.lg,
+                  AppSpace.md,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        onChanged: onQueryChanged,
+                        textInputAction: TextInputAction.search,
+                        style: AppTextStyles.bodyMedium,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          hintText: 'Search products and shops',
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            color: AppColors.primaryBlue,
+                            size: 20,
+                          ),
+                          suffixIcon: query.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: Icon(
+                                    Icons.close,
+                                    size: 18,
+                                    color: palette.textMuted,
+                                  ),
+                                  onPressed: onClearQuery,
+                                ),
+                          filled: true,
+                          fillColor: palette.inputFill,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: AppSpace.sm,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    CartBadgeButton(onTap: onCartTap),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Pins the category chips directly under the header, so filtering stays one
+/// tap away however far down the grid the member has scrolled.
+class _CategoryStripDelegate extends SliverPersistentHeaderDelegate {
+  _CategoryStripDelegate({required this.child});
+
+  final Widget child;
+
+  static const double _height = 52;
+
+  @override
+  double get maxExtent => _height;
+
+  @override
+  double get minExtent => _height;
+
+  @override
+  bool shouldRebuild(covariant _CategoryStripDelegate old) =>
+      old.child != child;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
+    return Material(
+      color: context.palette.scaffoldBg,
+      child: SizedBox(height: _height, child: child),
     );
   }
 }

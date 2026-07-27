@@ -40,6 +40,32 @@ class CacheService {
     }
   }
 
+  /// How long LIBRARY content survives without being re-opened.
+  ///
+  /// Bible chapters and Sabbath School lessons are offline-first by promise —
+  /// the app has an explicit "download this week" button — but they were being
+  /// swept by the 24h TTL along with feed payloads. A member who downloaded a
+  /// quarter on Sabbath found it gone by Monday, the Bible re-fetched books it
+  /// had already stored, and the ~90-language Sabbath School picker collapsed
+  /// to its two hardcoded fallbacks whenever it was opened offline a day after
+  /// the last successful sync.
+  ///
+  /// A year is effectively permanent from the member's point of view while
+  /// still letting the box reclaim content that genuinely was never revisited.
+  static const Duration _libraryMaxAge = Duration(days: 365);
+
+  /// Chat/inbox caches are read "stale" for offline, so they outlive the
+  /// default TTL too, just by less.
+  static const Duration _chatMaxAge = Duration(days: 7);
+
+  /// True for offline-first Library payloads: downloaded Bible chapters,
+  /// Sabbath School quarterlies / lessons / days, and the language list that
+  /// makes the Sabbath School picker usable without a connection.
+  static bool _isLibraryContent(String key) =>
+      key.startsWith('bible:') ||
+      key.startsWith('ss:') ||
+      key.startsWith('ss_');
+
   /// Drop expired cached payloads, then rewrite the box to drop all the
   /// dead/overwritten log entries. Best-effort, off the critical path.
   static Future<void> _pruneAndCompact() async {
@@ -52,18 +78,21 @@ class CacheService {
         if (key is! String || key.endsWith('__ts') || key.startsWith('pref:')) {
           continue;
         }
-        // Offline-first library content (the Hymnal) must survive so people
-        // can read hymns with no connection — it's static text that rarely
-        // changes, so it's never pruned (an admin edit busts it via
-        // HymnService.invalidate + refetch when back online).
+        // The bundled Hymnal is static text that rarely changes and is never
+        // pruned at all (an admin edit busts it via HymnService.invalidate +
+        // refetch when back online).
         if (key.startsWith('hymns_')) continue;
         final tsRaw = box.get('${key}__ts');
         final ts = tsRaw == null ? null : DateTime.tryParse(tsRaw);
         if (ts == null) continue;
-        // Chat/inbox caches are read "stale" for offline, so give them a
-        // longer 7-day window; everything else follows the 24h TTL.
-        final isChat = key == 'inbox' || key.startsWith('chat:');
-        final limit = isChat ? const Duration(days: 7) : _maxAge;
+        final Duration limit;
+        if (_isLibraryContent(key)) {
+          limit = _libraryMaxAge;
+        } else if (key == 'inbox' || key.startsWith('chat:')) {
+          limit = _chatMaxAge;
+        } else {
+          limit = _maxAge;
+        }
         if (now.difference(ts) > limit) {
           toDelete..add(key)..add('${key}__ts');
         }

@@ -68,6 +68,23 @@ class MessagingService {
 
   static final SupabaseClient _client = Supabase.instance.client;
 
+  /// Total unread messages across every thread, published app-wide.
+  ///
+  /// Advent Chat is a bottom-nav tab now, so its badge has to be right on
+  /// Watch / Marketplace / Profile too — screens that never fetch an inbox.
+  /// [fetchConversations] refreshes this on every call, and the nav listens,
+  /// so the badge stays live wherever the member happens to be standing.
+  static final ValueNotifier<int> unreadTotal = ValueNotifier<int>(0);
+
+  /// Recomputes [unreadTotal] from a freshly-fetched inbox.
+  static void _publishUnread(List<Conversation> conversations) {
+    var total = 0;
+    for (final c in conversations) {
+      total += c.unreadCount;
+    }
+    if (unreadTotal.value != total) unreadTotal.value = total;
+  }
+
   static const _conversationsTable = 'conversations';
   static const _messagesTable = 'messages';
   static const _voiceBucket = 'voice_notes';
@@ -382,6 +399,7 @@ class MessagingService {
       if (b.isSelfChat && !a.isSelfChat) return 1;
       return b.lastMessageAt.compareTo(a.lastMessageAt);
     });
+    _publishUnread(list);
     return list;
   }
 

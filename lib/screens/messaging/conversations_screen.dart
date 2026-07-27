@@ -11,6 +11,7 @@ import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
 import '../../widgets/church_group_avatar.dart';
 import '../../services/presence_service.dart';
+import '../widgets/main_bottom_nav.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -798,6 +799,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
+      // Advent Chat is a top-level tab now (it replaced Churches), so the
+      // inbox carries the island like every other tab destination.
+      bottomNavigationBar: const MainBottomNav(
+        currentIndex: MainBottomNav.chatIndex,
+      ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: AppColors.white,

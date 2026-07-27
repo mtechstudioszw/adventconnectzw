@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../models/sabbath_school_model.dart';
+import '../widgets/cached_image.dart' show precacheImageUrls;
 import 'cache_service.dart';
 
 /// Reads Sabbath School lessons from Adventech's public API — the same feed
@@ -86,9 +87,18 @@ class SabbathSchoolService {
           .map((e) => SsLanguage.fromJson(e as Map<String, dynamic>))
           .toList());
     }
+    // Cold first run with no connection. Covers every priority language
+    // rather than just Shona + English: the picker collapsing to two entries
+    // was the reported "it loses all the languages when I'm offline", and the
+    // real cause (the 24h cache prune eating ss_languages_v1) is fixed in
+    // CacheService — this is the floor underneath that.
     return const [
       SsLanguage(code: 'sn', name: 'Shona'),
       SsLanguage(code: 'en', name: 'English'),
+      SsLanguage(code: 'nd', name: 'Ndebele'),
+      SsLanguage(code: 'af', name: 'Afrikaans'),
+      SsLanguage(code: 'pt', name: 'Português'),
+      SsLanguage(code: 'sw', name: 'Kiswahili'),
     ];
   }
 
@@ -140,6 +150,12 @@ class SabbathSchoolService {
         key,
         jsonEncode([for (final q in list) q.toJson()]),
       ));
+      // Warm the covers into the image cache alongside the JSON, so a quarter
+      // that has been seen once still shows its artwork offline instead of a
+      // grid of retry tiles.
+      unawaited(precacheImageUrls([
+        for (final q in list) ...[q.cover, q.splash],
+      ]));
       return list;
     } catch (e) {
       debugPrint('SS quarterlies falling back to cache: $e');
@@ -187,6 +203,7 @@ class SabbathSchoolService {
         key,
         jsonEncode([for (final l in list) l.toJson()]),
       ));
+      unawaited(precacheImageUrls([for (final l in list) l.cover]));
       return list;
     } catch (e) {
       debugPrint('SS lessons falling back to cache: $e');

@@ -45,7 +45,6 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/ads/native_ad_card.dart';
-import '../../widgets/home/advent_chat_bubble.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_entry.dart';
 import '../../widgets/home/composer_sheet.dart';
@@ -60,7 +59,6 @@ import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/today_card.dart';
-import '../library/widgets/now_playing_bar.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/job_card.dart';
 import '../../widgets/marketplace/product_tile.dart';
@@ -107,9 +105,10 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   List<Job> _jobs = const [];
   // Individual tracks interleaved into the feed, one card each.
   List<LibraryItem> _music = const [];
-  // Watch (YouTube): the current live stream for the LIVE banner + a page
-  // of recent videos interleaved into the feed as individual cards.
-  YoutubeVideo? _liveVideo;
+  // Watch (YouTube): every currently-live stream for the LIVE banner (it is
+  // a swipeable deck when more than one channel is on air) + a page of recent
+  // videos interleaved into the feed as individual cards.
+  List<YoutubeVideo> _liveVideos = const [];
   List<YoutubeVideo> _homeVideos = const [];
   // userId -> friendship row (if any) so the suggestion cards know
   // whether to show "Add friend" / "Pending" / "Friends".
@@ -167,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       if (mounted && d != null) setState(() => _devotion = d);
     });
     // Paint the cached LIVE banner instantly (no late pop-in), then refresh.
-    _liveVideo = YoutubeService.cachedLive();
+    _liveVideos = YoutubeService.cachedLiveNow();
     // Watch content — live stream + recent videos. Independent of the main
     // bootstrap so a slow YouTube read never delays the rest of Home.
     _loadWatch();
@@ -720,8 +719,8 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
         .toUpperCase();
   }
 
-  bool get _hasUnreadChat => _unreadMessages > 0 || _pendingFriendRequests > 0;
-
+  /// What the Chat tab badges: unread messages plus friend requests waiting
+  /// to be accepted, since both are answered from inside Advent Chat.
   int? get _chatBadgeCount {
     final total = _unreadMessages + _pendingFriendRequests;
     return total > 0 ? total : null;
@@ -1010,70 +1009,29 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
           // listen further up.
           return false;
         },
-        child: Stack(
-          children: [
-            _buildScrollableContent(),
-            // Exactly one floating bubble: Advent Chat (with its unread
-            // badge). The old Prayer quick-access bubble that stacked on top
-            // was removed — Prayer is reached from the Stories section link
-            // and the Prayer tab.
-            //
-            // It now rides away with the bottom nav instead of sitting over
-            // the feed while you read.
-            Positioned(
-              right: AppSpace.lg,
-              bottom: AppSpace.xl,
-              child: AnimatedSlide(
-                offset: navVisible ? Offset.zero : const Offset(1.4, 0),
-                duration: AppMotion.maybe(context, AppMotion.standard),
-                curve: AppMotion.easeOut,
-                child: AnimatedOpacity(
-                  opacity: navVisible ? 1 : 0,
-                  duration: AppMotion.maybe(context, AppMotion.quick),
-                  child: AdventChatBubble(
-                    hasUnread: _hasUnreadChat,
-                    unreadCount: _chatBadgeCount,
-                    onTap: () async {
-                      await context.pushNamed('messages');
-                      // Returning from the inbox refreshes the badge — covers
-                      // the case where the user read every unread message
-                      // inside the chat and the FAB would otherwise stay red
-                      // until the next realtime activity event.
-                      if (mounted) await _refreshUnreadBadge();
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+        // The floating Advent Chat bubble that used to sit here is gone
+        // (2026-07-27). It was unreachable by construction: `extendBody` puts
+        // the body under the island, so a bottom-anchored bubble rendered
+        // beneath the nav and could not be tapped, and it slid away with the
+        // island on scroll. Chat is a real tab now — see MainBottomNav.
+        child: _buildScrollableContent(),
       ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Now-playing sits ABOVE the nav and deliberately OUTSIDE
-          // HideOnScroll — the tabs may slide away while you read, but
-          // transport controls for something that's actually playing must
-          // not. Self-hides to zero height when no queue is loaded.
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
-            child: NowPlayingBar(),
-          ),
-          HideOnScroll(
-            visible: navVisible,
-            child: MainBottomNav(
-              currentIndex: 0,
-              // Tapping Home while already on Home returns to the top — the
-              // only way back up from an endless feed.
-              onReselect: _scrollToTop,
-              // No chat badge on the Profile tab — the floating Advent Chat
-              // bubble (bottom-right) already surfaces unread counts, and
-              // tapping Profile doesn't actually take the user to messages,
-              // which made the badge misleading ("6 unread shown but
-              // nothing in profile when I open it").
-            ),
-          ),
-        ],
+      // No NowPlayingBar here. The mini player belongs to the Music tab; away
+      // from it, transport controls live where a real music player puts them
+      // — the Android media notification and the iOS lock screen / Control
+      // Centre, both driven by the media session in MusicPlayerService.
+      bottomNavigationBar: HideOnScroll(
+        visible: navVisible,
+        child: MainBottomNav(
+          currentIndex: 0,
+          // Tapping Home while already on Home returns to the top — the
+          // only way back up from an endless feed.
+          onReselect: _scrollToTop,
+          // Home's own count is richer than the app-wide unread total the
+          // nav falls back to: it also folds in pending friend requests,
+          // which is the other thing waiting for you inside Chat.
+          badges: {MainBottomNav.chatIndex: _chatBadgeCount ?? 0},
+        ),
       ),
     );
   }
@@ -1103,7 +1061,10 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
 
   Future<void> _loadWatch() async {
     final results = await Future.wait<Object?>([
-      YoutubeService.fetchCurrentLive(),
+      // Every live channel, not just the first: the banner is a deck now, and
+      // silently dropping a second congregation's stream was a real loss on
+      // Sabbath morning when several are on air at once.
+      YoutubeService.fetchLiveNow(),
       YoutubeService.fetchFeed(limit: 30),
     ]);
     if (!mounted) return;
@@ -1112,7 +1073,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     final pool = List<YoutubeVideo>.from(results[1] as List<YoutubeVideo>);
     pool.shuffle();
     setState(() {
-      _liveVideo = results[0] as YoutubeVideo?;
+      _liveVideos = results[0] as List<YoutubeVideo>;
       _homeVideos = pool.take(8).toList();
     });
   }
@@ -1166,11 +1127,12 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // LIVE now — collapses to nothing when no channel is live.
-                  LiveBanner(live: _liveVideo, onTap: _openVideo),
+                  // LIVE now — collapses to nothing when no channel is live,
+                  // and becomes a swipeable deck when several are.
+                  LiveBanner(live: _liveVideos, onTap: _openVideo),
                   if (_banner != null &&
                       !_dismissedBannerIds.contains(_banner!.id)) ...[
-                    const SizedBox(height: AppSpace.lg),
+                    const SizedBox(height: AppSpace.md),
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpace.lg,
@@ -1183,18 +1145,16 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                       ),
                     ),
                   ],
-                  const SizedBox(height: AppSpace.lg),
-                  // A real search field, not just the header icon. Search was
-                  // discoverable only as a small glyph competing with the
-                  // bell; a field states plainly that the app is searchable.
-                  // It scrolls away with the content rather than occupying
-                  // permanent header space.
-                  _SearchPill(onTap: () => context.pushNamed('search')),
+                  // The standalone search field that used to sit here is gone
+                  // — it duplicated the header's search button one thumb away
+                  // from it, and cost a whole row between the live card and
+                  // the composer. Search is the header glyph now, full stop.
                   const SizedBox(height: AppSpace.md),
                   ComposerEntry(
                     photoUrl: _viewerPhotoUrl(),
                     name: _displayFullName(),
                     onCreate: _handleCreate,
+                    onDonate: () => context.pushNamed('donate'),
                   ),
                 ],
               ),
@@ -1225,12 +1185,12 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: AppSpace.xl),
+                  const SizedBox(height: AppSpace.lg),
                   // Devotion + Sabbath School + hymn / music / EGW of the
                   // day. Self-hides only if every source is empty, which the
                   // bundled hymnal makes very unlikely.
                   TodayCard(devotion: _devotion),
-                  const SizedBox(height: AppSpace.lg),
+                  const SizedBox(height: AppSpace.md),
                   // Library launcher. This is the ONLY route into /quiz —
                   // see LibraryTiles before reordering it.
                   const LibraryTiles(),
@@ -1259,8 +1219,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
           // Watch videos and sponsored slots, in one continuous scroll.
           _buildFeedSliver(),
           SliverToBoxAdapter(child: _buildFeedFooter()),
-          // Bottom padding so the floating chat bubble + bottom nav
-          // don't sit on top of the last bit of feed content.
+          // Bottom padding so the floating nav island doesn't sit on top of
+          // the last bit of feed content — `extendBody` runs the feed
+          // underneath it. Matches the ~96dp MainBottomNav asks for.
           const SliverToBoxAdapter(child: SizedBox(height: 96)),
         ],
       ),
@@ -1307,7 +1268,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
               icon: Icons.church_outlined,
               value: '${_followedChurchIds.length}',
               label: 'Churches',
-              onTap: () => context.goNamed('churches'),
+              // Pushed, not `go`n: Churches is no longer a nav tab, so it
+              // needs a back stack to return to Home.
+              onTap: () => context.pushNamed('churches'),
             ),
           ),
           const SizedBox(width: 10),
@@ -1603,7 +1566,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => context.goNamed('churches'),
+                    onPressed: () => context.pushNamed('churches'),
                     icon: const Icon(Icons.church_outlined, size: 18),
                     label: const Text('Find churches'),
                   ),
@@ -1938,7 +1901,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
           widget: _discoverySection(
             title: 'Discover churches',
             action: 'See all',
-            onAction: () => context.goNamed('churches'),
+            onAction: () => context.pushNamed('churches'),
             child: _buildChurchGrid(),
           ),
         ),
@@ -2747,64 +2710,6 @@ class _SeenReporterState extends State<_SeenReporter> {
   Widget build(BuildContext context) => widget.child;
 }
 
-/// Tappable search field at the top of the feed.
-///
-/// Looks like an input but is a button — tapping opens the real search
-/// screen. A dummy field beats a live one here: it costs no focus node or
-/// keyboard handling in the feed, and search has its own screen with
-/// filters and history already.
-class _SearchPill extends StatelessWidget {
-  const _SearchPill({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-      child: Semantics(
-        button: true,
-        label: 'Search Advent Connect',
-        child: Pressable(
-          onTap: onTap,
-          pressedScale: 0.985,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpace.md,
-              vertical: AppSpace.md,
-            ),
-            decoration: BoxDecoration(
-              color: palette.card,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.all(color: palette.divider),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.search_rounded,
-                  size: 20,
-                  color: palette.textMuted,
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Text(
-                    'Search people, churches, events…',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: palette.textMuted,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _UrgentBannerCard extends StatelessWidget {
   const _UrgentBannerCard({required this.banner, required this.onDismiss});

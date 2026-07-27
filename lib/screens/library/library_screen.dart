@@ -10,7 +10,6 @@ import 'egw_tab.dart';
 import 'hymnal_tab.dart';
 import 'music_tab.dart';
 import 'sabbath_school_tab.dart';
-import 'widgets/now_playing_bar.dart';
 
 /// The in-app Library: Bible (bundled offline KJV), Sabbath School (Adventech
 /// lessons in ~90 languages, Shona by default), Hymnal (bundled, fully
@@ -116,9 +115,11 @@ class _LibraryScreenState extends State<LibraryScreen>
                 ],
               ),
             ),
-            // Shell-level so playback controls follow the user across every
-            // tab — start a hymn, keep reading the Bible, still control it.
-            const NowPlayingBar(),
+            // The shell-level mini player was removed: the founder wants the
+            // now-playing card confined to the Music tab (which mounts its
+            // own). Everywhere else — other Library tabs, Home, and outside
+            // the app entirely — playback is controlled from the Android
+            // media notification and the iOS lock screen / Control Centre.
           ],
         ),
       ),

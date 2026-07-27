@@ -5,7 +5,6 @@ import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
-import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../motion/pressable.dart';
@@ -25,6 +24,11 @@ enum CreateKind { post, story, event, prayer, news, notice, job, product }
 /// blur, the tiles spring in on a stagger, and the whole thing reverses on
 /// the way out. Every animation is driven by the route's own animation, so
 /// dismissing plays the entrance backwards instead of cutting.
+///
+/// Styled to match [TranslationPicker], the Bible version switcher: navy
+/// scrim, gold overline, and glass cards rather than opaque white tiles. The
+/// white-card version read as a different app's component dropped onto a navy
+/// backdrop — light-mode cards carrying dark text over a dark scrim.
 ///
 /// Returns the chosen kind, or null if dismissed. Deliberately presentational
 /// — the caller owns navigation, because posts and stories come back with a
@@ -112,116 +116,124 @@ class _CreateScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final animate = AppMotion.enabled(context);
 
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        final t = animate
-            ? Curves.easeOutCubic.transform(animation.value.clamp(0.0, 1.0))
-            : 1.0;
+    // Scaffold, not a bare Stack. A `showGeneralDialog` page has no Material
+    // ancestor, so every Text here inherited Flutter's missing-Material error
+    // style — black glyphs with a double YELLOW underline — and no amount of
+    // palette work could fix it. This is the transparent-Material fix.
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: AnimatedBuilder(
+        animation: animation,
+        builder: (context, _) {
+          final t = animate
+              ? Curves.easeOutCubic.transform(animation.value.clamp(0.0, 1.0))
+              : 1.0;
 
-        return Stack(
-          children: [
-            // Scrim + blur. Tapping anywhere off the tiles closes.
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(context).pop(),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 18 * t, sigmaY: 18 * t),
-                  child: ColoredBox(
-                    color: AppColors.darkNavy.withValues(alpha: 0.55 * t),
+          return Stack(
+            children: [
+              // Scrim + blur. Tapping anywhere off the tiles closes.
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pop(),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 18 * t, sigmaY: 18 * t),
+                    child: ColoredBox(
+                      // Matches the translation picker's depth — at 0.55 the
+                      // feed showed through hard enough to fight the tiles.
+                      color: AppColors.darkNavy.withValues(alpha: 0.82 * t),
+                    ),
                   ),
                 ),
               ),
-            ),
-            SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Opacity(
-                    opacity: t,
-                    child: Transform.translate(
-                      offset: Offset(0, -16 * (1 - t)),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpace.xl,
-                          AppSpace.lg,
-                          AppSpace.lg,
-                          AppSpace.sm,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'CREATE',
-                                    style: AppTextStyles.labelSmall.copyWith(
-                                      color: AppColors.white.withValues(
-                                        alpha: 0.7,
+              SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Opacity(
+                      opacity: t,
+                      child: Transform.translate(
+                        offset: Offset(0, -16 * (1 - t)),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpace.xl,
+                            AppSpace.lg,
+                            AppSpace.lg,
+                            AppSpace.sm,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'CREATE',
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        // The screen's one gold moment, in the
+                                        // same slot the Bible switcher uses it.
+                                        color: AppColors.goldAccent,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1.8,
                                       ),
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 1.8,
                                     ),
-                                  ),
-                                  const SizedBox(height: AppSpace.xs),
-                                  Text(
-                                    'What would you\nlike to share?',
-                                    style: AppTextStyles.displayMedium.copyWith(
-                                      color: AppColors.white,
-                                      height: 1.15,
+                                    const SizedBox(height: AppSpace.xs),
+                                    Text(
+                                      'What would you\nlike to share?',
+                                      style: AppTextStyles.displayMedium
+                                          .copyWith(
+                                        color: AppColors.white,
+                                        height: 1.15,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: AppSpace.md),
-                            _CloseButton(
-                              onTap: () => Navigator.of(context).pop(),
-                            ),
+                              const SizedBox(width: AppSpace.md),
+                              _CloseButton(
+                                onTap: () => Navigator.of(context).pop(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpace.lg,
+                          AppSpace.md,
+                          AppSpace.lg,
+                          AppSpace.xl,
+                        ),
+                        child: Wrap(
+                          spacing: AppSpace.md,
+                          runSpacing: AppSpace.md,
+                          children: [
+                            for (var i = 0; i < _options.length; i++)
+                              _Tile(
+                                option: _options[i],
+                                // Two per row, minus the spacing between them.
+                                width: (MediaQuery.sizeOf(context).width -
+                                        AppSpace.lg * 2 -
+                                        AppSpace.md) /
+                                    2,
+                                t: animate ? _tileT(i) : 1.0,
+                              ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpace.lg,
-                        AppSpace.md,
-                        AppSpace.lg,
-                        AppSpace.xl,
-                      ),
-                      child: Wrap(
-                        spacing: AppSpace.md,
-                        runSpacing: AppSpace.md,
-                        children: [
-                          for (var i = 0; i < _options.length; i++)
-                            _Tile(
-                              option: _options[i],
-                              // Two per row, minus the spacing between them.
-                              width: (MediaQuery.sizeOf(context).width -
-                                      AppSpace.lg * 2 -
-                                      AppSpace.md) /
-                                  2,
-                              t: animate ? _tileT(i) : 1.0,
-                              palette: palette,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -231,13 +243,11 @@ class _Tile extends StatelessWidget {
     required this.option,
     required this.width,
     required this.t,
-    required this.palette,
   });
 
   final _Option option;
   final double width;
   final double t;
-  final AppPalette palette;
 
   @override
   Widget build(BuildContext context) {
@@ -261,15 +271,14 @@ class _Tile extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(AppSpace.lg),
                 decoration: BoxDecoration(
-                  color: palette.card,
+                  // Glass on navy, exactly as the Bible switcher does it — the
+                  // tile belongs to the overlay instead of sitting on top of
+                  // it as a foreign white rectangle.
+                  color: AppColors.white.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(AppRadius.lg),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.22),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
+                  border: Border.all(
+                    color: AppColors.white.withValues(alpha: 0.16),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,7 +313,7 @@ class _Tile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.titleSmall.copyWith(
-                        color: palette.text,
+                        color: AppColors.white,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -314,7 +323,7 @@ class _Tile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.caption.copyWith(
-                        color: palette.textMuted,
+                        color: AppColors.white.withValues(alpha: 0.68),
                         height: 1.3,
                       ),
                     ),

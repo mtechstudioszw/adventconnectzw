@@ -7,6 +7,7 @@ import '../../models/hymn_model.dart';
 import '../../models/library_item_model.dart';
 import '../../models/sabbath_school_model.dart';
 import '../../services/hymn_service.dart';
+import '../../services/library_launch_intent.dart';
 import '../../services/library_service.dart';
 import '../../services/sabbath_school_service.dart';
 import '../../theme/app_colors.dart';
@@ -130,8 +131,9 @@ class _TodayCardState extends State<TodayCard> {
               label: 'MUSIC OF THE DAY',
               icon: Icons.headphones_outlined,
               fallbackIcon: Icons.music_note_rounded,
-              openLabel: 'Play in Music',
+              openLabel: 'Play this track',
               tabIndex: 4,
+              playOnOpen: true,
             ),
           ),
         if (_book != null)
@@ -197,7 +199,10 @@ class _TodayCardState extends State<TodayCard> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  height: 186,
+                  // 186 → 224. The devotion page carries the most text of the
+                  // five (verse + reference + an Ellen White quote) and was
+                  // clipping mid-sentence at the old height.
+                  height: 224,
                   child: PageView.builder(
                     controller: _pc,
                     itemCount: slides.length,
@@ -322,7 +327,7 @@ class _DevotionPage extends StatelessWidget {
           Flexible(
             child: Text(
               '"${devotion.bibleText}"',
-              maxLines: 3,
+              maxLines: 4,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: AppColors.white,
@@ -345,7 +350,7 @@ class _DevotionPage extends StatelessWidget {
           Flexible(
             child: Text(
               '${devotion.egwQuote}  — Ellen G. White, ${devotion.egwSource}',
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.caption.copyWith(
                 color: AppColors.white.withValues(alpha: 0.72),
@@ -353,6 +358,10 @@ class _DevotionPage extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: AppSpace.xs),
+          // A card this size can never hold a full devotion, so say so
+          // instead of ending on a clipped word with no way forward.
+          const _OpenHint(label: 'Read the full devotion'),
         ],
       ),
     );
@@ -365,41 +374,107 @@ class _LessonPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cover = quarterly.cover ?? '';
     return _PageShell(
       label: 'SABBATH SCHOOL',
       icon: Icons.school_outlined,
       onTap: () => context.pushNamed('library', extra: 1),
-      backdrop: (quarterly.cover ?? '').isEmpty
-          ? null
-          : _ArtBackdrop(url: quarterly.cover!),
-      child: Column(
+      backdrop: cover.isEmpty ? null : _ArtBackdrop(url: cover),
+      // The quarterly cover now appears as a real thumbnail, not only as a
+      // wash behind the text. At 26% opacity under a 92% navy scrim the
+      // backdrop was effectively invisible, so this page looked like the one
+      // slide with no artwork — which is exactly what it was reported as.
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Flexible(
-            child: Text(
-              quarterly.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.titleLarge.copyWith(
-                color: AppColors.white,
-                fontWeight: FontWeight.w700,
-                height: 1.25,
-              ),
+          _CoverTile(
+            url: cover,
+            fallbackIcon: Icons.school_rounded,
+            // Quarterly covers are portrait book jackets, unlike the square
+            // album art the music and EGW pages carry.
+            width: 52,
+            height: 68,
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Flexible(
+                  child: Text(
+                    quarterly.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleLarge.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpace.xs + 2),
+                Text(
+                  quarterly.humanDate,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.white.withValues(alpha: 0.75),
+                  ),
+                ),
+                const Spacer(),
+                const _OpenHint(label: 'Open this quarter'),
+              ],
             ),
           ),
-          const SizedBox(height: AppSpace.xs + 2),
-          Text(
-            quarterly.humanDate,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.white.withValues(alpha: 0.75),
-            ),
-          ),
-          const Spacer(),
-          const _OpenHint(label: 'Open this quarter'),
         ],
       ),
+    );
+  }
+}
+
+/// Shared artwork tile for the Today pages — quarterly jackets, album art and
+/// book covers all land here so they degrade the same way.
+class _CoverTile extends StatelessWidget {
+  const _CoverTile({
+    required this.url,
+    required this.fallbackIcon,
+    this.width = 62,
+    this.height = 62,
+  });
+
+  final String url;
+  final IconData fallbackIcon;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Icon(fallbackIcon, color: AppColors.white, size: 26);
+    return Container(
+      width: width,
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        color: AppColors.white.withValues(alpha: 0.12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: url.isEmpty
+          ? fallback
+          : CachedImage(
+              url,
+              fit: BoxFit.cover,
+              width: width,
+              height: height,
+              errorBuilder: (_, _, _) => fallback,
+            ),
     );
   }
 }
@@ -468,6 +543,7 @@ class _LibraryPickPage extends StatelessWidget {
     required this.fallbackIcon,
     required this.openLabel,
     required this.tabIndex,
+    this.playOnOpen = false,
   });
 
   final LibraryItem item;
@@ -477,6 +553,16 @@ class _LibraryPickPage extends StatelessWidget {
   final String openLabel;
   final int tabIndex;
 
+  /// Music of the day starts playing THIS track on arrival instead of just
+  /// opening the Music tab — tapping a named track and landing in an
+  /// undifferentiated catalogue was the complaint.
+  final bool playOnOpen;
+
+  void _open(BuildContext context) {
+    if (playOnOpen) LibraryLaunchIntent.musicItemId = item.id;
+    context.pushNamed('library', extra: tabIndex);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cover = item.coverUrl ?? '';
@@ -484,35 +570,12 @@ class _LibraryPickPage extends StatelessWidget {
     return _PageShell(
       label: label,
       icon: icon,
-      onTap: () => context.pushNamed('library', extra: tabIndex),
+      onTap: () => _open(context),
       backdrop: cover.isEmpty ? null : _ArtBackdrop(url: cover),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 62,
-            height: 62,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              color: AppColors.white.withValues(alpha: 0.12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: cover.isEmpty
-                ? Icon(fallbackIcon, color: AppColors.white, size: 26)
-                : CachedImage(
-                    cover,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        Icon(fallbackIcon, color: AppColors.white, size: 26),
-                  ),
-          ),
+          _CoverTile(url: cover, fallbackIcon: fallbackIcon),
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
@@ -565,7 +628,9 @@ class _ArtBackdrop extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           Opacity(
-            opacity: 0.26,
+            // Raised from 0.26 — under the navy scrim below, the artwork was
+            // reading as noise rather than as a picture.
+            opacity: 0.42,
             child: CachedImage(
               url,
               fit: BoxFit.cover,

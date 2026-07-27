@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../widgets/screen_shell.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
@@ -35,7 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _sabbathEnabled = SabbathService.isEnabled();
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
   ThemeMode _themeMode = ThemeService.current;
-  // Watch (YouTube) preferences — synchronous reads from local prefs.
+  // Watch (YouTube) preferences â€” synchronous reads from local prefs.
   bool _ytAutoplayNext = YoutubePrefs.autoplayNext;
   bool _isSuperAdmin = false;
   bool _biometricAvailable = false;
@@ -90,7 +89,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     setState(() {
       _biometricBusy = false;
       // setEnabled(false) is unconditional, setEnabled(true) only
-      // returns true once the OS prompt is satisfied — so this
+      // returns true once the OS prompt is satisfied â€” so this
       // single expression covers cancel-flip-back too.
       _biometricEnabled = ok && next;
     });
@@ -108,7 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
 
-  /// Optimistic write — flip the local toggle immediately so the
+  /// Optimistic write â€” flip the local toggle immediately so the
   /// Switch animates, then fire-and-forget the persist call. The
   /// service swallows network errors silently; if the write fails
   /// the toggle simply doesn't survive a reload, and the user can
@@ -224,20 +223,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  /// Personal EcoCash details for ministry donations. Zim's
-  /// dominant mobile-money network — every smartphone user already
-  /// has the dialer flow muscle-memorised. Two CTAs in the sheet
-  /// below: tap-to-copy the number so it pastes straight into the
-  /// EcoCash app, and tap-to-dial *151# to launch the USSD send-
-  /// money flow without leaving the phone keyboard.
-  ///
-  /// REPLACE both constants with your real values:
-  ///   - Number: full Zim mobile (e.g. +263 77 123 4567)
-  ///   - Display name: how the recipient appears on the EcoCash
-  ///     confirmation prompt (helps donors trust the destination)
-  static const _ecoCashNumber = '0778 092 494';
-  static const _ecoCashName = 'Advent Connect ZW';
-  // Same number doubles as the support WhatsApp + a contact email.
+  // The EcoCash donation details moved to DonateScreen, which Home and
+  // Settings now share. Same number doubles as the support WhatsApp + a
+  // contact email.
   // Update these as the ministry's reach grows.
   static const _supportWhatsApp = '+263778092494';
   static const _supportEmail = 'adventconnectzw@gmail.com';
@@ -290,7 +278,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 onTap: () async {
                   final url = Uri.parse(
                     'https://wa.me/${_supportWhatsApp.replaceAll(RegExp(r"[^0-9+]"), "")}'
-                    '?text=${Uri.encodeComponent("Hi Advent Connect ZW team — ")}',
+                    '?text=${Uri.encodeComponent("Hi Advent Connect ZW team â€” ")}',
                   );
                   Navigator.of(ctx).pop();
                   await launchUrl(url,
@@ -308,7 +296,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     scheme: 'mailto',
                     path: _supportEmail,
                     queryParameters: {
-                      'subject': 'Advent Connect ZW — Support',
+                      'subject': 'Advent Connect ZW â€” Support',
                     },
                   );
                   Navigator.of(ctx).pop();
@@ -334,28 +322,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  /// Opens the shared Donate screen rather than a sheet local to Settings.
+  ///
+  /// Home gained a Donate button, and two copies of the EcoCash number in two
+  /// files is one copy too many â€” see [DonateScreen] for the number and for
+  /// why the flow deliberately collects nothing in-app.
   Future<void> _openDonation() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => _EcoCashDonationSheet(
-        number: _ecoCashNumber,
-        recipientName: _ecoCashName,
-        onSnack: (msg) {
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            SnackBar(
-              backgroundColor: AppColors.successGreen,
-              content: Text(
-                msg,
-                style:
-                    AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-              ),
-            ),
-          );
-        },
-      ),
-    );
+    await context.pushNamed('donate');
   }
 
   Future<void> _pickLanguage() async {
@@ -369,7 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  // Theme picker — kept available for the v1.1 dark-mode update.
+  // Theme picker â€” kept available for the v1.1 dark-mode update.
   // The Settings row that triggers it is hidden in build() until
   // the remaining ~45 screens are migrated to context.palette.
   // ignore: unused_element
@@ -556,7 +529,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         const _Divider(),
                         _ToggleRow(
                           icon: Icons.play_circle_outline,
-                          label: 'Watch — new videos & live',
+                          label: 'Watch â€” new videos & live',
                           value: _categoryPrefs.watch,
                           onChanged: (v) {
                             _setCategory(_categoryPrefs.copyWith(watch: v));
@@ -776,7 +749,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(height: 24),
                     Center(
                       child: Text(
-                        'Made with care • MyTech Studios Zw',
+                        'Made with care â€¢ MyTech Studios Zw',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: AppColors.textMuted,
                           fontSize: 11,
@@ -873,235 +846,6 @@ class _SupportChannel extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EcoCashDonationSheet extends StatelessWidget {
-  const _EcoCashDonationSheet({
-    required this.number,
-    required this.recipientName,
-    required this.onSnack,
-  });
-
-  final String number;
-  final String recipientName;
-  final void Function(String) onSnack;
-
-  Future<void> _copyNumber(BuildContext context) async {
-    await Clipboard.setData(ClipboardData(text: number));
-    onSnack('EcoCash number copied — paste it in your EcoCash app.');
-  }
-
-  Future<void> _dialUssd(BuildContext context) async {
-    // *151# is the EcoCash menu shortcut on Econet lines. We URL-
-    // encode the # as %23 because some Android dialers refuse a
-    // raw # in a tel: URI. Launches the dialer pre-filled, user
-    // hits the call button.
-    final uri = Uri.parse('tel:*151%23');
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok) throw Exception('launch failed');
-    } catch (_) {
-      onSnack('Could not open the dialer. Try dialling *151# manually.');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.palette.sheet,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.favorite,
-                    color: AppColors.goldAccent,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Donate via EcoCash',
-                        style: AppTextStyles.titleLarge.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Send any amount to the number below.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              decoration: BoxDecoration(
-                color: context.palette.cardMuted,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.divider,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ECOCASH NUMBER',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.textMuted,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          number,
-                          style: AppTextStyles.headlineSmall.copyWith(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 20,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                      Material(
-                        color: AppColors.primaryBlue,
-                        borderRadius: BorderRadius.circular(10),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: () => _copyNumber(context),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 9,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // TODO(dark-mode): const Icon — sits on primaryBlue copy button.
-                                const Icon(
-                                  Icons.content_copy,
-                                  color: AppColors.white,
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Copy',
-                                  style: AppTextStyles.labelMedium.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Account name: Tanatswa Michael Mikuwa',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Material(
-              color: AppColors.primaryBlue,
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => _dialUssd(context),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // TODO(dark-mode): const Icon — sits on primaryBlue dialer button.
-                      const Icon(Icons.dialpad,
-                          color: AppColors.white, size: 18),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Open dialer  •  *151#',
-                        style: AppTextStyles.buttonText.copyWith(
-                          color: AppColors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'How to send:\n'
-              '1. Dial *151# (or open the EcoCash app)\n'
-              '2. Choose "Send Money" → "To Mobile"\n'
-              '3. Enter the number above\n'
-              '4. Enter the amount you want to donate\n'
-              '5. Confirm with your PIN',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textMuted,
-                height: 1.55,
-                fontSize: 12.5,
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -1244,7 +988,7 @@ class _NavRow extends StatelessWidget {
   final IconData icon;
   final String label;
   // Nullable so callers can render a passive (non-tappable) row when
-  // there is nothing left to do — e.g. "Google linked" once linking
+  // there is nothing left to do â€” e.g. "Google linked" once linking
   // has succeeded. A null onTap also disables InkWell's ripple.
   final VoidCallback? onTap;
   final String? trailing;
@@ -1521,13 +1265,13 @@ class _ThemeSheet extends StatelessWidget {
       ThemeMode.light,
       'Light',
       Icons.light_mode_outlined,
-      'Bright surfaces — best in daylight.',
+      'Bright surfaces â€” best in daylight.',
     ),
     (
       ThemeMode.dark,
       'Dark',
       Icons.dark_mode_outlined,
-      'Dim surfaces — easier on the eyes at night.',
+      'Dim surfaces â€” easier on the eyes at night.',
     ),
   ];
 
@@ -1731,7 +1475,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   final _formKey = GlobalKey<FormState>();
   bool _busy = false;
   String? _error;
-  // Independent obscure flags for each field — tapping the eye on the
+  // Independent obscure flags for each field â€” tapping the eye on the
   // current-password field doesn't reveal the new one, and vice versa.
   bool _obscureCurrent = true;
   bool _obscureNew = true;
@@ -1890,7 +1634,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
           style: FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
           onPressed: _busy ? null : _save,
           child: Text(
-            _busy ? 'Saving…' : 'Save',
+            _busy ? 'Savingâ€¦' : 'Save',
             style: AppTextStyles.labelLarge,
           ),
         ),

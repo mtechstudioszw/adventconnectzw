@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
@@ -25,12 +26,19 @@ const bool kFloatingNavBlur = true;
 
 /// Custom bottom navigation shared by the 5 top-level tabs.
 ///
-/// Home, Watch, Churches, Marketplace, Profile. (Watch replaced the
-/// Events tab — Events now lives on Home via the featured-events strip +
-/// the events discovery row + a "See all" entry.) Prayer and Messaging
-/// live inside the Profile tab's menu rather than as top-level tabs —
-/// which is why unread chat / friend request counts surface on the
-/// Profile icon here.
+/// Home, Watch, Chat, Marketplace, Profile. (Watch replaced the Events tab —
+/// Events now lives on Home via the featured-events strip + the events
+/// discovery row + a "See all" entry.)
+///
+/// **Chat replaced Churches here on 2026-07-27.** The floating chat bubble it
+/// supersedes was unreachable: it sat *under* the island and slid away with it
+/// on scroll, so Advent Chat had no working entry point at all. Churches was
+/// the right tab to give up because it is the only one already one tap from
+/// Home — the churches discovery rail, the "Churches" quick-stat and the
+/// "Find churches" button all route there, and it keeps its Profile-menu
+/// entry. Six tabs was measured and rejected: at 360dp the island has ~312dp
+/// of usable width, and five icon slots plus a labelled "Marketplace" pill
+/// already wants ~368dp, so a sixth forces every label to ellipsise.
 ///
 /// A FLOATING ISLAND: detached from the screen edge, frosted, with content
 /// scrolling underneath. Inactive tabs are icon-only; the active one expands
@@ -46,7 +54,12 @@ const bool kFloatingNavBlur = true;
 /// the app-wide fade-through transition carries the movement between tabs.
 ///
 /// Each tab can optionally show a red badge with a count by passing
-/// [badges] (map of tab-index → count). A count of 0 hides the badge.
+/// [badges] (map of tab-index → count). A count of 0 hides the badge. The
+/// Chat tab additionally self-badges from [MessagingService.unreadTotal], so
+/// it stays accurate on screens that never fetch an inbox.
+///
+/// Pass [currentIndex] `-1` for a screen that is no longer a tab (Churches)
+/// but still wants the island — nothing renders as active.
 class MainBottomNav extends StatelessWidget {
   const MainBottomNav({
     super.key,
@@ -54,6 +67,9 @@ class MainBottomNav extends StatelessWidget {
     this.badges = const <int, int>{},
     this.onReselect,
   });
+
+  /// Index of the Chat tab, which merges in the app-wide unread count.
+  static const int chatIndex = 2;
 
   final int currentIndex;
   final Map<int, int> badges;
@@ -66,7 +82,7 @@ class MainBottomNav extends StatelessWidget {
   static const _routes = [
     'home',
     'watch',
-    'churches',
+    'messages',
     'marketplace',
     'profile',
   ];
@@ -74,7 +90,7 @@ class MainBottomNav extends StatelessWidget {
   static const _tabs = <(IconData, IconData, String)>[
     (Icons.home_outlined, Icons.home_rounded, 'Home'),
     (Icons.play_circle_outline, Icons.play_circle_fill_rounded, 'Watch'),
-    (Icons.church_outlined, Icons.church_rounded, 'Churches'),
+    (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
     // storefront, not a shopping bag — this is a marketplace members sell
     // in, not a checkout.
     (Icons.storefront_outlined, Icons.storefront_rounded, 'Marketplace'),
@@ -154,40 +170,75 @@ class MainBottomNav extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final blurring = kFloatingNavBlur && AppMotion.enabled(context);
 
-    Widget island = Container(
-      height: 62,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
-      decoration: BoxDecoration(
-        // Translucent when we're blurring so the frost actually reads;
-        // opaque otherwise so it never looks washed out.
-        color: palette.card.withValues(alpha: blurring ? 0.82 : 1.0),
-        borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
-        border: Border.all(
-          color: dark
-              ? AppColors.white.withValues(alpha: 0.08)
-              : palette.divider,
-        ),
-      ),
-      child: Row(
-        children: [
-          for (var i = 0; i < _tabs.length; i++)
-            _NavItem(
-              outlineIcon: _tabs[i].$1,
-              filledIcon: _tabs[i].$2,
-              label: _tabs[i].$3,
-              active: i == currentIndex,
-              badge: badges[i] ?? 0,
-              onTap: () => _go(context, i),
-              // Profile is the last tab and shows the member's own photo.
-              glyph: i == _tabs.length - 1
-                  ? _profileAvatar(
-                      active: i == currentIndex,
-                      size: i == currentIndex ? 24 : 26,
-                    )
-                  : null,
+    final surface = palette.card.withValues(alpha: blurring ? 0.82 : 1.0);
+
+    Widget island = ValueListenableBuilder<int>(
+      valueListenable: MessagingService.unreadTotal,
+      builder: (context, unread, _) {
+        return Container(
+          height: 62,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
+            border: Border.all(
+              color: dark
+                  ? AppColors.white.withValues(alpha: 0.08)
+                  : palette.divider,
             ),
-        ],
-      ),
+            // A top-down sheen so the glass has a light source instead of
+            // reading as a flat slab. Barely visible on its own; what it buys
+            // is the sense that the island has thickness.
+            //
+            // The sheen is blended INTO the surface colour, not layered over
+            // it: BoxDecoration paints `gradient` as a shader and ignores
+            // `color` when both are given, so a translucent-white gradient
+            // here would erase the island's fill. Translucent while blurring
+            // so the frost reads, opaque otherwise so it never looks washed
+            // out.
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.alphaBlend(
+                  AppColors.white.withValues(alpha: dark ? 0.06 : 0.5),
+                  surface,
+                ),
+                surface,
+              ],
+            ),
+          ),
+          child: Row(
+            // Without this the active pill (a loose Flexible) takes only the
+            // width it needs and every leftover pixel piles up after the last
+            // tab — the "huge gap on the right of the island". Spreading the
+            // slack across the four gaps keeps the row optically even at any
+            // pill width.
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (var i = 0; i < _tabs.length; i++)
+                _NavItem(
+                  outlineIcon: _tabs[i].$1,
+                  filledIcon: _tabs[i].$2,
+                  label: _tabs[i].$3,
+                  active: i == currentIndex,
+                  // Chat merges the app-wide unread total with anything the
+                  // host screen passed, so the badge is right everywhere.
+                  badge: i == chatIndex
+                      ? (badges[i] ?? unread)
+                      : (badges[i] ?? 0),
+                  onTap: () => _go(context, i),
+                  // Profile is the last tab and shows the member's own photo.
+                  glyph: i == _tabs.length - 1
+                      ? _profileAvatar(
+                          active: i == currentIndex,
+                          size: i == currentIndex ? 24 : 26,
+                        )
+                      : null,
+                ),
+            ],
+          ),
+        );
+      },
     );
 
     if (blurring) {

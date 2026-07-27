@@ -12,6 +12,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../cached_image.dart';
+import 'post_preview_sheet.dart';
 import 'story_text_style.dart';
 
 /// Opens the "write a post" bottom sheet. Resolves to the freshly
@@ -149,6 +150,23 @@ class _PostComposerState extends State<_PostComposer> {
 
   bool get _hasContent =>
       _controller.text.trim().isNotEmpty || _photos.isNotEmpty;
+
+  /// Shows the post as the feed will render it, and publishes straight from
+  /// there if the member is happy — so "check it, then send it" is two taps,
+  /// not a round trip back through the composer.
+  Future<void> _openPreview() async {
+    // Dismiss the keyboard first: the preview is about seeing the whole card,
+    // and half of it would otherwise be behind the keyboard.
+    FocusScope.of(context).unfocus();
+    final publish = await showPostPreview(
+      context,
+      body: _controller.text,
+      photos: List<String>.of(_photos),
+      visibility: _visibility,
+    );
+    if (!mounted || !publish) return;
+    await _publish();
+  }
 
   /// Confirms before throwing away work. Returns true if it's OK to close.
   Future<bool> _confirmDiscard() async {
@@ -528,6 +546,28 @@ class _PostComposerState extends State<_PostComposer> {
                               : 'Add another (${_photos.length}/$_maxPhotos)',
                       style: AppTextStyles.buttonText.copyWith(
                         color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  // Disabled on an empty post — there is nothing to preview.
+                  TextButton.icon(
+                    onPressed: hasContent ? _openPreview : null,
+                    icon: Icon(
+                      Icons.visibility_outlined,
+                      size: 19,
+                      color: hasContent
+                          ? AppColors.primaryBlue
+                          : context.palette.textMuted,
+                    ),
+                    label: Text(
+                      'Preview',
+                      style: AppTextStyles.buttonText.copyWith(
+                        color: hasContent
+                            ? AppColors.primaryBlue
+                            : context.palette.textMuted,
                         fontWeight: FontWeight.w600,
                         fontSize: 13.5,
                       ),

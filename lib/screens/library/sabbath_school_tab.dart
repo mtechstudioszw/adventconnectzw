@@ -13,6 +13,7 @@ import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import 'ss_lesson_screen.dart';
+import 'widgets/ss_language_picker.dart';
 
 /// Library → Sabbath School tab.
 ///
@@ -184,84 +185,13 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
     return known[code] ?? code.toUpperCase();
   }
 
+  /// Opens the cinematic language switcher — the Sabbath School counterpart
+  /// of the Bible version picker. It replaced a plain `ListTile` bottom sheet
+  /// that read like a settings menu for what is actually the choice of which
+  /// language you'll study a whole quarter in.
   Future<void> _openLanguagePicker() async {
-    final palette = context.palette;
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: palette.sheet,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (ctx) => SizedBox(
-        height: MediaQuery.sizeOf(ctx).height * 0.75,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Row(
-                children: [
-                  Text(
-                    'Lesson language',
-                    style: AppTextStyles.titleSmall
-                        .copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Shona is the default',
-                    style: AppTextStyles.labelSmall
-                        .copyWith(color: palette.textMuted),
-                  ),
-                ],
-              ),
-            ),
-            Divider(color: palette.divider, height: 1),
-            Expanded(
-              child: FutureBuilder<List<SsLanguage>>(
-                future: SabbathSchoolService.languages(),
-                builder: (context, snap) {
-                  if (!snap.hasData) {
-                    return const Center(child: BrandSpinner(size: 26));
-                  }
-                  final langs = snap.data!;
-                  return ListView.builder(
-                    itemCount: langs.length,
-                    itemBuilder: (context, i) {
-                      final l = langs[i];
-                      final selected = l.code == _lang;
-                      return ListTile(
-                        title: Text(
-                          l.name,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500,
-                            color:
-                                selected ? AppColors.primaryBlue : palette.text,
-                          ),
-                        ),
-                        subtitle: Text(
-                          l.code.toUpperCase(),
-                          style: AppTextStyles.labelSmall
-                              .copyWith(color: palette.textMuted),
-                        ),
-                        trailing: selected
-                            ? const Icon(Icons.check_circle_rounded,
-                                color: AppColors.primaryBlue)
-                            : null,
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          _switchLanguage(l.code);
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    final code = await SsLanguagePicker.show(context, current: _lang);
+    if (code != null) await _switchLanguage(code);
   }
 
   // ---- Continue reading ---------------------------------------------------

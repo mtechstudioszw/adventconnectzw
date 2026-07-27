@@ -9,12 +9,19 @@ import '../../../theme/app_text_styles.dart';
 import 'full_player_screen.dart';
 import 'music_visuals.dart';
 
-/// Persistent mini player.
+/// Mini player for the Music tab.
 ///
-/// Renders nothing when no queue is loaded, so it can be dropped at the
-/// bottom of any Library tab without a layout guard. Swipe up (or tap) opens
-/// the full player; swipe down closes playback entirely — the two gestures
-/// every listener already knows from other music apps.
+/// Renders nothing when no queue is loaded, so it can be dropped at the bottom
+/// of a tab without a layout guard. Tap (or swipe up) opens the full player.
+///
+/// **Scope:** this card is mounted ONLY inside the Music tab. Away from it —
+/// other Library tabs, Home, or with the app closed — playback is controlled
+/// from the Android media notification and the iOS lock screen / Control
+/// Centre, which is where a music player is supposed to put those controls.
+///
+/// Stopping playback has an explicit ✕ button. Swipe-down still works, but a
+/// gesture is not an affordance: there was previously no visible way to end
+/// playback from here at all.
 class NowPlayingBar extends StatelessWidget {
   const NowPlayingBar({super.key});
 
@@ -171,6 +178,20 @@ class NowPlayingBar extends StatelessWidget {
                                 icon: const Icon(Icons.skip_next_rounded,
                                     color: AppColors.white, size: 26),
                                 onPressed: service.next,
+                              ),
+                              // Ends playback and dismisses the bar. Stop, not
+                              // pause: pausing leaves the card sitting there
+                              // with no way to get rid of it.
+                              IconButton(
+                                tooltip: 'Stop',
+                                visualDensity: VisualDensity.compact,
+                                icon: Icon(
+                                  Icons.close_rounded,
+                                  color:
+                                      AppColors.white.withValues(alpha: 0.75),
+                                  size: 21,
+                                ),
+                                onPressed: service.stop,
                               ),
                             ],
                           );

@@ -30,14 +30,38 @@ class _TimeoutHttpFileService extends HttpFileService {
 
 /// Shared cache manager for all network images. Same disk-cache behaviour as
 /// the default, but every fetch is time-bounded by [_TimeoutHttpFileService].
+///
+/// The limits are generous on purpose. At 400 objects the cache held roughly
+/// one long session of feed scrolling, and feed photos are by far the highest
+/// churn source of images in the app — so Library artwork (Sabbath School
+/// quarterly covers, hymn and EGW jackets, album art) was being evicted
+/// between visits and re-downloaded every time, which is what "the Sabbath
+/// School images aren't cached" actually was. Library artwork is a small,
+/// stable set; the feed is what should be losing the race for space.
 final BaseCacheManager adventImageCacheManager = CacheManager(
   Config(
     'adventImageCache',
-    stalePeriod: const Duration(days: 14),
-    maxNrOfCacheObjects: 400,
+    stalePeriod: const Duration(days: 60),
+    maxNrOfCacheObjects: 1200,
     fileService: _TimeoutHttpFileService(),
   ),
 );
+
+/// Pulls [urls] into the image cache ahead of time, ignoring failures.
+///
+/// Used by content services that already know which artwork a screen is about
+/// to need, so a quarter opened once keeps its covers offline instead of
+/// showing retry tiles on the next flight-mode launch.
+Future<void> precacheImageUrls(Iterable<String?> urls) async {
+  for (final url in urls) {
+    if (url == null || url.isEmpty) continue;
+    try {
+      await adventImageCacheManager.downloadFile(url);
+    } catch (_) {
+      // Best-effort warm-up — the widget will fetch on demand if this failed.
+    }
+  }
+}
 
 /// Drop-in replacement for `Image.network(...)`. Disk-caches the image
 /// via cached_network_image so post photos, avatars, product shots

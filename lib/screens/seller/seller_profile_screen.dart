@@ -553,9 +553,24 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     );
   }
 
+  // Storefront header geometry. Kept as named constants because the name
+  // block's position is derived from all three — hand-tuned magic numbers are
+  // exactly how the name ended up sitting on top of the cover photo.
+  static const double _coverHeight = 190;
+  static const double _logoSize = 88;
+  static const double _logoOverlap = 44;
+  static const double _headerHeight =
+      _coverHeight - _logoOverlap + _logoSize + AppSpace.md + 58;
+
   /// Cover photo with the logo breaking its bottom edge — the same shape
   /// language as the shops rail on the marketplace tab, so a shop looks
   /// like itself wherever you meet it.
+  ///
+  /// The shop name sits BELOW the logo, not beside it. Side by side, the name
+  /// was laid over the bottom of the cover photo — dark navy body text on
+  /// whatever picture the seller had uploaded — so it fought both the artwork
+  /// and the logo for the same 40dp of screen. Stacked, the name gets the full
+  /// width on a clean background and long business names stop colliding.
   Widget _buildHeader() {
     final seller = _seller;
     final photo = seller?.profilePhotoUrl;
@@ -564,7 +579,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     final hasCover = cover != null && cover.isNotEmpty;
 
     return SizedBox(
-      height: 260,
+      height: _headerHeight,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -572,7 +587,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
             left: 0,
             right: 0,
             top: 0,
-            height: 200,
+            height: _coverHeight,
             child: hasCover
                 ? GestureDetector(
                     onTap: () => FullImageViewer.show(context, cover),
@@ -590,7 +605,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
             left: 0,
             right: 0,
             top: 0,
-            height: 200,
+            height: _coverHeight,
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -634,90 +649,88 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
               ),
             ),
           ),
+          // Logo breaks the cover's bottom edge.
+          Positioned(
+            left: AppSpace.lg,
+            top: _coverHeight - _logoOverlap,
+            child: GestureDetector(
+              onTap:
+                  hasPhoto ? () => FullImageViewer.show(context, photo) : null,
+              child: Container(
+                width: _logoSize,
+                height: _logoSize,
+                decoration: BoxDecoration(
+                  gradient: hasPhoto ? null : AppColors.primaryGradient,
+                  color: hasPhoto ? AppColors.lightGrey : null,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: context.palette.scaffoldBg,
+                    width: 4,
+                  ),
+                  boxShadow: AppShadows.card(context),
+                  image: hasPhoto
+                      ? DecorationImage(
+                          image: CachedNetworkImageProvider(photo),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: hasPhoto
+                    ? null
+                    : const Icon(
+                        Icons.storefront,
+                        color: AppColors.white,
+                        size: 36,
+                      ),
+              ),
+            ),
+          ),
+          // Name block, clear of both the logo and the cover photo.
           Positioned(
             left: AppSpace.lg,
             right: AppSpace.lg,
-            top: 152,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            top: _coverHeight - _logoOverlap + _logoSize + AppSpace.md,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                GestureDetector(
-                  onTap: hasPhoto
-                      ? () => FullImageViewer.show(context, photo)
-                      : null,
-                  child: Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      gradient: hasPhoto ? null : AppColors.primaryGradient,
-                      color: hasPhoto ? AppColors.lightGrey : null,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: context.palette.scaffoldBg,
-                        width: 4,
-                      ),
-                      image: hasPhoto
-                          ? DecorationImage(
-                              image: CachedNetworkImageProvider(photo),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: hasPhoto
-                        ? null
-                        : const Icon(
-                            Icons.storefront,
-                            color: AppColors.white,
-                            size: 36,
-                          ),
-                  ),
-                ),
-                const SizedBox(width: AppSpace.md),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                seller?.businessName ?? 'Loading…',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.headlineSmall.copyWith(
-                                  color: context.palette.text,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            if (seller?.verified == true ||
-                                seller?.sdaVerified == true) ...[
-                              const SizedBox(width: 6),
-                              const Icon(
-                                Icons.verified,
-                                color: AppColors.goldAccent,
-                                size: 16,
-                              ),
-                            ],
-                          ],
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        seller?.businessName ?? 'Loading…',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.headlineSmall.copyWith(
+                          color: context.palette.text,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
                         ),
-                        if (seller != null)
-                          Text(
-                            SellerCategory.labelFor(seller.category),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: context.palette.textMuted,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                      ],
+                      ),
+                    ),
+                    if (seller?.verified == true ||
+                        seller?.sdaVerified == true) ...[
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.verified,
+                        color: AppColors.goldAccent,
+                        size: 17,
+                      ),
+                    ],
+                  ],
+                ),
+                if (seller != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    SellerCategory.labelFor(seller.category),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.textMuted,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

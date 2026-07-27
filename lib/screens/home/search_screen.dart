@@ -689,7 +689,7 @@ class _SearchScreenState extends State<SearchScreen> {
           // Real distance ranking lives on the Churches screen's "Near me".
           'Discover churches',
           actionLabel: 'See all',
-          onAction: () => context.goNamed('churches'),
+          onAction: () => context.pushNamed('churches'),
         ),
       );
       sections.add(

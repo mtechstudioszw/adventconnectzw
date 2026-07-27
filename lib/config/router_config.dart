@@ -48,6 +48,7 @@ import '../services/church_service.dart';
 import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
+import '../screens/donate/donate_screen.dart';
 import '../models/advent_news_model.dart';
 import '../models/event_model.dart';
 import '../models/job_model.dart';
@@ -483,6 +484,11 @@ final GoRouter appRouter = GoRouter(
           },
         ),
       ],
+    ),
+    GoRoute(
+      path: '/donate',
+      name: 'donate',
+      builder: (context, state) => const DonateScreen(),
     ),
     GoRoute(
       path: '/messages',

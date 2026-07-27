@@ -1872,10 +1872,22 @@ class _ChapterPageState extends State<_ChapterPage> {
     final note = BiblePrefsService.note(key);
     final isSelected = widget.selected.contains(i);
     final rtl = widget.translation.rtl;
-    _verseKeys[i] = GlobalKey();
+    // One STABLE key per verse. This used to mint `GlobalKey()` fresh on every
+    // build, which is a bug twice over:
+    //
+    //  * A changing GlobalKey forces Flutter to tear the element down and
+    //    reparent it on each rebuild. That deactivates elements outside the
+    //    normal order and is a classic trigger for
+    //    `InheritedElement.debugDeactivated: '_dependents.isEmpty' is not
+    //    true` — the framework assertion reported from the Library.
+    //  * The keys existed so `scrollToVerse` could find a verse's context, but
+    //    replacing them every build meant the post-frame lookup in initState
+    //    was reading keys that were already stale. Jump-to-verse could only
+    //    work by luck.
+    final verseKey = _verseKeys.putIfAbsent(i, GlobalKey.new);
 
     return Container(
-      key: _verseKeys[i],
+      key: verseKey,
       margin: const EdgeInsets.only(bottom: 3),
       decoration: BoxDecoration(
         color: isSelected

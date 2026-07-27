@@ -26,8 +26,9 @@ class HomeMusicCard extends StatelessWidget {
 
   Future<void> _play(BuildContext context) async {
     HapticFeedback.mediumImpact();
-    // Queue of one: the NowPlayingBar takes over from here, and it's mounted
-    // on Home, so playback stays controllable without leaving the feed.
+    // Queue of one. There is no mini player on Home any more — from here the
+    // media notification (Android) and the lock screen / Control Centre (iOS)
+    // carry the controls, and the Music tab has the full card.
     await MusicPlayerService.instance.setQueueAndPlay([item], 0);
   }
 

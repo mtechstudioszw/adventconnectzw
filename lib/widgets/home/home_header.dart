@@ -108,9 +108,16 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onBellTap;
 
   // Body heights excluding the status-bar inset. Expanded carries the
-  // greeting + status line; collapsed is a single wordmark bar.
-  static const double _expandedBody = 108;
+  // greeting + status line; collapsed keeps the member's name.
+  //
+  // 108 → 96: the status line was boxed at 32dp for a row that is only ~17dp
+  // tall (13dp icon, 11pt caption), so a dozen dead pixels sat between the
+  // date and whatever came next. That was the gap under the date.
+  static const double _expandedBody = 96;
   static const double _collapsedBody = 56;
+
+  /// Height of the status ("Sabata in 2d…" / date) row when fully expanded.
+  static const double _statusBody = 20;
 
   @override
   double get maxExtent => topInset + _expandedBody;
@@ -152,7 +159,7 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
     // expanded) so the header can never overflow mid-scroll.
     final rowHeight = lerpDouble(48, 40, t)!;
     final gap = (1 - t) * AppSpace.xs;
-    final statusHeight = (1 - t) * 32;
+    final statusHeight = (1 - t) * _statusBody;
     final bottomPad = lerpDouble(AppSpace.md, AppSpace.sm, t)!;
 
     Widget header = Stack(
@@ -222,7 +229,7 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                     child: OverflowBox(
                       alignment: Alignment.topLeft,
                       minHeight: 0,
-                      maxHeight: 32,
+                      maxHeight: _statusBody,
                       child: Opacity(
                         opacity: (1 - t * 1.8).clamp(0.0, 1.0),
                         child: _StatusLine(
@@ -332,8 +339,14 @@ class _Background extends StatelessWidget {
   }
 }
 
-/// Crossfades the expanded greeting against the collapsed wordmark inside a
-/// fixed box, so the row height never depends on which one is showing.
+/// The member's name is the constant; only the greeting eyebrow above it
+/// comes and goes.
+///
+/// This used to crossfade the name out and an "Advent Connect" wordmark in as
+/// you scrolled. That was wrong twice over: it took the member's own name off
+/// their own home screen the moment they touched it, and it spent the header
+/// telling people which app they had just opened. The name now stays put and
+/// simply settles down a type size as the eyebrow collapses.
 class _TitleBlock extends StatelessWidget {
   const _TitleBlock({
     required this.t,
@@ -351,55 +364,49 @@ class _TitleBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Greeting fades over the first ~55% of the collapse, then its row
+    // collapses to zero height so the name rises to fill the bar rather than
+    // leaving a hole where the eyebrow was.
+    final eyebrowOpacity = (1 - t * 1.8).clamp(0.0, 1.0);
+    final eyebrowExtent = (1 - t * 1.5).clamp(0.0, 1.0);
+
     return ClipRect(
-      child: Stack(
-        alignment: Alignment.centerLeft,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Expanded: eyebrow + name. Fades out over the first ~55%.
-          Opacity(
-            opacity: (1 - t * 1.8).clamp(0.0, 1.0),
-            child: Transform.translate(
-              offset: Offset(0, -8 * t),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    greeting.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: onHeaderMuted,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.6,
-                    ),
+          Align(
+            alignment: Alignment.topLeft,
+            heightFactor: eyebrowExtent,
+            child: Opacity(
+              opacity: eyebrowOpacity,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(
+                  greeting.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: onHeaderMuted,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.6,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    firstName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.headlineMedium.copyWith(
-                      color: onHeader,
-                      fontWeight: FontWeight.w700,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-          // Collapsed: wordmark. Fades in over the last ~45%.
-          Opacity(
-            opacity: ((t - 0.55) / 0.45).clamp(0.0, 1.0),
-            child: Text(
-              'Advent Connect',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.titleLarge.copyWith(
-                color: onHeader,
-                fontWeight: FontWeight.w700,
-              ),
+          Text(
+            firstName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.headlineMedium.copyWith(
+              color: onHeader,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
+              // 20pt expanded → 17pt pinned. Tracks the finger like the rest
+              // of the header instead of snapping at a threshold.
+              fontSize: lerpDouble(20, 17, t),
             ),
           ),
         ],
@@ -587,11 +594,21 @@ class _HeaderIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final chip = isSabbath
-        ? AppColors.white.withValues(alpha: 0.16)
-        : (dark ? context.palette.cardMuted : const Color(0xFFE4E9F2));
-    final fg = isSabbath ? AppColors.white : context.palette.text;
+    final fg = isSabbath ? AppColors.white : palette.text;
+
+    // A raised control rather than a flat grey disc. The old #E4E9F2 blob sat
+    // *into* the background and read as a placeholder; a card-coloured face
+    // with a hairline edge, a top sheen and a soft drop shadow reads as
+    // something you can press. On Sabbath it becomes frosted white so it
+    // still separates from the sundown gradient.
+    final face = isSabbath
+        ? AppColors.white.withValues(alpha: 0.18)
+        : (dark ? palette.cardMuted : palette.card);
+    final edge = isSabbath
+        ? AppColors.white.withValues(alpha: 0.30)
+        : (dark ? AppColors.white.withValues(alpha: 0.10) : palette.divider);
 
     return Tooltip(
       message: tooltip,
@@ -605,9 +622,28 @@ class _HeaderIcon extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(color: chip, shape: BoxShape.circle),
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: edge),
+                  // Sheen is blended INTO the face colour rather than layered
+                  // as a separate translucent gradient — BoxDecoration paints
+                  // `gradient` as a shader and ignores `color` entirely when
+                  // both are set, which would have left these discs white.
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color.alphaBlend(
+                        AppColors.white.withValues(alpha: dark ? 0.06 : 0.5),
+                        face,
+                      ),
+                      face,
+                    ],
+                  ),
+                  boxShadow: isSabbath ? null : AppShadows.card(context),
+                ),
                 alignment: Alignment.center,
                 child: Icon(icon, color: fg, size: 20),
               ),

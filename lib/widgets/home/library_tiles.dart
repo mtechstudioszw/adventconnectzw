@@ -10,18 +10,25 @@ import '../motion/staggered_reveal.dart';
 
 /// The Library launcher on Home.
 ///
-/// Replaces two things at once: the five ~48dp chips (each carrying a 10pt
-/// label — the smallest text on the screen was advertising the app's whole
-/// consolidation pitch) and the standalone Quiz Arena card below them.
+/// A single row of compact pills — icon and label side by side, ~44dp tall.
 ///
-/// Ordering is deliberate. On a 360dp screen four tiles fit fully and the
-/// fifth peeks, which is what invites the scroll — so **Quiz sits fourth**,
-/// fully visible. This row is still the ONLY route into `/quiz`; don't
-/// reorder it out of view without adding another entry point.
+/// It was previously a row of 58dp icon squares with the label stacked
+/// underneath, 92dp in total. Sitting directly beneath the 224dp Today card
+/// that meant well over 300dp of the first screen was chrome before the feed
+/// began, and six saturated squares competed with the card above them for
+/// attention when this row is navigation, not a hero. Laying each entry out
+/// horizontally halves the height and matches the chip vocabulary already used
+/// on the Marketplace.
+///
+/// Ordering is deliberate: **Quiz sits fourth** so it lands inside the first
+/// screenful, and it keeps the brand gradient so it still reads as the one
+/// highlight. This row is still the ONLY route into `/quiz` — don't reorder it
+/// out of view without adding another entry point.
 class LibraryTiles extends StatelessWidget {
   const LibraryTiles({super.key});
 
-  static const double _tile = 78;
+  /// Row height. The pill itself is 40dp; the rest is breathing room.
+  static const double _rowHeight = 44;
 
   // (label, icon, library tab index, isHero). Tab indexes map 1:1 onto
   // LibraryScreen's TabBar order — keep the two in sync.
@@ -38,12 +45,12 @@ class LibraryTiles extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 92,
+      height: _rowHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
         itemCount: _items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppSpace.sm + 2),
+        separatorBuilder: (_, _) => const SizedBox(width: AppSpace.sm),
         itemBuilder: (context, i) {
           final (label, icon, tab, hero) = _items[i];
           // Only six items and they all build at once, so a stagger here
@@ -91,51 +98,40 @@ class _Tile extends StatelessWidget {
       child: Pressable(
         onTap: onTap,
         haptics: true,
-        pressedScale: 0.92,
-        child: SizedBox(
-          width: LibraryTiles._tile,
-          child: Column(
+        pressedScale: 0.94,
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+          decoration: BoxDecoration(
+            gradient: hero ? AppColors.primaryGradient : null,
+            color: hero ? null : palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: hero ? null : Border.all(color: palette.divider),
+            boxShadow: hero
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.28),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ]
+                : AppShadows.card(context),
+          ),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  gradient: hero ? AppColors.primaryGradient : null,
-                  color: hero
-                      ? null
-                      : AppColors.primaryBlue.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  border: hero
-                      ? null
-                      : Border.all(color: palette.divider, width: 1),
-                  boxShadow: hero
-                      ? [
-                          BoxShadow(
-                            color: AppColors.primaryBlue.withValues(
-                              alpha: 0.28,
-                            ),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ]
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  icon,
-                  size: 26,
-                  color: hero ? AppColors.white : AppColors.primaryBlue,
-                ),
+              Icon(
+                icon,
+                size: 18,
+                color: hero ? AppColors.white : AppColors.primaryBlue,
               ),
-              const SizedBox(height: AppSpace.sm),
+              const SizedBox(width: AppSpace.sm - 2),
               Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: palette.text,
+                  color: hero ? AppColors.white : palette.text,
                   fontWeight: FontWeight.w700,
                 ),
               ),

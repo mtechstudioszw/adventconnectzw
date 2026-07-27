@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../config/share_config.dart';
 import '../../models/library_item_model.dart';
+import '../../services/library_launch_intent.dart';
 import '../../services/library_service.dart';
 import '../../services/music_download_service.dart';
 import '../../services/music_player_service.dart';
@@ -110,7 +111,22 @@ class _MusicTabState extends State<MusicTab>
     // badge without each one hitting the filesystem during build.
     await MusicDownloadService.warmPaths(items);
     if (mounted) setState(() => _all = items);
+    await _consumeLaunchIntent(items);
     return items;
+  }
+
+  /// Starts the track Home asked for, if it asked for one.
+  ///
+  /// "Music of the day" used to just open this tab, leaving the member to
+  /// hunt for the track they had literally just tapped. The queue is seeded
+  /// with the whole catalogue from that track's position, so play-next still
+  /// works exactly as it does when you tap a row here.
+  Future<void> _consumeLaunchIntent(List<LibraryItem> items) async {
+    final wanted = LibraryLaunchIntent.takeMusic();
+    if (wanted == null || !mounted) return;
+    final index = items.indexWhere((i) => i.id == wanted);
+    if (index < 0) return;
+    await _play(items, index);
   }
 
   Future<void> _refresh() async {

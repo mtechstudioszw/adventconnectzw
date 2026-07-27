@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 
 import '../models/library_item_model.dart';
 import 'music_download_service.dart';
@@ -43,16 +44,62 @@ class MusicPlayerService {
 
   /// Boots the media session. Call (and await) ONCE from `main()` before
   /// `runApp` and before anything touches [player]. Never throws.
+  ///
+  /// ## The fallback has to undo the platform swap
+  ///
+  /// `JustAudioBackground.init` does this, in this order:
+  ///
+  /// ```dart
+  /// JustAudioPlatform.instance = _JustAudioBackgroundPlugin();  // swap
+  /// _audioHandler = await AudioService.init(...);               // then assign
+  /// ```
+  ///
+  /// `_audioHandler` is a top-level `late` in that package. So if
+  /// `AudioService.init` throws — or our timeout fires — the platform is
+  /// ALREADY the background plugin while `_audioHandler` was never assigned,
+  /// and every later call explodes with
+  /// `LateInitializationError: Field '_audioHandler' has not been initialized`.
+  ///
+  /// That is the crash that got this plugin ripped out once before, and simply
+  /// setting `_backgroundReady = false` did nothing to prevent it: the damage
+  /// is at the platform layer, below anything this class checks. So we capture
+  /// the real platform first and put it back on failure, which is what finally
+  /// makes "degrade to plain in-app playback" true rather than aspirational.
   static Future<void> ensureInitialized() async {
     if (_initStarted) return;
     _initStarted = true;
     // Web and desktop have no audio_service implementation; calling init
     // there throws a MissingPluginException we can't usefully recover from.
     if (kIsWeb) return;
+    await _bootMediaSession();
+  }
+
+  /// Re-attempts the media session if it failed at startup.
+  ///
+  /// This is what a real music player does: a session that didn't come up
+  /// during a slow cold start is retried the moment the user actually presses
+  /// play, rather than leaving them without lock-screen controls — or, before
+  /// the platform-restore fix above, without any audio at all — until they
+  /// force-quit the app.
+  ///
+  /// Cheap no-op once the session is up. Returns true if background playback
+  /// is available afterwards.
+  static Future<bool> _retryMediaSessionIfNeeded() async {
+    if (_backgroundReady || kIsWeb || !_initStarted) return _backgroundReady;
+    await _bootMediaSession();
+    return _backgroundReady;
+  }
+
+  static Future<void> _bootMediaSession() async {
+    // The genuine method-channel platform, before the plugin swaps itself in.
+    final plainPlatform = JustAudioPlatform.instance;
+
     try {
-      // Timeboxed: this runs on the critical path before runApp, and a
-      // wedged platform channel on some OEM would otherwise hang the splash
-      // forever. A timeout degrades to plain playback, same as a throw.
+      // Still timeboxed — this runs before runApp and a wedged platform
+      // channel would otherwise hang the splash forever — but 6s was too
+      // tight. Registering a foreground service on a cold start on a mid-range
+      // Android 13/14 device regularly runs past it, and every timeout used to
+      // mean no music for the whole session.
       await JustAudioBackground.init(
         androidNotificationChannelId:
             'com.mtechstudioszw.adventconnect.channel.audio',
@@ -65,11 +112,13 @@ class MusicPlayerService {
         androidStopForegroundOnPause: true,
         androidNotificationIcon: 'mipmap/ic_launcher',
         preloadArtwork: true,
-      ).timeout(const Duration(seconds: 6));
+      ).timeout(const Duration(seconds: 15));
       _backgroundReady = true;
     } catch (e, s) {
-      // Non-fatal by design — see the class doc.
-      debugPrint('JustAudioBackground.init failed, falling back to plain '
+      // Put the real platform back, or nothing will ever play again this
+      // session. Without this line the "fallback" is a crash.
+      JustAudioPlatform.instance = plainPlatform;
+      debugPrint('JustAudioBackground.init failed, reverted to plain '
           'playback: $e\n$s');
       _backgroundReady = false;
     }
@@ -82,6 +131,25 @@ class MusicPlayerService {
   /// The shared player. Constructed lazily so it can never be built before
   /// [ensureInitialized] has run.
   AudioPlayer get player => _player ??= AudioPlayer();
+
+  /// Retries the media session, and rebuilds the player if that succeeded.
+  ///
+  /// An [AudioPlayer] binds to whichever [JustAudioPlatform] was current when
+  /// it was constructed. If startup fell back to plain playback and a later
+  /// retry brings the session up, an existing player is still attached to the
+  /// plain platform and would play with no notification at all — so it is
+  /// thrown away and rebuilt against the session. Safe here because the caller
+  /// is about to load a fresh queue anyway.
+  Future<void> _recoverMediaSession() async {
+    if (backgroundReady) return;
+    final recovered = await _retryMediaSessionIfNeeded();
+    if (!recovered || _player == null) return;
+    await _indexSub?.cancel();
+    _indexSub = null;
+    await _player!.dispose();
+    _player = null;
+    _loadedSignature = '';
+  }
 
   /// The playlist currently loaded, so the mini bar and full player can
   /// resolve titles / art by index.
@@ -146,6 +214,11 @@ class MusicPlayerService {
     if (items.isEmpty) return;
     final index = startIndex.clamp(0, items.length - 1);
     final signature = items.map((e) => e.id).join(',');
+
+    // Pressing play is the natural moment to give the media session another
+    // go, so a slow cold start costs the member lock-screen controls for one
+    // tap instead of for the whole session.
+    await _recoverMediaSession();
 
     if (signature == _loadedSignature && _player != null) {
       await player.seek(Duration.zero, index: index);

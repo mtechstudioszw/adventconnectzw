@@ -18,7 +18,17 @@ import '../../../theme/app_text_styles.dart';
 ///
 /// Anything unrecognised degrades to its text content, so a new tag in a
 /// future quarterly can never render as blank or as raw markup.
-class SsHtmlText extends StatelessWidget {
+///
+/// **Stateful because of the tap recognizers.** A `TextSpan.recognizer` is not
+/// owned by the framework — whoever creates it must dispose it. This widget
+/// used to be stateless and built `TapGestureRecognizer()` inline for every
+/// verse link on every rebuild, leaking one recognizer per reference per
+/// frame. Changing the font-size slider on a lesson page with a few dozen
+/// references leaks them by the hundred, and the abandoned recognizers stay
+/// registered with the gesture arena, which is what surfaced as framework
+/// assertions while tearing the reader down. Recognizers are now cached per
+/// verse reference and disposed with the widget.
+class SsHtmlText extends StatefulWidget {
   const SsHtmlText({
     super.key,
     required this.html,
@@ -36,9 +46,36 @@ class SsHtmlText extends StatelessWidget {
   final void Function(String verseRef, String label)? onVerseTap;
 
   @override
+  State<SsHtmlText> createState() => _SsHtmlTextState();
+}
+
+class _SsHtmlTextState extends State<SsHtmlText> {
+  /// One recognizer per verse reference, reused across rebuilds and disposed
+  /// in [dispose]. Keyed by the raw `verse` attribute.
+  final Map<String, TapGestureRecognizer> _recognizers = {};
+
+  double get fontScale => widget.fontScale;
+
+  TapGestureRecognizer _recognizerFor(String verseRef, String label) {
+    return _recognizers.putIfAbsent(verseRef, TapGestureRecognizer.new)
+      // Rebound every build: the callback closes over the current label and
+      // the latest onVerseTap, both of which can change between builds.
+      ..onTap = () => widget.onVerseTap?.call(verseRef, label);
+  }
+
+  @override
+  void dispose() {
+    for (final r in _recognizers.values) {
+      r.dispose();
+    }
+    _recognizers.clear();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final blocks = _parseBlocks(html);
-    final color = textColor ?? context.palette.text;
+    final blocks = _parseBlocks(widget.html);
+    final color = widget.textColor ?? context.palette.text;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -165,9 +202,7 @@ class SsHtmlText extends StatelessWidget {
                 color: AppColors.primaryBlue,
                 fontWeight: FontWeight.w600,
               ),
-              recognizer: TapGestureRecognizer()
-                ..onTap = () =>
-                    onVerseTap?.call(inline.verseRef!, inline.text),
+              recognizer: _recognizerFor(inline.verseRef!, inline.text),
             )
           else
             TextSpan(

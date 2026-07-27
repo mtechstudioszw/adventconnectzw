@@ -243,7 +243,10 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   Widget build(BuildContext context) {
     return MainScaffold(
       title: 'Churches',
-      currentIndex: 2,
+      // Churches gave up its nav slot to Advent Chat (2026-07-27). It is now
+      // pushed from Home / Profile, so no tab renders as active — the island
+      // stays only so members can jump straight to another section.
+      currentIndex: -1,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _nearMe,
         backgroundColor: AppColors.primaryBlue,

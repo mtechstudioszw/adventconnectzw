@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+
+import 'image_preview_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -136,6 +138,19 @@ class _ChatScreenState extends State<ChatScreen>
   /// nothing changed.
   Future<void> _reconcileTicks() async {
     if (!mounted || !ConnectivityService.isOnline) return;
+    // Only fetch when a tick could actually still change.
+    //
+    // This used to run unconditionally every 8s, and each run costs a
+    // message_floor RPC, a select of up to 500 rows, AND a full rewrite of
+    // the Hive message cache. Sitting in a thread for ten minutes pulled it
+    // down about seventy-five times. On Zimbabwean mobile data that is real
+    // money, spent to re-check receipts that realtime had already delivered.
+    //
+    // The only thing this fallback exists to repair is the sender's own
+    // ✓ → ✓✓ → blue progression after a dropped socket. Once everything you
+    // sent has been read there is nothing left to reconcile, so it goes
+    // quiet and costs nothing until you send again.
+    if (!_hasUnsettledOutgoing) return;
     try {
       final list = await MessagingService.fetchMessages(widget.conversationId);
       if (!mounted) return;
@@ -143,6 +158,17 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (_) {
       // best-effort; the next tick retries.
     }
+  }
+
+  /// True while at least one message the viewer sent is not yet read — i.e.
+  /// while a tick on screen could still legitimately change.
+  bool get _hasUnsettledOutgoing {
+    final me = AuthService.currentUser?.id;
+    if (me == null) return false;
+    for (final m in _serverMessages) {
+      if (m.senderId == me && !m.read) return true;
+    }
+    return false;
   }
 
   void _applyServerMessages(List<Message> list) {
@@ -868,6 +894,15 @@ class _ChatScreenState extends State<ChatScreen>
       _productPreviewPrice = ChatLaunchIntent.productPrice;
       ChatLaunchIntent.clear();
     }
+    // Restore an unsent draft — but never over a product hand-off, which is
+    // a deliberate prefill the user just triggered.
+    if (_inputController.text.isEmpty) {
+      final saved = MessagingService.readDraft(widget.conversationId);
+      if (saved != null) {
+        _inputController.text = saved;
+        _hasText = saved.trim().isNotEmpty;
+      }
+    }
     _bootstrap();
     _resolveConversation();
     // Opening the chat clears its tray notification (WhatsApp parity) — the
@@ -1342,6 +1377,17 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   void dispose() {
+    // Persist whatever is in the composer before the screen goes. Editing an
+    // existing message is NOT a draft — that text belongs to a sent message
+    // and restoring it into a fresh composer would be baffling.
+    if (_editing == null) {
+      unawaited(
+        MessagingService.saveDraft(
+          widget.conversationId,
+          _inputController.text,
+        ),
+      );
+    }
     _stream?.cancel();
     _highlightTimer?.cancel();
     _typingExpiry?.cancel();
@@ -1477,13 +1523,16 @@ class _ChatScreenState extends State<ChatScreen>
       });
       // Self-healing tick reconcile: on a flaky network the realtime socket
       // can silently drop, so the sender's ticks (sent → delivered → read)
-      // stop updating. Every 8s while the chat is open + online, re-fetch the
-      // messages and re-apply — cheap (the merge is a no-op when nothing
-      // changed) but it keeps the ticks honest even if a realtime UPDATE was
-      // missed.
+      // stop updating. This is the fallback for that — realtime handles it
+      // instantly in the normal case.
+      //
+      // 20s, not 8s, and _reconcileTicks skips entirely unless one of your
+      // own messages is still unread. A receipt that lands 20s late on a
+      // dead socket is unnoticeable; re-downloading the thread every 8s is
+      // not (see _reconcileTicks).
       _tickReconcileTimer?.cancel();
       _tickReconcileTimer = Timer.periodic(
-        const Duration(seconds: 8),
+        const Duration(seconds: 20),
         (_) => _reconcileTicks(),
       );
       _typingChannel = MessagingService.subscribeTyping(
@@ -1727,6 +1776,10 @@ class _ChatScreenState extends State<ChatScreen>
       try {
         await File(path).delete();
       } catch (_) {}
+      // The image path already did this; the voice path never did, so every
+      // voice note left a dead progress entry keyed by a temp id that no
+      // message carries any more.
+      _uploadProgress.remove(tempId);
       if (mounted) setState(() => _sending = false);
       _activeRecordingPath = null;
     }
@@ -1821,6 +1874,10 @@ class _ChatScreenState extends State<ChatScreen>
     // resend the same text.
     if (text.isEmpty) return;
     final me = AuthService.currentUser?.id ?? '';
+    // The composer is about to be emptied, so any stored draft is spent.
+    // Clearing here (not in dispose) means the inbox drops its "Draft:"
+    // preview the instant you hit send, not when you leave the screen.
+    unawaited(MessagingService.clearDraft(widget.conversationId));
 
     // Edit mode — update the existing message instead of sending a new
     // one. The realtime stream echoes the UPDATE and refreshes the
@@ -3477,8 +3534,21 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_ensureOnline('send photos')) return;
     try {
       final result = await StorageService.pickChatImage(fromCamera: fromCamera);
-      if (result == null) return;
-      await _sendImageBytes(result.bytes, result.ext);
+      if (result == null || !mounted) return;
+      // Preview + caption before it goes. Picking used to send instantly,
+      // which meant the wrong photo was already delivered before you saw it.
+      final caption = await Navigator.of(context).push<String>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => ImagePreviewScreen(
+            bytes: result.bytes,
+            recipientLabel: _conversation?.otherUserName ?? 'this chat',
+          ),
+        ),
+      );
+      // null means they backed out; '' means send with no caption.
+      if (caption == null || !mounted) return;
+      await _sendImageBytes(result.bytes, result.ext, caption);
     } on FileTooLargeException catch (e) {
       if (mounted) _toast(e.message);
     } catch (_) {
@@ -3486,8 +3556,13 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
-  Future<void> _sendImageBytes(Uint8List bytes, String ext) async {
+  Future<void> _sendImageBytes(
+    Uint8List bytes,
+    String ext, [
+    String caption = '',
+  ]) async {
     final me = AuthService.currentUser?.id ?? '';
+    final text = caption.trim();
     // Write to a temp file so the optimistic bubble can render the photo
     // immediately (Image.file) while the upload runs.
     String localPath;
@@ -3507,7 +3582,9 @@ class _ChatScreenState extends State<ChatScreen>
       conversationId: widget.conversationId,
       senderId: me,
       senderName: 'You',
-      content: '📷 Photo',
+      // Same shape the server will store, so the optimistic bubble and the
+      // canonical row render identically and the swap is invisible.
+      content: text.isEmpty ? '📷 Photo' : text,
       messageType: 'image',
       mediaUrl: localPath,
       createdAt: _optimisticTimestamp(),
@@ -3522,6 +3599,7 @@ class _ChatScreenState extends State<ChatScreen>
         conversationId: widget.conversationId,
         bytes: bytes,
         ext: ext,
+        caption: text,
         onProgress: (p) {
           if (mounted) setState(() => _uploadProgress[tempId] = p);
         },
@@ -5172,6 +5250,11 @@ class _ImageBubbleState extends State<_ImageBubble> {
   Widget build(BuildContext context) {
     final isMine = widget.isMine;
     final maxWidth = MediaQuery.of(context).size.width * 0.66;
+    // '📷 Photo' is the placeholder the server stores when there's no
+    // caption — it's chrome, not something the sender wrote, so it must
+    // never render as a caption under the picture.
+    final caption = widget.message.content.trim();
+    final hasCaption = caption.isNotEmpty && caption != '📷 Photo';
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
       child: ClipRRect(
@@ -5181,7 +5264,11 @@ class _ImageBubbleState extends State<_ImageBubble> {
           bottomLeft: Radius.circular(isMine ? 18 : 4),
           bottomRight: Radius.circular(isMine ? 4 : 18),
         ),
-        child: GestureDetector(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
           onTap: _open,
           child: Container(
             constraints: const BoxConstraints(minWidth: 160, minHeight: 160),
@@ -5228,6 +5315,24 @@ class _ImageBubbleState extends State<_ImageBubble> {
               ],
             ),
           ),
+            ),
+            if (hasCaption)
+              Container(
+                width: double.infinity,
+                color: isMine
+                    ? AppColors.primaryBlue
+                    : context.palette.cardMuted,
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                child: Text(
+                  caption,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: isMine ? AppColors.white : context.palette.text,
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

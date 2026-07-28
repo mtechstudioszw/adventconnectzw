@@ -1189,6 +1189,46 @@ class MessagingService {
     }
   }
 
+  // ----- Unsent drafts -------------------------------------------------
+  //
+  // Typing a message, leaving the chat and losing it is the single most
+  // annoying thing a messaging app can do, and WhatsApp has kept drafts
+  // since forever. Stored under a `pref:` key ON PURPOSE — CacheService's
+  // 24h janitor skips that prefix, so a draft survives indefinitely
+  // instead of evaporating overnight like a cached payload would.
+  //
+  // Device-local only. A draft is not a message; it has never been sent
+  // anywhere and should never leave the phone.
+  static String _draftKey(String conversationId) =>
+      'pref:draft:$conversationId';
+
+  /// Notifies the inbox when a draft is written or cleared, so the row can
+  /// show or drop its "Draft:" preview without a refetch.
+  static final ValueNotifier<int> draftRevision = ValueNotifier<int>(0);
+
+  static String? readDraft(String conversationId) {
+    final raw = CacheService.readPref(_draftKey(conversationId));
+    if (raw == null || raw.trim().isEmpty) return null;
+    return raw;
+  }
+
+  static Future<void> saveDraft(String conversationId, String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      await clearDraft(conversationId);
+      return;
+    }
+    if (readDraft(conversationId) == text) return;
+    await CacheService.writePref(_draftKey(conversationId), text);
+    draftRevision.value++;
+  }
+
+  static Future<void> clearDraft(String conversationId) async {
+    if (CacheService.readPref(_draftKey(conversationId)) == null) return;
+    await CacheService.deletePref(_draftKey(conversationId));
+    draftRevision.value++;
+  }
+
   /// "Who is this?" context for the chat header (patch_166): the other
   /// person's church, and how many friends you have in common.
   ///
@@ -1879,10 +1919,17 @@ class MessagingService {
   /// Uploads a compressed image to the private chat_media bucket and
   /// inserts a `message_type='image'` row. Path is conversation-scoped
   /// so the patch_051 RLS limits reads to participants.
+  /// Send a photo, optionally with a caption.
+  ///
+  /// The caption is stored as the message `content` so the bubble can render
+  /// it verbatim, while `last_message` carries a 📷-prefixed copy for the
+  /// inbox preview. Keeping the decoration out of `content` means the bubble
+  /// never has to strip an emoji back off the user's own words.
   static Future<Message> sendImageMessage({
     required String conversationId,
     required Uint8List bytes,
     required String ext,
+    String? caption,
     void Function(double progress)? onProgress,
   }) async {
     final user = _client.auth.currentUser;
@@ -1898,12 +1945,13 @@ class MessagingService {
       contentType: _imageMime(ext),
       onProgress: onProgress ?? (_) {},
     );
+    final text = (caption ?? '').trim();
     final response = await _client
         .from(_messagesTable)
         .insert({
           'conversation_id': conversationId,
           'sender_id': user.id,
-          'content': '📷 Photo',
+          'content': text.isEmpty ? '📷 Photo' : text,
           'message_type': 'image',
           'media_url': storagePath,
         })
@@ -1911,7 +1959,7 @@ class MessagingService {
         .single();
     final message = Message.fromJson(response);
     await _client.from(_conversationsTable).update({
-      'last_message': '📷 Photo',
+      'last_message': text.isEmpty ? '📷 Photo' : '📷 $text',
       'last_sender_id': user.id,
       'last_message_at': message.createdAt.toIso8601String(),
     }).eq('id', conversationId);

@@ -182,6 +182,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     // event, so listen for them explicitly and rebuild — otherwise a message
     // you deleted-for-me still showed in the list until a new message arrived.
     MessagingService.inboxLocalRevision.addListener(_onLocalInboxChange);
+    // Drafts are written on the chat screen and read here, so the row needs
+    // telling — otherwise "Draft:" only appears after some other refetch.
+    MessagingService.draftRevision.addListener(_onLocalInboxChange);
   }
 
   void _onLocalInboxChange() {
@@ -194,6 +197,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     _searchDebounce?.cancel();
     _activitySub?.cancel();
     MessagingService.inboxLocalRevision.removeListener(_onLocalInboxChange);
+    MessagingService.draftRevision.removeListener(_onLocalInboxChange);
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -2517,6 +2521,15 @@ class _ConversationTile extends StatelessWidget {
     return null;
   }
 
+  /// Drop the leading media emoji once the row is already showing a glyph
+  /// for it — otherwise a captioned photo reads "🖼 📷 at the beach".
+  String _previewText(String raw) {
+    for (final prefix in const ['📷 ', '🎤 ', '🎙️ ']) {
+      if (raw.startsWith(prefix)) return raw.substring(prefix.length);
+    }
+    return raw;
+  }
+
   /// Group rows name the speaker; 1:1 rows never should.
   ///
   /// "Tapiwa: bring the projector" and "bring the projector" are different
@@ -2533,6 +2546,10 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unread = conversation.unreadCount > 0 && !isLastFromMe;
+    // An unsent draft outranks the last message in the preview: it's the
+    // thing waiting on YOU, and it's how you find the half-written reply
+    // you walked away from. WhatsApp's behaviour, and its colour.
+    final draft = MessagingService.readDraft(conversation.id);
     final glyph = _previewGlyph(context);
     final speaker = _groupSpeakerPrefix();
     // Self-chat reads quietly — it is a notepad, not a correspondent, and
@@ -2736,6 +2753,7 @@ class _ConversationTile extends StatelessWidget {
                           // Never on a placeholder ("Say hello") or a reaction
                           // preview — those aren't messages the viewer sent.
                           if (isLastFromMe &&
+                              draft == null &&
                               !conversation.isSelfChat &&
                               reactionPreview == null &&
                               !previewCleared &&
@@ -2756,7 +2774,8 @@ class _ConversationTile extends StatelessWidget {
                           ],
                           // Type glyph — 📢 for a church announcement, a mic
                           // for a voice note, a bookmark for your own notes.
-                          if (glyph != null && !previewCleared) ...[
+                          if (glyph != null && draft == null && !previewCleared)
+                            ...[
                             Icon(
                               glyph.icon,
                               size: 13,
@@ -2765,7 +2784,25 @@ class _ConversationTile extends StatelessWidget {
                             const SizedBox(width: 4),
                           ],
                           Expanded(
-                            child: (reactionPreview != null && !previewCleared)
+                            child: draft != null
+                                ? RichText(
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    text: TextSpan(
+                                      style: previewStyle,
+                                      children: [
+                                        TextSpan(
+                                          text: 'Draft: ',
+                                          style: previewStyle.copyWith(
+                                            color: AppColors.successGreen,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        TextSpan(text: draft),
+                                      ],
+                                    ),
+                                  )
+                                : (reactionPreview != null && !previewCleared)
                                 ? Text(
                                     _reactionPreviewLabel(reactionPreview!),
                                     maxLines: 1,
@@ -2801,9 +2838,13 @@ class _ConversationTile extends StatelessWidget {
                                         TextSpan(
                                           text: isLastFromMe
                                               ? _selfSystemLabel(
-                                                  conversation.lastMessage,
+                                                  _previewText(
+                                                    conversation.lastMessage,
+                                                  ),
                                                 )
-                                              : conversation.lastMessage,
+                                              : _previewText(
+                                                  conversation.lastMessage,
+                                                ),
                                         ),
                                       ],
                                     ),

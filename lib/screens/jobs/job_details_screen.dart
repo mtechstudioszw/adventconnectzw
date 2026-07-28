@@ -649,7 +649,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     return ClipPath(
       clipper: _HeroClipper(),
       child: Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
+        // Flat header on the scaffold colour (founder rule, 2026-07-28).
+        // Every foreground in here was white-on-navy and has been moved
+        // onto the palette — a background swap alone would have left
+        // white text invisible on light grey.
+        color: context.palette.scaffoldBg,
         child: SafeArea(
           bottom: false,
           child: Padding(
@@ -683,11 +687,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                         height: 56,
                         clipBehavior: Clip.antiAlias,
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.palette.card,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppColors.white.withValues(alpha: 0.2),
-                          ),
+                          border: Border.all(color: context.palette.divider),
                         ),
                         child:
                             job.companyLogoUrl != null &&
@@ -708,7 +710,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                             Text(
                               job.company,
                               style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.white.withValues(alpha: 0.7),
+                                color: context.palette.textMuted,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -717,7 +719,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                             Text(
                               job.title,
                               style: AppTextStyles.displayMedium.copyWith(
-                                color: AppColors.white,
+                                color: context.palette.text,
                                 fontSize: 22,
                                 fontWeight: FontWeight.w700,
                                 height: 1.2,
@@ -1045,11 +1047,15 @@ class _CircleIconButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.10),
+            // Light-grey chip with a dark icon — the flat-header
+            // equivalent of the old translucent-white-on-navy circle.
+            color: Theme.of(context).brightness == Brightness.dark
+                ? context.palette.cardMuted
+                : const Color(0xFFE4E9F2),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.10)),
+            border: Border.all(color: context.palette.divider),
           ),
-          child: Icon(icon, color: AppColors.white, size: 18),
+          child: Icon(icon, color: context.palette.text, size: 18),
         ),
       ),
     );

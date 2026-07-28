@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/friendship_model.dart';
+import '../../models/ministry_tag_model.dart';
 import '../../models/post_model.dart';
+import '../../services/ministry_service.dart';
+import '../../widgets/ministry_chips.dart';
 import '../../utils/date_format.dart';
 import '../../services/auth_service.dart';
 import '../../services/block_service.dart';
@@ -17,7 +20,7 @@ import '../../widgets/full_image_viewer.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../services/messaging_service.dart';
 import '../../widgets/cached_image.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/brand_spinner.dart';
 
 /// Viewing another user's profile (not the logged-in user — that's the
@@ -43,6 +46,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _loading = true;
   bool _friendBusy = false;
   String? _error;
+
+  /// patch_166. Church + mutual-friend COUNT for the person being viewed.
+  /// The same signal the chat header carries — "do we belong to the same
+  /// congregation, and do we know any of the same people" is the question
+  /// a profile should answer first. The RPC returns a count only, never
+  /// the identities, so the friend graph stays private.
+  ({String? churchName, int mutualFriends})? _peerContext;
+
+  /// Their ministry involvement + spiritual gifts (patch_168). RLS
+  /// returns nothing for a non-discoverable profile, so this stays
+  /// empty and the section renders nothing.
+  List<MinistryTag> _tags = const [];
 
   String? get _viewerId => AuthService.currentUser?.id;
   bool get _isSelf => _viewerId == widget.userId;
@@ -91,6 +106,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (profile != null && profile.isDiscoverable) {
         _loadPosts();
       }
+      // Peer context is useful even on a private profile — knowing you
+      // share a church is exactly what helps you decide whether to send
+      // the request that would open it up.
+      if (profile != null && !_isSelf) {
+        _loadPeerContext();
+      }
+      if (profile != null) {
+        _loadMinistryTags();
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -111,6 +135,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       });
     } catch (_) {
       // ignore — empty posts state is fine.
+    }
+  }
+
+  Future<void> _loadPeerContext() async {
+    try {
+      final ctx = await MessagingService.fetchPeerContext(widget.userId);
+      if (!mounted) return;
+      setState(() => _peerContext = ctx);
+    } catch (_) {
+      // Best-effort — the strip just doesn't render.
+    }
+  }
+
+  Future<void> _loadMinistryTags() async {
+    try {
+      final tags = await MinistryService.fetchForProfile(widget.userId);
+      if (!mounted) return;
+      setState(() => _tags = tags);
+    } catch (_) {
+      // Best-effort — the section just doesn't render.
     }
   }
 
@@ -289,11 +333,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHero(),
-            const SizedBox(height: 56),
+            const SizedBox(height: 8),
             _buildNameBlock(),
             const SizedBox(height: 16),
             if (!_isSelf) _buildActionToolbar(),
             const SizedBox(height: 18),
+            // Shared church + mutual friends, above the bio — it is the
+            // context you read the rest of the profile through.
+            ?_buildPeerContextStrip(),
             if (_profile!.isDiscoverable)
               ..._buildPublicSections()
             else
@@ -305,105 +352,178 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  /// Flat header + optional cover band + avatar. Mirrors the own-profile
+  /// header: no navy slab when there's no cover photo, and the back /
+  /// report controls are header chips on the scaffold colour rather than
+  /// translucent circles floating on a gradient.
   Widget _buildHero() {
     final cover = _profile!.coverPhotoUrl;
-    return SizedBox(
-      height: 220,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Cover image / gradient placeholder. Tap to expand.
-          GestureDetector(
-            onTap: (cover != null && cover.isNotEmpty)
-                ? () => FullImageViewer.show(context, cover)
-                : null,
-            child: Container(
-              height: 180,
-              decoration: BoxDecoration(
-                gradient: AppColors.appBarGradient,
-                image: cover != null && cover.isNotEmpty
-                    ? DecorationImage(
-                        image: CachedNetworkImageProvider(cover),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-            ),
-          ),
-          // Back button.
-          Positioned(
-            top: 12,
-            left: 12,
-            child: SafeArea(
-              child: CircleAvatar(
-                backgroundColor: Colors.black.withValues(alpha: 0.35),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: AppColors.white),
-                  onPressed: () => context.canPop()
-                      ? context.pop()
-                      : context.goNamed('home'),
+    final hasCover = cover != null && cover.isNotEmpty;
+    return FlatStatusBar(
+      child: Container(
+        color: context.palette.scaffoldBg,
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 16, 0),
+                child: Row(
+                  children: [
+                    const ScreenHeroBackButton(),
+                    const Spacer(),
+                    if (!_isSelf)
+                      HeaderIconButton(
+                        icon: Icons.flag_outlined,
+                        tooltip: 'Report this profile',
+                        onTap: _reportUser,
+                      ),
+                  ],
                 ),
               ),
-            ),
-          ),
-          // Report (only when viewing someone else's profile).
-          if (!_isSelf)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: SafeArea(
-                child: CircleAvatar(
-                  backgroundColor: Colors.black.withValues(alpha: 0.35),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.flag_outlined,
-                      color: AppColors.white,
+              const SizedBox(height: 12),
+              SizedBox(
+                height: hasCover ? 190 : 124,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    if (hasCover)
+                      Positioned(
+                        top: 0,
+                        left: 16,
+                        right: 16,
+                        height: 132,
+                        child: GestureDetector(
+                          onTap: () => FullImageViewer.show(context, cover),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: CachedImage(
+                              cover,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(color: context.palette.cardMuted),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      bottom: 0,
+                      child: Container(
+                        width: 118,
+                        height: 118,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: context.palette.cardMuted,
+                          border: Border.all(
+                            color: context.palette.scaffoldBg,
+                            width: 5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.10),
+                              blurRadius: 18,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: GestureDetector(
+                          onTap:
+                              (_profile!.profilePhotoUrl != null &&
+                                  _profile!.profilePhotoUrl!.isNotEmpty)
+                              ? () => FullImageViewer.show(
+                                  context,
+                                  _profile!.profilePhotoUrl,
+                                )
+                              : null,
+                          child:
+                              _profile!.profilePhotoUrl != null &&
+                                  _profile!.profilePhotoUrl!.isNotEmpty
+                              ? CachedImage(
+                                  _profile!.profilePhotoUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder:
+                                      (context, error, stackTrace) =>
+                                          _initialAvatar(),
+                                )
+                              : _initialAvatar(),
+                        ),
+                      ),
                     ),
-                    onPressed: _reportUser,
-                  ),
+                  ],
                 ),
               ),
-            ),
-          // Avatar overlapping the cover bottom.
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                width: 112,
-                height: 112,
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: AppColors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: GestureDetector(
-                  onTap:
-                      (_profile!.profilePhotoUrl != null &&
-                          _profile!.profilePhotoUrl!.isNotEmpty)
-                      ? () => FullImageViewer.show(
-                          context,
-                          _profile!.profilePhotoUrl,
-                        )
-                      : null,
-                  child: ClipOval(
-                    child:
-                        _profile!.profilePhotoUrl != null &&
-                            _profile!.profilePhotoUrl!.isNotEmpty
-                        ? CachedImage(
-                            _profile!.profilePhotoUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                _initialAvatar(),
-                          )
-                        : _initialAvatar(),
-                  ),
-                ),
-              ),
-            ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// "You both go to Glen View SDA · 3 mutual friends" — the two facts
+  /// that answer "who is this to me". Renders nothing when the RPC hasn't
+  /// resolved or has nothing to say, rather than showing "0 mutual
+  /// friends", which reads as a judgement.
+  Widget? _buildPeerContextStrip() {
+    final ctx = _peerContext;
+    if (ctx == null) return null;
+    final church = ctx.churchName?.trim();
+    final mutual = ctx.mutualFriends;
+    final bits = <({IconData icon, String label})>[
+      if (church != null && church.isNotEmpty)
+        (icon: Icons.church_outlined, label: church),
+      if (mutual > 0)
+        (
+          icon: Icons.people_alt_outlined,
+          label: '$mutual mutual friend${mutual == 1 ? '' : 's'}',
+        ),
+    ];
+    if (bits.isEmpty) return null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.primaryBlue.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.primaryBlue.withValues(alpha: 0.16),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < bits.length; i++) ...[
+              if (i > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Container(
+                    width: 3,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: context.palette.textMuted,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              Icon(bits[i].icon, size: 14, color: AppColors.primaryBlue),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  bits[i].label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: context.palette.text,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -573,6 +693,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ],
           ),
         ),
+      // Ministry & gifts (patch_168) — read-only here. Turns "who is
+      // this" into "who can help with this", which is the question a
+      // church directory exists to answer.
+      if (_tags.isNotEmpty) ...[
+        const SizedBox(height: 20),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: MinistrySection(tags: _tags, isOwn: false),
+        ),
+      ],
       const SizedBox(height: 24),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),

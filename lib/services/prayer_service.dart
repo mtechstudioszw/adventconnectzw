@@ -29,17 +29,113 @@ class PrayerService {
   /// Optionally filter by [category] code ('healing', 'family',
   /// 'spiritual', 'provision', 'thanksgiving', 'ministry', 'other').
   /// Null = all categories. Drives the chip filter on prayer_screen.
-  static Future<List<Prayer>> fetchPrayers({String? category}) async {
+  ///
+  /// [answeredOnly] backs the "Answered" chip. It is deliberately NOT a
+  /// category — a prayer has one category and may also be answered, so
+  /// the two filters are orthogonal. Answered results order by
+  /// `answered_at` (patch_167), because the interesting thing about an
+  /// answered prayer is when it was ANSWERED, not when it was asked.
+  static Future<List<Prayer>> fetchPrayers({
+    String? category,
+    bool answeredOnly = false,
+  }) async {
     var query = _client.from(_readTable).select('*, $_authorEmbed');
     if (category != null && category.isNotEmpty) {
       query = query.eq('category', category);
     }
+    if (answeredOnly) {
+      query = query.eq('is_answered', true);
+    }
     final response = await query
-        .order('created_at', ascending: false)
+        .order(answeredOnly ? 'answered_at' : 'created_at', ascending: false)
         .limit(100);
     return (response as List)
         .map((row) => _hydratePrayer(row as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Who prayed, for every visible card, in ONE round-trip.
+  ///
+  /// The card shows "Rutendo, Blessing and 41 others prayed", so it needs
+  /// a couple of names per prayer — but calling [fetchPrayingUsers] per
+  /// card would be an N+1 across the whole list. This pulls the reactions
+  /// for every id at once and groups client-side.
+  ///
+  /// Returns a capped preview, not a complete list: the authoritative
+  /// total is `prayers.prayer_count` (maintained by the bump trigger), and
+  /// the caller derives "and N others" from that. Anonymous prayers are
+  /// not special-cased here — praying is never anonymous, only posting is.
+  static Future<Map<String, List<PrayingUserRef>>> fetchPrayedByPreview(
+    List<String> prayerIds,
+  ) async {
+    if (prayerIds.isEmpty) return const {};
+    try {
+      final response = await _client
+          .from(_responsesTable)
+          .select(
+              'prayer_id, user_id, created_at, '
+              'profiles:user_id(full_name, profile_photo_url)')
+          .inFilter('prayer_id', prayerIds)
+          .eq('response_type', 'praying')
+          .order('created_at', ascending: false)
+          .limit(600);
+
+      final grouped = <String, List<PrayingUserRef>>{};
+      for (final row in response as List) {
+        final map = row as Map<String, dynamic>;
+        final prayerId = map['prayer_id']?.toString();
+        if (prayerId == null) continue;
+        final bucket = grouped.putIfAbsent(prayerId, () => []);
+        // Only the first two per prayer are ever rendered — stop
+        // accumulating so a prayer with 400 reactions doesn't build a
+        // 400-element list we throw away.
+        if (bucket.length >= 2) continue;
+        final profile = map['profiles'] as Map<String, dynamic>?;
+        final name = (profile?['full_name'] as String?)?.trim();
+        if (name == null || name.isEmpty) continue;
+        final photo = (profile?['profile_photo_url'] as String?)?.trim();
+        bucket.add(PrayingUserRef(
+          userId: map['user_id']?.toString() ?? '',
+          fullName: name,
+          photoUrl: photo?.isNotEmpty == true ? photo : null,
+        ));
+      }
+      return grouped;
+    } catch (_) {
+      // Best-effort garnish — the card falls back to the bare count.
+      return const {};
+    }
+  }
+
+  /// Mark a prayer answered (or un-answer it), optionally with a short
+  /// testimony. Author-only: RLS on `prayers` gates UPDATE to
+  /// `author_id = auth.uid()`, and the predicate is repeated here so a
+  /// transient role issue can never touch someone else's row.
+  ///
+  /// `answered_at` is stamped by the patch_167 BEFORE UPDATE trigger, so
+  /// this deliberately does NOT send it — letting the client pick the
+  /// timestamp would let a device with a wrong clock reorder the feed.
+  static Future<void> setAnswered(
+    String prayerId, {
+    required bool answered,
+    String? testimony,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sign in to update your prayer.');
+    }
+    final trimmed = testimony?.trim();
+    await _client
+        .from(_writeTable)
+        .update({
+          'is_answered': answered,
+          // The trigger clears testimony when un-answering; send it only
+          // on the answering path so we never fight it.
+          if (answered) 'testimony':
+              trimmed?.isNotEmpty == true ? trimmed : null,
+        })
+        .eq('id', prayerId)
+        .eq('author_id', user.id);
   }
 
   static Future<Prayer?> fetchPrayerById(String id) async {

@@ -46,7 +46,39 @@ Success Green:  #2E7D32  // Status badges ONLY
 
 \- \*\*Screen backgrounds:\*\* Light Grey #F5F7FA
 
-\- \*\*App bar:\*\* Dark Navy #0D1B3E with gradient
+\- \*\*Headers / app bars: FLAT — never navy.\*\* (Founder rule, 2026-07-28.)
+
+  A header shares `palette.scaffoldBg` with the page and sets its title in
+
+  `palette.text`. Use the \*\*ScreenHero / FlatStatusBar\*\* pattern in
+
+  `lib/widgets/screen_shell.dart` — `FlatStatusBar` flips the status-bar
+
+  icons dark so they stay visible on the light background.
+
+  \- `AppColors.appBarGradient` is \*\*not\*\* for headers. It survives only
+
+    as a fill behind missing imagery (church logos, product tiles, event
+
+    covers); converting those is a separate, deliberate call.
+
+  \- A missing cover photo is \*\*not\*\* a reason to paint a navy slab — the
+
+    header stays flat and the content moves up. See
+
+    lib/screens/profile/profile\_screen.dart.
+
+  \- \*\*Trap:\*\* a childless `DecoratedBox` in `flexibleSpace` collapses to
+
+    zero height and paints nothing. That is how the Watch header's
+
+    gradient vanished and left white text invisible on light grey. Use
+
+    `Container`.
+
+  \- Dark Navy #0D1B3E is still valid for body text, icons and dark
+
+    sections. It is the \*header\* use that is retired.
 
 \- \*\*Uploaded images:\*\* Square via AspectRatio(1.0) — avatars, church logos,
 

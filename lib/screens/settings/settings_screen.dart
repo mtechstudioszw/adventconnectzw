@@ -32,6 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       NotificationCategoryPrefs.defaults;
   String _language = 'English';
   bool _sabbathEnabled = SabbathService.isEnabled();
+  bool _sabbathMode = SabbathService.sabbathModeEnabled();
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
   ThemeMode _themeMode = ThemeService.current;
   // Watch (YouTube) preferences â€” synchronous reads from local prefs.
@@ -125,6 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void dispose() {
     _entrance.dispose();
+    _settingsSearchController.dispose();
     super.dispose();
   }
 
@@ -404,6 +406,234 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  // ── Settings search ────────────────────────────────────────────────
+  // iOS and Android both landed on a search field at the top of Settings
+  // for the same reason: past about thirty rows, browsing stops working.
+  // This screen is well past thirty.
+
+  final _settingsSearchController = TextEditingController();
+  String _settingsQuery = '';
+
+  /// The searchable index.
+  ///
+  /// This is a hand-maintained list rather than something derived from the
+  /// widget tree, because the sections below are a static tree of widgets,
+  /// not data. **Adding a row above means adding it here too** — an entry
+  /// that goes missing is invisible rather than broken, so it is worth
+  /// checking this list whenever a destination is added.
+  ///
+  /// Only rows with a real destination are indexed. Toggles live inside a
+  /// section and are found by opening it, which is why each entry carries
+  /// its section name.
+  List<_SettingsEntry> _searchIndex() {
+    return [
+      // Account
+      _SettingsEntry('Edit profile', 'Account', Icons.person_outline,
+          AppColors.primaryBlue, 'name photo bio church avatar',
+          () => context.pushNamed('edit_profile')),
+      _SettingsEntry('Change password', 'Account', Icons.lock_outline,
+          AppColors.primaryBlue, 'security passcode reset',
+          () => _changePassword()),
+      _SettingsEntry('Blocked contacts', 'Account', Icons.block,
+          AppColors.red, 'block unblock privacy people',
+          () => context.pushNamed('blocked_contacts')),
+      // Preferences
+      _SettingsEntry('Notification permissions', 'Preferences',
+          Icons.notifications_active_outlined, AppColors.goldAccent,
+          'alerts push permission', () => context.pushNamed('notification_permissions')),
+      _SettingsEntry('Appearance', 'Preferences', Icons.brightness_6_outlined,
+          AppColors.primaryBlue, 'theme dark light mode display',
+          () => _pickTheme()),
+      _SettingsEntry('Language', 'Preferences', Icons.translate,
+          AppColors.primaryBlue, 'shona english translate locale',
+          () => _pickLanguage()),
+      _SettingsEntry('Sabbath province', 'Preferences',
+          Icons.location_on_outlined, AppColors.goldAccent,
+          'sundown sunset harare bulawayo countdown timer',
+          () => _pickSabbathProvince()),
+      _SettingsEntry('Sabbath mode', 'Preferences',
+          Icons.do_not_disturb_on_outlined, AppColors.goldAccent,
+          'quiet mute silence notifications sabbath friday sundown',
+          () => _toggleSabbathModeFromSearch()),
+      // Legal
+      _SettingsEntry('Terms of service', 'Legal', Icons.description_outlined,
+          AppColors.textMuted, 'legal terms conditions',
+          () => context.pushNamed('terms')),
+      _SettingsEntry('Privacy policy', 'Legal', Icons.privacy_tip_outlined,
+          AppColors.textMuted, 'legal privacy data',
+          () => context.pushNamed('privacy')),
+      _SettingsEntry('Community guidelines', 'Legal', Icons.groups_outlined,
+          AppColors.textMuted, 'rules conduct moderation',
+          () => context.pushNamed('community_guidelines')),
+      // Support
+      _SettingsEntry('Send feedback', 'Support', Icons.feedback_outlined,
+          AppColors.successGreen, 'suggest idea complain',
+          () => context.pushNamed('feedback')),
+      _SettingsEntry('Help center', 'Support', Icons.help_outline,
+          AppColors.successGreen, 'faq support question',
+          () => context.pushNamed('help_center')),
+      _SettingsEntry('Report a problem', 'Support', Icons.bug_report_outlined,
+          AppColors.red, 'bug broken crash issue',
+          () => context.pushNamed('report_problem')),
+      // App
+      _SettingsEntry('About', 'App', Icons.info_outline, AppColors.primaryBlue,
+          'version credits mtech', () => context.pushNamed('about')),
+    ];
+  }
+
+  /// Reached from the search results, where there is no Switch to flip.
+  /// Clears the query so the user lands back on the section with the
+  /// toggle visible in its new state, rather than on a result row that
+  /// silently changed something.
+  Future<void> _toggleSabbathModeFromSearch() async {
+    final next = !_sabbathMode;
+    setState(() {
+      _sabbathMode = next;
+      _settingsQuery = '';
+      _settingsSearchController.clear();
+    });
+    await SabbathService.setSabbathMode(next);
+  }
+
+  /// "Quiet from Fri 17:52 to Sat 18:04" — the toggle should show the
+  /// actual window it will act on, computed from the chosen province.
+  /// Falls back to a plain description if the province isn't recognised.
+  String _sabbathModeSubtitle() {
+    String hhmm(DateTime d) =>
+        '${d.hour.toString().padLeft(2, '0')}:'
+        '${d.minute.toString().padLeft(2, '0')}';
+    final start = SabbathService.nextSabbathStart(
+      overrideProvince: _sabbathProvince,
+    );
+    final end = SabbathService.currentSabbathEnd(
+      overrideProvince: _sabbathProvince,
+    );
+    if (SabbathService.isSabbathNow(overrideProvince: _sabbathProvince) &&
+        end != null) {
+      return 'Quiet until sundown, ${hhmm(end.toLocal())}';
+    }
+    if (start == null) return 'Mutes non-essential alerts over the Sabbath';
+    return 'Quiet from Fri ${hhmm(start.toLocal())} to Saturday sundown';
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.palette.inputFill,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: TextField(
+          controller: _settingsSearchController,
+          onChanged: (v) => setState(() => _settingsQuery = v.trim()),
+          textInputAction: TextInputAction.search,
+          style: AppTextStyles.bodyMedium.copyWith(fontSize: 14.5),
+          decoration: InputDecoration(
+            hintText: 'Search settings',
+            hintStyle: AppTextStyles.bodyMedium.copyWith(
+              color: context.palette.textMuted,
+              fontSize: 14,
+            ),
+            prefixIcon: Icon(
+              Icons.search,
+              size: 19,
+              color: context.palette.textMuted,
+            ),
+            suffixIcon: _settingsQuery.isEmpty
+                ? null
+                : IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: context.palette.textMuted,
+                    ),
+                    onPressed: () {
+                      _settingsSearchController.clear();
+                      setState(() => _settingsQuery = '');
+                      FocusScope.of(context).unfocus();
+                    },
+                  ),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 13),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchResults() {
+    final q = _settingsQuery.toLowerCase();
+    // Match the label first, then the keyword bag, so typing "dark" finds
+    // Appearance and "sundown" finds Sabbath province.
+    final hits = _searchIndex()
+        .where((e) =>
+            e.label.toLowerCase().contains(q) ||
+            e.keywords.contains(q) ||
+            e.section.toLowerCase().contains(q))
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      child: hits.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.search_off,
+                    size: 34,
+                    color: context.palette.textMuted,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Nothing in Settings matches "$_settingsQuery"',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: context.palette.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Container(
+              decoration: BoxDecoration(
+                color: context.palette.card,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < hits.length; i++) ...[
+                    if (i > 0) const _Divider(),
+                    _NavRow(
+                      icon: hits[i].icon,
+                      label: hits[i].label,
+                      tint: hits[i].tint,
+                      // The section name is the useful second line here —
+                      // it tells you where the row lives so next time you
+                      // can browse straight to it.
+                      trailing: hits[i].section,
+                      onTap: () {
+                        FocusScope.of(context).unfocus();
+                        hits[i].onTap();
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -413,6 +643,14 @@ class _SettingsScreenState extends State<SettingsScreen>
         child: Column(
           children: [
             _buildHero(),
+            _buildSearchField(),
+            // Searching replaces the whole section stack rather than
+            // filtering in place: past ~30 rows, browsing stops working,
+            // and a partially-filtered stack of section cards is harder
+            // to read than a flat list of hits.
+            if (_settingsQuery.isNotEmpty)
+              _buildSearchResults()
+            else
             AnimatedBuilder(
               animation: _entrance,
               builder: (context, child) => Opacity(
@@ -429,6 +667,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   children: [
                     _Section(
                       title: 'Account',
+                      accent: AppColors.primaryBlue,
                       children: [
                         _NavRow(
                           icon: Icons.person_outline,
@@ -470,6 +709,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(height: 18),
                     _Section(
                       title: 'Preferences',
+                      accent: AppColors.goldAccent,
                       children: [
                         _ToggleRow(
                           icon: Icons.event_outlined,
@@ -568,7 +808,20 @@ class _SettingsScreenState extends State<SettingsScreen>
                             }
                           },
                         ),
-                        if (_sabbathEnabled) ...[
+                        const _Divider(),
+                        // Sabbath mode (patch_169) — the countdown above
+                        // SHOWS the Sabbath; this one acts on it.
+                        _ToggleRow(
+                          icon: Icons.do_not_disturb_on_outlined,
+                          label: 'Sabbath mode',
+                          subtitle: _sabbathModeSubtitle(),
+                          value: _sabbathMode,
+                          onChanged: (v) async {
+                            setState(() => _sabbathMode = v);
+                            await SabbathService.setSabbathMode(v);
+                          },
+                        ),
+                        if (_sabbathEnabled || _sabbathMode) ...[
                           const _Divider(),
                           _NavRow(
                             icon: Icons.place_outlined,
@@ -582,6 +835,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(height: 18),
                     _Section(
                       title: 'Watch',
+                      accent: AppColors.red,
                       children: [
                         _ToggleRow(
                           icon: Icons.smart_display_outlined,
@@ -597,6 +851,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(height: 18),
                     _Section(
                       title: 'Legal',
+                      accent: AppColors.textMuted,
                       children: [
                         _NavRow(
                           icon: Icons.description_outlined,
@@ -626,6 +881,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(height: 18),
                     _Section(
                       title: 'Support',
+                      accent: AppColors.successGreen,
                       children: [
                         _NavRow(
                           icon: Icons.feedback_outlined,
@@ -656,6 +912,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       const SizedBox(height: 18),
                       _Section(
                         title: 'Super admin',
+                        accent: AppColors.darkNavy,
                         children: [
                           _NavRow(
                             icon: Icons.verified_user_outlined,
@@ -718,6 +975,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(height: 18),
                     _Section(
                       title: 'App',
+                      accent: AppColors.primaryBlue,
                       children: [
                         _NavRow(
                           icon: Icons.info_outline,
@@ -935,13 +1193,85 @@ class _DonationCard extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
-  final String title;
-  final List<Widget> children;
+/// Rounded tinted square behind a settings icon. A bare glyph in a
+/// 60-row list gives the eye nothing to land on; a colour does.
+/// One searchable destination in Settings. [keywords] is a lowercase bag
+/// of synonyms so people find things by the word they actually use —
+/// "dark" for Appearance, "sundown" for Sabbath province.
+class _SettingsEntry {
+  const _SettingsEntry(
+    this.label,
+    this.section,
+    this.icon,
+    this.tint,
+    this.keywords,
+    this.onTap,
+  );
+
+  final String label;
+  final String section;
+  final IconData icon;
+  final Color tint;
+  final String keywords;
+  final VoidCallback onTap;
+}
+
+class _SettingsIconChip extends StatelessWidget {
+  const _SettingsIconChip({required this.icon, required this.tint});
+
+  final IconData icon;
+  final Color tint;
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Icon(icon, color: tint, size: 18),
+    );
+  }
+}
+
+/// Carries a section's accent colour down to its rows, so each group of
+/// settings is a different colour without threading `tint:` through
+/// forty call sites. A row can still override with its own `tint`.
+class _SectionAccent extends InheritedWidget {
+  const _SectionAccent({required this.color, required super.child});
+
+  final Color color;
+
+  static Color? of(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_SectionAccent>()
+      ?.color;
+
+  @override
+  bool updateShouldNotify(_SectionAccent oldWidget) =>
+      oldWidget.color != color;
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.children, this.accent});
+  final String title;
+  final List<Widget> children;
+
+  /// Icon colour for every row in this section. Defaults to Primary Blue.
+  /// Only ever one of the CLAUDE.md scheme colours.
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionAccent(
+      color: accent ?? AppColors.primaryBlue,
+      child: _buildSection(context),
+    );
+  }
+
+  Widget _buildSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -983,6 +1313,7 @@ class _NavRow extends StatelessWidget {
     required this.onTap,
     this.trailing,
     this.destructive = false,
+    this.tint,
   });
 
   final IconData icon;
@@ -994,18 +1325,26 @@ class _NavRow extends StatelessWidget {
   final String? trailing;
   final bool destructive;
 
+  /// Icon chip colour. Defaults to Primary Blue; sections override it so
+  /// a long list is scannable by colour before it is read. Destructive
+  /// rows ignore it and go red.
+  final Color? tint;
+
   @override
   Widget build(BuildContext context) {
     final color = destructive ? AppColors.red : AppColors.text;
+    final chipTint = destructive
+        ? AppColors.red
+        : (tint ?? _SectionAccent.of(context) ?? AppColors.primaryBlue);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           child: Row(
             children: [
-              Icon(icon, color: color, size: 20),
+              _SettingsIconChip(icon: icon, tint: chipTint),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
@@ -1046,6 +1385,7 @@ class _ToggleRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.subtitle,
   });
 
   final IconData icon;
@@ -1055,21 +1395,44 @@ class _ToggleRow extends StatelessWidget {
   // OS prompt (e.g. waiting for the biometric dialog to return).
   final ValueChanged<bool>? onChanged;
 
+  /// Optional second line — used where the toggle's effect depends on
+  /// data the user should see (Sabbath mode shows tonight's sundown).
+  final String? subtitle;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.text, size: 20),
+          _SettingsIconChip(
+            icon: icon,
+            tint: _SectionAccent.of(context) ?? AppColors.primaryBlue,
+          ),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              label,
-              style: AppTextStyles.titleMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 14.5,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14.5,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.textMuted,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           Switch.adaptive(

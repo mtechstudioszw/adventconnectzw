@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'cache_service.dart';
 
 /// Sabbath sundown helper. Mirrors Part 16 of the master reference:
@@ -28,6 +30,56 @@ class SabbathService {
 
   static Future<void> setProvince(String name) async {
     await CacheService.writePref(_provinceKey, name);
+    // The server's quiet window is derived from the province, so a
+    // province change has to re-stamp it or notifications would keep
+    // muting on the old town's sundown.
+    if (sabbathModeEnabled()) await syncSabbathQuietWindow();
+  }
+
+  // ── Sabbath mode (patch_169) ────────────────────────────────────────
+  // Distinct from the countdown toggle above: that shows a timer, this
+  // MUTES non-essential notifications for the Sabbath window.
+
+  static const _modeKey = 'pref:sabbath_mode';
+
+  static bool sabbathModeEnabled() =>
+      CacheService.readPref(_modeKey) == 'true';
+
+  /// Turn Sabbath mode on/off and push the resulting quiet window to the
+  /// server. The server never computes sundown — it only compares now()
+  /// against the timestamp we stamp here, so this must be called
+  /// whenever the window could change.
+  static Future<void> setSabbathMode(bool value) async {
+    await CacheService.writePref(_modeKey, value ? 'true' : 'false');
+    await syncSabbathQuietWindow();
+  }
+
+  /// Write the current (or upcoming) Sabbath window to `profiles`.
+  ///
+  /// Sends `sabbath_quiet_until` = Saturday sundown when we are inside
+  /// the Sabbath right now, and null otherwise. Deliberately does NOT
+  /// pre-stamp a future window: a device that goes offline on Thursday
+  /// would otherwise mute the user's Sabbath with a timestamp nothing
+  /// can revise. The app re-syncs on launch and when the toggle moves,
+  /// so the window is stamped at the point it becomes true.
+  static Future<void> syncSabbathQuietWindow() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return;
+    final enabled = sabbathModeEnabled();
+    DateTime? until;
+    if (enabled && isSabbathNow()) {
+      until = currentSabbathEnd();
+    }
+    try {
+      await client.from('profiles').update({
+        'sabbath_mode_enabled': enabled,
+        'sabbath_quiet_until': until?.toUtc().toIso8601String(),
+      }).eq('id', user.id);
+    } catch (_) {
+      // Best-effort: a failed sync means notifications aren't muted,
+      // which is the safe direction to fail in.
+    }
   }
 
   // -- Province coordinates ----------------------------------------------

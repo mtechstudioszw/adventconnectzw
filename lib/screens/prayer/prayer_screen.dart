@@ -31,6 +31,13 @@ class _PrayerScreenState extends State<PrayerScreen> {
   /// passed to fetchPrayers() to narrow the server-side query.
   PrayerCategory? _activeCategory;
 
+  /// The "Answered" chip. Orthogonal to [_activeCategory] rather than one
+  /// of its values — a prayer has exactly one category and may also be
+  /// answered, so selecting Answered clears the category and vice versa
+  /// only because the chip row is single-select, not because the DB
+  /// couldn't express both.
+  bool _answeredOnly = false;
+
   @override
   void initState() {
     super.initState();
@@ -41,24 +48,60 @@ class _PrayerScreenState extends State<PrayerScreen> {
     setState(() => _loading = true);
     try {
       final results = await Future.wait([
-        PrayerService.fetchPrayers(category: _activeCategory?.code),
+        PrayerService.fetchPrayers(
+          category: _activeCategory?.code,
+          answeredOnly: _answeredOnly,
+        ),
         PrayerService.fetchUserPrayedIds(),
       ]);
       if (!mounted) return;
+      final prayers = results[0] as List<Prayer>;
       setState(() {
-        _prayers = results[0] as List<Prayer>;
+        _prayers = prayers;
         _prayedIds = results[1] as Set<String>;
         _loading = false;
       });
+      // Names for the "Rutendo, Blessing and 41 others prayed" line.
+      // Deliberately after the first paint: the list is useful without
+      // it, and one extra round-trip shouldn't delay the whole screen.
+      _loadPrayedBy(prayers);
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
     }
   }
 
+  Future<void> _loadPrayedBy(List<Prayer> prayers) async {
+    final ids = prayers
+        .where((p) => p.prayerCount > 0)
+        .map((p) => p.id)
+        .toList(growable: false);
+    if (ids.isEmpty) return;
+    final grouped = await PrayerService.fetchPrayedByPreview(ids);
+    if (!mounted || grouped.isEmpty) return;
+    setState(() {
+      _prayers = _prayers.map((p) {
+        final names = grouped[p.id];
+        return names == null ? p : p.copyWith(prayedBy: names);
+      }).toList();
+    });
+  }
+
   Future<void> _selectCategory(PrayerCategory? next) async {
-    if (next == _activeCategory) return;
-    setState(() => _activeCategory = next);
+    if (next == _activeCategory && !_answeredOnly) return;
+    setState(() {
+      _activeCategory = next;
+      _answeredOnly = false;
+    });
+    await _bootstrap();
+  }
+
+  Future<void> _selectAnswered() async {
+    if (_answeredOnly) return;
+    setState(() {
+      _answeredOnly = true;
+      _activeCategory = null;
+    });
     await _bootstrap();
   }
 
@@ -103,6 +146,129 @@ class _PrayerScreenState extends State<PrayerScreen> {
           () => _busyIds = _busyIds.where((id) => id != prayer.id).toSet(),
         );
       }
+    }
+  }
+
+  /// Mark answered (with an optional testimony) or un-answer. Author-only
+  /// — the card passes null for anyone else, so the menu item is absent.
+  Future<void> _toggleAnswered(Prayer prayer) async {
+    if (prayer.isAnswered) {
+      await _writeAnswered(prayer, answered: false, testimony: null);
+      return;
+    }
+    final controller = TextEditingController();
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Mark as answered', style: AppTextStyles.headlineSmall),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Everyone who prayed will see this. Sharing what happened is '
+              'optional — you can mark it answered on its own.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: ctx.palette.textMuted,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 5,
+              maxLength: 500,
+              textCapitalization: TextCapitalization.sentences,
+              style: AppTextStyles.bodyMedium,
+              decoration: const InputDecoration(
+                hintText: 'What happened? (optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.labelMedium.copyWith(color: ctx.palette.text),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.successGreen,
+            ),
+            child: Text('Mark answered', style: AppTextStyles.labelLarge),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    // Distinguish "dismissed" (null) from "confirmed with no testimony"
+    // (empty string) — only the second should write.
+    if (result == null) return;
+    await _writeAnswered(
+      prayer,
+      answered: true,
+      testimony: result.isEmpty ? null : result,
+    );
+  }
+
+  Future<void> _writeAnswered(
+    Prayer prayer, {
+    required bool answered,
+    required String? testimony,
+  }) async {
+    try {
+      await PrayerService.setAnswered(
+        prayer.id,
+        answered: answered,
+        testimony: testimony,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (_answeredOnly && !answered) {
+          // It no longer belongs in this filtered list.
+          _prayers = _prayers.where((p) => p.id != prayer.id).toList();
+          return;
+        }
+        _prayers = _prayers
+            .map((p) => p.id == prayer.id
+                ? p.copyWith(
+                    isAnswered: answered,
+                    // Mirror the trigger's stamp locally so the card can
+                    // render "Answered just now" without a refetch.
+                    answeredAt: answered ? DateTime.now() : null,
+                    testimony: testimony,
+                  )
+                : p)
+            .toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.successGreen,
+          content: Text(
+            answered ? 'Marked as answered. 🙏' : 'Moved back to open prayers.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not update. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
     }
   }
 
@@ -293,14 +459,25 @@ class _PrayerScreenState extends State<PrayerScreen> {
           children: [
             _CategoryChip(
               label: 'All',
-              selected: _activeCategory == null,
+              selected: _activeCategory == null && !_answeredOnly,
               onTap: () => _selectCategory(null),
+            ),
+            const SizedBox(width: 8),
+            // Answered sits second, right after All — it is the reason to
+            // come back to this screen, so it should not be the last chip
+            // off the right edge.
+            _CategoryChip(
+              label: 'Answered',
+              selected: _answeredOnly,
+              tint: AppColors.successGreen,
+              icon: Icons.auto_awesome,
+              onTap: _selectAnswered,
             ),
             for (final c in PrayerCategory.values) ...[
               const SizedBox(width: 8),
               _CategoryChip(
                 label: c.label,
-                selected: _activeCategory == c,
+                selected: _activeCategory == c && !_answeredOnly,
                 onTap: () => _selectCategory(c),
               ),
             ],
@@ -403,6 +580,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
               : null,
           onEdit: isMine ? () => _editPrayer(p) : null,
           onDelete: isMine ? () => _confirmDelete(p) : null,
+          onToggleAnswered: isMine ? () => _toggleAnswered(p) : null,
         );
         if (i >= 8) return card;
         return StaggeredReveal(index: i, rise: 18, child: card);
@@ -416,17 +594,25 @@ class _CategoryChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.tint,
+    this.icon,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
+  /// Overrides the selected fill. Only "Answered" uses it — green, so the
+  /// chip matches the rail on the cards it filters to.
+  final Color? tint;
+  final IconData? icon;
+
   @override
   Widget build(BuildContext context) {
+    final accent = tint ?? AppColors.primaryBlue;
     return PressEffect(
       child: Material(
-        color: selected ? AppColors.primaryBlue : context.palette.card,
+        color: selected ? accent : context.palette.card,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
@@ -436,16 +622,29 @@ class _CategoryChip extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: selected ? AppColors.primaryBlue : AppColors.divider,
+                color: selected ? accent : AppColors.divider,
               ),
             ),
             alignment: Alignment.center,
-            child: Text(
-              label,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: selected ? AppColors.white : context.palette.text,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(
+                    icon,
+                    size: 13,
+                    color: selected ? AppColors.white : accent,
+                  ),
+                  const SizedBox(width: 5),
+                ],
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: selected ? AppColors.white : context.palette.text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
+import '../../models/friendship_model.dart';
+import '../../services/auth_service.dart';
 import '../../models/job_model.dart';
 import '../../models/member_directory_model.dart';
 import '../../models/post_model.dart';
@@ -76,6 +78,21 @@ class _SearchScreenState extends State<SearchScreen> {
   List<String> _recent = const [];
   bool _seeAllRecent = false;
 
+  // ── Inline action state ────────────────────────────────────────────
+  // Search results act in place: Add a person, Follow a church, RSVP to
+  // an event, without leaving the results. That needs the viewer's
+  // current relationship to each row, loaded once on open and mutated
+  // optimistically. Previously every result was a navigation link — you
+  // searched, tapped through, added, came back, and lost your results.
+  Set<String> _friendIds = <String>{};
+  Set<String> _pendingFriendIds = <String>{};
+  Set<String> _followedChurchIds = <String>{};
+  Set<String> _rsvpedEventIds = <String>{};
+
+  /// Rows with an action in flight, keyed by result id, so a row can
+  /// show a spinner and reject double taps without blocking the list.
+  final Set<String> _actionBusy = <String>{};
+
   // Mixed discovery for the no-query landing state — people, products,
   // churches, events and jobs, so search always surfaces something to
   // explore (not just people, and not an empty recents list).
@@ -92,8 +109,126 @@ class _SearchScreenState extends State<SearchScreen> {
     super.initState();
     _loadRecent();
     _loadSuggestions();
+    _loadRelationships();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _focusNode.requestFocus(),
+    );
+  }
+
+  /// One pass for every inline action's "current state". All three are
+  /// best-effort: if a set fails to load the row just renders its
+  /// default affordance (Add / Follow / RSVP) and the write still
+  /// works — the server is the source of truth either way.
+  Future<void> _loadRelationships() async {
+    Future<T> safe<T>(Future<T> Function() fn, T fallback) async {
+      try {
+        return await fn();
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    final me = AuthService.currentUser?.id;
+    final results = await Future.wait([
+      safe(() => FeedService.fetchMyFriendships(), <Friendship>[]),
+      safe(() => ChurchService.fetchUserFollowedChurchIds(), <String>{}),
+      safe(() => EventService.fetchUserRsvpedEventIds(), <String>{}),
+    ]);
+    if (!mounted) return;
+    final friendships = results[0] as List<Friendship>;
+    final friends = <String>{};
+    final pending = <String>{};
+    for (final f in friendships) {
+      // The row needs "the other person's id" — which end of the pair
+      // that is depends on who sent the request.
+      final other = f.requesterId == me ? f.addresseeId : f.requesterId;
+      if (f.isAccepted) {
+        friends.add(other);
+      } else {
+        pending.add(other);
+      }
+    }
+    setState(() {
+      _friendIds = friends;
+      _pendingFriendIds = pending;
+      _followedChurchIds = results[1] as Set<String>;
+      _rsvpedEventIds = results[2] as Set<String>;
+    });
+  }
+
+  Future<void> _addFriend(String userId) async {
+    if (_actionBusy.contains(userId)) return;
+    setState(() => _actionBusy.add(userId));
+    try {
+      await FeedService.sendRequest(userId);
+      if (!mounted) return;
+      setState(() => _pendingFriendIds = {..._pendingFriendIds, userId});
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not send the request.');
+    } finally {
+      if (mounted) setState(() => _actionBusy.remove(userId));
+    }
+  }
+
+  Future<void> _toggleFollowChurch(String churchId) async {
+    if (_actionBusy.contains(churchId)) return;
+    final following = _followedChurchIds.contains(churchId);
+    setState(() => _actionBusy.add(churchId));
+    try {
+      if (following) {
+        await ChurchService.unfollow(churchId);
+      } else {
+        await ChurchService.follow(churchId);
+      }
+      if (!mounted) return;
+      setState(() {
+        _followedChurchIds = following
+            ? (_followedChurchIds.where((id) => id != churchId).toSet())
+            : {..._followedChurchIds, churchId};
+      });
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not update. Try again.');
+    } finally {
+      if (mounted) setState(() => _actionBusy.remove(churchId));
+    }
+  }
+
+  Future<void> _toggleRsvp(String eventId) async {
+    if (_actionBusy.contains(eventId)) return;
+    final going = _rsvpedEventIds.contains(eventId);
+    setState(() => _actionBusy.add(eventId));
+    try {
+      if (going) {
+        await EventService.cancelRsvp(eventId);
+      } else {
+        await EventService.rsvpToEvent(eventId);
+      }
+      if (!mounted) return;
+      setState(() {
+        _rsvpedEventIds = going
+            ? (_rsvpedEventIds.where((id) => id != eventId).toSet())
+            : {..._rsvpedEventIds, eventId};
+      });
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not update your RSVP.');
+    } finally {
+      if (mounted) setState(() => _actionBusy.remove(eventId));
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.red,
+        content: Text(
+          message,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
     );
   }
 
@@ -396,22 +531,26 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSearchBar() {
-    return Container(
-      color: context.palette.card,
-      padding: const EdgeInsets.fromLTRB(8, 8, 12, 10),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.goNamed('home');
-              }
-            },
-            icon: Icon(Icons.arrow_back, color: context.palette.text),
-            splashRadius: 22,
-          ),
+    // Flat header on the scaffold colour — no navy bar, no white slab.
+    // The screen reads as one continuous surface from the status bar
+    // down, and FlatStatusBar keeps the status-bar icons dark on it.
+    return FlatStatusBar(
+      child: Container(
+        color: context.palette.scaffoldBg,
+        padding: const EdgeInsets.fromLTRB(8, 4, 12, 10),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.goNamed('home');
+                }
+              },
+              icon: Icon(Icons.arrow_back, color: context.palette.text),
+              splashRadius: 22,
+            ),
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -462,7 +601,8 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -479,7 +619,7 @@ class _SearchScreenState extends State<SearchScreen> {
       const _FilterDef(_Filter.jobs, 'Jobs'),
     ];
     return Container(
-      color: context.palette.card,
+      color: context.palette.scaffoldBg,
       padding: const EdgeInsets.only(bottom: 8),
       child: SizedBox(
         height: 38,
@@ -624,10 +764,21 @@ class _SearchScreenState extends State<SearchScreen> {
       );
       sections.add(
         _landingList([
+          // Same rich row as the results list — so the landing state is
+          // somewhere you can actually add people, not just a list of
+          // links back into the profile screen.
           for (final p
               in (_seeAllSuggestions ? _suggestions : _suggestions.take(6)))
-            _PersonRow(
+            _PersonResultRow(
               person: p,
+              query: '',
+              state: _friendIds.contains(p.userId)
+                  ? _FriendState.friends
+                  : _pendingFriendIds.contains(p.userId)
+                      ? _FriendState.pending
+                      : _FriendState.none,
+              busy: _actionBusy.contains(p.userId),
+              onAdd: () => _addFriend(p.userId),
               onTap: () => context.pushNamed(
                 'user_profile',
                 pathParameters: {'userId': p.userId},
@@ -830,8 +981,18 @@ class _SearchScreenState extends State<SearchScreen> {
           for (final p in _fallbackPeople.take(15))
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _PersonRow(
+              child: _PersonResultRow(
                 person: p,
+                // No highlight here — these are suggestions, not matches,
+                // so marking the query inside them would be a lie.
+                query: '',
+                state: _friendIds.contains(p.userId)
+                    ? _FriendState.friends
+                    : _pendingFriendIds.contains(p.userId)
+                        ? _FriendState.pending
+                        : _FriendState.none,
+                busy: _actionBusy.contains(p.userId),
+                onAdd: () => _addFriend(p.userId),
                 onTap: () => _openResult(
                   _lastQuery,
                   () => context.pushNamed(
@@ -888,36 +1049,37 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
+    // On "All" every section is capped so no single type can push the
+    // others off the screen — a name that matches 12 people and 1 church
+    // should still show the church. "See all N" switches to that scope
+    // rather than expanding in place, which is what the chips are for.
+    const allCap = 3;
+    final grouped = _filter == _Filter.all;
+    List<T> cap<T>(List<T> items) =>
+        grouped ? items.take(allCap).toList() : items;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
-        if (showVideos)
-          _Section(
-            label: 'VIDEOS',
-            count: _videos.length,
-            children: [
-              for (final v in _videos)
-                YoutubeVideoCard(
-                  video: v,
-                  onTap: () => _openResult(
-                    _lastQuery,
-                    () => context.pushNamed(
-                      'watch_video',
-                      pathParameters: {'id': v.videoId},
-                      extra: v,
-                    ),
-                  ),
-                ),
-            ],
-          ),
         if (showPeople)
           _Section(
             label: 'PEOPLE',
             count: _people.length,
+            onSeeAll: grouped && _people.length > allCap
+                ? () => setState(() => _filter = _Filter.people)
+                : null,
             children: [
-              for (final p in _people)
-                _PersonRow(
+              for (final p in cap(_people))
+                _PersonResultRow(
                   person: p,
+                  query: _lastQuery,
+                  state: _friendIds.contains(p.userId)
+                      ? _FriendState.friends
+                      : _pendingFriendIds.contains(p.userId)
+                          ? _FriendState.pending
+                          : _FriendState.none,
+                  busy: _actionBusy.contains(p.userId),
+                  onAdd: () => _addFriend(p.userId),
                   onTap: () => _openResult(
                     _lastQuery,
                     () => context.pushNamed(
@@ -928,27 +1090,21 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
             ],
           ),
-        if (showPosts)
-          _Section(
-            label: 'POSTS',
-            count: _posts.length,
-            children: [
-              for (final post in _posts)
-                _PostRow(
-                  post: post,
-                  onTap: () =>
-                      _openResult(_lastQuery, () => Navigator.pop(context)),
-                ),
-            ],
-          ),
         if (showChurches)
           _Section(
             label: 'CHURCHES',
             count: _churches.length,
+            onSeeAll: grouped && _churches.length > allCap
+                ? () => setState(() => _filter = _Filter.churches)
+                : null,
             children: [
-              for (final c in _churches)
-                _ChurchRow(
+              for (final c in cap(_churches))
+                _ChurchResultRow(
                   church: c,
+                  query: _lastQuery,
+                  following: _followedChurchIds.contains(c.id),
+                  busy: _actionBusy.contains(c.id),
+                  onToggleFollow: () => _toggleFollowChurch(c.id),
                   onTap: () => _openResult(
                     _lastQuery,
                     () => context.pushNamed(
@@ -964,10 +1120,17 @@ class _SearchScreenState extends State<SearchScreen> {
           _Section(
             label: 'EVENTS',
             count: _events.length,
+            onSeeAll: grouped && _events.length > allCap
+                ? () => setState(() => _filter = _Filter.events)
+                : null,
             children: [
-              for (final e in _events)
-                _EventRow(
+              for (final e in cap(_events))
+                _EventResultRow(
                   event: e,
+                  query: _lastQuery,
+                  going: _rsvpedEventIds.contains(e.id),
+                  busy: _actionBusy.contains(e.id),
+                  onToggleRsvp: () => _toggleRsvp(e.id),
                   onTap: () => _openResult(
                     _lastQuery,
                     () => context.pushNamed(
@@ -979,14 +1142,57 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
             ],
           ),
+        if (showPosts)
+          _Section(
+            label: 'POSTS',
+            count: _posts.length,
+            onSeeAll: grouped && _posts.length > allCap
+                ? () => setState(() => _filter = _Filter.posts)
+                : null,
+            children: [
+              for (final post in cap(_posts))
+                _PostResultRow(
+                  post: post,
+                  query: _lastQuery,
+                  onTap: () =>
+                      _openResult(_lastQuery, () => Navigator.pop(context)),
+                ),
+            ],
+          ),
+        if (showVideos)
+          _Section(
+            label: 'VIDEOS',
+            count: _videos.length,
+            onSeeAll: grouped && _videos.length > allCap
+                ? () => setState(() => _filter = _Filter.videos)
+                : null,
+            children: [
+              for (final v in cap(_videos))
+                YoutubeVideoCard(
+                  video: v,
+                  onTap: () => _openResult(
+                    _lastQuery,
+                    () => context.pushNamed(
+                      'watch_video',
+                      pathParameters: {'id': v.videoId},
+                      extra: v,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         if (showProducts)
           _Section(
             label: 'MARKETPLACE',
             count: _products.length,
+            onSeeAll: grouped && _products.length > allCap
+                ? () => setState(() => _filter = _Filter.marketplace)
+                : null,
             children: [
-              for (final p in _products)
-                _ProductRow(
+              for (final p in cap(_products))
+                _ProductResultRow(
                   product: p,
+                  query: _lastQuery,
                   onTap: () => _openResult(
                     _lastQuery,
                     () => context.pushNamed(
@@ -1002,10 +1208,14 @@ class _SearchScreenState extends State<SearchScreen> {
           _Section(
             label: 'JOBS',
             count: _jobs.length,
+            onSeeAll: grouped && _jobs.length > allCap
+                ? () => setState(() => _filter = _Filter.jobs)
+                : null,
             children: [
-              for (final j in _jobs)
-                _JobRow(
+              for (final j in cap(_jobs))
+                _JobResultRow(
                   job: j,
+                  query: _lastQuery,
                   onTap: () => _openResult(
                     _lastQuery,
                     () => context.pushNamed(
@@ -1197,10 +1407,17 @@ class _Section extends StatelessWidget {
     required this.label,
     required this.count,
     required this.children,
+    this.onSeeAll,
   });
   final String label;
   final int count;
   final List<Widget> children;
+
+  /// Non-null only when the section is truncated on the "All" scope.
+  /// Switches the chip filter to this type rather than expanding in
+  /// place — the chips already exist, this just makes them discoverable
+  /// from the results instead of requiring you to plan ahead.
+  final VoidCallback? onSeeAll;
 
   @override
   Widget build(BuildContext context) {
@@ -1236,6 +1453,26 @@ class _Section extends StatelessWidget {
                   ),
                 ),
               ),
+              const Spacer(),
+              if (onSeeAll != null)
+                GestureDetector(
+                  onTap: onSeeAll,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      'See all $count',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1246,9 +1483,199 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _PersonRow extends StatelessWidget {
-  const _PersonRow({required this.person, required this.onTap});
+/// The viewer's relationship to a person result — drives which inline
+/// affordance the row shows.
+enum _FriendState { none, pending, friends }
+
+/// Renders [text] with every occurrence of [query] tinted, so a result
+/// says WHY it matched. Without this a results list makes people re-read
+/// every row to work out what the app thought they meant.
+///
+/// Case-insensitive, and matches on the whole query string rather than
+/// per-word so "camp meeting" highlights as one phrase.
+class _HighlightedText extends StatelessWidget {
+  const _HighlightedText({
+    required this.text,
+    required this.query,
+    required this.style,
+    this.maxLines = 1,
+  });
+
+  final String text;
+  final String query;
+  final TextStyle style;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final needle = query.trim().toLowerCase();
+    final haystack = text.toLowerCase();
+    if (needle.isEmpty || !haystack.contains(needle)) {
+      return Text(
+        text,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: style,
+      );
+    }
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    while (cursor < text.length) {
+      final hit = haystack.indexOf(needle, cursor);
+      if (hit == -1) {
+        spans.add(TextSpan(text: text.substring(cursor)));
+        break;
+      }
+      if (hit > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, hit)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(hit, hit + needle.length),
+          style: TextStyle(
+            color: AppColors.primaryBlue,
+            fontWeight: FontWeight.w800,
+            backgroundColor: AppColors.primaryBlue.withValues(alpha: 0.14),
+          ),
+        ),
+      );
+      cursor = hit + needle.length;
+    }
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+  }
+}
+
+/// Pill button used for the inline Add / Follow / RSVP actions. Filled
+/// when the action is available, outlined once it has been taken — so
+/// "done" is legible without reading the label.
+class _InlineAction extends StatelessWidget {
+  const _InlineAction({
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.filled = true,
+    this.busy = false,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final IconData? icon;
+  final bool filled;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = filled ? AppColors.white : context.palette.textMuted;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: busy ? null : onTap,
+        borderRadius: BorderRadius.circular(100),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: filled ? AppColors.primaryBlue : Colors.transparent,
+            borderRadius: BorderRadius.circular(100),
+            border: filled
+                ? null
+                : Border.all(color: context.palette.divider),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (busy)
+                SizedBox(
+                  width: 11,
+                  height: 11,
+                  child: CircularProgressIndicator(strokeWidth: 1.8, color: fg),
+                )
+              else if (icon != null)
+                Icon(icon, size: 13, color: fg),
+              if (busy || icon != null) const SizedBox(width: 5),
+              Text(
+                label,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: fg,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared chrome for every result row: the card, the tap target and the
+/// leading/body/trailing rhythm. The rows differ in what they put in
+/// those slots, which is the whole point — a church, a job and a person
+/// should not arrive looking like siblings.
+class _ResultShell extends StatelessWidget {
+  const _ResultShell({
+    required this.leading,
+    required this.body,
+    required this.onTap,
+    this.trailing,
+  });
+
+  final Widget leading;
+  final Widget body;
+  final VoidCallback onTap;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressEffect(
+      child: ScreenCard(
+        padding: const EdgeInsets.all(12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Row(
+              children: [
+                leading,
+                const SizedBox(width: 12),
+                Expanded(child: body),
+                if (trailing != null) ...[
+                  const SizedBox(width: 8),
+                  trailing!,
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A person: round avatar, name with verified tick, church/place
+/// subtitle, and an inline Add.
+class _PersonResultRow extends StatelessWidget {
+  const _PersonResultRow({
+    required this.person,
+    required this.query,
+    required this.state,
+    required this.busy,
+    required this.onAdd,
+    required this.onTap,
+  });
+
   final MemberDirectoryEntry person;
+  final String query;
+  final _FriendState state;
+  final bool busy;
+  final VoidCallback onAdd;
   final VoidCallback onTap;
 
   @override
@@ -1257,149 +1684,478 @@ class _PersonRow extends StatelessWidget {
         ? 'Member'
         : person.fullName!.trim();
     final parts = <String>[
-      if ((person.profession ?? '').trim().isNotEmpty)
-        person.profession!.trim(),
+      if ((person.churchName ?? '').trim().isNotEmpty) person.churchName!.trim(),
+      if ((person.profession ?? '').trim().isNotEmpty) person.profession!.trim(),
       if ((person.city ?? '').trim().isNotEmpty) person.city!.trim(),
-      if ((person.churchName ?? '').trim().isNotEmpty)
-        person.churchName!.trim(),
     ];
-    final subtitle = parts.isEmpty ? 'On Advent Connect' : parts.join('  ·  ');
-    return PressEffect(
-      child: ScreenCard(
-        padding: const EdgeInsets.all(14),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Row(
-              children: [
-                _PersonAvatar(photoUrl: person.profilePhotoUrl, fullName: name),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.titleSmall.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          if (person.isVerified) ...[
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.verified,
-                              color: AppColors.goldAccent,
-                              size: 15,
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.palette.textMuted,
-                        ),
-                      ),
-                    ],
+    return _ResultShell(
+      onTap: onTap,
+      leading: _PersonAvatar(photoUrl: person.profilePhotoUrl, fullName: name),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: _HighlightedText(
+                  text: name,
+                  query: query,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
+              ),
+              if (person.isVerified) ...[
+                const SizedBox(width: 4),
                 const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.primaryBlue,
-                  size: 22,
+                  Icons.verified,
+                  color: AppColors.goldAccent,
+                  size: 15,
                 ),
               ],
+            ],
+          ),
+          const SizedBox(height: 2),
+          _HighlightedText(
+            text: parts.isEmpty ? 'On Advent Connect' : parts.join('  ·  '),
+            query: query,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
             ),
           ),
-        ),
+        ],
       ),
+      trailing: switch (state) {
+        _FriendState.friends => _InlineAction(
+            label: 'Friends',
+            icon: Icons.check,
+            filled: false,
+            onTap: null,
+          ),
+        _FriendState.pending => _InlineAction(
+            label: 'Pending',
+            icon: Icons.hourglass_top_rounded,
+            filled: false,
+            onTap: null,
+          ),
+        _FriendState.none => _InlineAction(
+            label: 'Add',
+            icon: Icons.person_add_alt_1,
+            busy: busy,
+            onTap: onAdd,
+          ),
+      },
     );
   }
 }
 
-class _PostRow extends StatelessWidget {
-  const _PostRow({required this.post, required this.onTap});
+/// A church: square logo (churches have logos, not faces), city and
+/// member count, and an inline Follow.
+class _ChurchResultRow extends StatelessWidget {
+  const _ChurchResultRow({
+    required this.church,
+    required this.query,
+    required this.following,
+    required this.busy,
+    required this.onToggleFollow,
+    required this.onTap,
+  });
 
-  final Post post;
+  final Church church;
+  final String query;
+  final bool following;
+  final bool busy;
+  final VoidCallback onToggleFollow;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final body = (post.body ?? '').trim();
-    final preview = body.isEmpty
-        ? '(photo post)'
-        : body.length > 140
-        ? '${body.substring(0, 140)}…'
-        : body;
-    return PressEffect(
-      child: ScreenCard(
-        padding: const EdgeInsets.all(14),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.article_outlined,
-                    color: AppColors.white,
-                    size: 18,
+    final logo = (church.profilePhotoUrl ?? '').trim();
+    final members = church.membersCount;
+    final subtitle = [
+      if (church.city.trim().isNotEmpty) church.city.trim(),
+      if (members > 0) '$members member${members == 1 ? '' : 's'}',
+    ].join('  ·  ');
+    return _ResultShell(
+      onTap: onTap,
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: logo.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: logo,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => const _ChurchGlyph(),
+                errorWidget: (_, _, _) => const _ChurchGlyph(),
+              )
+            : const _ChurchGlyph(),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: _HighlightedText(
+                  text: church.name,
+                  query: query,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        post.authorName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleSmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        preview,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: context.palette.textMuted,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
+              ),
+              if (church.isVerified) ...[
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.verified,
+                  color: AppColors.goldAccent,
+                  size: 15,
                 ),
               ],
+            ],
+          ),
+          const SizedBox(height: 2),
+          _HighlightedText(
+            text: subtitle.isEmpty ? 'SDA church' : subtitle,
+            query: query,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
             ),
           ),
-        ),
+        ],
+      ),
+      trailing: _InlineAction(
+        label: following ? 'Following' : 'Follow',
+        icon: following ? Icons.check : Icons.add,
+        filled: !following,
+        busy: busy,
+        onTap: onToggleFollow,
       ),
     );
   }
 }
+
+class _ChurchGlyph extends StatelessWidget {
+  const _ChurchGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: const Icon(Icons.church, color: AppColors.white, size: 21),
+    );
+  }
+}
+
+/// An event: a date block instead of an avatar, because the first thing
+/// you need from an event is when it is. Plus an inline RSVP.
+class _EventResultRow extends StatelessWidget {
+  const _EventResultRow({
+    required this.event,
+    required this.query,
+    required this.going,
+    required this.busy,
+    required this.onToggleRsvp,
+    required this.onTap,
+  });
+
+  final Event event;
+  final String query;
+  final bool going;
+  final bool busy;
+  final VoidCallback onToggleRsvp;
+  final VoidCallback onTap;
+
+  static const _months = [
+    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final date = event.eventDate;
+    final subtitle = [
+      event.eventTime,
+      if ((event.location ?? '').trim().isNotEmpty) event.location!.trim(),
+      if (event.rsvpCount > 0) '${event.rsvpCount} going',
+    ].join('  ·  ');
+    return _ResultShell(
+      onTap: onTap,
+      leading: Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.primaryBlue.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '${date.day}',
+              style: AppTextStyles.titleSmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                height: 1.05,
+              ),
+            ),
+            Text(
+              _months[(date.month - 1).clamp(0, 11)],
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w800,
+                fontSize: 8.5,
+                height: 1.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _HighlightedText(
+            text: event.title,
+            query: query,
+            style: AppTextStyles.titleSmall.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          _HighlightedText(
+            text: subtitle,
+            query: query,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+            ),
+          ),
+        ],
+      ),
+      trailing: _InlineAction(
+        label: going ? 'Going' : 'RSVP',
+        icon: going ? Icons.check : Icons.event_available,
+        filled: !going,
+        busy: busy,
+        onTap: onToggleRsvp,
+      ),
+    );
+  }
+}
+
+/// A post: the author, and the sentence that actually matched — not the
+/// first 140 characters of the body regardless of where the hit was.
+class _PostResultRow extends StatelessWidget {
+  const _PostResultRow({
+    required this.post,
+    required this.query,
+    required this.onTap,
+  });
+
+  final Post post;
+  final String query;
+  final VoidCallback onTap;
+
+  /// Window the body around the first hit so the highlighted term is
+  /// visible in a two-line preview. A match 400 characters in is
+  /// invisible if you always start from the beginning.
+  String _snippet() {
+    final body = (post.body ?? '').trim();
+    if (body.isEmpty) return '(photo post)';
+    final hit = body.toLowerCase().indexOf(query.trim().toLowerCase());
+    if (hit <= 60 || query.trim().isEmpty) {
+      return body.length > 160 ? '${body.substring(0, 160)}…' : body;
+    }
+    final start = hit - 40;
+    final end = (hit + 120).clamp(0, body.length);
+    return '…${body.substring(start, end)}${end < body.length ? '…' : ''}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ResultShell(
+      onTap: onTap,
+      leading: _PersonAvatar(
+        photoUrl: post.authorPhotoUrl,
+        fullName: post.authorName,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _HighlightedText(
+            text: post.authorName,
+            query: query,
+            style: AppTextStyles.titleSmall.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          _HighlightedText(
+            text: _snippet(),
+            query: query,
+            maxLines: 2,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A product: square photo (it is the product), price and seller.
+class _ProductResultRow extends StatelessWidget {
+  const _ProductResultRow({
+    required this.product,
+    required this.query,
+    required this.onTap,
+  });
+
+  final Product product;
+  final String query;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = product.firstImage.trim();
+    return _ResultShell(
+      onTap: onTap,
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: image.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: image,
+                width: 44,
+                height: 44,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => const _ProductGlyph(),
+                errorWidget: (_, _, _) => const _ProductGlyph(),
+              )
+            : const _ProductGlyph(),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _HighlightedText(
+            text: product.title,
+            query: query,
+            style: AppTextStyles.titleSmall.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Text(
+                product.formatPrice(),
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12.5,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _HighlightedText(
+                  text: product.sellerName,
+                  query: query,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.textMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductGlyph extends StatelessWidget {
+  const _ProductGlyph();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: const Icon(
+        Icons.shopping_bag_outlined,
+        color: AppColors.primaryBlue,
+        size: 20,
+      ),
+    );
+  }
+}
+
+/// A job: role, then company and place — the two things you screen on.
+class _JobResultRow extends StatelessWidget {
+  const _JobResultRow({
+    required this.job,
+    required this.query,
+    required this.onTap,
+  });
+
+  final Job job;
+  final String query;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = (job.location ?? '').trim();
+    return _ResultShell(
+      onTap: onTap,
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppColors.goldAccent.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: const Icon(
+          Icons.work_outline,
+          color: Color(0xFF8A6D1F),
+          size: 20,
+        ),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _HighlightedText(
+            text: job.title,
+            query: query,
+            style: AppTextStyles.titleSmall.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          _HighlightedText(
+            text: loc.isEmpty ? job.company : '${job.company}  ·  $loc',
+            query: query,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 class _PersonAvatar extends StatelessWidget {
   const _PersonAvatar({required this.photoUrl, required this.fullName});

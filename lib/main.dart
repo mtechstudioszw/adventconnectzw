@@ -20,6 +20,7 @@ import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
 import 'services/music_player_service.dart';
 import 'services/presence_service.dart';
+import 'services/sabbath_service.dart';
 import 'services/push_service.dart';
 import 'services/theme_service.dart';
 import 'theme/app_text_styles.dart';
@@ -124,6 +125,11 @@ Future<void> _initBackgroundServices() async {
       case AuthChangeEvent.tokenRefreshed:
         if (data.session?.user != null) {
           unawaited(PresenceService.start());
+          // Re-stamp the Sabbath quiet window (patch_169). The server
+          // only compares now() against this timestamp — it never
+          // computes sundown — so it has to be refreshed whenever the
+          // app comes up, which is when a window can newly be open.
+          unawaited(SabbathService.syncSabbathQuietWindow());
         }
         break;
       case AuthChangeEvent.signedOut:

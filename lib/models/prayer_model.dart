@@ -23,6 +23,30 @@ enum PrayerCategory {
   }
 }
 
+/// A person who prayed, reduced to what the card actually renders — a
+/// first name and an optional avatar. Deliberately not the full profile:
+/// this list is batch-loaded for every visible card, so it stays cheap.
+class PrayingUserRef {
+  const PrayingUserRef({
+    required this.userId,
+    required this.fullName,
+    this.photoUrl,
+  });
+
+  final String userId;
+  final String fullName;
+  final String? photoUrl;
+
+  /// "Rutendo Moyo" → "Rutendo". The summary line names people the way
+  /// someone would say it out loud, not the way the directory stores it.
+  String get firstName {
+    final trimmed = fullName.trim();
+    if (trimmed.isEmpty) return '';
+    final space = trimmed.indexOf(' ');
+    return space == -1 ? trimmed : trimmed.substring(0, space);
+  }
+}
+
 class Prayer {
   const Prayer({
     required this.id,
@@ -37,6 +61,10 @@ class Prayer {
     this.category = PrayerCategory.other,
     this.isMine = false,
     this.isAnonymous = false,
+    this.isAnswered = false,
+    this.answeredAt,
+    this.testimony,
+    this.prayedBy = const [],
   });
 
   final String id;
@@ -58,6 +86,49 @@ class Prayer {
   /// True when this prayer was posted anonymously (author hidden from others).
   final bool isAnonymous;
 
+  /// `prayers.is_answered` — has existed since the base schema; patch_006
+  /// fires a notification on its FALSE → TRUE transition. Only the author
+  /// can flip it (RLS gates UPDATE to `author_id = auth.uid()`).
+  final bool isAnswered;
+
+  /// patch_167. Stamped by a BEFORE UPDATE trigger on the flag transition,
+  /// so it is non-null exactly when [isAnswered] is true. The Answered
+  /// filter sorts on this, not on [createdAt] — a March request answered
+  /// yesterday belongs at the top.
+  final DateTime? answeredAt;
+
+  /// patch_167. The author's short account of how it was answered. Shown
+  /// on the card in place of a second request.
+  final String? testimony;
+
+  /// First few people who prayed, newest first — for the
+  /// "Rutendo, Blessing and 41 others prayed" line. Batch-loaded by
+  /// [PrayerService.fetchPrayedByPreview]; empty until it resolves, and
+  /// the line falls back to the bare count.
+  final List<PrayingUserRef> prayedBy;
+
+  /// Names only, capped — the card renders at most two before "and N others".
+  String? prayedBySummary() {
+    if (prayedBy.isEmpty) return null;
+    final names = prayedBy
+        .map((p) => p.firstName)
+        .where((n) => n.isNotEmpty)
+        .toList();
+    if (names.isEmpty) return null;
+    // `prayerCount` is authoritative (DB trigger); prayedBy is a capped
+    // preview, so derive the remainder from the count, never the list.
+    final others = prayerCount - names.length.clamp(0, prayerCount);
+    if (names.length == 1) {
+      return others <= 0
+          ? '${names[0]} prayed'
+          : '${names[0]} and $others ${others == 1 ? "other" : "others"} prayed';
+    }
+    final lead = '${names[0]}, ${names[1]}';
+    return others <= 0
+        ? '$lead prayed'
+        : '$lead and $others ${others == 1 ? "other" : "others"} prayed';
+  }
+
   factory Prayer.fromJson(Map<String, dynamic> json) {
     return Prayer(
       id: json['id'].toString(),
@@ -73,10 +144,24 @@ class Prayer {
           DateTime.now(),
       isMine: json['is_mine'] == true,
       isAnonymous: (json['visibility'] as String?) == 'anonymous',
+      isAnswered: json['is_answered'] == true,
+      // Nullable by design — patch_167's CHECK keeps it non-null exactly
+      // when is_answered is true, but tolerate a pre-patch deployment.
+      answeredAt: DateTime.tryParse(json['answered_at']?.toString() ?? ''),
+      testimony: (json['testimony'] as String?)?.trim().isNotEmpty == true
+          ? (json['testimony'] as String).trim()
+          : null,
     );
   }
 
-  Prayer copyWith({int? prayerCount, int? commentCount}) {
+  Prayer copyWith({
+    int? prayerCount,
+    int? commentCount,
+    bool? isAnswered,
+    DateTime? answeredAt,
+    String? testimony,
+    List<PrayingUserRef>? prayedBy,
+  }) {
     return Prayer(
       id: id,
       authorId: authorId,
@@ -90,6 +175,13 @@ class Prayer {
       createdAt: createdAt,
       isMine: isMine,
       isAnonymous: isAnonymous,
+      isAnswered: isAnswered ?? this.isAnswered,
+      // Un-answering must be able to clear these, so when isAnswered is
+      // explicitly set to false we drop both rather than carrying stale
+      // values forward — mirrors what the DB trigger does server-side.
+      answeredAt: isAnswered == false ? null : (answeredAt ?? this.answeredAt),
+      testimony: isAnswered == false ? null : (testimony ?? this.testimony),
+      prayedBy: prayedBy ?? this.prayedBy,
     );
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../models/church_model.dart';
 import '../../services/church_service.dart';
 import '../../services/location_service.dart';
 import '../../services/storage_service.dart';
@@ -41,6 +42,12 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
 
   String? _coverUrl;
   String? _logoUrl;
+
+  /// When this congregation meets (patch_176). Editable here because
+  /// nothing else can write it — the directory row and church profile
+  /// both read it, and a column nobody can fill is a column that stays
+  /// empty forever.
+  List<ServiceTime> _serviceTimes = [];
 
   bool _loading = true;
   bool _saving = false;
@@ -97,6 +104,7 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
       _longitude.text = church.longitude?.toString() ?? '';
       _coverUrl = church.coverPhotoUrl;
       _logoUrl = church.profilePhotoUrl;
+      _serviceTimes = [...church.serviceTimes];
       setState(() => _loading = false);
     } catch (_) {
       if (!mounted) return;
@@ -130,6 +138,118 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
       _toast(_msg(e), AppColors.red);
     } finally {
       if (mounted) setState(() => _uploadingLogo = false);
+    }
+  }
+
+  /// Service-times editor. A list rather than a fixed Sabbath School +
+  /// Divine Service pair: congregations here vary enough that a fixed
+  /// pair would need a migration the first time one ran two services.
+  Widget _buildServiceTimes() {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'SERVICE TIMES',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: palette.textMuted,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.4,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Shown on your church\'s row in the directory. This is the first '
+          'thing a visitor looks for.',
+          style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+        ),
+        const SizedBox(height: 10),
+        for (var i = 0; i < _serviceTimes.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+              decoration: BoxDecoration(
+                color: palette.cardMuted,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: palette.divider),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.schedule_outlined,
+                    size: 18,
+                    color: AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _serviceTimes[i].label,
+                          style: AppTextStyles.titleSmall.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          _serviceTimes[i].whenLabel,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Remove',
+                    icon: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: AppColors.red,
+                    ),
+                    onPressed: () =>
+                        setState(() => _serviceTimes.removeAt(i)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _addServiceTime,
+            icon: const Icon(Icons.add, size: 18),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primaryBlue,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+            label: Text(
+              'Add a service',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _addServiceTime() async {
+    final added = await showModalBottomSheet<ServiceTime>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _ServiceTimeSheet(),
+    );
+    if (added != null && mounted) {
+      setState(() => _serviceTimes.add(added));
     }
   }
 
@@ -171,6 +291,7 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
         longitude: lng,
         coverPhotoUrl: _coverUrl,
         profilePhotoUrl: _logoUrl,
+        serviceTimes: _serviceTimes,
       );
       if (!mounted) return;
       _toast('Church profile updated.', AppColors.successGreen);
@@ -399,6 +520,8 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
               return null;
             },
           ),
+          const SizedBox(height: 22),
+          _buildServiceTimes(),
           if (_saveError != null) ...[
             const SizedBox(height: 14),
             ErrorBanner(message: _saveError!),
@@ -642,6 +765,199 @@ class _PhotoLabel extends StatelessWidget {
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
           fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
+/// Add one service: what it's called, which day, what time.
+///
+/// Day and time are pickers rather than free text — "Sat 8:30am" typed
+/// six different ways across six churches is a directory nobody can scan.
+class _ServiceTimeSheet extends StatefulWidget {
+  const _ServiceTimeSheet();
+
+  @override
+  State<_ServiceTimeSheet> createState() => _ServiceTimeSheetState();
+}
+
+class _ServiceTimeSheetState extends State<_ServiceTimeSheet> {
+  static const _days = [
+    'Saturday', 'Sunday', 'Monday', 'Tuesday',
+    'Wednesday', 'Thursday', 'Friday',
+  ];
+
+  /// The services an Adventist congregation actually runs. Tapping one
+  /// fills the name so most admins never type at all.
+  static const _presets = [
+    'Sabbath School',
+    'Divine Service',
+    'AY / Youth',
+    'Prayer Meeting',
+    'Vespers',
+  ];
+
+  final _label = TextEditingController();
+  String _day = 'Saturday';
+  TimeOfDay? _time;
+
+  @override
+  void dispose() {
+    _label.dispose();
+    super.dispose();
+  }
+
+  String get _timeLabel {
+    final t = _time;
+    if (t == null) return 'Pick a time';
+    return '${t.hour.toString().padLeft(2, '0')}:'
+        '${t.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final canSave = _label.text.trim().isNotEmpty && _time != null;
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: palette.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Add a service',
+                  style: AppTextStyles.headlineSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final p in _presets)
+                      ActionChip(
+                        label: Text(p),
+                        backgroundColor: palette.cardMuted,
+                        side: BorderSide(color: palette.divider),
+                        onPressed: () => setState(() {
+                          _label.text = p;
+                          // Sabbath services default to Saturday; the
+                          // midweek ones don't, so leave those alone.
+                          if (p == 'Sabbath School' ||
+                              p == 'Divine Service') {
+                            _day = 'Saturday';
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _label,
+                  textCapitalization: TextCapitalization.words,
+                  onChanged: (_) => setState(() {}),
+                  style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: 'Service name',
+                    filled: true,
+                    fillColor: palette.inputFill,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: palette.divider),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _day,
+                  items: [
+                    for (final d in _days)
+                      DropdownMenuItem(value: d, child: Text(d)),
+                  ],
+                  onChanged: (v) => setState(() => _day = v ?? 'Saturday'),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: palette.inputFill,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: palette.divider),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Material(
+                  color: palette.inputFill,
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime:
+                            _time ?? const TimeOfDay(hour: 8, minute: 30),
+                      );
+                      if (picked != null) setState(() => _time = picked);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.schedule_outlined,
+                            size: 20,
+                            color: AppColors.primaryBlue,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            _timeLabel,
+                            style: AppTextStyles.bodyLarge.copyWith(
+                              fontSize: 15,
+                              color: _time == null
+                                  ? palette.textMuted
+                                  : palette.text,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                PrimaryGradientButton(
+                  label: 'Add',
+                  onTap: !canSave
+                      ? null
+                      : () => Navigator.pop(
+                            context,
+                            ServiceTime(
+                              label: _label.text.trim(),
+                              day: _day,
+                              time: _timeLabel,
+                            ),
+                          ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

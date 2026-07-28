@@ -31,6 +31,10 @@ const WEBSUB_SECRET = Deno.env.get("WEBSUB_SECRET") ?? "";
 const ONBOARD_PER_TICK = 3;
 const BACKFILL_CHANNELS_PER_TICK = 2;
 const BACKFILL_PAGES_PER_CHANNEL = 4;   // 4 * 50 = 200 videos/channel/tick
+// Per-run budgets for the daily reconcile. It had none, which is how a
+// daily maintenance job could out-spend the every-3-minutes tick.
+const RECONCILE_CHANNELS_PER_RUN = 4;
+const RECONCILE_PLAYLISTS_PER_CHANNEL = 8;
 
 async function onboard(sb): Promise<string[]> {
   const log: string[] = [];
@@ -110,7 +114,26 @@ async function livePoll(sb): Promise<string[]> {
     .from("youtube_videos").select("video_id")
     .in("live_status", ["live", "upcoming"]).limit(50);
   const ids = (vids ?? []).map((v: any) => v.video_id);
-  if (ids.length) await fetchAndUpsertVideos(sb, API_KEY, ids);
+  // FAIL SOFT. This refresh is the only YouTube API call in the whole
+  // function, and everything below it — the is_live recompute and the
+  // "🔴 live now" fan-out — is pure database work that needs no quota.
+  // Letting an API error escape here took the push fan-out down with it
+  // and returned a 500 that only pg_cron ever saw: on 2026-07-28 video
+  // notifications stopped at 04:39Z, minutes into the daily 04:30
+  // reconcile, while every other notification type kept flowing. A dead
+  // API must degrade to "no fresh statuses", never to "no pushes".
+  if (ids.length) {
+    try {
+      await fetchAndUpsertVideos(sb, API_KEY, ids);
+    } catch (e) {
+      const msg = (e as Error).message;
+      log.push(
+        `live refresh FAILED (pushing from last-known state): ${msg}` +
+        (msg.includes("quotaExceeded") || msg.includes(" 403:")
+          ? " [QUOTA — see reconcile budget]" : ""),
+      );
+    }
+  }
 
   // Reap dead "upcoming" rows.
   //
@@ -214,9 +237,20 @@ async function resubscribe(sb): Promise<string[]> {
 
 async function reconcile(sb): Promise<string[]> {
   const log: string[] = [];
+  // Round-robin, like backfill. Reconcile used to take EVERY active
+  // channel and walk EVERY page of EVERY one of its playlists in a single
+  // daily run — the one action in this file with no budget, in a file
+  // whose header promises "bounded per call so a single run never blows
+  // the 10,000 units/day quota". It is the prime suspect for the quota
+  // exhaustion that silenced the live pushes. Least-recently-reconciled
+  // first means every channel still comes round, just over several days.
   const { data: chans } = await sb
     .from("youtube_channels").select("channel_id, uploads_playlist_id, thumbnail_url")
-    .eq("status", "active").eq("backfill_done", true);
+    .eq("status", "active").eq("backfill_done", true)
+    // last_synced_at is safe to share with backfill: that step only ever
+    // looks at backfill_done = false channels, this one only at true.
+    .order("last_synced_at", { ascending: true, nullsFirst: true })
+    .limit(RECONCILE_CHANNELS_PER_RUN);
   for (const c of chans ?? []) {
     try {
       // Catch anything WebSub missed: re-pull the newest page of uploads.
@@ -227,13 +261,23 @@ async function reconcile(sb): Promise<string[]> {
         const ids = (r.items ?? []).map((it: any) => it.contentDetails?.videoId).filter(Boolean);
         await fetchAndUpsertVideos(sb, API_KEY, ids, c.thumbnail_url);
       }
-      // Refresh playlist membership (categories).
-      const { data: pls } = await sb.from("youtube_playlists").select("playlist_id").eq("channel_id", c.channel_id);
+      // Refresh playlist membership (categories). Capped at PLAYLISTS_PER
+      // _CHANNEL playlists, each capped at 4 pages inside mapPlaylistItems
+      // — a channel with 40 playlists used to cost 40+ calls here alone.
+      const { data: pls } = await sb
+        .from("youtube_playlists").select("playlist_id")
+        .eq("channel_id", c.channel_id)
+        .limit(RECONCILE_PLAYLISTS_PER_CHANNEL);
       for (const p of pls ?? []) await mapPlaylistItems(sb, API_KEY, p.playlist_id);
       log.push(`reconcile ${c.channel_id}: ok`);
     } catch (e) {
       log.push(`reconcile ${c.channel_id}: ${(e as Error).message}`);
     }
+    // Stamp even on failure, so one broken channel can't pin the
+    // round-robin to itself and starve every other channel forever.
+    await sb.from("youtube_channels")
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq("channel_id", c.channel_id);
   }
   // 30-day refresh + prune: re-fetch the stalest metadata and drop videos
   // YouTube no longer returns (deleted/private). Bounded per run.
@@ -285,10 +329,26 @@ Deno.serve(async (req) => {
       }
       case "tick":
       default:
-        out.push(...await onboard(sb));
-        out.push(...await backfill(sb));
-        out.push(...await livePoll(sb));
-        out.push(...await resubscribe(sb));
+        // livePoll FIRST. It is the only step that produces a member-
+        // visible notification, and it is the cheapest (one videos.list
+        // call). Running it after the two catalogue-hungry steps meant
+        // that on a tight quota day the live pushes were the first thing
+        // to starve — and nobody notices a backfill running late.
+        //
+        // Each step is isolated: one failing step used to abort the rest
+        // of the tick with a 500, so a bad backfill also skipped the
+        // WebSub renewal — and expired leases stop new uploads arriving
+        // at all. A tick does as much as it can and reports the rest.
+        for (const [name, step] of [
+          ["live", livePoll], ["onboard", onboard],
+          ["backfill", backfill], ["resub", resubscribe],
+        ] as const) {
+          try {
+            out.push(...await step(sb));
+          } catch (e) {
+            out.push(`${name}: FAILED ${(e as Error).message}`);
+          }
+        }
     }
   } catch (e) {
     return new Response(JSON.stringify({ ok: false, error: (e as Error).message, log: out }), {

@@ -264,6 +264,7 @@ class ChurchService {
     double? longitude,
     String? coverPhotoUrl,
     String? profilePhotoUrl,
+    List<ServiceTime>? serviceTimes,
   }) async {
     final id = int.tryParse(churchId);
     if (id == null) throw ArgumentError('Invalid church id: $churchId');
@@ -283,8 +284,21 @@ class ChurchService {
     // null would blow away the existing image.
     if (coverPhotoUrl != null) patch['cover_photo_url'] = coverPhotoUrl;
     if (profilePhotoUrl != null) patch['profile_photo_url'] = profilePhotoUrl;
+    // An empty list is meaningful here (the admin cleared them all), so
+    // this checks for null rather than for emptiness.
+    if (serviceTimes != null) {
+      patch['service_times'] = serviceTimes.map((e) => e.toJson()).toList();
+    }
     await _client.from(_table).update(patch).eq('id', id);
+    // The churches tab hydrates from a 24h Hive cache before it hits the
+    // network, so without this an admin who just changed the logo still
+    // sees the old one in the directory — and keeps seeing it offline.
+    await CacheService.invalidate(churchesListCacheKey);
   }
+
+  /// Hive key for the cached church directory. Shared so the screen that
+  /// reads it and the mutations that invalidate it can't drift apart.
+  static const String churchesListCacheKey = 'churches_list';
 
   // ---- Super-admin: church-admin claim queue (patch_112) ----------------
   static Future<List<PendingChurchAdmin>> listPendingChurchAdmins() async {
@@ -305,16 +319,25 @@ class ChurchService {
         params: {'p_id': id, 'p_reason': reason});
   }
 
-  /// Fetch a church's announcements feed. Filters out expired rows.
+  /// Fetch a church's announcements feed. Filters out expired rows, and
+  /// (unless [includeScheduled]) anything not yet due to publish.
+  ///
+  /// The admin dashboard passes includeScheduled so a secretary can see
+  /// and cancel what they've queued; members never should.
   static Future<List<ChurchAnnouncement>> fetchAnnouncements({
     required String churchId,
+    bool includeScheduled = false,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
-    final response = await _client
+    var query = _client
         .from('announcements')
         .select()
         .eq('church_id', churchId)
-        .or('expires_at.is.null,expires_at.gt.$now')
+        .or('expires_at.is.null,expires_at.gt.$now');
+    if (!includeScheduled) {
+      query = query.or('publish_at.is.null,publish_at.lte.$now');
+    }
+    final response = await query
         .order('is_pinned', ascending: false)
         .order('created_at', ascending: false)
         .limit(100);
@@ -324,14 +347,239 @@ class ChurchService {
         .toList();
   }
 
+  /// Record that the signed-in member opened this announcement.
+  ///
+  /// Feeds the admin reach sparkline (patch_173). Best-effort and
+  /// idempotent — the primary key swallows repeats, and a member who
+  /// reads the same notice twice is still one reader.
+  static Future<void> markAnnouncementRead(String announcementId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    final id = int.tryParse(announcementId);
+    if (id == null) return;
+    try {
+      await _client.from('announcement_reads').upsert(
+        {'announcement_id': id, 'user_id': user.id},
+        onConflict: 'announcement_id,user_id',
+        ignoreDuplicates: true,
+      );
+    } catch (_) {
+      // Analytics must never break reading an announcement.
+    }
+  }
+
+  /// Sent vs opened for this church's recent announcements (patch_173).
+  /// Returns empty for anyone who isn't an approved admin of the church.
+  static Future<List<AnnouncementReach>> fetchAnnouncementReach(
+    String churchId, {
+    int limit = 8,
+  }) async {
+    try {
+      final res = await _client.rpc(
+        'church_announcement_reach',
+        params: {
+          'p_church_id': int.tryParse(churchId) ?? churchId,
+          'p_limit': limit,
+        },
+      );
+      if (res is! List) return const [];
+      return res
+          .map((r) => AnnouncementReach.fromJson(
+              Map<String, dynamic>.from(r as Map)))
+          .toList()
+          .reversed // oldest → newest, so the sparkline reads left to right
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// How many of MY friends belong to each of these churches (patch_176).
+  /// Returns a churchId → count map; churches with none are absent.
+  static Future<Map<String, int>> fetchFriendCounts(
+    List<String> churchIds,
+  ) async {
+    if (churchIds.isEmpty) return const {};
+    final ids = churchIds
+        .map(int.tryParse)
+        .whereType<int>()
+        .toList(growable: false);
+    if (ids.isEmpty) return const {};
+    try {
+      final res = await _client
+          .rpc('church_friend_counts', params: {'p_church_ids': ids});
+      if (res is! List) return const {};
+      return {
+        for (final r in res)
+          (r as Map)['church_id'].toString():
+              ((r['friend_count'] as num?)?.toInt() ?? 0),
+      };
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Set (or clear) the signed-in member's home church — `profiles
+  /// .church_id`. Needs no RPC: profiles_update_self already allows a
+  /// member to write their own row.
+  ///
+  /// This matters more than it looks: patch_171 made announcements fan
+  /// out to `profiles.church_id`, so a member who never sets one only
+  /// hears from churches they explicitly followed.
+  static Future<void> setHomeChurch(String? churchId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw const AuthException('Sign in first.');
+    await _client
+        .from('profiles')
+        .update({'church_id': churchId == null ? null : int.tryParse(churchId)})
+        .eq('id', user.id);
+  }
+
+  /// The signed-in member's home church id, or null.
+  static Future<String?> fetchHomeChurchId() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('church_id')
+          .eq('id', user.id)
+          .maybeSingle();
+      return row?['church_id']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Everything waiting on this church's admin, oldest-waiting first.
+  ///
+  /// Three queues that were previously invisible from the dashboard:
+  /// community events proposed against this church, member-suggested
+  /// edits to the church profile, and (patch_175) nominated admins. The
+  /// `pending_approvals` screen has always handled the first two — the
+  /// dashboard just never linked to it, so nothing told an admin there
+  /// was anything to do.
+  static Future<List<AdminTask>> fetchNeedsYou(String churchId) async {
+    final out = <AdminTask>[];
+    Future<void> collect(
+      String table,
+      AdminTaskKind kind,
+      String Function(Map<String, dynamic>) title,
+    ) async {
+      try {
+        final rows = await _client
+            .from(table)
+            .select()
+            .eq('church_id', churchId)
+            .eq('status', 'pending')
+            .order('created_at', ascending: true)
+            .limit(20);
+        for (final r in (rows as List).cast<Map<String, dynamic>>()) {
+          out.add(AdminTask(
+            id: r['id'].toString(),
+            kind: kind,
+            title: title(r),
+            waitingSince:
+                DateTime.tryParse(r['created_at']?.toString() ?? '')?.toLocal(),
+          ));
+        }
+      } catch (_) {
+        // One unreadable queue must not blank the whole card.
+      }
+    }
+
+    await Future.wait([
+      collect('events', AdminTaskKind.event,
+          (r) => (r['title'] ?? 'Untitled event').toString()),
+      collect('church_edit_suggestions', AdminTaskKind.edit,
+          (r) => 'Suggested edit to your church details'),
+      collect('church_admins', AdminTaskKind.admin,
+          (r) => 'Admin nomination awaiting approval'),
+    ]);
+
+    // Longest wait first. That IS the ordering the queue is for: a
+    // three-week-old request is a member who has been ignored, and a
+    // newest-first list buries exactly those.
+    out.sort((a, b) {
+      final av = a.waitingSince;
+      final bv = b.waitingSince;
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return av.compareTo(bv);
+    });
+    return out;
+  }
+
+  // ---- Multiple admins per church (patch_175) --------------------------
+
+  /// The admin roster for a church. Approved admins of that church only.
+  static Future<List<ChurchAdminMember>> fetchChurchAdmins(
+    String churchId,
+  ) async {
+    try {
+      final res = await _client.rpc(
+        'church_admin_list',
+        params: {'p_church_id': int.tryParse(churchId) ?? churchId},
+      );
+      if (res is! List) return const [];
+      return res
+          .map((r) => ChurchAdminMember.fromJson(
+              Map<String, dynamic>.from(r as Map)))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Primary admin nominates a member as a standard admin. Lands as
+  /// `pending` — super-admin approval is still the only route to power.
+  static Future<void> nominateChurchAdmin({
+    required String churchId,
+    required String userId,
+  }) async {
+    await _client.rpc('church_admin_nominate', params: {
+      'p_church_id': int.tryParse(churchId) ?? churchId,
+      'p_user_id': userId,
+    });
+  }
+
+  static Future<void> revokeChurchAdmin(int id) async {
+    await _client.rpc('church_admin_revoke', params: {'p_id': id});
+  }
+
+  /// Resolve an announcement id to the church that posted it.
+  ///
+  /// Announcement notifications carry the ANNOUNCEMENT id in
+  /// `reference_id`, but the announcements screen is keyed on the church —
+  /// so a tap has to make this hop before it can open anything. Returns
+  /// null when the announcement (or its church) is gone, so callers can
+  /// fall back rather than push a broken route.
+  static Future<Church?> fetchChurchForAnnouncement(String announcementId) async {
+    final row = await _client
+        .from('announcements')
+        .select('church_id')
+        .eq('id', announcementId)
+        .maybeSingle();
+    final churchId = row?['church_id']?.toString() ?? '';
+    if (churchId.isEmpty) return null;
+    return fetchChurchById(churchId);
+  }
+
   /// Post an announcement on behalf of an approved church admin.
   /// Server-side RLS enforces that the caller actually owns this role.
+  /// Post an announcement, or queue one for later.
+  ///
+  /// [publishAt] in the future defers the whole thing: the insert trigger
+  /// skips the fan-out and patch_174's cron job posts it on time. Members
+  /// don't see it in the meantime (see [fetchAnnouncements]).
   static Future<void> postAnnouncement({
     required String churchId,
     required String title,
     required String body,
     String category = 'general',
     bool isPinned = false,
+    DateTime? publishAt,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -344,7 +592,21 @@ class ChurchService {
       'body': body.trim(),
       'category': category,
       'is_pinned': isPinned,
+      if (publishAt != null)
+        'publish_at': publishAt.toUtc().toIso8601String(),
     });
+  }
+
+  /// Cancel a queued announcement. Only meaningful before it publishes —
+  /// once notified_at is set the notifications are already out.
+  static Future<void> cancelScheduledAnnouncement(String announcementId) async {
+    final id = int.tryParse(announcementId);
+    if (id == null) return;
+    await _client
+        .from('announcements')
+        .delete()
+        .eq('id', id)
+        .isFilter('notified_at', null);
   }
 
   /// How many members follow this church. Returns 0 unless the caller is the
@@ -445,6 +707,8 @@ class ChurchAnnouncement {
     required this.createdAt,
     this.category = 'general',
     this.isPinned = false,
+    this.publishAt,
+    this.notifiedAt,
   });
 
   final String id;
@@ -453,6 +717,21 @@ class ChurchAnnouncement {
   final String category;
   final bool isPinned;
   final DateTime createdAt;
+
+  /// When this is due to go out (patch_174). Null means it went out on
+  /// insert, like every announcement before scheduling existed.
+  final DateTime? publishAt;
+
+  /// When the fan-out actually ran (patch_173). Null means it hasn't yet
+  /// — the announcement is queued and no member can see it.
+  final DateTime? notifiedAt;
+
+  /// Queued, not published. The admin dashboard shows these; the member
+  /// feed filters them out.
+  bool get isScheduled =>
+      notifiedAt == null &&
+      publishAt != null &&
+      publishAt!.isAfter(DateTime.now());
 
   factory ChurchAnnouncement.fromJson(Map<String, dynamic> json) {
     return ChurchAnnouncement(
@@ -463,8 +742,128 @@ class ChurchAnnouncement {
       isPinned: json['is_pinned'] == true,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      publishAt:
+          DateTime.tryParse(json['publish_at']?.toString() ?? '')?.toLocal(),
+      notifiedAt:
+          DateTime.tryParse(json['notified_at']?.toString() ?? '')?.toLocal(),
     );
   }
+}
+
+enum AdminTaskKind { event, edit, admin }
+
+/// One item in the dashboard's "needs you" queue.
+class AdminTask {
+  const AdminTask({
+    required this.id,
+    required this.kind,
+    required this.title,
+    this.waitingSince,
+  });
+
+  final String id;
+  final AdminTaskKind kind;
+  final String title;
+  final DateTime? waitingSince;
+
+  /// How long this has been sitting there. Null when the row has no
+  /// usable timestamp.
+  Duration? get waited =>
+      waitingSince == null ? null : DateTime.now().difference(waitingSince!);
+
+  /// "3 weeks", "2 days", "4 hours". Deliberately blunt — the point of
+  /// the queue is that a long number should be uncomfortable to read.
+  String get waitedLabel {
+    final d = waited;
+    if (d == null) return '';
+    if (d.inDays >= 14) return '${d.inDays ~/ 7} weeks';
+    if (d.inDays >= 1) return '${d.inDays} day${d.inDays == 1 ? '' : 's'}';
+    if (d.inHours >= 1) return '${d.inHours} hour${d.inHours == 1 ? '' : 's'}';
+    return 'just now';
+  }
+
+  /// Past a week, the row turns red. Not a threshold with a rule behind
+  /// it — just long enough that a member has noticed being ignored.
+  bool get isOverdue => (waited?.inDays ?? 0) >= 7;
+}
+
+/// One bar of the admin dashboard's reach sparkline (patch_173).
+class AnnouncementReach {
+  const AnnouncementReach({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.createdAt,
+    required this.sentCount,
+    required this.readCount,
+  });
+
+  final String id;
+  final String title;
+  final String category;
+  final DateTime createdAt;
+
+  /// Notifications actually written by the fan-out — delivery, not opens.
+  final int sentCount;
+
+  /// Members who opened it. Always <= [sentCount].
+  final int readCount;
+
+  /// 0..1. Zero when nothing was sent, so the bar renders empty rather
+  /// than dividing by zero.
+  double get openRate => sentCount <= 0 ? 0 : readCount / sentCount;
+
+  factory AnnouncementReach.fromJson(Map<String, dynamic> json) =>
+      AnnouncementReach(
+        id: json['id'].toString(),
+        title: (json['title'] ?? '') as String,
+        category: (json['category'] ?? 'general') as String,
+        createdAt:
+            DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal() ??
+                DateTime.now(),
+        sentCount: (json['sent_count'] as num?)?.toInt() ?? 0,
+        readCount: (json['read_count'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// A row of the church's admin roster (patch_175).
+class ChurchAdminMember {
+  const ChurchAdminMember({
+    required this.id,
+    required this.userId,
+    required this.fullName,
+    required this.role,
+    required this.status,
+    this.photoUrl,
+    this.createdAt,
+  });
+
+  final int id;
+  final String userId;
+  final String fullName;
+  final String? photoUrl;
+
+  /// 'primary' | 'standard'. Only one primary per church.
+  final String role;
+
+  /// 'pending' | 'approved' | 'rejected'.
+  final String status;
+  final DateTime? createdAt;
+
+  bool get isPrimary => role == 'primary';
+  bool get isApproved => status == 'approved';
+
+  factory ChurchAdminMember.fromJson(Map<String, dynamic> json) =>
+      ChurchAdminMember(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        userId: json['user_id'].toString(),
+        fullName: (json['full_name'] ?? 'Member') as String,
+        photoUrl: json['photo_url'] as String?,
+        role: (json['role'] ?? 'standard') as String,
+        status: (json['status'] ?? 'pending') as String,
+        createdAt:
+            DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal(),
+      );
 }
 
 class ChurchAdminRole {

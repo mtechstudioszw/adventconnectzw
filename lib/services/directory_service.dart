@@ -82,9 +82,30 @@ class DirectoryService {
       // the same A→Z top-N for everyone) keeps the row fresh and gives every
       // member a chance to be seen. RLS already restricts this to discoverable
       // profiles.
+      // Who the VIEWER is, so a suggestion can carry a real reason
+      // instead of a random face. Best-effort: no profile row just means
+      // every candidate lands in the last tier.
+      String? myChurchId;
+      String? myCity;
+      String? myProvince;
+      if (user != null) {
+        try {
+          final me = await _client
+              .from('profiles')
+              .select('church_id, city, province')
+              .eq('id', user.id)
+              .maybeSingle();
+          myChurchId = me?['church_id']?.toString();
+          myCity = (me?['city'] as String?)?.trim();
+          myProvince = (me?['province'] as String?)?.trim();
+        } catch (_) {/* fall through to the untiered pool */}
+      }
+
       var profilesQuery = _client
           .from('profiles')
-          .select('id, full_name, profile_photo_url, province, city, bio, is_verified, is_verified_admin')
+          .select('id, full_name, profile_photo_url, province, city, bio, '
+              'church_id, is_verified, is_verified_admin, '
+              'churches:church_id(name)')
           .eq('is_discoverable', true)
           .eq('is_banned', false);
       if (user != null) {
@@ -95,23 +116,59 @@ class DirectoryService {
           .limit(200);
       final pool = (profilesResponse as List)
           .map((row) => row as Map<String, dynamic>)
-          .map((row) => MemberDirectoryEntry(
-                id: row['id'].toString(),
-                userId: row['id'].toString(),
-                isVisible: true,
-                fullName: row['full_name'] as String?,
-                profilePhotoUrl: row['profile_photo_url'] as String?,
-                province: row['province'] as String?,
-                city: row['city'] as String?,
-                bio: row['bio'] as String?,
-                isVerified: row['is_verified'] == true ||
-                    row['is_verified_admin'] == true,
-              ))
+          .map((row) {
+            final church = row['churches'];
+            return MemberDirectoryEntry(
+              id: row['id'].toString(),
+              userId: row['id'].toString(),
+              isVisible: true,
+              fullName: row['full_name'] as String?,
+              profilePhotoUrl: row['profile_photo_url'] as String?,
+              province: row['province'] as String?,
+              city: row['city'] as String?,
+              bio: row['bio'] as String?,
+              churchId: row['church_id']?.toString(),
+              churchName: church is Map ? church['name'] as String? : null,
+              isVerified: row['is_verified'] == true ||
+                  row['is_verified_admin'] == true,
+            );
+          })
           .where((e) => (e.fullName ?? '').trim().isNotEmpty)
           .toList();
 
-      pool.shuffle();
-      return pool.take(limit).toList();
+      // Tier by how connected the person actually is to the viewer, then
+      // shuffle WITHIN each tier — so the row stays fresh on every visit
+      // but never leads with a stranger from another province while
+      // someone from the viewer's own congregation is available.
+      bool sameChurch(MemberDirectoryEntry e) =>
+          myChurchId != null && e.churchId == myChurchId;
+      bool sameCity(MemberDirectoryEntry e) =>
+          (myCity ?? '').isNotEmpty &&
+          (e.city ?? '').toLowerCase() == myCity!.toLowerCase();
+      bool sameProvince(MemberDirectoryEntry e) =>
+          (myProvince ?? '').isNotEmpty &&
+          (e.province ?? '').toLowerCase() == myProvince!.toLowerCase();
+
+      final tiers = <List<MemberDirectoryEntry>>[[], [], [], []];
+      for (final e in pool) {
+        if (sameChurch(e)) {
+          tiers[0].add(e.withReason('Goes to your church'));
+        } else if (sameCity(e)) {
+          tiers[1].add(e.withReason('Also in ${e.city!.trim()}'));
+        } else if (sameProvince(e)) {
+          tiers[2].add(e.withReason('${e.province!.trim()} province'));
+        } else if ((e.churchName ?? '').trim().isNotEmpty) {
+          // No overlap with the viewer, but we can still say something
+          // true and useful about them.
+          tiers[3].add(e.withReason('Worships at ${e.churchName!.trim()}'));
+        } else {
+          tiers[3].add(e);
+        }
+      }
+      for (final t in tiers) {
+        t.shuffle();
+      }
+      return [for (final t in tiers) ...t].take(limit).toList();
     } catch (_) {
       return const [];
     }

@@ -66,8 +66,18 @@ Deno.serve(async (req) => {
     .filter((id) => !deleted.includes(id));
 
   let synced = 0;
+  let syncError = "";
   if (ids.length && API_KEY) {
-    try { synced = await fetchAndUpsertVideos(sb, API_KEY, ids); } catch (_) { /* swallow: hub retries */ }
+    // The old comment here said "swallow: hub retries" — but this handler
+    // always returned 200, so the hub never retried. A quota error meant
+    // the row was never upserted, the fan-out below found nothing, and
+    // that upload's push was lost permanently. Record the failure and let
+    // the response decide (see the 503 at the bottom).
+    try {
+      synced = await fetchAndUpsertVideos(sb, API_KEY, ids);
+    } catch (e) {
+      syncError = (e as Error).message;
+    }
     // "New video" push. Spam-safe by construction:
     //   - only genuinely-new uploads (upload_notified_at IS NULL),
     //   - only recent ones (<6h) so a backfill/re-sync of old videos is silent,
@@ -115,7 +125,15 @@ Deno.serve(async (req) => {
     } catch (_) { /* notifications are best-effort */ }
   }
 
-  // Always 200 so the hub doesn't hammer retries.
+  // 200 for everything we handled — a well-behaved subscriber, and no
+  // retry storms. The one exception is a failed YouTube fetch: that is
+  // exactly the transient case retries exist for, and swallowing it
+  // silently dropped the "new video" push for that upload entirely.
+  if (syncError) {
+    return new Response(JSON.stringify({ synced, error: syncError }), {
+      status: 503, headers: { "Content-Type": "application/json" },
+    });
+  }
   return new Response(JSON.stringify({ synced, deleted: deleted.length }), {
     status: 200, headers: { "Content-Type": "application/json" },
   });

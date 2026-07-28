@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../services/church_service.dart';
 import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -118,33 +119,16 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       // failed mark-read isn't worth a snackbar.
       NotificationService.markRead(n.id).ignore();
     }
-    // Announcements / suspensions carry their whole message in the body
-    // and have no screen to open — show it in a reader sheet instead of
-    // a dead tap. Everything else routes to the relevant screen.
-    if (_hasRoute(n)) {
-      _routeFor(n);
-    } else {
-      _openReader(n);
-    }
-  }
-
-  /// True when [_routeFor] can actually take the user somewhere. Used to
-  /// decide between routing and opening the in-place reader sheet.
-  bool _hasRoute(AppNotification n) {
-    final hasId = (n.referenceId ?? '').isNotEmpty;
-    switch (n.referenceType) {
-      case 'event':
-      case 'prayer':
-      case 'conversation':
-      case 'job':
-      case 'post':
-        return hasId;
-      case 'friend_request':
-      case 'seller':
-      case 'church_admin':
-        return true;
-    }
-    return false;
+    // One switch decides everything: [_routeFor] navigates and reports
+    // whether it managed to, and anything it can't place opens in the
+    // reader sheet instead. Suspensions and one-off broadcasts genuinely
+    // have no screen; a reference_type nobody has wired yet at least
+    // shows its message. There is deliberately no second "can this
+    // route?" predicate — the two used to disagree, and every type
+    // missing from one of them (video, friendship, announcement) became
+    // a tap that did nothing at all.
+    final routed = await _routeFor(n);
+    if (!routed && mounted) _openReader(n);
   }
 
   void _openReader(AppNotification n) {
@@ -159,45 +143,85 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     );
   }
 
-  void _routeFor(AppNotification n) {
+  /// Opens whatever this notification points at. Returns false when there
+  /// is nothing to open — an unknown `reference_type`, or a known one whose
+  /// `reference_id` is missing — and the caller shows the reader sheet.
+  ///
+  /// Mirrors the push-tap switch in `main.dart`; keep the two in step when
+  /// a new `reference_type` is added to the DB.
+  Future<bool> _routeFor(AppNotification n) async {
     final id = n.referenceId ?? '';
     switch (n.referenceType) {
       case 'event':
-        if (id.isNotEmpty) {
-          context.pushNamed('event_details', pathParameters: {'id': id});
-        }
-        break;
+        if (id.isEmpty) return false;
+        context.pushNamed('event_details', pathParameters: {'id': id});
+        return true;
       case 'prayer':
-        if (id.isNotEmpty) {
-          context.pushNamed('prayer_details', pathParameters: {'id': id});
-        }
-        break;
+        if (id.isEmpty) return false;
+        context.pushNamed('prayer_details', pathParameters: {'id': id});
+        return true;
       case 'conversation':
-        if (id.isNotEmpty) {
-          context.pushNamed('chat', pathParameters: {'id': id});
-        }
-        break;
+        if (id.isEmpty) return false;
+        context.pushNamed('chat', pathParameters: {'id': id});
+        return true;
       case 'job':
-        if (id.isNotEmpty) {
-          context.pushNamed('job_details', pathParameters: {'id': id});
-        }
-        break;
+        if (id.isEmpty) return false;
+        context.pushNamed('job_details', pathParameters: {'id': id});
+        return true;
       case 'post':
         // Likes & comments all carry the post id — open the post's
         // discussion (the same comments sheet used in the feed).
-        if (id.isNotEmpty) {
-          showCommentsSheet(context, postId: id, onCommentCountChanged: (_) {});
-        }
-        break;
+        if (id.isEmpty) return false;
+        showCommentsSheet(context, postId: id, onCommentCountChanged: (_) {});
+        return true;
+      case 'video':
+        // YouTube live / new-upload fan-out (patch_156) — reference_id is
+        // the video id, same as the push-tap and deep-link paths.
+        if (id.isEmpty) return false;
+        context.pushNamed('watch_video', pathParameters: {'id': id});
+        return true;
+      case 'friendship':
+        // Accepted (patch_033) and declined (patch_088) both carry the
+        // FRIENDSHIP row id, not a profile id — so there's no person to
+        // open. The Requests tab is where friend requests live either way.
+        context.pushNamed('messages', queryParameters: {'tab': 'requests'});
+        return true;
+      case 'announcement':
+        return _openAnnouncement(id);
       case 'friend_request':
         context.pushNamed('messages', queryParameters: {'tab': 'requests'});
-        break;
+        return true;
       case 'seller':
         context.pushNamed('seller_dashboard');
-        break;
+        return true;
       case 'church_admin':
         context.pushNamed('admin_login');
-        break;
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /// Announcement notifications carry the announcement id, but the feed
+  /// screen is keyed on the church — so resolve one to the other first.
+  /// A failed lookup returns false and the body opens in the reader sheet,
+  /// which is still better than a dead tap.
+  Future<bool> _openAnnouncement(String id) async {
+    if (id.isEmpty) return false;
+    // Opening from the inbox counts as reading it — this is what the
+    // admin reach sparkline measures (patch_173).
+    ChurchService.markAnnouncementRead(id).ignore();
+    try {
+      final church = await ChurchService.fetchChurchForAnnouncement(id);
+      if (church == null || !mounted) return false;
+      context.pushNamed(
+        'church_announcements',
+        pathParameters: {'id': church.id},
+        extra: church,
+      );
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -589,6 +613,16 @@ class _NotificationRow extends StatelessWidget {
         return Icons.storefront_outlined;
       case 'church_admin_status':
         return Icons.shield_outlined;
+      case 'youtube_live':
+        return Icons.play_circle_outline;
+      case 'friend_accepted':
+      case 'social':
+        return Icons.person_add_alt_outlined;
+      case 'announcement':
+      case 'announcement_urgent':
+      case 'announcement_obituary':
+      case 'urgent_banner':
+        return Icons.campaign_outlined;
       default:
         return Icons.notifications_none_outlined;
     }

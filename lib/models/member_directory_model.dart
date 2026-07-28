@@ -17,6 +17,7 @@ class MemberDirectoryEntry {
     this.profilePhotoUrl,
     this.createdAt,
     this.isVerified = false,
+    this.suggestionReason,
   });
 
   final String id;
@@ -35,6 +36,34 @@ class MemberDirectoryEntry {
 
   /// Cosmetic gold tick — super admin or approved church admin (patch_134).
   final bool isVerified;
+
+  /// Why this person is being suggested — "Goes to your church", "Also in
+  /// Bulawayo". Computed by [DirectoryService.fetchSuggestedMembers]
+  /// against the VIEWER, so it can't be derived from this row alone.
+  ///
+  /// The home cards show exactly one reason. Null when the person made
+  /// the list only because they're new and discoverable, in which case
+  /// the card says nothing rather than inventing something.
+  final String? suggestionReason;
+
+  /// Same person, tagged with why they're being suggested.
+  MemberDirectoryEntry withReason(String reason) => MemberDirectoryEntry(
+        id: id,
+        userId: userId,
+        isVisible: isVisible,
+        profession: profession,
+        skills: skills,
+        churchId: churchId,
+        churchName: churchName,
+        province: province,
+        city: city,
+        bio: bio,
+        fullName: fullName,
+        profilePhotoUrl: profilePhotoUrl,
+        createdAt: createdAt,
+        isVerified: isVerified,
+        suggestionReason: reason,
+      );
 
   factory MemberDirectoryEntry.fromJson(Map<String, dynamic> json) {
     // The list endpoint joins the profiles row via Supabase's embed

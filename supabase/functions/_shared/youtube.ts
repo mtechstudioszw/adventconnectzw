@@ -205,9 +205,18 @@ export async function upsertPlaylists(sb: SupabaseClient, apiKey: string, channe
 }
 
 // Map a playlist's video membership (for category filtering).
-export async function mapPlaylistItems(sb: SupabaseClient, apiKey: string, playlistId: string) {
+// Refresh a playlist's membership (which videos are in which series).
+//
+// `maxPages` is a hard quota guard, not a nicety: this used to walk every
+// page of every playlist of every channel on each reconcile run, which is
+// unbounded YouTube spend on a daily job. Positions are stable from the
+// front of the playlist, so the first pages are the ones worth having.
+export async function mapPlaylistItems(
+  sb: SupabaseClient, apiKey: string, playlistId: string, maxPages = 4,
+) {
   let pageToken = "";
   let pos = 0;
+  let pages = 0;
   do {
     const r = await ytApi("playlistItems", {
       part: "contentDetails", playlistId, maxResults: "50",
@@ -219,7 +228,7 @@ export async function mapPlaylistItems(sb: SupabaseClient, apiKey: string, playl
       .map((vid: string) => ({ playlist_id: playlistId, video_id: vid, position: pos++ }));
     if (rows.length) await sb.from("youtube_playlist_items").upsert(rows, { onConflict: "playlist_id,video_id" });
     pageToken = r.nextPageToken ?? "";
-  } while (pageToken);
+  } while (pageToken && ++pages < maxPages);
 }
 
 // Subscribe / unsubscribe a channel's upload feed via PubSubHubbub (WebSub).

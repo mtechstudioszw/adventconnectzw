@@ -79,6 +79,7 @@ import '../../widgets/chat_contact_sheet.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/inline_action.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -120,6 +121,13 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   // user sees fresh banners on relaunch but isn't pestered after they
   // already swiped one away.
   final Set<String> _dismissedBannerIds = <String>{};
+  // "People you may meet" cards swiped away this session. In memory only,
+  // for the same reason as the banners: "not now" isn't "never", and
+  // persisting it would need a table for a decision that costs one tap.
+  final Set<String> _dismissedSuggestionIds = <String>{};
+  // Friend requests currently in flight, so the card's Add shows a
+  // spinner instead of accepting a second tap.
+  final Set<String> _addingFriendIds = <String>{};
   bool _loading = true;
 
   // ---- Endless scroll ----------------------------------------------------
@@ -959,6 +967,8 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   }
 
   Future<void> _sendFriendRequest(MemberDirectoryEntry member) async {
+    if (_addingFriendIds.contains(member.userId)) return;
+    setState(() => _addingFriendIds.add(member.userId));
     try {
       final f = await FeedService.sendRequest(member.userId);
       if (!mounted) return;
@@ -982,6 +992,10 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
           backgroundColor: AppColors.red,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _addingFriendIds.remove(member.userId));
+      }
     }
   }
 
@@ -1154,6 +1168,15 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
                     photoUrl: _viewerPhotoUrl(),
                     name: _displayFullName(),
                     onCreate: _handleCreate,
+                  ),
+                  // Navigation, not authoring — so these sit UNDER the
+                  // composer card rather than inside it. Order here is
+                  // fixed by the founder (28 Jul): header, live banner,
+                  // composer, these chips, stories, devotion, library
+                  // tiles, feed.
+                  HomeShortcutChips(
+                    onChurches: () => context.pushNamed('churches'),
+                    onEvent: () => _handleCreate(CreateKind.event),
                     onDonate: () => context.pushNamed('donate'),
                   ),
                 ],
@@ -1839,7 +1862,7 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
         _DiscoverySlot(
           key: 'people',
           widget: _discoverySection(
-            title: 'People to meet',
+            title: 'People you may meet',
             child: _buildSuggestedMembersRow(),
           ),
         ),
@@ -2175,14 +2198,18 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     final viewerId = AuthService.currentUser?.id;
     // Hide people the viewer is already friends with — they no longer
     // belong in a "suggestions" rail. Pending requests (either
-    // direction) stay visible so the viewer can react to them.
+    // direction) stay visible so the viewer can react to them. Dismissed
+    // cards drop out for this session.
     final visibleSuggestions = _suggestedMembers.where((m) {
+      if (_dismissedSuggestionIds.contains(m.userId)) return false;
       final f = _friendshipsByUser[m.userId];
       if (f == null) return true;
       return f.status != FriendshipStatus.accepted;
     }).toList();
+    // 168 of photo + ~92 of name / reason / button. Fixed rather than
+    // intrinsic so every card in the rail agrees on its baseline.
     return SizedBox(
-      height: 210,
+      height: 260,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -2192,11 +2219,14 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
           final m = visibleSuggestions[i];
           final friendship = _friendshipsByUser[m.userId];
           return SizedBox(
-            width: 150,
+            width: 168,
             child: _SuggestedMemberTile(
               entry: m,
               friendship: friendship,
               viewerId: viewerId,
+              busy: _addingFriendIds.contains(m.userId),
+              onDismiss: () =>
+                  setState(() => _dismissedSuggestionIds.add(m.userId)),
               onAddFriend: () => _sendFriendRequest(m),
               onAcceptRequest: () async {
                 if (friendship == null) return;
@@ -2372,105 +2402,151 @@ class _SabbathChipState extends State<_SabbathChip> {
   }
 }
 
+/// One "People you may meet" card: a big square photo, the name, ONE
+/// reason, and a full-width Add.
+///
+/// It used to be a 62dp circular avatar floating in a mostly-empty card,
+/// with a profession subtitle that was usually "Adventist member" and two
+/// competing actions (a pill AND a "View profile" link). You cannot
+/// decide whether to meet someone from a thumbnail that small — the photo
+/// IS the content here, so it takes the whole top of the card, and the
+/// card as a whole is the tap target for their profile.
 class _SuggestedMemberTile extends StatelessWidget {
   const _SuggestedMemberTile({
     required this.entry,
     required this.friendship,
     required this.viewerId,
+    required this.busy,
     required this.onAddFriend,
     required this.onAcceptRequest,
     required this.onCancelOrUnfriend,
     required this.onOpenProfile,
+    required this.onDismiss,
   });
 
   final MemberDirectoryEntry entry;
   final Friendship? friendship;
   final String? viewerId;
+  final bool busy;
   final VoidCallback onAddFriend;
   final VoidCallback onAcceptRequest;
   final VoidCallback onCancelOrUnfriend;
   final VoidCallback onOpenProfile;
+  final VoidCallback onDismiss;
+
+  /// Exactly one line, and only if it is true. The service tiers people
+  /// by their real overlap with the viewer and tags the winning reason;
+  /// city or profession stand in when there is no overlap, and a person
+  /// we know nothing about gets nothing rather than filler.
+  String? get _reason {
+    final r = entry.suggestionReason?.trim();
+    if (r != null && r.isNotEmpty) return r;
+    final p = entry.profession?.trim();
+    if (p != null && p.isNotEmpty) return p;
+    final c = entry.city?.trim();
+    if (c != null && c.isNotEmpty) return c;
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final name = entry.fullName ?? 'Member';
-    final subtitle = entry.profession?.trim().isNotEmpty == true
-        ? entry.profession!.trim()
-        : (entry.city?.trim().isNotEmpty == true
-              ? entry.city!.trim()
-              : 'Adventist member');
-    return Material(
-      color: context.palette.card,
-      borderRadius: BorderRadius.circular(AppRadius.card),
-      elevation: 0,
-      child: InkWell(
-        onTap: onOpenProfile,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: context.palette.card,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: context.palette.divider),
-            boxShadow: AppShadows.card(context),
-          ),
-          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _MemberAvatar(photoUrl: entry.profilePhotoUrl, name: name),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
+    final reason = _reason;
+    return Pressable(
+      onTap: onOpenProfile,
+      pressedScale: 0.97,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: palette.divider),
+          boxShadow: AppShadows.card(context),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: _MemberPhoto(
+                    photoUrl: entry.profilePhotoUrl,
+                    name: name,
+                  ),
+                ),
+                // Dismiss. Session-only: nothing persists it, so the
+                // person can return on the next refresh. Storing it would
+                // need a table, and "not right now" is not "never".
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Pressable(
+                    onTap: onDismiss,
+                    haptics: true,
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 14,
+                        color: AppColors.white,
                       ),
                     ),
                   ),
-                  if (entry.isVerified) const VerifiedTick(size: 13),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      if (entry.isVerified) const VerifiedTick(size: 13),
+                    ],
+                  ),
+                  // Reserved whether or not there's a reason, so the Add
+                  // buttons line up across a row of mixed cards.
+                  SizedBox(
+                    height: 18,
+                    child: reason == null
+                        ? null
+                        : Text(
+                            reason,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: palette.textMuted,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 8),
+                  _friendButton(),
                 ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: context.palette.textMuted,
-                  fontSize: 12,
-                ),
-              ),
-              const Spacer(),
-              _friendButton(),
-              const SizedBox(height: 4),
-              GestureDetector(
-                onTap: onOpenProfile,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'View profile',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2478,202 +2554,87 @@ class _SuggestedMemberTile extends StatelessWidget {
 
   Widget _friendButton() {
     final f = friendship;
-    // No relationship yet → primary "Add friend" CTA.
+    // No relationship yet → the primary action.
     if (f == null) {
-      return _GradientPill(
+      return InlineAction(
         icon: Icons.person_add_alt_1,
-        label: 'Add friend',
+        label: 'Add',
+        expand: true,
+        busy: busy,
         onTap: onAddFriend,
       );
     }
     // Accepted → tap to unfriend.
     if (f.isAccepted) {
-      return _OutlinePill(
+      return InlineAction(
         icon: Icons.check_circle_outline,
         label: 'Friends',
-        color: AppColors.successGreen,
+        expand: true,
+        filled: false,
+        tint: AppColors.successGreen,
         onTap: onCancelOrUnfriend,
       );
     }
     // Pending: differs by direction.
     if (viewerId != null && f.isIncomingPendingFor(viewerId!)) {
-      return _GradientPill(
+      return InlineAction(
         icon: Icons.check_rounded,
         label: 'Accept',
+        expand: true,
         onTap: onAcceptRequest,
       );
     }
     // Outgoing pending → tap to cancel.
-    return _OutlinePill(
+    return InlineAction(
       icon: Icons.hourglass_empty_rounded,
-      label: 'Cancel',
-      color: AppColors.primaryBlue,
+      label: 'Requested',
+      expand: true,
+      filled: false,
+      tint: AppColors.primaryBlue,
       onTap: onCancelOrUnfriend,
     );
   }
 }
 
-class _GradientPill extends StatelessWidget {
-  const _GradientPill({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 13, color: AppColors.white),
-                const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: AppColors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OutlinePill extends StatelessWidget {
-  const _OutlinePill({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: Border.all(color: color.withValues(alpha: 0.35)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 13, color: color),
-                const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MemberAvatar extends StatelessWidget {
-  const _MemberAvatar({required this.photoUrl, required this.name});
+/// Full-bleed square photo for a suggestion card. Falls back to the
+/// member's initials on the brand gradient — never a grey box.
+class _MemberPhoto extends StatelessWidget {
+  const _MemberPhoto({required this.photoUrl, required this.name});
 
   final String? photoUrl;
   final String name;
 
   @override
   Widget build(BuildContext context) {
-    final initials = _initialsFrom(name);
-    final radius = BorderRadius.circular(28);
-    if (photoUrl != null && photoUrl!.isNotEmpty) {
-      return Container(
-        width: 56,
-        height: 56,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          border: Border.all(
-            color: AppColors.primaryBlue.withValues(alpha: 0.2),
-            width: 2,
-          ),
-        ),
-        child: CachedImage(
-          photoUrl!,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _initialsBox(initials),
-        ),
-      );
-    }
-    return _initialsBox(initials);
-  }
-
-  Widget _initialsBox(String initials) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(28),
-      ),
+    final fallback = Container(
       alignment: Alignment.center,
+      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
       child: Text(
-        initials,
-        style: AppTextStyles.titleMedium.copyWith(
+        _initialsFrom(name),
+        style: AppTextStyles.displayMedium.copyWith(
           color: AppColors.white,
+          fontSize: 30,
           fontWeight: FontWeight.w700,
-          fontSize: 18,
         ),
       ),
     );
+    if (photoUrl == null || photoUrl!.isEmpty) return fallback;
+    return CachedImage(
+      photoUrl!,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => fallback,
+    );
   }
+}
 
-  String _initialsFrom(String name) {
-    final parts = name
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-        .toUpperCase();
-  }
+/// "Tendai Moyo" → "TM". Used by the suggestion cards when a member has
+/// no photo.
+String _initialsFrom(String name) {
+  final parts = name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return '?';
+  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+  return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+      .toUpperCase();
 }
 
 /// Reports its post as seen the moment the sliver creates this element.

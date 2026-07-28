@@ -25,6 +25,7 @@ import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/inline_action.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/motion/content_reveal.dart';
@@ -1550,69 +1551,9 @@ class _HighlightedText extends StatelessWidget {
   }
 }
 
-/// Pill button used for the inline Add / Follow / RSVP actions. Filled
-/// when the action is available, outlined once it has been taken — so
-/// "done" is legible without reading the label.
-class _InlineAction extends StatelessWidget {
-  const _InlineAction({
-    required this.label,
-    required this.onTap,
-    this.icon,
-    this.filled = true,
-    this.busy = false,
-  });
-
-  final String label;
-  final VoidCallback? onTap;
-  final IconData? icon;
-  final bool filled;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = filled ? AppColors.white : context.palette.textMuted;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: busy ? null : onTap,
-        borderRadius: BorderRadius.circular(100),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: filled ? AppColors.primaryBlue : Colors.transparent,
-            borderRadius: BorderRadius.circular(100),
-            border: filled
-                ? null
-                : Border.all(color: context.palette.divider),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (busy)
-                SizedBox(
-                  width: 11,
-                  height: 11,
-                  child: CircularProgressIndicator(strokeWidth: 1.8, color: fg),
-                )
-              else if (icon != null)
-                Icon(icon, size: 13, color: fg),
-              if (busy || icon != null) const SizedBox(width: 5),
-              Text(
-                label,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: fg,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// The inline Add / Follow / RSVP pill now lives in
+// `lib/widgets/inline_action.dart` as InlineAction, shared with the home
+// "People you may meet" cards so Add can't mean two things in two places.
 
 /// Shared chrome for every result row: the card, the tap target and the
 /// leading/body/trailing rhythm. The rows differ in what they put in
@@ -1726,19 +1667,19 @@ class _PersonResultRow extends StatelessWidget {
         ],
       ),
       trailing: switch (state) {
-        _FriendState.friends => _InlineAction(
+        _FriendState.friends => InlineAction(
             label: 'Friends',
             icon: Icons.check,
             filled: false,
             onTap: null,
           ),
-        _FriendState.pending => _InlineAction(
+        _FriendState.pending => InlineAction(
             label: 'Pending',
             icon: Icons.hourglass_top_rounded,
             filled: false,
             onTap: null,
           ),
-        _FriendState.none => _InlineAction(
+        _FriendState.none => InlineAction(
             label: 'Add',
             icon: Icons.person_add_alt_1,
             busy: busy,
@@ -1825,7 +1766,7 @@ class _ChurchResultRow extends StatelessWidget {
           ),
         ],
       ),
-      trailing: _InlineAction(
+      trailing: InlineAction(
         label: following ? 'Following' : 'Follow',
         icon: following ? Icons.check : Icons.add,
         filled: !following,
@@ -1939,7 +1880,7 @@ class _EventResultRow extends StatelessWidget {
           ),
         ],
       ),
-      trailing: _InlineAction(
+      trailing: InlineAction(
         label: going ? 'Going' : 'RSVP',
         icon: going ? Icons.check : Icons.event_available,
         filled: !going,

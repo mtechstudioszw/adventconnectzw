@@ -13,6 +13,7 @@ class MainScaffold extends StatefulWidget {
     this.floatingActionButton,
     this.showAd = true,
     this.showNav = true,
+    this.showAppBar = true,
   });
 
   final String title;
@@ -30,6 +31,14 @@ class MainScaffold extends StatefulWidget {
   /// button instead of a tab highlight.
   final bool showNav;
 
+  /// Suppress the themed AppBar so the screen can render its own flat
+  /// header inside [body] — a hero with a subtitle and its own actions,
+  /// the ScreenHero language used everywhere else. Still flat, still on
+  /// `palette.scaffoldBg`; this only moves who draws it. The screen must
+  /// then wrap its header in [FlatStatusBar] and handle its own top
+  /// SafeArea (this scaffold stops insetting the top when it has no bar).
+  final bool showAppBar;
+
   @override
   State<MainScaffold> createState() => _MainScaffoldState();
 }
@@ -42,13 +51,14 @@ class _MainScaffoldState extends State<MainScaffold> with NavVisibilityMixin {
       // Flat, single-colour header — matches the scaffold background so the
       // screen reads as one continuous colour (styling comes from the themed
       // AppBarTheme; the back button is auto-added on pushed routes).
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
+      appBar: widget.showAppBar ? AppBar(title: Text(widget.title)) : null,
       // Scroll direction drives nav visibility (YouTube-style hide).
       body: NotificationListener<UserScrollNotification>(
         onNotification: handleNavScroll,
-        child: SafeArea(child: widget.body),
+        // With no AppBar there is nothing between the body and the status
+        // bar, so the top inset becomes the screen's own problem — its
+        // header does the SafeArea, the way ScreenHero does.
+        child: SafeArea(top: widget.showAppBar, child: widget.body),
       ),
       // Banner sits directly above the main bottom nav. AdBanner self-hides
       // (zero height) until an ad loads, so the nav never shifts on a miss.

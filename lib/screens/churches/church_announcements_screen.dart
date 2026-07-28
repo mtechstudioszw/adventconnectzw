@@ -45,6 +45,13 @@ class _ChurchAnnouncementsScreenState extends State<ChurchAnnouncementsScreen> {
         _items = items;
         _loading = false;
       });
+      // Every card on this screen shows its FULL body — there is no
+      // "tap to expand", so reaching this list is reading it. Recording
+      // it here is what makes the admin reach sparkline mean opens
+      // rather than sends (patch_173). Fire-and-forget.
+      for (final a in items) {
+        ChurchService.markAnnouncementRead(a.id).ignore();
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {

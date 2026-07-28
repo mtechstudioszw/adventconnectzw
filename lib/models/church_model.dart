@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class Church {
   const Church({
     required this.id,
@@ -19,6 +21,7 @@ class Church {
     this.longitude,
     this.province,
     this.conference,
+    this.serviceTimes = const [],
   });
 
   final String id;
@@ -49,6 +52,11 @@ class Church {
   /// SDA conference (e.g. "North Zimbabwe Conference"). Surfaced in
   /// the conference dropdown filter per master reference Part 15.
   final String? conference;
+
+  /// When this congregation meets (`churches.service_times`, patch_176).
+  /// Ordered as the church admin entered them, so the first entry is the
+  /// one worth showing on a directory row.
+  final List<ServiceTime> serviceTimes;
 
   bool get hasLocation => latitude != null && longitude != null;
 
@@ -92,6 +100,7 @@ class Church {
       conference: (json['conference'] as String?)?.trim().isNotEmpty == true
           ? (json['conference'] as String).trim()
           : null,
+      serviceTimes: ServiceTime.listFrom(json['service_times']),
     );
   }
 
@@ -117,6 +126,7 @@ class Church {
         'longitude': longitude,
         'province': province,
         'conference': conference,
+        'service_times': serviceTimes.map((e) => e.toJson()).toList(),
       };
 
   Church copyWith({
@@ -134,6 +144,7 @@ class Church {
     String? contactEmail,
     double? latitude,
     double? longitude,
+    List<ServiceTime>? serviceTimes,
   }) {
     return Church(
       id: id,
@@ -155,6 +166,7 @@ class Church {
       longitude: longitude ?? this.longitude,
       province: province,
       conference: conference,
+      serviceTimes: serviceTimes ?? this.serviceTimes,
     );
   }
 
@@ -169,5 +181,72 @@ class Church {
     if (value is double) return value;
     if (value is num) return value.toDouble();
     return double.tryParse('$value');
+  }
+}
+
+/// One entry from `churches.service_times` — "Sabbath School, Saturday,
+/// 08:30". Deliberately free-form: congregations differ, and a fixed
+/// Sabbath-School-plus-Divine-Service pair would need migrating the first
+/// time one of them ran two services or added a Wednesday prayer meeting.
+class ServiceTime {
+  const ServiceTime({required this.label, this.day, this.time});
+
+  final String label;
+  final String? day;
+
+  /// 24-hour "HH:mm" as entered by the admin. Kept as text rather than a
+  /// TimeOfDay because it round-trips through JSONB and the Hive cache.
+  final String? time;
+
+  bool get isEmpty => label.trim().isEmpty && (time ?? '').trim().isEmpty;
+
+  /// "Saturday · 08:30", skipping whichever half is missing.
+  String get whenLabel {
+    final parts = [
+      if ((day ?? '').trim().isNotEmpty) day!.trim(),
+      if ((time ?? '').trim().isNotEmpty) time!.trim(),
+    ];
+    return parts.join(' · ');
+  }
+
+  factory ServiceTime.fromJson(Map<String, dynamic> json) => ServiceTime(
+        label: (json['label'] ?? '').toString(),
+        day: (json['day'] as String?)?.trim().isNotEmpty == true
+            ? (json['day'] as String).trim()
+            : null,
+        time: (json['time'] as String?)?.trim().isNotEmpty == true
+            ? (json['time'] as String).trim()
+            : null,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        if (day != null) 'day': day,
+        if (time != null) 'time': time,
+      };
+
+  /// Tolerant parse. The column is JSONB, but a Hive round-trip can hand
+  /// back an encoded string, and hand-seeded rows may hold anything —
+  /// none of which is worth crashing a church row over.
+  static List<ServiceTime> listFrom(dynamic raw) {
+    if (raw == null) return const [];
+    dynamic value = raw;
+    if (value is String) {
+      if (value.trim().isEmpty) return const [];
+      try {
+        value = jsonDecode(value);
+      } catch (_) {
+        return const [];
+      }
+    }
+    if (value is! List) return const [];
+    final out = <ServiceTime>[];
+    for (final e in value) {
+      if (e is Map) {
+        final st = ServiceTime.fromJson(Map<String, dynamic>.from(e));
+        if (!st.isEmpty) out.add(st);
+      }
+    }
+    return out;
   }
 }

@@ -130,6 +130,18 @@ class CacheService {
     return value;
   }
 
+  /// Drop one cached payload, so the next read goes to the network.
+  ///
+  /// Use after a write that makes a cached list wrong — editing a church
+  /// invalidates `churches_list`, otherwise the directory keeps painting
+  /// the old logo from Hive for up to 24h (and indefinitely offline).
+  static Future<void> invalidate(String key) async {
+    final box = _box;
+    if (box == null) return;
+    await box.delete(key);
+    await box.delete('${key}__ts');
+  }
+
   /// When was the value at [key] last written? Returns null if there's
   /// nothing cached, or the timestamp is missing / malformed. Used by
   /// the "Updated X ago" strip on each tab so users know how fresh the

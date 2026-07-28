@@ -72,4 +72,49 @@ new upload on YouTube ──► PubSubHubbub ──► youtube-websub ──► 
 
 ## Quota
 
-`search.list` (100 units) is only a last-resort in channel resolution. Everything else is 1 unit/call: `playlistItems.list`, `videos.list`, `playlists.list`, `channels.list`. A full backfill ≈ 400 units / 10k videos; steady state is near-zero thanks to WebSub. Default quota is 10,000 units/day.
+`search.list` (100 units) is only a last-resort in channel resolution. Everything else is 1 unit/call: `playlistItems.list`, `videos.list`, `playlists.list`, `channels.list`. A full backfill ≈ 400 units / 10k videos; steady state is near-zero thanks to WebSub. Default quota is 10,000 units/day, resetting at **midnight US Pacific** (07:00 UTC in summer, 08:00 in winter) — *not* at UTC midnight.
+
+Every action is budgeted per run. Keep it that way:
+
+| Action | Budget |
+|---|---|
+| `onboard` | 3 submissions/tick |
+| `backfill` | 2 channels × 4 pages/tick |
+| `live` | 1 `videos.list` (≤50 ids)/tick |
+| `reconcile` | 4 channels × (1 uploads page + 8 playlists × ≤4 pages)/run |
+
+## When video notifications stop
+
+Diagnosed 2026-07-28: video notifications ceased at 04:39Z while every
+other type kept flowing to 09:05Z. The table and triggers were healthy —
+the producer had stopped. Three defects, all now fixed in this directory,
+each of which alone is enough to silence Watch pushes:
+
+1. **`reconcile` had no budget** — it walked every page of every playlist
+   of every channel, daily at 04:30 UTC, in a file whose header promises
+   bounded runs. Nine minutes before the stop.
+2. **`livePoll` let an API error escape.** Its one quota-spending call sat
+   *above* the live-push fan-out in the same function, so any quota error
+   took the pushes with it and 500'd the tick.
+3. **A 500 mid-tick skipped `resubscribe`.** WebSub leases last 10 days
+   and are renewed inside the tick; miss the window and YouTube's hub
+   stops delivering, which kills the "📺 New video" push permanently —
+   it does not recover when quota resets. This is the one that explains a
+   stop that never healed on its own.
+
+After redeploying, confirm the producer is alive:
+
+```sql
+-- Leases must be in the FUTURE. Any past/null row means the hub is
+-- no longer delivering to us; the next successful tick re-subscribes.
+select channel_id, is_live, websub_expires_at, last_synced_at
+  from youtube_channels where status = 'active' order by websub_expires_at;
+
+-- Did the cron actually run, and did it return 200?
+select jobname, status, return_message, start_time
+  from cron.job_run_details
+ where jobname like 'youtube-sync%' order by start_time desc limit 20;
+```
+
+Then hit `?action=tick` by hand and read the JSON `log` array — every step
+now reports its own failure instead of aborting the run.

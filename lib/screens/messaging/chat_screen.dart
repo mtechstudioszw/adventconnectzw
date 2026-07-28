@@ -2730,112 +2730,172 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Widget _buildOverflowMenu(bool canOpenProfile, String? otherUserId) {
-    return PopupMenuButton<String>(
-      icon: Icon(Icons.more_vert, color: context.palette.text),
-      color: context.palette.card,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      onSelected: (action) async {
-        switch (action) {
-          case 'profile':
-            if (canOpenProfile) {
-              context.pushNamed(
-                'user_profile',
-                pathParameters: {'userId': otherUserId!},
-              );
-            }
-            break;
-          case 'block':
-            await _confirmBlock(otherUserId);
-            break;
-          case 'unblock':
-            await _confirmUnblock(otherUserId);
-            break;
-          case 'clear':
-            await _confirmClearChat();
-            break;
-          case 'delete':
-            await _confirmDeleteConversation();
-            break;
-          case 'report_group':
-            await showReportSheet(
-              context,
-              contentType: 'group',
-              contentId: widget.conversationId,
-              contentLabel: _conversation?.otherUserName ?? 'this group',
-            );
-            break;
+    return _CircleIconButton(
+      icon: Icons.more_vert,
+      onTap: () => _openChatActions(canOpenProfile, otherUserId),
+    );
+  }
+
+  /// The ⋮ sheet: everything you can do to THIS conversation, grouped by
+  /// what each action actually touches.
+  ///
+  /// It replaces a flat PopupMenu where "View profile", "Clear chat" and
+  /// "Delete conversation" sat as identical grey rows — three actions with
+  /// wildly different consequences, one of them irreversible, all looking
+  /// the same. Grouping plus a tinted icon per action makes the blast
+  /// radius readable before you tap.
+  ///
+  /// Account-wide chat settings (last seen, online status, read receipts)
+  /// are deliberately NOT here — they outlive this conversation and live
+  /// in Settings › Chat privacy. The last row is a signpost to them, not
+  /// a copy of them.
+  Future<void> _openChatActions(
+    bool canOpenProfile,
+    String? otherUserId,
+  ) async {
+    final name = _conversation?.otherUserName ?? 'this chat';
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) {
+        void run(Future<void> Function() action) {
+          Navigator.pop(sheetCtx);
+          action();
         }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: sheetCtx.palette.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // ---- The person -------------------------------------
+                if (canOpenProfile) ...[
+                  const _SheetGroupLabel('The person'),
+                  _ChatActionGroup(
+                    children: [
+                      _ChatAction(
+                        icon: Icons.person_outline,
+                        tint: AppColors.primaryBlue,
+                        label: 'View profile',
+                        onTap: () => run(() async {
+                          context.pushNamed(
+                            'user_profile',
+                            pathParameters: {'userId': otherUserId!},
+                          );
+                        }),
+                      ),
+                      if (_isBlocked)
+                        _ChatAction(
+                          icon: Icons.lock_open,
+                          tint: AppColors.primaryBlue,
+                          label: 'Unblock',
+                          subtitle: 'They can message you again.',
+                          onTap: () =>
+                              run(() => _confirmUnblock(otherUserId)),
+                        )
+                      else
+                        _ChatAction(
+                          icon: Icons.block,
+                          tint: AppColors.red,
+                          label: 'Block',
+                          subtitle: 'Stops their messages everywhere, '
+                              'not just here.',
+                          onTap: () => run(() => _confirmBlock(otherUserId)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // ---- This conversation ------------------------------
+                const _SheetGroupLabel('This conversation'),
+                _ChatActionGroup(
+                  children: [
+                    if (_isGroup)
+                      _ChatAction(
+                        icon: Icons.flag_outlined,
+                        tint: AppColors.red,
+                        label: 'Report group',
+                        onTap: () => run(() async {
+                          await showReportSheet(
+                            context,
+                            contentType: 'group',
+                            contentId: widget.conversationId,
+                            contentLabel:
+                                _conversation?.otherUserName ?? 'this group',
+                          );
+                        }),
+                      ),
+                    _ChatAction(
+                      icon: Icons.cleaning_services_outlined,
+                      tint: AppColors.goldAccent,
+                      label: 'Clear chat',
+                      subtitle: 'Empties it for you. Nobody else is affected.',
+                      onTap: () => run(_confirmClearChat),
+                    ),
+                    if (!_isChurchGroup)
+                      _ChatAction(
+                        icon: Icons.delete_outline,
+                        tint: AppColors.red,
+                        label: 'Delete conversation',
+                        subtitle: 'Removes it from your inbox.',
+                        onTap: () => run(_confirmDeleteConversation),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // ---- Beyond this chat -------------------------------
+                _ChatActionGroup(
+                  children: [
+                    _ChatAction(
+                      icon: Icons.shield_outlined,
+                      tint: AppColors.primaryBlue,
+                      label: 'Chat privacy settings',
+                      subtitle:
+                          'Last seen, online status and read receipts — '
+                          'for every chat.',
+                      onTap: () => run(() async {
+                        context.pushNamed('chat_privacy');
+                      }),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
       },
-      itemBuilder: (context) => [
-        if (canOpenProfile)
-          const PopupMenuItem(
-            value: 'profile',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.person_outline),
-              title: Text('View profile'),
-            ),
-          ),
-        if (canOpenProfile && !_isBlocked)
-          const PopupMenuItem(
-            value: 'block',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.block, color: AppColors.red),
-              title: Text('Block', style: TextStyle(color: AppColors.red)),
-            ),
-          ),
-        if (canOpenProfile && _isBlocked)
-          const PopupMenuItem(
-            value: 'unblock',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.lock_open, color: AppColors.primaryBlue),
-              title: Text(
-                'Unblock',
-                style: TextStyle(color: AppColors.primaryBlue),
-              ),
-            ),
-          ),
-        const PopupMenuItem(
-          value: 'clear',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.cleaning_services_outlined),
-            title: Text('Clear chat'),
-          ),
-        ),
-        if (_isGroup)
-          const PopupMenuItem(
-            value: 'report_group',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.flag_outlined, color: AppColors.red),
-              title: Text(
-                'Report group',
-                style: TextStyle(color: AppColors.red),
-              ),
-            ),
-          ),
-        if (!_isChurchGroup)
-          const PopupMenuItem(
-            value: 'delete',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.delete_outline, color: AppColors.red),
-              title: Text(
-                'Delete conversation',
-                style: TextStyle(color: AppColors.red),
-              ),
-            ),
-          ),
-      ],
     );
   }
 
@@ -5624,6 +5684,136 @@ class _CircleIconButton extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: context.palette.text, size: 18),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small uppercase label above a group in the chat actions sheet. Names
+/// the SCOPE of the rows under it, which is the whole point of grouping
+/// them: "The person" and "This conversation" are different blast radii.
+class _SheetGroupLabel extends StatelessWidget {
+  const _SheetGroupLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 7),
+      child: Text(
+        label.toUpperCase(),
+        style: AppTextStyles.labelSmall.copyWith(
+          color: context.palette.textMuted,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.3,
+        ),
+      ),
+    );
+  }
+}
+
+/// Rounded container holding one group of [_ChatAction] rows, hairlines
+/// between them.
+class _ChatActionGroup extends StatelessWidget {
+  const _ChatActionGroup({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) {
+        rows.add(Divider(height: 1, indent: 62, color: palette.divider));
+      }
+      rows.add(children[i]);
+    }
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.divider),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: rows),
+    );
+  }
+}
+
+/// One action row: a tinted icon disc, a label, and an optional line
+/// saying what it actually does.
+///
+/// The tint carries the meaning — blue for navigation and settings, gold
+/// for reversible housekeeping, red for anything destructive or
+/// account-affecting. In the old PopupMenu every row was the same grey,
+/// so "View profile" and "Delete conversation" looked equally harmless.
+class _ChatAction extends StatelessWidget {
+  const _ChatAction({
+    required this.icon,
+    required this.tint,
+    required this.label,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final IconData icon;
+  final Color tint;
+  final String label;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 18, color: tint),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        color: tint == AppColors.red ? tint : palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                          fontSize: 11.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

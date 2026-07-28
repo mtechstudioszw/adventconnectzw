@@ -10,33 +10,27 @@ import 'create_sheet.dart';
 
 /// The "what would you like to share?" card at the top of Home.
 ///
-/// Tapping the row opens the full [showCreateSheet] chooser. Underneath sit
-/// exactly two shortcuts: **Event** — the thing members create most often
-/// after a plain post — and **Donate**.
+/// Tapping the row opens the full [showCreateSheet] chooser. That is ALL
+/// this card does now.
 ///
-/// It used to carry three (Story / Event / Prayer). Story is already a
-/// one-tap action in the stories rail directly below, and Prayer has its own
-/// entry on the Stories section header, so two of the three shortcuts were
-/// duplicating a control that was already on screen.
+/// Event and Donate used to live inside this card, under a divider — which
+/// put "give money to the church" and "go to the churches directory" inside
+/// the box for writing a post, and made both read as kinds of posting.
+/// They are navigation, not authoring, so they moved out into
+/// [HomeShortcutChips] directly below (2026-07-28).
 class ComposerEntry extends StatelessWidget {
   const ComposerEntry({
     super.key,
     required this.photoUrl,
     required this.name,
     required this.onCreate,
-    required this.onDonate,
   });
 
   final String? photoUrl;
   final String name;
 
-  /// Fires with whatever the member picked — either from the sheet or from
-  /// the Event shortcut.
+  /// Fires with whatever the member picked in the sheet.
   final void Function(CreateKind) onCreate;
-
-  /// Opens the Donate screen. Not a [CreateKind]: giving isn't authoring, and
-  /// it must not appear in the create chooser.
-  final VoidCallback onDonate;
 
   Future<void> _openSheet(BuildContext context) async {
     final choice = await showCreateSheet(context);
@@ -80,9 +74,7 @@ class ComposerEntry extends StatelessWidget {
           ),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            Pressable(
+        child: Pressable(
               onTap: () => _openSheet(context),
               pressedScale: 0.985,
               child: Padding(
@@ -168,51 +160,82 @@ class ComposerEntry extends StatelessWidget {
                 ),
               ),
             ),
-            Divider(height: 1, color: palette.divider),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.sm,
-                vertical: AppSpace.xs,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _Shortcut(
-                      icon: Icons.event_outlined,
-                      label: 'Event',
-                      tint: AppColors.primaryBlue,
-                      onTap: () => onCreate(CreateKind.event),
-                    ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 22,
-                    color: palette.divider,
-                  ),
-                  Expanded(
-                    child: _Shortcut(
-                      icon: Icons.favorite_rounded,
-                      label: 'Donate',
-                      // Home's single gold moment on an ordinary day. On
-                      // Sabbath the header takes the gold instead; the two
-                      // never compete for attention because the header's is
-                      // a whole warm gradient and this is one 17dp glyph.
-                      tint: AppColors.goldAccent,
-                      onTap: onDonate,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 }
 
-class _Shortcut extends StatelessWidget {
-  const _Shortcut({
+/// The three shortcuts that used to be buried inside the composer card:
+/// **Churches**, **Events**, **Donate**.
+///
+/// They sit on the scaffold as their own row, not inside a card, because
+/// none of them is a kind of post. Under the composer they read as "and
+/// here are the other places to go", which is what they are.
+///
+/// Equal thirds rather than a scrolling rail: three is few enough to fit
+/// any phone, and a rail would hide Donate off the right edge on a small
+/// screen — the one shortcut the church most wants found.
+class HomeShortcutChips extends StatelessWidget {
+  const HomeShortcutChips({
+    super.key,
+    required this.onChurches,
+    required this.onEvent,
+    required this.onDonate,
+  });
+
+  final VoidCallback onChurches;
+  final VoidCallback onEvent;
+  final VoidCallback onDonate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.md,
+        AppSpace.lg,
+        0,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ShortcutChip(
+              icon: Icons.church_outlined,
+              label: 'Churches',
+              tint: AppColors.primaryBlue,
+              onTap: onChurches,
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: _ShortcutChip(
+              icon: Icons.event_outlined,
+              label: 'Events',
+              tint: AppColors.darkNavy,
+              onTap: onEvent,
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: _ShortcutChip(
+              icon: Icons.favorite_rounded,
+              label: 'Donate',
+              // Home's single gold moment on an ordinary day. On Sabbath
+              // the header takes the gold instead; the two never compete
+              // because the header's is a whole warm gradient and this is
+              // one 16dp glyph in a tinted disc.
+              tint: AppColors.goldAccent,
+              onTap: onDonate,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShortcutChip extends StatelessWidget {
+  const _ShortcutChip({
     required this.icon,
     required this.label,
     required this.tint,
@@ -230,12 +253,31 @@ class _Shortcut extends StatelessWidget {
     return Pressable(
       haptics: true,
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpace.sm + 2),
+      pressedScale: 0.96,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpace.sm,
+          vertical: AppSpace.sm + 1,
+        ),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: palette.divider),
+          boxShadow: AppShadows.card(context),
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 17, color: tint),
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: tint.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 16, color: tint),
+            ),
             const SizedBox(width: AppSpace.sm - 2),
             Flexible(
               child: Text(
@@ -244,7 +286,7 @@ class _Shortcut extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.labelMedium.copyWith(
                   color: palette.text,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),

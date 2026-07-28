@@ -83,12 +83,40 @@ Every action is budgeted per run. Keep it that way:
 | `live` | 1 `videos.list` (≤50 ids)/tick |
 | `reconcile` | 4 channels × (1 uploads page + 8 playlists × ≤4 pages)/run |
 
+### Live jobs, and the daily budget they actually spend
+
+**There are THREE cron jobs, not the two documented above.** Read live on
+2026-07-28:
+
+| Job | Schedule | Action | Runs/day | Approx units/day |
+|---|---|---|---|---|
+| `youtube-live-fast` | `* * * * *` | `live` | 1,440 | ~1,440 |
+| `youtube-sync-tick` | `*/3 * * * *` | `tick` | 480 | up to ~8,160 |
+| `youtube-sync-reconcile` | `30 4 * * *` | `reconcile` | 1 | was UNBOUNDED |
+
+`youtube-live-fast` is undocumented and predates this note — it exists to
+catch a stream going live within a minute rather than three. It is not
+wrong, but it is not free either, and the table above is the first place
+the three jobs have been counted together. **The steady-state floor is
+already ~1,440 units before the tick spends anything**, against a 10,000
+/day ceiling. Budget accordingly before adding channels or shortening a
+schedule.
+
 ## When video notifications stop
 
-Diagnosed 2026-07-28: video notifications ceased at 04:39Z while every
-other type kept flowing to 09:05Z. The table and triggers were healthy —
-the producer had stopped. Three defects, all now fixed in this directory,
-each of which alone is enough to silence Watch pushes:
+Diagnosed 2026-07-28. Video notifications stopped at 04:39Z — nine
+minutes into the daily reconcile — and **resumed on their own at ~12:00Z**
+once quota reset. The brief that reported this was written at 09:05Z,
+inside the gap, which is why it read as a permanent stop. So this is a
+~7-hour recurring outage, not a dead producer.
+
+Ruled out by live data, so don't re-investigate them: WebSub leases were
+never expired (17/17 active channels held a future lease), the table and
+triggers were healthy, and patch_169's Sabbath suppression is inert
+(no profile has `sabbath_mode_enabled`).
+
+Three defects, all now fixed in this directory, each of which makes that
+outage longer or more likely:
 
 1. **`reconcile` had no budget** — it walked every page of every playlist
    of every channel, daily at 04:30 UTC, in a file whose header promises
@@ -98,9 +126,10 @@ each of which alone is enough to silence Watch pushes:
    took the pushes with it and 500'd the tick.
 3. **A 500 mid-tick skipped `resubscribe`.** WebSub leases last 10 days
    and are renewed inside the tick; miss the window and YouTube's hub
-   stops delivering, which kills the "📺 New video" push permanently —
-   it does not recover when quota resets. This is the one that explains a
-   stop that never healed on its own.
+   stops delivering, which would kill the "📺 New video" push
+   permanently. This did NOT happen — the leases were checked and are
+   healthy — but it is the failure this bug was one bad week away from
+   causing, and it is unrecoverable without a manual re-subscribe.
 
 After redeploying, confirm the producer is alive:
 

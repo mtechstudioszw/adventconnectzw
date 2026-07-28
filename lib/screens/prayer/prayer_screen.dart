@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthException, PostgrestException;
 import '../../models/prayer_model.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
@@ -27,6 +29,10 @@ class _PrayerScreenState extends State<PrayerScreen> {
   Set<String> _busyIds = <String>{};
   bool _loading = true;
 
+  /// Non-null when the last load failed. Kept separate from "the list is
+  /// empty" so the two can render differently.
+  String? _loadError;
+
   /// null = "All" chip. Otherwise a PrayerCategory whose .code is
   /// passed to fetchPrayers() to narrow the server-side query.
   PrayerCategory? _activeCategory;
@@ -45,7 +51,10 @@ class _PrayerScreenState extends State<PrayerScreen> {
   }
 
   Future<void> _bootstrap() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
       final results = await Future.wait([
         PrayerService.fetchPrayers(
@@ -65,10 +74,30 @@ class _PrayerScreenState extends State<PrayerScreen> {
       // Deliberately after the first paint: the list is useful without
       // it, and one extra round-trip shouldn't delay the whole screen.
       _loadPrayedBy(prayers);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      // Previously this swallowed the error and fell through to the
+      // "Be the first to share" empty state — so a dropped connection,
+      // an expired session or an RLS rejection all looked identical to
+      // "nobody has posted a prayer". Surface it instead: an empty list
+      // and a failed load are different things and need different
+      // reactions from the user.
+      setState(() {
+        _loading = false;
+        _loadError = _describeLoadError(e);
+      });
     }
+  }
+
+  /// Turn an exception into something a member can act on. Auth and
+  /// connectivity are the two that actually happen and each has a
+  /// different remedy, so they get their own wording.
+  String _describeLoadError(Object e) {
+    if (e is AuthException) return 'Sign in again to see prayers.';
+    if (e is PostgrestException) {
+      return 'Prayers could not be loaded (${e.code ?? 'server error'}).';
+    }
+    return 'Could not load prayers. Check your connection and try again.';
   }
 
   Future<void> _loadPrayedBy(List<Prayer> prayers) async {
@@ -496,6 +525,57 @@ class _PrayerScreenState extends State<PrayerScreen> {
   }
 
   Widget _buildListContent() {
+    // A failed load is NOT an empty list. Showing "Be the first to share"
+    // when the request actually errored tells the user the community has
+    // posted nothing, which is both wrong and unfixable from their side.
+    final error = _loadError;
+    if (error != null && _prayers.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 80),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              children: [
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: AppColors.red.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.cloud_off_outlined,
+                    color: AppColors.red,
+                    size: 38,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Prayers didn\'t load',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.headlineMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: context.palette.textMuted,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _GradientButton(label: 'Try again', onTap: _bootstrap),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     if (_prayers.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),

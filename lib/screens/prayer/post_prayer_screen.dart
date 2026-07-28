@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/prayer_circle_model.dart';
 import '../../models/prayer_model.dart';
+import '../../services/prayer_circle_service.dart';
+import '../../widgets/prayer_circles_sheet.dart';
 import '../../services/prayer_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -31,6 +34,11 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
   late final Animation<double> _slide;
 
   String _visibility = 'public';
+
+  // Prayer circles (patch_170). Null = not scoped to a circle, which is
+  // every prayer's default and the behaviour that existed before.
+  String? _circleId;
+  List<PrayerCircle> _circles = const [];
   bool _isUrgent = false;
   PrayerCategory _category = PrayerCategory.other;
   bool _saving = false;
@@ -53,6 +61,23 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
     if (existing != null) {
       _contentController.text = existing.content;
       _category = existing.category;
+    }
+    _loadCircles();
+  }
+
+  /// Circles the user belongs to (patch_170). Best-effort: if this fails
+  /// the circle audience option simply isn't offered, and every other
+  /// audience still works.
+  Future<void> _loadCircles() async {
+    // Editing doesn't offer a circle change — moving a prayer between
+    // audiences after people have already seen it is a different, and
+    // much more surprising, operation than choosing one up front.
+    if (widget.isEditing) return;
+    try {
+      final circles = await PrayerCircleService.fetchMine();
+      if (mounted) setState(() => _circles = circles);
+    } catch (_) {
+      // ignore — option stays hidden.
     }
   }
 
@@ -85,6 +110,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
           isUrgent: _isUrgent,
           title: _titleController.text,
           category: _category.code,
+          circleId: _circleId,
         );
       }
       if (!mounted) return;
@@ -318,9 +344,115 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
             selected: _visibility == 'anonymous',
             onTap: () => setState(() => _visibility = 'anonymous'),
           ),
+          // Prayer circles (patch_170). Always offered: when the user has
+          // none, tapping it opens the create flow rather than hiding the
+          // capability behind a menu they'd have to already know about.
+          if (!widget.isEditing) ...[
+            const SizedBox(height: 8),
+            _VisibilityOption(
+              icon: Icons.group_outlined,
+              title: 'A prayer circle',
+              subtitle: _selectedCircle != null
+                  ? 'Only ${_selectedCircle!.name}.'
+                  : _circles.isEmpty
+                      ? 'Set up a small group — family, cell, choir.'
+                      : 'Only the people in one small group.',
+              selected: _circleId != null,
+              onTap: _circles.isEmpty ? _manageCircles : _pickCircle,
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  PrayerCircle? get _selectedCircle {
+    for (final c in _circles) {
+      if (c.id == _circleId) return c;
+    }
+    return null;
+  }
+
+  /// Open circle management, then reload so a circle created in there is
+  /// immediately pickable without leaving the composer.
+  Future<void> _manageCircles() async {
+    await showPrayerCirclesSheet(context);
+    if (!mounted) return;
+    await _loadCircles();
+    // If they created exactly one circle, select it — that is
+    // unambiguously what they came here to do.
+    if (mounted && _circles.length == 1) {
+      setState(() => _circleId = _circles.first.id);
+    }
+  }
+
+  Future<void> _pickCircle() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: ctx.palette.sheet,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ctx.palette.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Send to which circle?',
+                style: AppTextStyles.titleMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final c in _circles)
+                ListTile(
+                  leading: const Icon(
+                    Icons.group_outlined,
+                    color: AppColors.primaryBlue,
+                  ),
+                  title: Text(
+                    c.name,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${c.memberCount} ${c.memberCount == 1 ? "person" : "people"}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: ctx.palette.textMuted,
+                    ),
+                  ),
+                  trailing: c.id == _circleId
+                      ? const Icon(Icons.check, color: AppColors.primaryBlue)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, c.id),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _circleId = picked;
+      // A circle prayer is scoped by membership, not by the public /
+      // church_only ladder — leaving visibility on 'church_only' would
+      // imply a second, contradictory audience.
+      _visibility = 'public';
+    });
   }
 
   Widget _buildUrgentToggle() {

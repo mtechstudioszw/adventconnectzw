@@ -86,6 +86,14 @@ class DeepLinkService {
           // YouTube Watch deep link → open the in-app player by video id.
           appRouter.pushNamed('watch_video', pathParameters: {'id': id});
           break;
+        case 'user':
+          // Friend QR. The code encodes the member's auth user id, which
+          // is exactly the user_profile route's :userId param — so a scan
+          // lands on their profile with the normal Add / Pending / Friends
+          // state machine, rather than adding anyone silently. Scanning a
+          // code is an introduction, not consent to be befriended.
+          appRouter.pushNamed('user_profile', pathParameters: {'userId': id});
+          break;
         default:
           // Unknown host — nothing to open.
           break;

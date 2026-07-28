@@ -29,6 +29,7 @@ import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/last_updated_strip.dart';
+import '../../widgets/friend_qr_sheet.dart';
 import '../../widgets/screen_shell.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../widgets/cached_image.dart';
@@ -1187,6 +1188,15 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                       ),
                     ),
                     const Spacer(),
+                    // Friend QR — Adventists meet in person, and scanning
+                    // beats spelling a name into a search box in a noisy
+                    // hall at camp meeting.
+                    HeaderIconButton(
+                      icon: Icons.qr_code_2,
+                      tooltip: 'Your friend code',
+                      onTap: () => showFriendQrSheet(context),
+                    ),
+                    const SizedBox(width: 8),
                     HeaderIconButton(
                       icon: Icons.settings_outlined,
                       tooltip: 'Settings',

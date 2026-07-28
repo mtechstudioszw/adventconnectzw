@@ -257,6 +257,7 @@ class PrayerService {
     String? title,
     String? churchId,
     String category = 'other',
+    String? circleId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -278,6 +279,10 @@ class PrayerService {
             if (title != null && title.trim().isNotEmpty)
               'title': title.trim(),
             if (churchId != null) 'church_id': int.tryParse(churchId),
+            // patch_170. RLS additionally verifies membership, so a
+            // crafted circle_id can't route a prayer into a group the
+            // author doesn't belong to.
+            if (circleId != null && circleId.isNotEmpty) 'circle_id': circleId,
           })
           .select('*, author:author_id(full_name, profile_photo_url)')
           .single(),

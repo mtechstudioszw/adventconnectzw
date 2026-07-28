@@ -151,6 +151,8 @@ dependencies:
   # live_chat embed in a WebView). Pinned exact. Requires Android minSdk 24
   # (bumped in android/app/build.gradle.kts) + `flutter pub get`.
   webview_flutter: 4.14.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.4.0
 
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale

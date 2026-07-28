@@ -107,6 +107,7 @@ import '../screens/settings/permissions_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/splash/biometric_lock_screen.dart';
 import '../screens/splash/splash_screen.dart';
+import '../widgets/friend_qr_sheet.dart';
 
 /// A calm fade-through + gentle scale-up page transition. Used for the auth
 /// screen so finishing the onboarding tour glides into sign-up instead of a
@@ -608,6 +609,14 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const FeedbackScreen(),
         ),
       ],
+    ),
+    // Friend QR scanner. Top-level rather than nested under profile so a
+    // scan can replace it with the scanned member's profile without
+    // stranding the camera in the back stack.
+    GoRoute(
+      path: '/scan-friend',
+      name: 'scan_friend',
+      builder: (context, state) => const ScanFriendScreen(),
     ),
     GoRoute(
       path: '/users/:userId',

@@ -111,9 +111,15 @@ class _SearchScreenState extends State<SearchScreen> {
     _loadRecent();
     _loadSuggestions();
     _loadRelationships();
+    // Keeps Add / Pending / Friends honest while this screen is open.
+    FeedService.friendshipsChanged.addListener(_onFriendshipsChanged);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _focusNode.requestFocus(),
     );
+  }
+
+  void _onFriendshipsChanged() {
+    if (mounted) _loadRelationships();
   }
 
   /// One pass for every inline action's "current state". All three are
@@ -263,6 +269,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   void dispose() {
+    FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
     _debounce?.cancel();
     _controller.dispose();
     _focusNode.dispose();

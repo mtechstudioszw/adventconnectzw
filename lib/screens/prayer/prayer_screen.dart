@@ -577,6 +577,15 @@ class _PrayerScreenState extends State<PrayerScreen> {
       );
     }
     if (_prayers.isEmpty) {
+      // "No prayers exist" and "no prayers match the chip you just
+      // tapped" are different situations and need different words. They
+      // used to share one screen that said "Be the first to share", so
+      // tapping Healing on a board whose prayers are all filed under
+      // Other looked exactly like an empty, broken Prayer tab — with a
+      // button inviting you to post something you'd already posted.
+      final filtered = _activeCategory != null || _answeredOnly;
+      final filterName =
+          _answeredOnly ? 'answered' : (_activeCategory?.label.toLowerCase() ?? '');
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -592,15 +601,19 @@ class _PrayerScreenState extends State<PrayerScreen> {
                     color: AppColors.primaryBlue.withValues(alpha: 0.10),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.volunteer_activism_outlined,
+                  child: Icon(
+                    filtered
+                        ? Icons.filter_alt_off_outlined
+                        : Icons.volunteer_activism_outlined,
                     color: AppColors.primaryBlue,
                     size: 40,
                   ),
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Be the first to share',
+                  filtered
+                      ? 'Nothing under $filterName yet'
+                      : 'Be the first to share',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.headlineMedium.copyWith(
                     fontWeight: FontWeight.w700,
@@ -608,7 +621,10 @@ class _PrayerScreenState extends State<PrayerScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Share a prayer request and pray together with the SDA community in Zimbabwe.',
+                  filtered
+                      ? 'There are prayers on the board — just none in this '
+                          'filter. Clear it to see them all.'
+                      : 'Share a prayer request and pray together with the SDA community in Zimbabwe.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: context.palette.textMuted,
@@ -616,10 +632,22 @@ class _PrayerScreenState extends State<PrayerScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                _GradientButton(
-                  label: 'Share a prayer',
-                  onTap: _openPostScreen,
-                ),
+                if (filtered)
+                  _GradientButton(
+                    label: 'Show all prayers',
+                    onTap: () {
+                      setState(() {
+                        _activeCategory = null;
+                        _answeredOnly = false;
+                      });
+                      _bootstrap();
+                    },
+                  )
+                else
+                  _GradientButton(
+                    label: 'Share a prayer',
+                    onTap: _openPostScreen,
+                  ),
               ],
             ),
           ),

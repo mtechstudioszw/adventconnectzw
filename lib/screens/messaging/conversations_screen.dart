@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/friendship_model.dart';
 import '../../models/message_model.dart';
 import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
@@ -69,6 +70,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   Map<String, int> _groupCounts = const {};
   Set<String> _viewedStoryIds = const {};
   List<PendingFriendRequest> _friendRequests = const [];
+
+  /// User ids the viewer has an ACCEPTED friendship with. Drives the
+  /// Friends chip, which previously matched any 1:1 chat and so listed
+  /// people the viewer had merely messaged.
+  Set<String> _friendIds = const {};
   bool _loading = true;
   String? _error;
   _ChatFilter _chatFilter = _ChatFilter.all;
@@ -319,6 +325,9 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         MessagingService.fetchConversationStates(),
         FeedService.fetchMyViewedStoryIds(),
         MessagingService.fetchInboxReactionPreviews(),
+        // Who the viewer is ACTUALLY friends with — the Friends chip
+        // needs real friendships, not "is a 1:1 chat".
+        FeedService.fetchMyFriendships(),
       ]).timeout(const Duration(seconds: 15));
       if (!mounted) return;
       setState(() {
@@ -328,6 +337,11 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _convStates = results[3] as Map<String, ConversationState>;
         _viewedStoryIds = results[4] as Set<String>;
         _reactionPreviews = results[5] as Map<String, InboxReactionPreview>;
+        _friendIds = {
+          for (final f in results[6] as List<Friendship>)
+            if (f.isAccepted)
+              f.requesterId == _currentUserId ? f.addresseeId : f.requesterId,
+        };
         _loading = false;
         unawaited(_resolveSenderNames());
         // Auto-route to Requests tab on first paint if the inbox is
@@ -1301,8 +1315,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   /// Narrow the inbox to the selected chip.
   ///
   /// "Churches" is the announcements channel plus the church members group;
-  /// "Friends" is everything that is a real 1:1 person — not a group, not a
-  /// church, and not your own notes.
+  /// "Friends" is a 1:1 chat with someone you are ACTUALLY friends with.
+  ///
+  /// It used to mean "any 1:1 chat that isn't a group, a church or your
+  /// own notes", which listed everyone you had ever exchanged a message
+  /// with — including people whose message request you accepted and never
+  /// befriended. Now it checks the friendship.
   List<Conversation> _applyFilter(List<Conversation> all, _ChatFilter filter) {
     return switch (filter) {
       _ChatFilter.all => all,
@@ -1311,7 +1329,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         all.where((c) => c.isGroup && !c.isChurchGroup).toList(),
       _ChatFilter.churches => all.where((c) => c.isChurchGroup).toList(),
       _ChatFilter.friends => all
-          .where((c) => !c.isGroup && !c.isChurchGroup && !c.isSelfChat)
+          .where(
+            (c) =>
+                !c.isGroup &&
+                !c.isChurchGroup &&
+                !c.isSelfChat &&
+                _friendIds.contains(c.otherUserId),
+          )
           .toList(),
     };
   }
@@ -1418,9 +1442,18 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         final me = _currentUserId;
 
         // Story authors, newest first, one entry per person.
+        //
+        // The viewer's OWN stories used to be dropped here and the "Your
+        // story" tile was hard-wired to the composer, so once you posted
+        // there was no way in the app to watch it back. They're kept now
+        // and handed to the leading tile.
         final byAuthor = <String, List<Story>>{};
+        final ownStories = <Story>[];
         for (final s in _stories) {
-          if (s.authorId == me) continue;
+          if (s.authorId == me) {
+            ownStories.add(s);
+            continue;
+          }
           byAuthor.putIfAbsent(s.authorId, () => []).add(s);
         }
 
@@ -1466,12 +1499,33 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           return rank(a).compareTo(rank(b));
         });
 
+        // Oldest-first is the order a reel is meant to play in; `_stories`
+        // arrives newest-first for the inbox.
+        List<Story> playOrder(List<Story> list) => list.reversed.toList();
+
+        // Tapping someone plays their reel and then keeps going through
+        // everyone after them who still has something unseen — so you
+        // watch through the rail once, like WhatsApp, instead of the
+        // viewer closing after every single person.
+        List<Story> reelFrom(int index) {
+          final reel = <Story>[];
+          for (var i = index; i < entries.length; i++) {
+            final e = entries[i];
+            if (!e.hasStory) continue;
+            if (i != index && !e.hasUnseenStory) continue;
+            reel.addAll(playOrder(e.stories));
+          }
+          return reel;
+        }
+
         return _ActiveRail(
           entries: entries,
           viewerName: _viewerName(),
           viewerPhotoUrl: _viewerPhotoUrl(),
+          ownStories: playOrder(ownStories),
           onAddStory: _openStoryComposer,
           onOpenStory: _openStoryViewer,
+          onOpenStoryAt: (i) => _openStoryViewer(reelFrom(i)),
           onOpenChat: (userId, name) => _startChatWith(userId, name),
         );
       },
@@ -2240,16 +2294,26 @@ class _ActiveRail extends StatelessWidget {
     required this.entries,
     required this.viewerName,
     required this.viewerPhotoUrl,
+    required this.ownStories,
     required this.onAddStory,
     required this.onOpenStory,
+    required this.onOpenStoryAt,
     required this.onOpenChat,
   });
 
   final List<_ActiveEntry> entries;
   final String viewerName;
   final String? viewerPhotoUrl;
+
+  /// The viewer's own live stories, oldest-first. Empty until they post.
+  final List<Story> ownStories;
+
   final VoidCallback onAddStory;
   final void Function(List<Story> reel) onOpenStory;
+
+  /// Play from this rail position onward, continuing through everyone
+  /// after it who still has something unseen.
+  final void Function(int index) onOpenStoryAt;
   final void Function(String userId, String name) onOpenChat;
 
   @override
@@ -2265,17 +2329,25 @@ class _ActiveRail extends StatelessWidget {
           separatorBuilder: (_, _) => const SizedBox(width: 14),
           itemBuilder: (context, i) {
             if (i == 0) {
+              final hasOwn = ownStories.isNotEmpty;
               return _ActiveAvatar(
-                name: 'Your story',
+                name: hasOwn ? 'Your story' : 'Add story',
                 photoUrl: viewerPhotoUrl,
                 initialsSource: viewerName,
-                ring: false,
+                // Your own ring lights up while your story is still live,
+                // the way it does for everyone else in the rail.
+                ring: hasOwn,
                 online: false,
                 showAddBadge: true,
-                onTap: onAddStory,
+                // Tap the face to watch yours back, the + badge to post
+                // another. Before you've posted anything there is nothing
+                // to watch, so the whole tile composes.
+                onTap: hasOwn ? () => onOpenStory(ownStories) : onAddStory,
+                onAddTap: onAddStory,
               );
             }
-            final e = entries[i - 1];
+            final index = i - 1;
+            final e = entries[index];
             return _ActiveAvatar(
               name: e.name,
               photoUrl: e.photoUrl,
@@ -2285,8 +2357,10 @@ class _ActiveRail extends StatelessWidget {
               showAddBadge: false,
               // A story is the thing with a deadline, so it wins the tap;
               // without one the face is just a fast way into the chat.
+              // A story already seen is still tappable — the grey ring
+              // means "watched", not "gone".
               onTap: () => e.hasStory
-                  ? onOpenStory(e.stories)
+                  ? onOpenStoryAt(index)
                   : onOpenChat(e.userId, e.name),
             );
           },
@@ -2305,6 +2379,7 @@ class _ActiveAvatar extends StatelessWidget {
     required this.online,
     required this.showAddBadge,
     required this.onTap,
+    this.onAddTap,
   });
 
   final String name;
@@ -2314,6 +2389,10 @@ class _ActiveAvatar extends StatelessWidget {
   final bool online;
   final bool showAddBadge;
   final VoidCallback onTap;
+
+  /// Tapping the + badge specifically. When null the badge is decorative
+  /// and the whole tile's [onTap] handles it.
+  final VoidCallback? onAddTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2372,21 +2451,26 @@ class _ActiveAvatar extends StatelessWidget {
                   Positioned(
                     right: 0,
                     bottom: 0,
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: palette.scaffoldBg,
-                          width: 2,
+                    child: GestureDetector(
+                      // Its own target, so "watch mine" and "post another"
+                      // don't fight over one tap.
+                      onTap: onAddTap,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: palette.scaffoldBg,
+                            width: 2,
+                          ),
                         ),
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        size: 12,
-                        color: AppColors.white,
+                        child: const Icon(
+                          Icons.add,
+                          size: 12,
+                          color: AppColors.white,
+                        ),
                       ),
                     ),
                   ),

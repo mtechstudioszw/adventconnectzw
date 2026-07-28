@@ -63,10 +63,16 @@ class _NewChatScreenState extends State<NewChatScreen> {
     super.initState();
     _loadFriends();
     _loadBonds();
+    FeedService.friendshipsChanged.addListener(_onFriendshipsChanged);
+  }
+
+  void _onFriendshipsChanged() {
+    if (mounted) _loadBonds();
   }
 
   @override
   void dispose() {
+    FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
     _debounce?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
@@ -90,6 +96,10 @@ class _NewChatScreenState extends State<NewChatScreen> {
   /// One pass over every friendship the viewer is party to, so each row knows
   /// whether to offer "Add", "Requested", or nothing at all. Without this the
   /// explore list offers to befriend people you already asked last week.
+  ///
+  /// Re-runs whenever a friendship changes anywhere in the app — this map
+  /// used to be loaded once in initState, so a row stayed on "Requested"
+  /// after the other person had already accepted.
   Future<void> _loadBonds() async {
     try {
       final me = AuthService.currentUser?.id ?? '';

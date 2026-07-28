@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/friendship_model.dart';
 import '../models/post_comment_model.dart';
@@ -820,6 +821,22 @@ class FeedService {
   // FRIENDSHIPS
   // ===================================================================
 
+  /// Bumped whenever a friendship is created, accepted or removed —
+  /// anywhere in the app.
+  ///
+  /// Several screens cache "am I friends with this person?" in local
+  /// state and only ever loaded it in initState, so a row could sit on
+  /// "Requested" long after the request had been accepted somewhere else
+  /// (Find people was the reported case). Listening to this and
+  /// re-reading is a two-line fix per screen and, unlike a manual
+  /// refresh, it can't be forgotten by the next screen that shows a
+  /// friend button.
+  static final ValueNotifier<int> friendshipsChanged = ValueNotifier<int>(0);
+
+  static void _noteFriendshipChange() {
+    friendshipsChanged.value++;
+  }
+
   /// Every friendship row that involves the viewer, in either direction.
   /// The home screen uses this to decide which suggestion cards to show
   /// the right CTA on ("Add friend" / "Pending" / "Accept").
@@ -887,6 +904,26 @@ class FeedService {
     }).toList();
   }
 
+  /// The viewer's accepted friends, with display fields (patch_177).
+  ///
+  /// Goes through a SECURITY DEFINER RPC for the same reason
+  /// [fetchPendingFriendRequests] does: reading `profiles` directly is
+  /// gated by profiles_select_discoverable_or_self, so any friend who
+  /// turned discoverability off would come back as "Member".
+  ///
+  /// `my_friends_detailed`, not patch_119's `my_friends` — that one is
+  /// already live and read by DirectoryService, and Postgres can't widen
+  /// a function's return type without a DROP that would break it.
+  static Future<List<FriendSummary>> fetchMyFriends() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return const [];
+    final rows = await _client.rpc('my_friends_detailed');
+    if (rows is! List) return const [];
+    return rows
+        .map((r) => FriendSummary.fromJson(Map<String, dynamic>.from(r as Map)))
+        .toList();
+  }
+
   static Future<Friendship> sendRequest(String addresseeId) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -902,6 +939,7 @@ class FeedService {
     final row = await _client
         .rpc('send_friend_request', params: {'p_addressee': addresseeId});
     final map = row is List ? (row.first as Map) : (row as Map);
+    _noteFriendshipChange();
     return Friendship.fromJson(Map<String, dynamic>.from(map));
   }
 
@@ -927,6 +965,7 @@ class FeedService {
         .select('requester_id, addressee_id')
         .maybeSingle();
     if (updated == null) return;
+    _noteFriendshipChange();
     final requesterId = updated['requester_id']?.toString() ?? '';
     final addresseeId = updated['addressee_id']?.toString() ?? '';
     // We can only seed the conversation if the caller is one of the
@@ -967,11 +1006,48 @@ class FeedService {
     await _client
         .from(_friendshipsTable)
         .update({'status': 'declined'}).eq('id', friendshipId);
+    _noteFriendshipChange();
   }
 
   static Future<void> removeFriendship(String friendshipId) async {
     await _client.from(_friendshipsTable).delete().eq('id', friendshipId);
+    _noteFriendshipChange();
   }
+}
+
+/// One row of the Friends screen (patch_177).
+class FriendSummary {
+  const FriendSummary({
+    required this.friendshipId,
+    required this.userId,
+    required this.fullName,
+    this.photoUrl,
+    this.churchName,
+    this.isVerified = false,
+    this.friendsSince,
+  });
+
+  final String friendshipId;
+  final String userId;
+  final String fullName;
+  final String? photoUrl;
+  final String? churchName;
+  final bool isVerified;
+  final DateTime? friendsSince;
+
+  factory FriendSummary.fromJson(Map<String, dynamic> json) => FriendSummary(
+        friendshipId: (json['friendship_id'] ?? '').toString(),
+        userId: (json['user_id'] ?? '').toString(),
+        fullName: ((json['full_name'] as String?)?.trim().isNotEmpty == true)
+            ? (json['full_name'] as String).trim()
+            : 'Member',
+        photoUrl: json['photo_url'] as String?,
+        churchName: (json['church_name'] as String?)?.trim(),
+        isVerified: json['is_verified'] == true,
+        friendsSince:
+            DateTime.tryParse(json['friends_since']?.toString() ?? '')
+                ?.toLocal(),
+      );
 }
 
 /// Lightweight DTO for a single pending friend request, joined with

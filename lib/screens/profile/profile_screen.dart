@@ -446,10 +446,11 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
         padding: EdgeInsets.zero,
         child: Row(
           children: [
-            // No tap target: the app has no friends-list screen, and
-            // routing this to the member directory would be a different
-            // thing wearing the same label.
-            _StatCell(value: _friendCount, label: 'Friends'),
+            _StatCell(
+              value: _friendCount,
+              label: 'Friends',
+              onTap: () => context.pushNamed('friends'),
+            ),
             _StatDivider(),
             _StatCell(
               value: _myPosts.length,

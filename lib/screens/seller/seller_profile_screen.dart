@@ -449,6 +449,11 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverToBoxAdapter(child: _buildHeader()),
+        // Opened from your own dashboard, this page is a PREVIEW. Say so
+        // — the buyer actions are all hidden for you, so without this the
+        // page just looks broken rather than deliberately read-only.
+        if (_isOwner)
+          SliverToBoxAdapter(child: _OwnerPreviewBanner(seller: seller)),
         SliverToBoxAdapter(child: _IdentityStrip(seller: seller)),
 
         SliverToBoxAdapter(
@@ -554,9 +559,14 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                   onRate: _openRateSheet,
                 ),
                 const SizedBox(height: AppSpace.lg),
-                _ReportButton(onTap: _showReport),
-                const SizedBox(height: AppSpace.lg),
-                const MarketplaceSafetyCard(),
+                // Reporting your own shop, and being warned about buying
+                // safely from yourself, are both nonsense when this is a
+                // preview of your own storefront.
+                if (!_isOwner) ...[
+                  _ReportButton(onTap: _showReport),
+                  const SizedBox(height: AppSpace.lg),
+                  const MarketplaceSafetyCard(),
+                ],
               ],
             ),
           ),
@@ -1180,6 +1190,101 @@ class _DeliveryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Shown only to the shop's owner, when they open their own storefront
+/// from the seller dashboard.
+///
+/// The page is identical to what a buyer sees minus every buyer action —
+/// no WhatsApp / Call / Message bar, no rating CTA, no report link, no
+/// safety card. Without this strip that reads as a broken page; with it,
+/// it reads as the preview it is, and gives them the one action that
+/// does belong here: editing the shop.
+class _OwnerPreviewBanner extends StatelessWidget {
+  const _OwnerPreviewBanner({required this.seller});
+
+  final Seller seller;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.lg,
+        AppSpace.lg,
+        0,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: AppColors.primaryBlue.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(
+            color: AppColors.primaryBlue.withValues(alpha: 0.22),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.visibility_outlined,
+                size: 18,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Preview',
+                    style: AppTextStyles.titleSmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'This is how buyers see your shop. Contact and rating '
+                    'buttons are off for you.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpace.sm),
+            TextButton(
+              onPressed: () => context.pushNamed('edit_store', extra: seller),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primaryBlue,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 36),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                'Edit',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

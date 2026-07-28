@@ -39,6 +39,7 @@ import '../models/youtube_video.dart';
 import '../screens/quiz/arena/quiz_boot_screen.dart';
 import '../screens/quiz/arena/widgets/arena_page_route.dart';
 import '../screens/profile/blocked_users_screen.dart';
+import '../screens/profile/friends_screen.dart';
 import '../screens/profile/member_directory_screen.dart';
 import '../screens/profile/my_directory_profile_screen.dart';
 import '../screens/profile/my_events_screen.dart';
@@ -586,6 +587,11 @@ final GoRouter appRouter = GoRouter(
           path: 'saved-listings',
           name: 'saved_listings',
           builder: (context, state) => const SavedListingsScreen(),
+        ),
+        GoRoute(
+          path: 'friends',
+          name: 'friends',
+          builder: (context, state) => const FriendsScreen(),
         ),
         GoRoute(
           path: 'sabbath-timer',

@@ -9,6 +9,7 @@ import '../../models/library_item_model.dart';
 import '../../services/bible_prefs_service.dart';
 import '../../services/bible_service.dart';
 import '../../services/bible_translation_service.dart';
+import '../../services/devotion_service.dart';
 import '../../services/music_player_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -450,7 +451,41 @@ class _VerseOfDayCard extends StatelessWidget {
     (60, 4, 6), // 1 Peter 5:7
   ];
 
-  (BibleBook, int, int)? _resolve() {
+  /// Today's devotion verse, resolved against the OFFLINE Bible.
+  ///
+  /// This is the same verse Home's devotion card shows, because it comes
+  /// from the same place — the `todays_devotion` RPC (patch_108). The two
+  /// used to disagree every single day: Home read the curated devotion
+  /// while this card cycled its own hard-coded list by day-of-year, so
+  /// the app told you two different "verse of the day"s depending on
+  /// which screen you opened.
+  ///
+  /// Returns null when there's no cached devotion or its reference isn't
+  /// one this translation can resolve — [_resolveFallback] then keeps the
+  /// card alive, which matters because the Library has to work offline.
+  (BibleBook, int, int)? _resolveFromDevotion() {
+    final ref = DevotionService.cachedToday()?.bibleRef.trim() ?? '';
+    if (ref.isEmpty) return null;
+    // "1 Corinthians 13:4" / "John 3:16" — name (which may start with a
+    // number) then chapter:verse.
+    final m = RegExp(r'^(.+?)\s+(\d+):(\d+)').firstMatch(ref);
+    if (m == null) return null;
+    final name = m.group(1)!.trim().toLowerCase();
+    final chapter = int.parse(m.group(2)!) - 1;
+    final verse = int.parse(m.group(3)!) - 1;
+    for (final book in books) {
+      if (book.name.trim().toLowerCase() != name) continue;
+      if (chapter < 0 || chapter >= book.chapters.length) return null;
+      if (verse < 0 || verse >= book.chapters[chapter].length) return null;
+      return (book, chapter, verse);
+    }
+    return null;
+  }
+
+  /// Hand-picked well-known passages, cycled by day-of-year. Only used
+  /// when the devotion isn't available — a random verse would surface
+  /// genealogies, and an empty card would be worse than either.
+  (BibleBook, int, int)? _resolveFallback() {
     final now = DateTime.now();
     // Day-of-year keeps it stable for the whole day and cycles the list.
     final dayOfYear = now.difference(DateTime(now.year)).inDays;
@@ -467,7 +502,7 @@ class _VerseOfDayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolved = _resolve();
+    final resolved = _resolveFromDevotion() ?? _resolveFallback();
     if (resolved == null) return const SizedBox.shrink();
     final (book, chapter, verse) = resolved;
     final text = BibleService.cleanVerse(book.chapters[chapter][verse]);

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show FloatingHeaderSnapConfiguration;
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -89,7 +90,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with NavVisibilityMixin, TickerProviderStateMixin {
   List<Event> _events = [];
   List<Church> _churches = [];
   List<MemberDirectoryEntry> _suggestedMembers = [];
@@ -137,6 +139,25 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   static const int _pageSize = 15;
   static const int _autoPagesOnCellular = 2;
   final ScrollController _scroll = ScrollController();
+
+  /// True once the greeting has scrolled out of the way, which swaps the
+  /// header to the compact "Advent Connect ZW" bar.
+  ///
+  /// Hysteresis on purpose: it turns ON above 190 and OFF below 130, so a
+  /// finger resting near the boundary can't flap the title back and forth.
+  /// Both bounds sit above the header's own 96dp collapse range, so the
+  /// extent change happens while the header is off-screen and invisible.
+  bool _headerBranded = false;
+  static const double _brandOnOffset = 190;
+  static const double _brandOffOffset = 130;
+
+  /// Lets a small scroll-up settle the floating header fully open rather
+  /// than stranding it half-revealed.
+  late final FloatingHeaderSnapConfiguration _headerSnap =
+      FloatingHeaderSnapConfiguration(
+    curve: AppMotion.easeOut,
+    duration: const Duration(milliseconds: 220),
+  );
   bool _loadingMore = false;
   bool _endOfFeed = false;
   int _pagesLoaded = 0;
@@ -167,6 +188,9 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     // Paint cached unread badges instantly so the notification bell + chat
     // bubble don't flash 0 → n on every open. Refreshed by the loads below.
     _hydrateBadgesFromCache();
+    // Keep the suggestion cards' Add / Requested / Friends state honest
+    // when a friendship changes on another screen.
+    FeedService.friendshipsChanged.addListener(_onFriendshipsChanged);
     // Today's devotion — paint the cached copy instantly (survives a slow /
     // offline open since the card is pinned to the top), then refresh.
     _devotion = DevotionService.cachedToday();
@@ -292,8 +316,29 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     }
   }
 
+  /// Re-read every friendship the viewer is party to, so a card that
+  /// says "Requested" stops saying it the moment the request is accepted
+  /// — wherever that happened.
+  Future<void> _onFriendshipsChanged() async {
+    if (!mounted) return;
+    try {
+      final links = await FeedService.fetchMyFriendships();
+      if (!mounted) return;
+      final me = AuthService.currentUser?.id;
+      setState(() {
+        _friendshipsByUser = {
+          for (final f in links)
+            (f.requesterId == me ? f.addresseeId : f.requesterId): f,
+        };
+      });
+    } catch (_) {
+      // The next full refresh will reconcile it.
+    }
+  }
+
   @override
   void dispose() {
+    FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
     _authSub?.cancel();
     _unreadRefreshDebounce?.cancel();
     _msgActivitySub?.cancel();
@@ -578,6 +623,20 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
     } catch (_) {
       if (mounted) setState(() => _loadingMore = false);
     }
+  }
+
+  /// Swap the header between the greeting and the branded bar.
+  ///
+  /// Rides the same scroll notification the nav already listens to, so
+  /// this costs nothing extra, and only calls setState when the flag
+  /// actually flips — not on every frame of a scroll.
+  void _updateHeaderBrand() {
+    if (!_scroll.hasClients) return;
+    final offset = _scroll.offset;
+    final next = _headerBranded
+        ? offset > _brandOffOffset
+        : offset > _brandOnOffset;
+    if (next != _headerBranded) setState(() => _headerBranded = next);
   }
 
   /// Auto-paging trigger. Honours the cellular allowance.
@@ -1018,7 +1077,10 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       body: NotificationListener<ScrollNotification>(
         onNotification: (note) {
           if (note is UserScrollNotification) handleNavScroll(note);
-          if (note is ScrollUpdateNotification) _maybeAutoLoadMore();
+          if (note is ScrollUpdateNotification) {
+            _maybeAutoLoadMore();
+            _updateHeaderBrand();
+          }
           // Never swallow the notification — LiveBanner and the nav both
           // listen further up.
           return false;
@@ -1116,9 +1178,15 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
+          // FLOATING, not pinned. Scrolling down takes the header away
+          // with the content the way the bottom nav goes; any scroll up
+          // brings it straight back, branded. Pinned meant "Hello
+          // Tanatswa" sat on screen for the entire feed.
           SliverPersistentHeader(
-            pinned: true,
+            floating: true,
             delegate: HomeHeaderDelegate(
+              branded: _headerBranded,
+              snapConfiguration: _headerSnap,
               topInset: MediaQuery.paddingOf(context).top,
               greeting: _greeting(),
               firstName: _firstName(),
@@ -1366,8 +1434,16 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
   }
 
   Widget _buildPrayersStrip() {
+    // The card asks for three lines of prayer text; at 132 it only had
+    // room for two, so the third was sliced through the middle of the
+    // letters — not ellipsised, cut. Height is derived from the real line
+    // height so the three lines it promises actually fit, at any system
+    // font size.
+    //   14+14 padding · 34 header · 8 · 3 lines · 8 · 18 footer
+    final lineHeight = MediaQuery.textScalerOf(context).scale(13) * 1.4;
+    final height = 28 + 34 + 8 + (lineHeight * 3) + 8 + 18;
     return SizedBox(
-      height: 132,
+      height: height,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2206,10 +2282,12 @@ class _HomeScreenState extends State<HomeScreen> with NavVisibilityMixin {
       if (f == null) return true;
       return f.status != FriendshipStatus.accepted;
     }).toList();
-    // 168 of photo + ~92 of name / reason / button. Fixed rather than
-    // intrinsic so every card in the rail agrees on its baseline.
+    // The text block below the photo takes its natural height and the
+    // photo absorbs whatever is left (see _SuggestedMemberTile), so the
+    // card cannot overflow when the system font is scaled up — it just
+    // crops a little more of the picture.
     return SizedBox(
-      height: 260,
+      height: 280,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -2466,17 +2544,21 @@ class _SuggestedMemberTile extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
+          // max, not min — Expanded below needs the full bounded height
+          // the rail hands down.
           children: [
-            Stack(
-              children: [
-                AspectRatio(
-                  aspectRatio: 1,
-                  child: _MemberPhoto(
+            // Expanded, not AspectRatio: the name / reason / button block
+            // claims its natural height first and the photo takes the
+            // rest. A fixed square plus a text block that grows with the
+            // system font size is exactly how this card overflowed.
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _MemberPhoto(
                     photoUrl: entry.profilePhotoUrl,
                     name: name,
                   ),
-                ),
                 // Dismiss. Session-only: nothing persists it, so the
                 // person can return on the next refresh. Storing it would
                 // need a table, and "not right now" is not "never".
@@ -2499,8 +2581,9 @@ class _SuggestedMemberTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),

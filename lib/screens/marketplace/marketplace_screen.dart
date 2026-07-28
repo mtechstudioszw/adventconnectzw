@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/marketplace_service.dart';
@@ -122,7 +123,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   Future<void> _loadShops() async {
     try {
       final shops = await SellerService.fetchApprovedSellers();
-      if (mounted) setState(() => _shops = shops);
+      if (!mounted) return;
+      // Your own shop doesn't belong in "Shops on Advent Connect" — this
+      // rail is for discovering other people's. Yours is one tap away on
+      // the seller dashboard, and seeing it here just made the rail
+      // shorter for no gain.
+      final me = AuthService.currentUser?.id;
+      setState(() => _shops =
+          shops.where((s) => me == null || s.authUserId != me).toList());
     } catch (_) {
       // Rail self-hides when empty.
     }

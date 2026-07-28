@@ -166,12 +166,20 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                   sliver: SliverGrid.builder(
                     gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                        SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 16,
-                      // Cover (2:3) + two text lines + progress bar.
-                      childAspectRatio: 0.50,
+                      // Cover (2:3) + two title lines + progress bar.
+                      //
+                      // Derived rather than the old fixed 0.50, because a
+                      // fixed ratio sets a fixed cell HEIGHT while the
+                      // title underneath grows with the system font — at
+                      // large text sizes the two lines no longer fit and
+                      // the cell overflowed. Measuring the text allowance
+                      // against the real text scale keeps the cover
+                      // proportion and lets the cell get taller instead.
+                      childAspectRatio: _gridAspectRatio(context),
                     ),
                     itemCount: visible.length,
                     itemBuilder: (context, i) => StaggeredReveal(
@@ -668,6 +676,30 @@ class _ContinueReadingCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 //  Grid cover
 // ---------------------------------------------------------------------------
+
+/// Cell shape for the EGW cover grid: a 2:3 cover plus however much room
+/// two lines of title and a progress bar actually need at the viewer's
+/// text size.
+///
+/// Returned as an aspect ratio because that is what the grid delegate
+/// takes; the real calculation is in pixels, from the measured cell
+/// width, so the covers stay 2:3 on every screen width.
+double _gridAspectRatio(BuildContext context) {
+  const columns = 3;
+  const horizontalPadding = 32.0; // SliverPadding, both sides
+  const crossSpacing = 12.0 * (columns - 1);
+  final width = MediaQuery.sizeOf(context).width;
+  final cellWidth =
+      ((width - horizontalPadding - crossSpacing) / columns).clamp(60.0, 260.0);
+
+  // 6 gap + two title lines + 4 gap + 3 progress bar. Only the type
+  // scales; the gaps and the bar don't.
+  final lineHeight = MediaQuery.textScalerOf(context).scale(11) * 1.25;
+  final textAllowance = 6 + (lineHeight * 2) + 4 + 3;
+
+  final cellHeight = (cellWidth * 3 / 2) + textAllowance;
+  return cellWidth / cellHeight;
+}
 
 class _BookCover extends StatelessWidget {
   const _BookCover({

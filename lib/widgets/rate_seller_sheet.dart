@@ -30,8 +30,9 @@ class RateSellerSheet extends StatefulWidget {
 
 class _RateSellerSheetState extends State<RateSellerSheet> {
   late int _stars = widget.existing?.rating ?? 0;
-  late final _reviewController =
-      TextEditingController(text: widget.existing?.review ?? '');
+  late final _reviewController = TextEditingController(
+    text: widget.existing?.review ?? '',
+  );
   bool _busy = false;
   String? _error;
 
@@ -88,98 +89,103 @@ class _RateSellerSheetState extends State<RateSellerSheet> {
       padding: EdgeInsets.only(bottom: keyboardInset),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                isEditing
-                    ? 'Update your review'
-                    : 'Rate ${widget.sellerName}',
-                style: AppTextStyles.headlineSmall.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Honest reviews help other buyers and reward good sellers.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.textMuted,
-                ),
-              ),
-              const SizedBox(height: 22),
-              _StarPicker(
-                value: _stars,
-                onChanged: (v) => setState(() => _stars = v),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _reviewController,
-                minLines: 3,
-                maxLines: 6,
-                maxLength: 500,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText:
-                      'Optional: what stood out? Communication, quality, delivery…',
-                  hintStyle: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                  filled: true,
-                  fillColor: context.palette.inputFill,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.all(14),
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _error!,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.red,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              _SubmitButton(
-                label: isEditing ? 'Save changes' : 'Submit review',
-                enabled: _stars > 0 && !_busy,
-                busy: _busy,
-                onTap: _submit,
-              ),
-              if (isEditing) ...[
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: _busy ? null : _remove,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.red,
-                  ),
-                  child: Text(
-                    'Remove my review',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.red,
-                      fontWeight: FontWeight.w700,
+        // Scrollable, because this sheet is taller than the space left
+        // once the keyboard is up: handle + title + blurb + a 44dp star
+        // row + a 3-to-6-line field + the submit button don't fit above a
+        // raised keyboard on an ordinary phone, and the column had no way
+        // to give.
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+                Text(
+                  isEditing
+                      ? 'Update your review'
+                      : 'Rate ${widget.sellerName}',
+                  style: AppTextStyles.headlineSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Honest reviews help other buyers and reward good sellers.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                _StarPicker(
+                  value: _stars,
+                  onChanged: (v) => setState(() => _stars = v),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _reviewController,
+                  minLines: 3,
+                  maxLines: 6,
+                  maxLength: 500,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText:
+                        'Optional: what stood out? Communication, quality, delivery…',
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                    filled: true,
+                    fillColor: context.palette.inputFill,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.all(14),
+                  ),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _error!,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.red,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                _SubmitButton(
+                  label: isEditing ? 'Save changes' : 'Submit review',
+                  enabled: _stars > 0 && !_busy,
+                  busy: _busy,
+                  onTap: _submit,
+                ),
+                if (isEditing) ...[
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: _busy ? null : _remove,
+                    style: TextButton.styleFrom(foregroundColor: AppColors.red),
+                    child: Text(
+                      'Remove my review',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.red,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -195,26 +201,30 @@ class _StarPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(5, (i) {
-        final star = i + 1;
-        final filled = star <= value;
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: InkResponse(
-            onTap: () => onChanged(star),
-            radius: 28,
-            child: Icon(
-              filled ? Icons.star_rounded : Icons.star_outline_rounded,
-              color: filled
-                  ? AppColors.goldAccent
-                  : AppColors.textMuted,
-              size: 44,
+    // Five 44dp stars plus their gaps is a fixed 260dp — wider than the
+    // content area on the narrowest phones once the sheet's own padding
+    // is taken off. Scaling down beats clipping a star.
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(5, (i) {
+          final star = i + 1;
+          final filled = star <= value;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: InkResponse(
+              onTap: () => onChanged(star),
+              radius: 28,
+              child: Icon(
+                filled ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: filled ? AppColors.goldAccent : AppColors.textMuted,
+                size: 44,
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:ui' show ImageFilter, lerpDouble;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show FloatingHeaderSnapConfiguration;
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 
 import '../../services/sabbath_service.dart';
@@ -94,7 +95,22 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.onAvatarTap,
     required this.onSearchTap,
     required this.onBellTap,
+    this.branded = false,
+    this.snapConfiguration,
   });
+
+  /// Scrolled far enough that the greeting is no longer the point.
+  ///
+  /// The header then becomes a compact branded bar — "Advent Connect ZW"
+  /// plus search and notifications — the way Facebook's does. "Hello
+  /// Tanatswa" is a greeting; it only makes sense on arrival, and it read
+  /// as clutter for the rest of the feed.
+  ///
+  /// The flip is driven by scroll OFFSET from the screen, not by
+  /// [shrinkOffset], because a floating header re-enters fully expanded:
+  /// shrinkOffset is 0 again the moment it comes back, and can't tell
+  /// "at the top" from "returning at post 40".
+  final bool branded;
 
   final double topInset;
   final String greeting;
@@ -106,6 +122,12 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onAvatarTap;
   final VoidCallback onSearchTap;
   final VoidCallback onBellTap;
+
+  /// Snap-back animation for the floating header, so a small scroll-up
+  /// settles it fully open or fully away instead of leaving it half in.
+  /// Needs a TickerProvider, so the screen supplies it.
+  @override
+  final FloatingHeaderSnapConfiguration? snapConfiguration;
 
   // Body heights excluding the status-bar inset. Expanded carries the
   // greeting + status line; collapsed keeps the member's name.
@@ -119,14 +141,20 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   /// Height of the status ("Sabata in 2d…" / date) row when fully expanded.
   static const double _statusBody = 20;
 
+  // Branded, the bar is a fixed compact height — there is no greeting left
+  // to collapse. Safe to change the extents on the fly because `branded`
+  // only flips well past the header's own range, by which point the header
+  // is entirely off-screen and nobody can see it resize.
   @override
-  double get maxExtent => topInset + _expandedBody;
+  double get maxExtent =>
+      topInset + (branded ? _collapsedBody : _expandedBody);
 
   @override
   double get minExtent => topInset + _collapsedBody;
 
   @override
   bool shouldRebuild(covariant HomeHeaderDelegate old) =>
+      old.branded != branded ||
       old.topInset != topInset ||
       old.greeting != greeting ||
       old.firstName != firstName ||
@@ -156,17 +184,20 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
         : palette.textMuted;
 
     // Heights add up to exactly the current body height (4px slack when
-    // expanded) so the header can never overflow mid-scroll.
-    final rowHeight = lerpDouble(48, 40, t)!;
-    final gap = (1 - t) * AppSpace.xs;
-    final statusHeight = (1 - t) * _statusBody;
-    final bottomPad = lerpDouble(AppSpace.md, AppSpace.sm, t)!;
+    // expanded) so the header can never overflow mid-scroll. Branded, the
+    // bar is already at its collapsed size, so nothing is animating and
+    // t is pinned at 1.
+    final tt = branded ? 1.0 : t;
+    final rowHeight = lerpDouble(48, 40, tt)!;
+    final gap = branded ? 0.0 : (1 - tt) * AppSpace.xs;
+    final statusHeight = branded ? 0.0 : (1 - tt) * _statusBody;
+    final bottomPad = lerpDouble(AppSpace.md, AppSpace.sm, tt)!;
 
     Widget header = Stack(
       fit: StackFit.expand,
       children: [
         _Background(
-          t: t,
+          t: tt,
           isSabbath: isSabbath,
           sundownEnd: sundownEnd,
           palette: palette,
@@ -188,22 +219,28 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                   height: rowHeight,
                   child: Row(
                     children: [
-                      _Avatar(
-                        size: lerpDouble(44, 34, t)!,
-                        initials: initials,
-                        photoUrl: photoUrl,
-                        highlight: isSabbath,
-                        onTap: onAvatarTap,
-                      ),
-                      const SizedBox(width: AppSpace.md),
-                      Expanded(
-                        child: _TitleBlock(
-                          t: t,
-                          greeting: greeting,
-                          firstName: firstName,
-                          onHeader: onHeader,
-                          onHeaderMuted: onHeaderMuted,
+                      // The avatar is part of the greeting, not the brand —
+                      // it goes with it. Profile is one tap away on the nav.
+                      if (!branded) ...[
+                        _Avatar(
+                          size: lerpDouble(44, 34, tt)!,
+                          initials: initials,
+                          photoUrl: photoUrl,
+                          highlight: isSabbath,
+                          onTap: onAvatarTap,
                         ),
+                        const SizedBox(width: AppSpace.md),
+                      ],
+                      Expanded(
+                        child: branded
+                            ? _BrandTitle(onHeader: onHeader)
+                            : _TitleBlock(
+                                t: tt,
+                                greeting: greeting,
+                                firstName: firstName,
+                                onHeader: onHeader,
+                                onHeaderMuted: onHeaderMuted,
+                              ),
                       ),
                       _HeaderIcon(
                         icon: Icons.search_rounded,
@@ -347,6 +384,47 @@ class _Background extends StatelessWidget {
 /// their own home screen the moment they touched it, and it spent the header
 /// telling people which app they had just opened. The name now stays put and
 /// simply settles down a type size as the eyebrow collapses.
+/// The app's own name, shown once the greeting has scrolled away.
+///
+/// Gets the gold full stop the Watch header uses, so the two branded bars
+/// in the app read as the same wordmark rather than two different ideas.
+class _BrandTitle extends StatelessWidget {
+  const _BrandTitle({required this.onHeader});
+
+  final Color onHeader;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              'Advent Connect ZW',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleLarge.copyWith(
+                color: onHeader,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
+            ),
+          ),
+          Text(
+            '.',
+            style: AppTextStyles.titleLarge.copyWith(
+              color: AppColors.goldAccent,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TitleBlock extends StatelessWidget {
   const _TitleBlock({
     required this.t,

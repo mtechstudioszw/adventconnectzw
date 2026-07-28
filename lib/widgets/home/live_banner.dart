@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
@@ -98,14 +100,20 @@ class _LiveCard extends StatelessWidget {
   final YoutubeVideo video;
   final VoidCallback onTap;
 
-  /// Media at 16:9 plus the caption strip, so the pager can be given a fixed
-  /// height without measuring children.
+  /// The card is the 16:9 media and nothing else — the caption is overlaid on
+  /// the scrim rather than stacked under it in its own strip. That strip was a
+  /// fixed 62dp box holding text that grows with the system font scale, so it
+  /// overflowed on accessibility sizes, and it made an already-tall hero
+  /// another 62dp taller.
+  ///
+  /// Clamped so the hero stays a banner on wide screens instead of eating the
+  /// whole fold — at 16:9 a 430dp-wide phone would otherwise give it 220dp.
   static double height(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width - AppSpace.lg * 2;
-    return width * 9 / 16 + _captionHeight;
+    return math.min(width * 9 / 16, _maxHeight);
   }
 
-  static const double _captionHeight = 62;
+  static const double _maxHeight = 196;
 
   @override
   Widget build(BuildContext context) {
@@ -125,73 +133,68 @@ class _LiveCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.lg),
             boxShadow: AppShadows.card(context),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (thumb != null && thumb.isNotEmpty)
-                      CachedImage(
-                        thumb,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const _ThumbFallback(),
-                      )
-                    else
-                      const _ThumbFallback(),
-                    // Scrim: dark at the top so the LIVE pill reads, dark at
-                    // the bottom so the play glyph does, clear through the
-                    // middle so the broadcast is actually visible.
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Color(0x730D1B3E),
-                            Color(0x1A0D1B3E),
-                            Color(0x8C0D1B3E),
-                          ],
-                          stops: [0, 0.45, 1],
-                        ),
-                      ),
+          child: SizedBox(
+            height: height(context),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (thumb != null && thumb.isNotEmpty)
+                  CachedImage(
+                    thumb,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const _ThumbFallback(),
+                  )
+                else
+                  const _ThumbFallback(),
+                // Scrim: dark at the top so the LIVE pill reads, dark at the
+                // bottom so the caption does, clear through the middle so the
+                // broadcast is actually visible. The bottom stop is heavier
+                // than it was because the title now sits on it.
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x730D1B3E),
+                        Color(0x1A0D1B3E),
+                        Color(0xD90D1B3E),
+                      ],
+                      stops: [0, 0.38, 1],
                     ),
-                    const Positioned(
-                      top: AppSpace.md,
-                      left: AppSpace.md,
-                      child: _LivePill(),
-                    ),
-                    if (views.isNotEmpty)
-                      Positioned(
-                        top: AppSpace.md,
-                        right: AppSpace.md,
-                        child: _GlassChip(
-                          icon: Icons.visibility_outlined,
-                          label: views.replaceAll(' views', ' watching'),
-                        ),
-                      ),
-                    const Center(child: _PlayGlyph()),
-                  ],
-                ),
-              ),
-              SizedBox(
-                height: _captionHeight,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpace.md,
-                    AppSpace.sm,
-                    AppSpace.md,
-                    AppSpace.sm,
                   ),
+                ),
+                const Positioned(
+                  top: AppSpace.md,
+                  left: AppSpace.md,
+                  child: _LivePill(),
+                ),
+                if (views.isNotEmpty)
+                  Positioned(
+                    top: AppSpace.md,
+                    right: AppSpace.md,
+                    child: _GlassChip(
+                      icon: Icons.visibility_outlined,
+                      label: views.replaceAll(' views', ' watching'),
+                    ),
+                  ),
+                // Nudged above centre so it optically balances against the
+                // caption sitting along the bottom edge.
+                const Align(
+                  alignment: Alignment(0, -0.18),
+                  child: _PlayGlyph(),
+                ),
+                Positioned(
+                  left: AppSpace.md,
+                  right: AppSpace.md,
+                  bottom: AppSpace.md,
                   child: Row(
                     children: [
                       _ChannelAvatar(video: video),
                       const SizedBox(width: AppSpace.sm + 2),
                       Expanded(
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
@@ -202,6 +205,12 @@ class _LiveCard extends StatelessWidget {
                                 color: AppColors.white,
                                 fontWeight: FontWeight.w700,
                                 height: 1.2,
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x730D1B3E),
+                                    blurRadius: 6,
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -210,7 +219,7 @@ class _LiveCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.caption.copyWith(
-                                color: AppColors.white.withValues(alpha: 0.72),
+                                color: AppColors.white.withValues(alpha: 0.82),
                               ),
                             ),
                           ],
@@ -225,8 +234,8 @@ class _LiveCard extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -360,8 +369,8 @@ class _PlayGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 54,
-      height: 54,
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         color: AppColors.white.withValues(alpha: 0.18),
         shape: BoxShape.circle,
@@ -371,7 +380,7 @@ class _PlayGlyph extends StatelessWidget {
       child: const Icon(
         Icons.play_arrow_rounded,
         color: AppColors.white,
-        size: 32,
+        size: 28,
       ),
     );
   }

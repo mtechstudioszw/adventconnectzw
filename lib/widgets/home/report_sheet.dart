@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/messaging_service.dart';
 import '../../services/report_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -15,6 +16,7 @@ Future<bool?> showReportSheet(
   required String contentType,
   required String contentId,
   required String contentLabel,
+  String? reportedText,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final sent = await showModalBottomSheet<bool>(
@@ -25,6 +27,7 @@ Future<bool?> showReportSheet(
       contentType: contentType,
       contentId: contentId,
       contentLabel: contentLabel,
+      reportedText: reportedText,
     ),
   );
   // Confirm to the reporter wherever it's opened from (mini-profile,
@@ -56,11 +59,16 @@ class _ReportSheet extends StatefulWidget {
     required this.contentType,
     required this.contentId,
     required this.contentLabel,
+    this.reportedText,
   });
 
   final String contentType;
   final String contentId;
   final String contentLabel;
+
+  /// The reporter's own copy of the reported body, sent with the report.
+  /// See [_ReportSheetState._submit].
+  final String? reportedText;
 
   @override
   State<_ReportSheet> createState() => _ReportSheetState();
@@ -87,15 +95,32 @@ class _ReportSheetState extends State<_ReportSheet> {
       _submitting = true;
       _error = null;
     });
+    final details = _detailsController.text.trim().isEmpty
+        ? null
+        : _detailsController.text;
     try {
-      await ReportService.submit(
-        contentType: widget.contentType,
-        contentId: widget.contentId,
-        reason: _reason!,
-        details: _detailsController.text.trim().isEmpty
-            ? null
-            : _detailsController.text,
-      );
+      if (widget.contentType == 'message') {
+        // Messages go through report_message() (patch_165) rather than a
+        // plain insert. The RPC stamps WHO sent the reported message
+        // server-side — a client can't misattribute a report — and stores
+        // the reporter's own copy of the text, which survives the sender
+        // editing or deleting it afterwards. That stored copy is also the
+        // only thing a moderator could ever read if message bodies are
+        // end-to-end encrypted later.
+        await MessagingService.reportMessage(
+          messageId: widget.contentId,
+          reason: _reason!,
+          details: details,
+          textCopy: widget.reportedText,
+        );
+      } else {
+        await ReportService.submit(
+          contentType: widget.contentType,
+          contentId: widget.contentId,
+          reason: _reason!,
+          details: details,
+        );
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (_) {

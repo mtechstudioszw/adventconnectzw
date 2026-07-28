@@ -1131,6 +1131,124 @@ class MessagingService {
 
   /// Block [otherUserId]: insert a blocked_users row keyed by the
   /// current user. Idempotent — re-blocking is a no-op.
+  /// Display names for a set of user ids, in one round trip.
+  ///
+  /// Group inbox rows show WHO spoke last ("Tapiwa: bring the projector"),
+  /// and the conversations row only carries `last_sender_id`. Resolving that
+  /// per-tile would be a query per row; this batches the whole visible inbox
+  /// into a single `in` filter. Best-effort — an empty map just means rows
+  /// fall back to showing the message without a speaker.
+  static Future<Map<String, String>> fetchDisplayNames(
+    Set<String> userIds,
+  ) async {
+    final ids = userIds.where((id) => id.isNotEmpty).toList();
+    if (ids.isEmpty) return const {};
+    try {
+      final rows = await _client
+          .from('profiles')
+          .select('id, full_name')
+          .inFilter('id', ids);
+      final out = <String, String>{};
+      for (final raw in (rows as List)) {
+        final m = Map<String, dynamic>.from(raw as Map);
+        final name = (m['full_name'] ?? '').toString().trim();
+        if (name.isNotEmpty) out[m['id'].toString()] = name;
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Member counts for the given group conversations, in one round trip.
+  ///
+  /// PostgREST has no GROUP BY, so this pulls the membership rows and counts
+  /// them client-side. That is only reasonable for user-created groups —
+  /// callers should NOT pass church groups, whose membership is the whole
+  /// congregation and would mean pulling hundreds of rows to render one
+  /// number. Best-effort: an empty map just means rows omit the count.
+  static Future<Map<String, int>> fetchGroupMemberCounts(
+    Set<String> conversationIds,
+  ) async {
+    final ids = conversationIds.where((id) => id.isNotEmpty).toList();
+    if (ids.isEmpty) return const {};
+    try {
+      final rows = await _client
+          .from('conversation_members')
+          .select('conversation_id')
+          .inFilter('conversation_id', ids);
+      final out = <String, int>{};
+      for (final raw in (rows as List)) {
+        final id = (raw as Map)['conversation_id']?.toString();
+        if (id == null) continue;
+        out[id] = (out[id] ?? 0) + 1;
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// "Who is this?" context for the chat header (patch_166): the other
+  /// person's church, and how many friends you have in common.
+  ///
+  /// Mutual friends CANNOT be computed client-side — RLS limits the
+  /// friendships table to rows you're party to, so you can read your own
+  /// friend list and nothing else. The RPC returns a count only, never the
+  /// identities, so the friend graph stays private.
+  static Future<({String? churchName, int mutualFriends})> fetchPeerContext(
+    String otherUserId,
+  ) async {
+    if (otherUserId.isEmpty) return (churchName: null, mutualFriends: 0);
+    try {
+      final rows = await _client.rpc(
+        'chat_peer_context',
+        params: {'p_other': otherUserId},
+      );
+      if (rows is! List || rows.isEmpty) {
+        return (churchName: null, mutualFriends: 0);
+      }
+      final m = Map<String, dynamic>.from(rows.first as Map);
+      final church = (m['church_name'] ?? '').toString().trim();
+      final mutual = m['mutual_friends'];
+      return (
+        churchName: church.isEmpty ? null : church,
+        mutualFriends: mutual is num ? mutual.toInt() : 0,
+      );
+    } catch (_) {
+      return (churchName: null, mutualFriends: 0);
+    }
+  }
+
+  /// Report a single message (patch_165).
+  ///
+  /// Blocking removes a person; reporting flags one thing they said, which
+  /// is what a moderator can actually act on. [textCopy] is the reporter's
+  /// own copy of the body, sent from their device — it survives the sender
+  /// editing or deleting the message afterwards, and it is what a moderator
+  /// would have to rely on if message content were ever end-to-end
+  /// encrypted. The server stamps who sent it, so a client can't misattribute
+  /// a report.
+  ///
+  /// Reporting the same message twice updates the existing report rather
+  /// than filing a duplicate.
+  static Future<void> reportMessage({
+    required String messageId,
+    required String reason,
+    String? details,
+    String? textCopy,
+  }) async {
+    await _client.rpc(
+      'report_message',
+      params: {
+        'p_message_id': int.tryParse(messageId) ?? messageId,
+        'p_reason': reason,
+        'p_details': details,
+        'p_text_copy': textCopy,
+      },
+    );
+  }
+
   static Future<void> blockUser(String otherUserId) async {
     final user = _client.auth.currentUser;
     if (user == null) {

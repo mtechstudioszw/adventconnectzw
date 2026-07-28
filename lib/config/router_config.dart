@@ -136,7 +136,17 @@ CustomTransitionPage<void> _fadeScalePage(
   );
 }
 
+/// The router's root navigator.
+///
+/// The global media bars (music, docked video, voice notes) are mounted in
+/// `MaterialApp.builder`, which sits ABOVE this navigator — so they cannot
+/// use `Navigator.of(context)` at all. Anything on that layer that needs to
+/// push a route goes through this key instead.
+final GlobalKey<NavigatorState> rootNavigatorKey =
+    GlobalKey<NavigatorState>(debugLabel: 'root');
+
 final GoRouter appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: '/splash',
   debugLogDiagnostics: false,
   routes: [

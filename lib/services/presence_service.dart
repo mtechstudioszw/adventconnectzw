@@ -24,9 +24,18 @@ class PresenceService {
   static final SupabaseClient _client = Supabase.instance.client;
   static const _channelName = 'online_users';
   static const _heartbeatInterval = Duration(seconds: 30);
+  // How often we check that the realtime socket is still actually up.
+  // Presence only pushes events on join/leave, so a socket that dies
+  // without emitting a close leaves the last roster frozen and every
+  // contact showing green. Polling the socket's own connection state is
+  // the signal that survives that — the realtime client's internal
+  // heartbeat flips it within ~30s of a silent drop, and we surface that
+  // to the UI one watchdog tick later.
+  static const _watchdogInterval = Duration(seconds: 10);
 
   static RealtimeChannel? _channel;
   static Timer? _heartbeatTimer;
+  static Timer? _watchdogTimer;
   static final Set<String> _onlineUserIds = <String>{};
   static final ValueNotifier<Set<String>> _notifier =
       ValueNotifier<Set<String>>(const <String>{});
@@ -70,6 +79,9 @@ class PresenceService {
     );
 
     channel.onPresenceSync((payload, [ref]) {
+      // Only the live channel owns the roster — a replaced channel's
+      // trailing sync must not resurrect an old view of who's online.
+      if (_channel != null && !identical(_channel, channel)) return;
       final state = channel.presenceState();
       final ids = <String>{};
       for (final group in state) {
@@ -84,18 +96,40 @@ class PresenceService {
       _notifier.value = Set.unmodifiable(_onlineUserIds);
     });
 
-    // Read the user's own show_online_status before announcing — if
-    // they've hidden their online dot via Settings → Chat privacy, we
-    // subscribe to the channel (so we can still SEE others' dots) but
-    // we don't broadcast ourselves. Previously start() always called
-    // track(), so flipping "Hide online" had no effect on what other
-    // clients saw — the user stayed visibly green.
-    final wantsToBroadcast = await _wantsToBroadcastPresence();
-
+    // Decide whether to announce ourselves INSIDE the callback, never
+    // outside it. subscribe() fires again on every socket reconnect, so a
+    // preference read once here and captured in the closure goes stale the
+    // moment the member flips "Hide online" — the next network blip would
+    // re-track them with the old `true` and silently put their green dot
+    // back. Someone who deliberately hid is the last person who should be
+    // re-exposed without being told, so we pay a small select per subscribe
+    // and always act on the current value.
     channel.subscribe((status, _) async {
-      if (status == RealtimeSubscribeStatus.subscribed && wantsToBroadcast) {
+      if (status != RealtimeSubscribeStatus.subscribed) {
+        // channelError / closed / timedOut — we are no longer receiving
+        // presence sync events, so the roster we hold is unverifiable.
+        // Drop it rather than leave stale green dots on the inbox.
+        // Ignore the death rattle of a channel we've already replaced:
+        // start() tears the old one down first, and its `closed` event
+        // lands after the new channel has synced.
+        if (!identical(_channel, channel)) return;
+        _isTracked = false;
+        _clearRoster();
+        return;
+      }
+      final wantsToBroadcast = await _wantsToBroadcastPresence();
+      if (!wantsToBroadcast) {
+        _isTracked = false;
+        return;
+      }
+      // The channel can be torn down between the await above and here
+      // (sign-out, a re-entrant start()); tracking a dead channel throws.
+      if (!identical(_channel, channel)) return;
+      try {
         await channel.track({'user_id': me.id});
         _isTracked = true;
+      } catch (_) {
+        _isTracked = false;
       }
     });
     _channel = channel;
@@ -105,6 +139,26 @@ class PresenceService {
       _heartbeatInterval,
       (_) => unawaited(_touchLastActive()),
     );
+
+    _watchdogTimer?.cancel();
+    _watchdogTimer = Timer.periodic(_watchdogInterval, (_) {
+      // A dropped socket stops delivering presence sync, and the last sync
+      // we got said everyone was online. Without this the inbox keeps
+      // showing contacts as available hours after they left — worse than
+      // showing no dots at all, because members message expecting a reply.
+      if (_onlineUserIds.isEmpty) return;
+      if (_client.realtime.isConnected) return;
+      _clearRoster();
+    });
+  }
+
+  /// Drops the online roster and notifies listeners. Used whenever we
+  /// lose the ability to observe presence — the alternative is leaving
+  /// dots on screen that we can no longer verify.
+  static void _clearRoster() {
+    if (_onlineUserIds.isEmpty) return;
+    _onlineUserIds.clear();
+    _notifier.value = const <String>{};
   }
 
   /// Leaves the presence channel and stops the heartbeat. Called on
@@ -113,6 +167,8 @@ class PresenceService {
   static Future<void> stop({bool clearRoster = true}) async {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
     _isTracked = false;
     final ch = _channel;
     _channel = null;

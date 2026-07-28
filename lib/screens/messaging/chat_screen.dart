@@ -658,6 +658,11 @@ class _ChatScreenState extends State<ChatScreen>
           contentType: 'message',
           contentId: m.id,
           contentLabel: 'this message',
+          // Send our own copy of the body with the report: the sender can
+          // edit or delete-for-everyone the moment they realise they've
+          // been reported, and without this the moderator would open an
+          // empty tombstone.
+          reportedText: m.content,
         );
       case 'copy':
         await Clipboard.setData(ClipboardData(text: m.content));
@@ -761,6 +766,13 @@ class _ChatScreenState extends State<ChatScreen>
 
   // Presence (other-user online / last-seen) state.
   DateTime? _otherLastSeen;
+
+  // "Who is this?" context for the header (patch_166). In a congregation the
+  // answer to "should I reply" is usually "do we go to the same church, and
+  // do we know the same people".
+  String? _peerChurch;
+  int _peerMutuals = 0;
+  bool _peerContextLoaded = false;
   Timer? _lastSeenRefreshTimer;
   Timer? _tickReconcileTimer;
   void Function()? _presenceListener;
@@ -1205,6 +1217,11 @@ class _ChatScreenState extends State<ChatScreen>
     unawaited(_refreshLastSeen(otherId));
     unawaited(_refreshBlockedState(otherId));
     unawaited(_refreshFriendship(otherId));
+    // Church + mutuals don't change while you're reading, so unlike the
+    // above this is fetched once rather than on the 30s timer.
+    if (!(_conversation?.isSelfChat ?? false)) {
+      unawaited(_loadPeerContext(otherId));
+    }
     _lastSeenRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       unawaited(_refreshLastSeen(otherId));
       // Keep the friendship banner fresh — so a request that arrives
@@ -1309,6 +1326,18 @@ class _ChatScreenState extends State<ChatScreen>
     final t = await PresenceService.fetchLastSeen(otherId);
     if (!mounted || t == null) return;
     setState(() => _otherLastSeen = t);
+  }
+
+  /// Church + mutual friends for the header (patch_166). Loaded once, after
+  /// the thread has painted — the messages are the point, this is context.
+  Future<void> _loadPeerContext(String otherId) async {
+    final ctx = await MessagingService.fetchPeerContext(otherId);
+    if (!mounted) return;
+    setState(() {
+      _peerChurch = ctx.churchName;
+      _peerMutuals = ctx.mutualFriends;
+      _peerContextLoaded = true;
+    });
   }
 
   @override
@@ -2981,11 +3010,39 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
     final currentUserId = AuthService.currentUser?.id ?? '';
+    // A privacy line above the first message. Members of a church app
+    // assume leadership can read everything they send — saying plainly
+    // that they can't is the cheapest trust the screen can buy. Only on
+    // private threads: in a group or an announcements channel it would be
+    // a lie, because everyone in the group genuinely can read it.
+    final showPrivacyLine =
+        !_isGroup && !(_conversation?.isSelfChat ?? false);
+    final leading = showPrivacyLine ? 1 : 0;
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
-      itemCount: _messages.length,
-      itemBuilder: (context, i) {
+      itemCount: _messages.length + leading,
+      itemBuilder: (context, rawIndex) {
+        if (showPrivacyLine && rawIndex == 0) {
+          return Column(
+            children: [
+              // Only for someone you haven't really talked to. Past a
+              // handful of messages you already know who they are, and a
+              // permanent "3 mutual friends" strip is clutter.
+              if (_peerContextLoaded &&
+                  _messages.length < 8 &&
+                  (_peerMutuals > 0 || (_peerChurch ?? '').isNotEmpty))
+                _PeerContextStrip(
+                  church: _peerChurch,
+                  mutuals: _peerMutuals,
+                ),
+              _PrivacyNotice(
+                otherName: _conversation?.otherUserName ?? 'this person',
+              ),
+            ],
+          );
+        }
+        final i = rawIndex - leading;
         final m = _messages[i];
         // System events (joined / left / removed / admin changes) render
         // as a centred pill, not a chat bubble.
@@ -3059,6 +3116,18 @@ class _ChatScreenState extends State<ChatScreen>
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onLongPress: () => _showMessageActions(m, isMine),
+                      // Double-tap to react. Reactions existed but lived
+                      // behind a long-press nobody discovers, so the feature
+                      // may as well not have shipped. 🙏 rather than ❤️ as
+                      // the one-tap default: in this community "amen" is the
+                      // reply people actually mean. The full picker is still
+                      // on long-press.
+                      onDoubleTap: m.isDeleted
+                          ? null
+                          : () {
+                              HapticFeedback.selectionClick();
+                              _react(m, '🙏');
+                            },
                       child: Column(
                         crossAxisAlignment: isMine
                             ? CrossAxisAlignment.end
@@ -3749,6 +3818,10 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
     final otherId = _conversation?.otherUserId;
+    // Church rides along on the same line: "Online · Harare City Centre".
+    // Sharing a congregation is the single strongest "this person is safe
+    // to reply to" signal this app can show, and it was nowhere.
+    final church = (_peerChurch ?? '').trim();
     if (otherId != null && PresenceService.isOnline(otherId)) {
       // Lit green dot + "Online" — same affordance WhatsApp uses.
       return Row(
@@ -3764,21 +3837,26 @@ class _ChatScreenState extends State<ChatScreen>
             ),
           ),
           const SizedBox(width: 6),
-          Text(
-            'Online',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              church.isEmpty ? 'Online' : 'Online · $church',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: context.palette.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
       );
     }
     final lastSeen = _otherLastSeen;
-    final label = lastSeen != null
+    final presence = lastSeen != null
         ? 'last seen ${PresenceService.formatLastSeen(lastSeen)}'
         : 'Offline';
+    final label = church.isEmpty ? presence : '$presence · $church';
     return Text(
       label,
       key: ValueKey(label),
@@ -3803,6 +3881,128 @@ class _ChatScreenState extends State<ChatScreen>
 
 /// Centered day-divider chip between messages from different days.
 /// Centred grey pill for group system events (joined / left / removed).
+/// "Who is this?" strip above the first message of a new thread.
+///
+/// Shows the two things that decide whether a stranger's message gets a
+/// reply in a congregation: whether you go to the same church, and how many
+/// people you both know. Mutual friends is a COUNT only — the RPC never
+/// returns who they are, so the friend graph stays private.
+class _PeerContextStrip extends StatelessWidget {
+  const _PeerContextStrip({required this.church, required this.mutuals});
+
+  final String? church;
+  final int mutuals;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final churchName = (church ?? '').trim();
+    final bits = <({IconData icon, String text})>[
+      if (churchName.isNotEmpty)
+        (icon: Icons.church_outlined, text: churchName),
+      if (mutuals > 0)
+        (
+          icon: Icons.people_alt_outlined,
+          text: '$mutuals mutual friend${mutuals == 1 ? '' : 's'}',
+        ),
+    ];
+    if (bits.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.divider),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < bits.length; i++) ...[
+              if (i > 0) const SizedBox(height: 7),
+              Row(
+                children: [
+                  Icon(bits[i].icon, size: 14, color: AppColors.primaryBlue),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      bits[i].text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.text,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The one-time line at the top of a private thread.
+///
+/// Members of a church app assume leadership can read everything — it is the
+/// single most common unspoken worry about messaging inside a congregation,
+/// and it is cheap to answer. Says three things and stops: who can see this,
+/// that admins cannot, and how to report. Deliberately not dismissible: it
+/// sits above the first message and scrolls away on its own the moment the
+/// conversation has any length to it.
+class _PrivacyNotice extends StatelessWidget {
+  const _PrivacyNotice({required this.otherName});
+
+  final String otherName;
+
+  @override
+  Widget build(BuildContext context) {
+    final first = otherName.trim().split(' ').first;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: AppColors.goldAccent.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.goldAccent.withValues(alpha: 0.30),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.lock_outline,
+              size: 15,
+              color: AppColors.goldAccent,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                'Messages here are between you and $first. Church admins '
+                'cannot read private chats. Press and hold any message to '
+                'report it.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.palette.textMuted,
+                  fontSize: 11.5,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SystemMessage extends StatelessWidget {
   const _SystemMessage({required this.text});
   final String text;

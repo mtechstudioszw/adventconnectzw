@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:go_router/go_router.dart';
 
 import '../../models/youtube_channel.dart';
@@ -399,24 +400,30 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
 
   // ------------------------------- app bar ----------------------------
   Widget _appBar() {
+    final palette = context.palette;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return SliverAppBar(
-      // Floats back down the moment you scroll up, the way a media app's
-      // bar should — pinning it would eat 56dp of a 16:9 hero forever.
-      floating: true,
-      snap: true,
-      pinned: false,
+      // Pinned, not floating. The filter rail below is itself pinned, and
+      // with a floating bar it ended up pinning to the top of the VIEWPORT
+      // — which starts behind the status bar — so the chips slid under the
+      // notch as soon as you scrolled. Keeping the toolbar on screen gives
+      // the rail something to pin beneath, and keeps "Watch" always visible.
+      pinned: true,
+      floating: false,
+      snap: false,
       elevation: 0,
       scrolledUnderElevation: 0,
-      backgroundColor: Colors.transparent,
-      foregroundColor: AppColors.white,
-      flexibleSpace: const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.darkNavy, Color(0xFF16295C)],
-          ),
-        ),
+      // Flat light header on the scaffold colour — same language as
+      // ScreenHero everywhere else. The old navy gradient lived in a
+      // childless DecoratedBox, which collapses to zero height, so it
+      // never painted and left the white "Watch" invisible on light grey.
+      backgroundColor: palette.scaffoldBg,
+      foregroundColor: palette.text,
+      surfaceTintColor: Colors.transparent,
+      systemOverlayStyle: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
       ),
       titleSpacing: AppSpace.lg,
       title: Row(
@@ -424,7 +431,7 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
           Text(
             'Watch',
             style: AppTextStyles.titleLarge.copyWith(
-              color: AppColors.white,
+              color: palette.text,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.4,
             ),

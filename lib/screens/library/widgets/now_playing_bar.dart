@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../../config/router_config.dart';
 import '../../../models/library_item_model.dart';
 import '../../../services/music_player_service.dart';
 import '../../../theme/app_colors.dart';
@@ -235,7 +236,12 @@ class NowPlayingBar extends StatelessWidget {
   }
 
   void _open(BuildContext context) {
-    Navigator.of(context).push(
+    // NOT Navigator.of(context): this bar is mounted in MaterialApp.builder,
+    // above the router's Navigator, so there is no Navigator to find and the
+    // lookup throws. Push on the root navigator directly.
+    final nav = rootNavigatorKey.currentState;
+    if (nav == null) return;
+    nav.push(
       PageRouteBuilder<void>(
         transitionDuration: AppMotion.entrance,
         reverseTransitionDuration: AppMotion.standard,

@@ -15,14 +15,13 @@ import '../widgets/main_bottom_nav.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
 import '../../widgets/home/composer_sheet.dart';
-import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/verified_tick.dart';
 import 'chat_search_delegate.dart';
-import '../../theme/app_motion.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
 import '../../widgets/motion/hide_on_scroll.dart';
@@ -41,10 +40,22 @@ class ConversationsScreen extends StatefulWidget {
   State<ConversationsScreen> createState() => _ConversationsScreenState();
 }
 
-enum _ConversationsTab { chats, stories }
+/// Quick filter chips above the inbox.
+///
+/// Stories no longer costs a top-level tab — a messaging screen's most
+/// valuable slot was spent on something Home already carries. It folds into
+/// the Active rail instead, and the freed space goes to these.
+enum _ChatFilter { all, unread, groups, churches, friends }
 
-/// WhatsApp-style quick filter chips on the Chats tab.
-enum _ChatFilter { all, unread, groups }
+extension _ChatFilterLabel on _ChatFilter {
+  String get label => switch (this) {
+    _ChatFilter.all => 'All',
+    _ChatFilter.unread => 'Unread',
+    _ChatFilter.groups => 'Groups',
+    _ChatFilter.churches => 'Churches',
+    _ChatFilter.friends => 'Friends',
+  };
+}
 
 class _ConversationsScreenState extends State<ConversationsScreen>
     with NavVisibilityMixin {
@@ -52,12 +63,27 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   Map<String, ConversationState> _convStates = const {};
   Map<String, InboxReactionPreview> _reactionPreviews = const {};
   List<Story> _stories = const [];
+  /// user id → display name, for the "who spoke last" prefix on group rows.
+  Map<String, String> _senderNames = const {};
+  /// conversation id → member count, for user-created group rows.
+  Map<String, int> _groupCounts = const {};
   Set<String> _viewedStoryIds = const {};
   List<PendingFriendRequest> _friendRequests = const [];
   bool _loading = true;
   String? _error;
-  _ConversationsTab _tab = _ConversationsTab.chats;
   _ChatFilter _chatFilter = _ChatFilter.all;
+
+  // ----- Inline search -------------------------------------------------
+  // searchMessages() has existed in the service since patch_130 and the
+  // inbox never exposed it. One field over people, groups AND message
+  // bodies — the "where did that message go" problem, already solved
+  // server-side and previously unreachable.
+  final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  String _query = '';
+  Timer? _searchDebounce;
+  bool _searching = false;
+  List<MessageSearchHit> _messageHits = const [];
 
   /// Requests aren't a tab anymore — they open from a banner on the Chats
   /// tab into an inline requests view. This flag drives that view.
@@ -74,7 +100,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   // pull-to-refresh from the user.
   StreamSubscription<List<Map<String, dynamic>>>? _activitySub;
   Timer? _refreshDebounce;
-  late final PageController _pageController;
   // Inbox multi-select (delete several chats at once).
   bool _chatSelect = false;
   final Set<String> _selectedChats = <String>{};
@@ -145,7 +170,6 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: _tab.index);
     if (widget.initialTab == 'requests') {
       _showRequests = true;
       // Caller asked for Requests explicitly — don't let the "auto-pick"
@@ -167,33 +191,50 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   @override
   void dispose() {
     _refreshDebounce?.cancel();
+    _searchDebounce?.cancel();
     _activitySub?.cancel();
     MessagingService.inboxLocalRevision.removeListener(_onLocalInboxChange);
-    _pageController.dispose();
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
-  /// Switch sub-tab via the pager so the transition animates (and a swipe
-  /// updates the selected pill).
-  void _selectTab(_ConversationsTab tab) {
-    setState(() => _tab = tab);
-    void go() {
-      if (!_pageController.hasClients) return;
-      if (_pageController.page?.round() == tab.index) return;
-      _pageController.animateToPage(
-        tab.index,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-      );
+  /// Inbox search. Names and group titles filter locally and instantly; the
+  /// message-body search is a server round-trip, so it debounces.
+  void _onQueryChanged(String raw) {
+    final q = raw.trim();
+    setState(() => _query = q);
+    _searchDebounce?.cancel();
+    if (q.length < 2) {
+      setState(() {
+        _messageHits = const [];
+        _searching = false;
+      });
+      return;
     }
+    setState(() => _searching = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 320), () async {
+      final hits = await MessagingService.searchMessages(q);
+      if (!mounted) return;
+      // A slower earlier request can land after a newer one — ignore it
+      // rather than showing results for a query the user has moved past.
+      if (_query != q) return;
+      setState(() {
+        _messageHits = hits;
+        _searching = false;
+      });
+    });
+  }
 
-    if (_pageController.hasClients) {
-      go();
-    } else {
-      // Pager not attached yet (e.g. coming back from the requests view) —
-      // animate once it is.
-      WidgetsBinding.instance.addPostFrameCallback((_) => go());
-    }
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchCtrl.clear();
+    _searchFocus.unfocus();
+    setState(() {
+      _query = '';
+      _messageHits = const [];
+      _searching = false;
+    });
   }
 
   /// Listen for any message activity (insert / status change) and
@@ -284,6 +325,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _viewedStoryIds = results[4] as Set<String>;
         _reactionPreviews = results[5] as Map<String, InboxReactionPreview>;
         _loading = false;
+        unawaited(_resolveSenderNames());
         // Auto-route to Requests tab on first paint if the inbox is
         // empty but there are pending requests. Fixes the "chat icon
         // shows 6, but inbox is empty when I tap it" complaint —
@@ -311,6 +353,47 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _loading = false;
       });
     }
+  }
+
+  /// Resolve "who spoke last" for group rows in one batched lookup.
+  ///
+  /// Runs after the inbox has already painted — the rows are useful without
+  /// the speaker name, so this must never hold up first paint.
+  Future<void> _resolveSenderNames() async {
+    final wanted = <String>{
+      for (final c in _conversations)
+        if (c.isGroup &&
+            !c.isChurchChannel &&
+            (c.lastSenderId ?? '').isNotEmpty &&
+            c.lastSenderId != _currentUserId &&
+            !_senderNames.containsKey(c.lastSenderId))
+          c.lastSenderId!,
+    };
+    // Church groups are excluded: their membership is the whole
+    // congregation, so counting them client-side would mean pulling
+    // hundreds of rows to render one number.
+    final groupIds = <String>{
+      for (final c in _conversations)
+        if (c.isGroup && !c.isChurchGroup && !_groupCounts.containsKey(c.id))
+          c.id,
+    };
+
+    final results = await Future.wait([
+      wanted.isEmpty
+          ? Future.value(const <String, String>{})
+          : MessagingService.fetchDisplayNames(wanted),
+      groupIds.isEmpty
+          ? Future.value(const <String, int>{})
+          : MessagingService.fetchGroupMemberCounts(groupIds),
+    ]);
+    if (!mounted) return;
+    final names = results[0] as Map<String, String>;
+    final counts = results[1] as Map<String, int>;
+    if (names.isEmpty && counts.isEmpty) return;
+    setState(() {
+      _senderNames = {..._senderNames, ...names};
+      _groupCounts = {..._groupCounts, ...counts};
+    });
   }
 
   Future<void> _openStoryComposer() async {
@@ -651,77 +734,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  /// FAB → New chat / New group (WhatsApp's creation entry point).
+  /// FAB → the creation entry point.
+  ///
+  /// Was three stock ListTiles with primary-coloured CircleAvatars, which is
+  /// the default Material sheet with different words in it. Each option now
+  /// says what it's FOR, not just what it's called — "New chat" and "New
+  /// group" are indistinguishable to somebody who hasn't used the app before.
   Future<void> _openNewChatSheet() async {
     final choice = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: context.palette.sheet,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: ctx.palette.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: AppColors.primaryBlue,
-                child: Icon(Icons.group_add, color: AppColors.white),
-              ),
-              title: Text(
-                'New group',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () => Navigator.pop(ctx, 'group'),
-            ),
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppColors.successGreen,
-                child: const Icon(Icons.person_add_alt, color: AppColors.white),
-              ),
-              title: Text(
-                'New chat',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () => Navigator.pop(ctx, 'chat'),
-            ),
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppColors.darkNavy,
-                child: const Icon(Icons.link, color: AppColors.white),
-              ),
-              title: Text(
-                'Join group with link',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () => Navigator.pop(ctx, 'join'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ComposeSheet(),
     );
     if (!mounted || choice == null) return;
     if (choice == 'group') {
       context.pushNamed('create_group');
     } else if (choice == 'join') {
       await _joinWithLink();
+    } else if (choice == 'self') {
+      await _openSelfChat();
     } else {
       context.pushNamed('new_chat');
     }
@@ -809,26 +840,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         visible: navVisible,
         child: const MainBottomNav(currentIndex: MainBottomNav.chatIndex),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primaryBlue,
-        foregroundColor: AppColors.white,
-        // Stories tab: the + adds a photo/text story (story composer).
-        // Chats: the + starts a new chat / group as before.
-        onPressed: _tab == _ConversationsTab.stories
-            ? _openStoryComposer
-            : _openNewChatSheet,
-        child: Icon(
-          _tab == _ConversationsTab.stories
-              ? Icons.add_a_photo_outlined
-              : Icons.edit_square,
-        ),
-      ),
+      // Hidden while multi-selecting or searching — in both modes the screen
+      // is doing something else and a "compose" button is noise.
+      floatingActionButton: _chatSelect || _query.isNotEmpty
+          ? null
+          : _ComposeFab(onTap: _openNewChatSheet),
       body: Column(
         children: [
           FlatStatusBar(
             child: _chatSelect ? _buildChatSelectionBar() : _buildHero(),
           ),
-          _buildTabBar(),
+          if (!_chatSelect && !_showRequests) _buildSearchField(),
           Expanded(
             child: NotificationListener<UserScrollNotification>(
               onNotification: handleNavScroll,
@@ -837,7 +859,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 onRefresh: _bootstrap,
                 // Entrance now happens per-tile (StaggeredReveal in
                 // _conversationListView) instead of one block fade.
-                child: _buildTabPager(),
+                child: _buildBody(),
               ),
             ),
           ),
@@ -906,7 +928,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
               ),
               const Spacer(),
-              _CircleIconButton(icon: Icons.search, onTap: _openChatSearch),
+              // Explore scopes (people who aren't friends yet, status,
+              // archived) still live in the full-screen scoped search — the
+              // inline field below covers the common case.
+              _CircleIconButton(icon: Icons.person_search, onTap: _openChatSearch),
               const SizedBox(width: 6),
               PopupMenuButton<String>(
                 icon: Icon(Icons.more_vert, color: context.palette.text),
@@ -956,59 +981,172 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     );
   }
 
-  /// WhatsApp-style tabs on the flat light header (same background as the
-  /// scaffold — one continuous colour), evenly distributed, with a blue
-  /// underline under the active tab. Two tabs only: Chats | Stories.
-  Widget _buildTabBar() {
-    return Container(
-      color: context.palette.scaffoldBg,
-      child: SizedBox(
-        height: 42,
+  /// The inline search field. One field over people, groups AND message
+  /// bodies — see [_onQueryChanged].
+  Widget _buildSearchField() {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.cardMuted,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: _searchFocus.hasFocus
+                ? AppColors.primaryBlue.withValues(alpha: 0.55)
+                : palette.divider,
+          ),
+        ),
         child: Row(
           children: [
-            _TabPill(
-              label: 'Chats',
-              selected: _tab == _ConversationsTab.chats && !_showRequests,
-              onTap: () {
-                if (_showRequests) setState(() => _showRequests = false);
-                _selectTab(_ConversationsTab.chats);
-              },
+            const SizedBox(width: 14),
+            Icon(Icons.search, size: 19, color: palette.textMuted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _searchCtrl,
+                focusNode: _searchFocus,
+                onChanged: _onQueryChanged,
+                textInputAction: TextInputAction.search,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: palette.text,
+                  fontSize: 14,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: 'Search people, groups, messages',
+                  hintStyle: AppTextStyles.bodyMedium.copyWith(
+                    color: palette.textMuted,
+                    fontSize: 14,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
             ),
-            _TabPill(
-              label: 'Stories',
-              selected: _tab == _ConversationsTab.stories,
-              onTap: () {
-                if (_showRequests) setState(() => _showRequests = false);
-                _selectTab(_ConversationsTab.stories);
-              },
-            ),
+            if (_query.isNotEmpty)
+              IconButton(
+                icon: Icon(Icons.close, size: 18, color: palette.textMuted),
+                splashRadius: 18,
+                onPressed: _clearSearch,
+              )
+            else
+              const SizedBox(width: 12),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTabPager() {
+  Widget _buildBody() {
     // Chat-shaped shimmer instead of a bare spinner, crossfading into
     // the inbox when it lands.
     return ContentReveal(
       loading: _loading && _conversations.isEmpty,
       skeleton: ShimmerLoaders.cardList(count: 7),
-      child: _buildTabPagerContent(),
+      child: _buildBodyContent(),
     );
   }
 
-  Widget _buildTabPagerContent() {
+  Widget _buildBodyContent() {
     if (_error != null && _conversations.isEmpty) {
       return _buildErrorState();
     }
+    if (_query.isNotEmpty) return _buildSearchResults();
     if (_showRequests) return _buildRequestsView();
-    // Swipe between Chats / Groups / Status / Archived with a smooth
-    // animated transition (order matches _ConversationsTab).
-    return PageView(
-      controller: _pageController,
-      onPageChanged: (i) => setState(() => _tab = _ConversationsTab.values[i]),
-      children: [_buildChatsTab(), _buildStoriesTab()],
+    return _buildChatsTab();
+  }
+
+  /// Results for the inline field: names first (instant, local), then
+  /// message bodies (the server round-trip).
+  Widget _buildSearchResults() {
+    final q = _query.toLowerCase();
+    final nameHits = _inbox
+        .where((c) => c.otherUserName.toLowerCase().contains(q))
+        .toList();
+    final convById = {for (final c in _conversations) c.id: c};
+
+    if (nameHits.isEmpty && _messageHits.isEmpty && !_searching) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 70),
+          Icon(
+            Icons.search_off,
+            size: 46,
+            color: context.palette.textMuted,
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                'Nothing matches “$_query”.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.palette.textMuted,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 32),
+      children: [
+        if (nameHits.isNotEmpty) ...[
+          _SearchSectionLabel(label: 'Chats and groups'),
+          for (final c in nameHits)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ConversationTile(
+                key: ValueKey('search-${c.id}'),
+                conversation: c,
+                isLastFromMe: c.lastSenderId == _currentUserId,
+                pinned: false,
+                muted: _isMuted(c),
+                onTap: () {
+                  _clearSearch();
+                  _openChat(c);
+                },
+                previewCleared: _isPreviewCleared(c),
+              ),
+            ),
+        ],
+        if (_searching)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 22),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: AppColors.primaryBlue,
+                ),
+              ),
+            ),
+          ),
+        if (_messageHits.isNotEmpty) ...[
+          _SearchSectionLabel(label: 'Messages'),
+          for (final hit in _messageHits)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _MessageHitTile(
+                hit: hit,
+                conversation: convById[hit.conversationId],
+                query: _query,
+                onTap: () {
+                  _clearSearch();
+                  _openChatAtMessage(hit.conversationId, hit.messageId);
+                },
+              ),
+            ),
+        ],
+      ],
     );
   }
 
@@ -1100,24 +1238,16 @@ class _ConversationsScreenState extends State<ConversationsScreen>
             'member directory or church page.',
       );
     }
-    // Apply the WhatsApp-style filter chip.
-    final List<Conversation> list;
-    switch (_chatFilter) {
-      case _ChatFilter.unread:
-        list = all.where((c) => c.unreadCount > 0).toList();
-      case _ChatFilter.groups:
-        list = _groups;
-      case _ChatFilter.all:
-        list = all;
-    }
+    final list = _applyFilter(all, _chatFilter);
     final headers = <Widget>[
-      _buildChatFilterChips(
-        unreadCount: all.where((c) => c.unreadCount > 0).length,
-      ),
+      _buildActiveRail(),
+      _buildChatFilterChips(all),
       if (requestCount > 0)
         _RequestsBanner(
-          count: requestCount,
+          requests: _friendRequests,
+          messageRequests: _requests,
           onTap: () => setState(() => _showRequests = true),
+          onAccept: _acceptFriendRequest,
         ),
       if (_archived.isNotEmpty)
         ListTile(
@@ -1141,9 +1271,18 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
           child: Center(
             child: Text(
-              _chatFilter == _ChatFilter.unread
-                  ? 'No unread chats — you\'re all caught up.'
-                  : 'No groups here yet.',
+              switch (_chatFilter) {
+                _ChatFilter.unread =>
+                  'No unread chats — you\'re all caught up.',
+                _ChatFilter.groups => 'No groups here yet.',
+                _ChatFilter.churches =>
+                  'No church channels yet. Join a church to see its '
+                      'announcements here.',
+                _ChatFilter.friends =>
+                  'No chats with friends yet. Tap the compose button to '
+                      'start one.',
+                _ChatFilter.all => 'Nothing here yet.',
+              },
               textAlign: TextAlign.center,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: context.palette.textMuted,
@@ -1155,9 +1294,37 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     return _conversationListView(list, banner: Column(children: headers));
   }
 
-  /// WhatsApp-style quick filter chips (All · Unread · Groups) above the
-  /// chat list. Unread carries a count badge.
-  Widget _buildChatFilterChips({required int unreadCount}) {
+  /// Narrow the inbox to the selected chip.
+  ///
+  /// "Churches" is the announcements channel plus the church members group;
+  /// "Friends" is everything that is a real 1:1 person — not a group, not a
+  /// church, and not your own notes.
+  List<Conversation> _applyFilter(List<Conversation> all, _ChatFilter filter) {
+    return switch (filter) {
+      _ChatFilter.all => all,
+      _ChatFilter.unread => all.where((c) => c.unreadCount > 0).toList(),
+      _ChatFilter.groups =>
+        all.where((c) => c.isGroup && !c.isChurchGroup).toList(),
+      _ChatFilter.churches => all.where((c) => c.isChurchGroup).toList(),
+      _ChatFilter.friends => all
+          .where((c) => !c.isGroup && !c.isChurchGroup && !c.isSelfChat)
+          .toList(),
+    };
+  }
+
+  /// Quick filter chips above the list. Each carries its own count, so the
+  /// row doubles as a summary of what's waiting — the unread badge on the
+  /// nav island finally has somewhere to land.
+  Widget _buildChatFilterChips(List<Conversation> all) {
+    int countFor(_ChatFilter f) {
+      if (f == _ChatFilter.all) return 0; // "All" needs no number
+      final matching = _applyFilter(all, f);
+      // Every chip but Unread counts what's UNREAD in that slice — a bare
+      // total ("Groups 12") is noise, "Groups 2" means two want you.
+      if (f == _ChatFilter.unread) return matching.length;
+      return matching.where((c) => c.unreadCount > 0).length;
+    }
+
     Widget chip(String label, _ChatFilter f, {int badge = 0}) {
       final selected = _chatFilter == f;
       return Padding(
@@ -1212,48 +1379,98 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
-      child: Row(
+    // Five chips don't fit a 360dp screen — scroll rather than shrink the
+    // labels to unreadable.
+    return SizedBox(
+      height: 46,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
         children: [
-          chip('All', _ChatFilter.all),
-          chip('Unread', _ChatFilter.unread, badge: unreadCount),
-          chip('Groups', _ChatFilter.groups),
+          for (final f in _ChatFilter.values)
+            chip(f.label, f, badge: countFor(f)),
         ],
       ),
     );
   }
 
-  // ----- Stories tab: the stories rail (moved off the chat list) -------
-  Widget _buildStoriesTab() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(top: 8, bottom: 32),
-      children: [
-        StoriesRail(
-          stories: _stories,
-          viewerId: _currentUserId,
+  // ----- The Active rail ----------------------------------------------
+  /// One rail doing two jobs: who has a story, and who is online.
+  ///
+  /// Stories used to cost a whole top-level tab on a *messaging* screen, and
+  /// Home already carries a stories rail. A separate "online now" rail was
+  /// the other option, but in a congregation on mobile data it is empty most
+  /// of the day, and an empty rail reads as broken. Merged, it always has
+  /// something in it: a blue ring means an unseen story, a green dot means
+  /// they're online right now.
+  ///
+  /// Members who chose "hide online" are absent by construction — they never
+  /// join the presence roster, so there is no privacy check to forget here.
+  Widget _buildActiveRail() {
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: PresenceService.onChange,
+      builder: (context, online, _) {
+        final seen = _viewedStoryIds.union(FeedService.viewedStoryIdsCached());
+        final me = _currentUserId;
+
+        // Story authors, newest first, one entry per person.
+        final byAuthor = <String, List<Story>>{};
+        for (final s in _stories) {
+          if (s.authorId == me) continue;
+          byAuthor.putIfAbsent(s.authorId, () => []).add(s);
+        }
+
+        final entries = <_ActiveEntry>[];
+        for (final e in byAuthor.entries) {
+          final reel = e.value;
+          entries.add(
+            _ActiveEntry(
+              userId: e.key,
+              name: reel.first.authorName,
+              photoUrl: reel.first.authorPhotoUrl,
+              stories: reel,
+              hasUnseenStory: reel.any((s) => !seen.contains(s.id)),
+              isOnline: online.contains(e.key),
+            ),
+          );
+        }
+
+        // Anyone online who isn't already in the rail via a story. Only
+        // people the viewer actually has a thread with — a rail of
+        // strangers is a directory, not an inbox.
+        for (final c in _conversations) {
+          if (c.isGroup || c.isSelfChat) continue;
+          if (c.otherUserId.isEmpty || c.otherUserId == me) continue;
+          if (!online.contains(c.otherUserId)) continue;
+          if (byAuthor.containsKey(c.otherUserId)) continue;
+          entries.add(
+            _ActiveEntry(
+              userId: c.otherUserId,
+              name: c.otherUserName,
+              photoUrl: c.otherUserPhotoUrl,
+              stories: const [],
+              hasUnseenStory: false,
+              isOnline: true,
+            ),
+          );
+        }
+
+        // Unseen stories first, then online, then the rest.
+        entries.sort((a, b) {
+          int rank(_ActiveEntry e) =>
+              e.hasUnseenStory ? 0 : (e.isOnline ? 1 : 2);
+          return rank(a).compareTo(rank(b));
+        });
+
+        return _ActiveRail(
+          entries: entries,
           viewerName: _viewerName(),
           viewerPhotoUrl: _viewerPhotoUrl(),
           onAddStory: _openStoryComposer,
-          onAuthorTapped: (_, list) => _openStoryViewer(list),
-          viewedStoryIds: _viewedStoryIds.union(
-            FeedService.viewedStoryIdsCached(),
-          ),
-        ),
-        if (_stories.isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
-            child: Text(
-              'No stories yet. Tap the + to share one — it disappears '
-              'after 24 hours.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.palette.textMuted,
-              ),
-            ),
-          ),
-      ],
+          onOpenStory: _openStoryViewer,
+          onOpenChat: (userId, name) => _startChatWith(userId, name),
+        );
+      },
     );
   }
 
@@ -1367,6 +1584,8 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   : () => _openChat(c),
               previewCleared: _isPreviewCleared(c),
               reactionPreview: _reactionPreviews[c.id],
+              lastSenderName: _senderNames[c.lastSenderId],
+              memberCount: _groupCounts[c.id],
             );
             if (revealIndex < 0) return tile;
             return StaggeredReveal(index: revealIndex, rise: 18, child: tile);
@@ -1661,55 +1880,566 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   }
 }
 
-class _TabPill extends StatelessWidget {
-  const _TabPill({
-    required this.label,
-    required this.selected,
+/// The compose sheet behind the FAB.
+class _ComposeSheet extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.sheet,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: palette.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Start something',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            _ComposeOption(
+              icon: Icons.chat_bubble_outline_rounded,
+              title: 'New chat',
+              subtitle: 'Message a friend, or find someone new',
+              onTap: () => Navigator.pop(context, 'chat'),
+            ),
+            _ComposeOption(
+              icon: Icons.group_add_rounded,
+              title: 'New group',
+              subtitle: 'Bring a ministry or study group together',
+              onTap: () => Navigator.pop(context, 'group'),
+            ),
+            _ComposeOption(
+              icon: Icons.link_rounded,
+              title: 'Join with a link',
+              subtitle: 'Paste an invite you were sent',
+              onTap: () => Navigator.pop(context, 'join'),
+            ),
+            _ComposeOption(
+              icon: Icons.bookmark_outline,
+              title: 'Notes to self',
+              subtitle: 'Save verses, links and reminders',
+              onTap: () => Navigator.pop(context, 'self'),
+            ),
+            const SizedBox(height: 14),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposeOption extends StatelessWidget {
+  const _ComposeOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
     required this.onTap,
   });
 
-  final String label;
-  final bool selected;
+  final IconData icon;
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    // Lives on the navy header: white text, animated white underline —
-    // WhatsApp's tab language, evenly distributed by the Expanded.
-    return Expanded(
-      child: PressEffect(
-        pressedScale: 0.95,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
+    final palette = context.palette;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.98,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: palette.divider),
+          ),
+          child: Row(
             children: [
-              AnimatedDefaultTextStyle(
-                duration: AppMotion.quick,
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: selected
-                      ? AppColors.primaryBlue
-                      : const Color(0xFF7C8698),
-                  fontSize: 13.5,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  letterSpacing: 0.2,
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Text(label, maxLines: 1),
+                child: Icon(icon, color: AppColors.primaryBlue, size: 22),
               ),
-              const SizedBox(height: 7),
-              AnimatedContainer(
-                duration: AppMotion.quick,
-                curve: AppMotion.easeOut,
-                height: 3,
-                width: selected ? 32 : 0,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryBlue,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.textMuted,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              Icon(Icons.chevron_right, color: palette.textMuted, size: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchSectionLabel extends StatelessWidget {
+  const _SearchSectionLabel({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+      child: Text(
+        label.toUpperCase(),
+        style: AppTextStyles.labelSmall.copyWith(
+          color: context.palette.textMuted,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+        ),
+      ),
+    );
+  }
+}
+
+/// A full-text hit from `searchMessages()`, with the matched term marked in
+/// the snippet so you can see *why* it matched.
+class _MessageHitTile extends StatelessWidget {
+  const _MessageHitTile({
+    required this.hit,
+    required this.conversation,
+    required this.query,
+    required this.onTap,
+  });
+
+  final MessageSearchHit hit;
+  final Conversation? conversation;
+  final String query;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final where = conversation?.otherUserName ?? 'Conversation';
+    return PressEffect(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: palette.card,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                _Avatar(
+                  name: where,
+                  photoUrl: conversation?.otherUserPhotoUrl,
+                  isGroup: conversation?.isGroup ?? false,
+                  size: 42,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              where,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            _shortDate(hit.createdAt),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: palette.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      _Highlighted(
+                        text: hit.content,
+                        query: query,
+                        base: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _shortDate(DateTime t) {
+    final local = t.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(local.year, local.month, local.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) {
+      final hh = local.hour.toString().padLeft(2, '0');
+      final mm = local.minute.toString().padLeft(2, '0');
+      return '$hh:$mm';
+    }
+    if (diff == 1) return 'Yest.';
+    if (diff < 7) {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return days[local.weekday - 1];
+    }
+    return '${local.day}/${local.month}';
+  }
+}
+
+/// Bolds the matched run inside a snippet. Cheap, but it is the difference
+/// between "here are 40 messages" and "here is the line you meant".
+class _Highlighted extends StatelessWidget {
+  const _Highlighted({
+    required this.text,
+    required this.query,
+    required this.base,
+  });
+
+  final String text;
+  final String query;
+  final TextStyle base;
+
+  @override
+  Widget build(BuildContext context) {
+    final at = text.toLowerCase().indexOf(query.toLowerCase());
+    if (at < 0 || query.isEmpty) {
+      return Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: base,
+      );
+    }
+    // Keep a little context before the match so the snippet reads as a
+    // sentence rather than starting mid-word.
+    final start = at > 24 ? at - 20 : 0;
+    final head = start > 0 ? '…${text.substring(start, at)}' : text.substring(0, at);
+    return RichText(
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: base,
+        children: [
+          TextSpan(text: head),
+          TextSpan(
+            text: text.substring(at, at + query.length),
+            style: base.copyWith(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          TextSpan(text: text.substring(at + query.length)),
+        ],
+      ),
+    );
+  }
+}
+
+/// One person in the Active rail — they have a story, or they're online, or
+/// both.
+class _ActiveEntry {
+  const _ActiveEntry({
+    required this.userId,
+    required this.name,
+    required this.photoUrl,
+    required this.stories,
+    required this.hasUnseenStory,
+    required this.isOnline,
+  });
+
+  final String userId;
+  final String name;
+  final String? photoUrl;
+  final List<Story> stories;
+  final bool hasUnseenStory;
+  final bool isOnline;
+
+  bool get hasStory => stories.isNotEmpty;
+}
+
+/// The merged stories + presence rail that sits above the inbox.
+class _ActiveRail extends StatelessWidget {
+  const _ActiveRail({
+    required this.entries,
+    required this.viewerName,
+    required this.viewerPhotoUrl,
+    required this.onAddStory,
+    required this.onOpenStory,
+    required this.onOpenChat,
+  });
+
+  final List<_ActiveEntry> entries;
+  final String viewerName;
+  final String? viewerPhotoUrl;
+  final VoidCallback onAddStory;
+  final void Function(List<Story> reel) onOpenStory;
+  final void Function(String userId, String name) onOpenChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: SizedBox(
+        height: 96,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          itemCount: entries.length + 1,
+          separatorBuilder: (_, _) => const SizedBox(width: 14),
+          itemBuilder: (context, i) {
+            if (i == 0) {
+              return _ActiveAvatar(
+                name: 'Your story',
+                photoUrl: viewerPhotoUrl,
+                initialsSource: viewerName,
+                ring: false,
+                online: false,
+                showAddBadge: true,
+                onTap: onAddStory,
+              );
+            }
+            final e = entries[i - 1];
+            return _ActiveAvatar(
+              name: e.name,
+              photoUrl: e.photoUrl,
+              initialsSource: e.name,
+              ring: e.hasUnseenStory,
+              online: e.isOnline,
+              showAddBadge: false,
+              // A story is the thing with a deadline, so it wins the tap;
+              // without one the face is just a fast way into the chat.
+              onTap: () => e.hasStory
+                  ? onOpenStory(e.stories)
+                  : onOpenChat(e.userId, e.name),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveAvatar extends StatelessWidget {
+  const _ActiveAvatar({
+    required this.name,
+    required this.photoUrl,
+    required this.initialsSource,
+    required this.ring,
+    required this.online,
+    required this.showAddBadge,
+    required this.onTap,
+  });
+
+  final String name;
+  final String? photoUrl;
+  final String initialsSource;
+  final bool ring;
+  final bool online;
+  final bool showAddBadge;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.93,
+      child: SizedBox(
+        width: 62,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(2.5),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: ring ? AppColors.primaryGradient : null,
+                    border: ring
+                        ? null
+                        : Border.all(color: palette.divider, width: 1.5),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: palette.scaffoldBg,
+                    ),
+                    child: _Avatar(
+                      name: initialsSource,
+                      photoUrl: photoUrl,
+                      size: 48,
+                    ),
+                  ),
+                ),
+                if (online)
+                  Positioned(
+                    right: 2,
+                    bottom: 2,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: AppColors.successGreen,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: palette.scaffoldBg,
+                          width: 2.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                if (showAddBadge)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: palette.scaffoldBg,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        size: 12,
+                        color: AppColors.white,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text(
+              name.split(' ').first,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: palette.textMuted,
+                fontSize: 11,
+                fontWeight: ring ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compose button.
+///
+/// A gradient squircle rather than Material's flat circular FAB — the stock
+/// one reads as a system control dropped on the screen, and this is the one
+/// button on the inbox that should look deliberate.
+class _ComposeFab extends StatelessWidget {
+  const _ComposeFab({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.92,
+      child: Container(
+        width: 58,
+        height: 58,
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withValues(alpha: 0.38),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.edit_square,
+          color: AppColors.white,
+          size: 24,
         ),
       ),
     );
@@ -1729,10 +2459,20 @@ class _ConversationTile extends StatelessWidget {
     this.onAvatarTap,
     this.previewCleared = false,
     this.reactionPreview,
+    this.lastSenderName,
+    this.memberCount,
   });
 
   final Conversation conversation;
   final bool isLastFromMe;
+
+  /// Who spoke last, for group rows. Resolved in one batched lookup by the
+  /// screen (see MessagingService.fetchDisplayNames) — null for 1:1 rows.
+  final String? lastSenderName;
+
+  /// How many people are in this group, shown next to its name. Null when
+  /// unknown or not a group.
+  final int? memberCount;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final bool pinned;
@@ -1754,9 +2494,60 @@ class _ConversationTile extends StatelessWidget {
     return 'Reacted ${r.emoji} to a message';
   }
 
+  /// A glyph in front of the preview that says what KIND of row this is.
+  ///
+  /// The whole point of the redesign: five different things were rendering
+  /// as avatar + name + preview + time, so a church announcement, a pending
+  /// request and your own notes were visually identical. The icon does most
+  /// of that work before any text is read.
+  ({IconData icon, Color color})? _previewGlyph(BuildContext context) {
+    if (conversation.isSelfChat) {
+      return (icon: Icons.bookmark_outline, color: context.palette.textMuted);
+    }
+    if (conversation.isChurchChannel) {
+      return (icon: Icons.campaign_outlined, color: AppColors.goldAccent);
+    }
+    final body = conversation.lastMessage.toLowerCase();
+    if (body.startsWith('🎤') || body.contains('voice note')) {
+      return (icon: Icons.mic_none, color: AppColors.primaryBlue);
+    }
+    if (body.startsWith('📷') || body.contains('photo')) {
+      return (icon: Icons.image_outlined, color: AppColors.primaryBlue);
+    }
+    return null;
+  }
+
+  /// Group rows name the speaker; 1:1 rows never should.
+  ///
+  /// "Tapiwa: bring the projector" and "bring the projector" are different
+  /// messages, and in a 24-person group the second one is unreadable.
+  String? _groupSpeakerPrefix() {
+    if (!conversation.isGroup || conversation.isChurchChannel) return null;
+    if (conversation.lastMessage.isEmpty) return null;
+    if (isLastFromMe) return 'You';
+    final name = (lastSenderName ?? '').trim();
+    if (name.isEmpty) return null;
+    return name.split(' ').first;
+  }
+
   @override
   Widget build(BuildContext context) {
     final unread = conversation.unreadCount > 0 && !isLastFromMe;
+    final glyph = _previewGlyph(context);
+    final speaker = _groupSpeakerPrefix();
+    // Self-chat reads quietly — it is a notepad, not a correspondent, and
+    // it sits pinned at the top of every inbox forever.
+    final previewStyle = AppTextStyles.bodySmall.copyWith(
+      color: conversation.isSelfChat
+          ? context.palette.textMuted
+          : unread
+          ? context.palette.text
+          : context.palette.textMuted,
+      fontSize: 13,
+      fontWeight: unread && !conversation.isSelfChat
+          ? FontWeight.w600
+          : FontWeight.w400,
+    );
     return PressEffect(
       child: Material(
         color: Colors.transparent,
@@ -1869,8 +2660,25 @@ class _ConversationTile extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (conversation.otherUserIsVerified)
+                          // Church channels carry the gold tick whether or
+                          // not the row's "other user" is a verified
+                          // account — the channel IS the church speaking.
+                          if (conversation.otherUserIsVerified ||
+                              conversation.isChurchGroup)
                             const VerifiedTick(size: 15),
+                          // Group size, in the name row where it reads as
+                          // part of the identity rather than as metadata.
+                          if (memberCount != null && conversation.isGroup) ...[
+                            const SizedBox(width: 5),
+                            Text(
+                              '$memberCount',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: context.palette.textMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                           if (conversation.isBusiness) ...[
                             const SizedBox(width: 6),
                             Container(
@@ -1946,32 +2754,60 @@ class _ConversationTile extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                           ],
-                          Expanded(
-                            child: Text(
-                              (reactionPreview != null && !previewCleared)
-                                  ? _reactionPreviewLabel(reactionPreview!)
-                                  : (previewCleared ||
-                                        conversation.lastMessage.isEmpty)
-                                  ? (conversation.isChurchChannel
-                                        ? 'Church announcements appear here'
-                                        : 'Say hello')
-                                  : (isLastFromMe
-                                        ? _selfSystemLabel(
-                                            conversation.lastMessage,
-                                          )
-                                        : conversation.lastMessage),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: unread
-                                    ? context.palette.text
-                                    : context.palette.textMuted,
-                                fontSize: 13,
-                                fontWeight: unread
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
+                          // Type glyph — 📢 for a church announcement, a mic
+                          // for a voice note, a bookmark for your own notes.
+                          if (glyph != null && !previewCleared) ...[
+                            Icon(
+                              glyph.icon,
+                              size: 13,
+                              color: glyph.color,
                             ),
+                            const SizedBox(width: 4),
+                          ],
+                          Expanded(
+                            child: (reactionPreview != null && !previewCleared)
+                                ? Text(
+                                    _reactionPreviewLabel(reactionPreview!),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: previewStyle,
+                                  )
+                                : (previewCleared ||
+                                      conversation.lastMessage.isEmpty)
+                                ? Text(
+                                    conversation.isChurchChannel
+                                        ? 'Church announcements appear here'
+                                        : conversation.isSelfChat
+                                        ? 'Notes and links you save yourself'
+                                        : 'Say hello',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: previewStyle,
+                                  )
+                                : RichText(
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    text: TextSpan(
+                                      style: previewStyle,
+                                      children: [
+                                        if (speaker != null)
+                                          TextSpan(
+                                            text: '$speaker: ',
+                                            style: previewStyle.copyWith(
+                                              color: AppColors.primaryBlue,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        TextSpan(
+                                          text: isLastFromMe
+                                              ? _selfSystemLabel(
+                                                  conversation.lastMessage,
+                                                )
+                                              : conversation.lastMessage,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                           ),
                           if (unread) ...[
                             const SizedBox(width: 6),
@@ -2453,11 +3289,13 @@ class _Avatar extends StatelessWidget {
     this.photoUrl,
     this.isSelfChat = false,
     this.isGroup = false,
+    this.size = 50,
   });
   final String name;
   final String? photoUrl;
   final bool isSelfChat;
   final bool isGroup;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -2474,8 +3312,8 @@ class _Avatar extends StatelessWidget {
               .toUpperCase();
     final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
     return Container(
-      width: 50,
-      height: 50,
+      width: size,
+      height: size,
       clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
       decoration: BoxDecoration(
@@ -2491,15 +3329,15 @@ class _Avatar extends StatelessWidget {
         ],
       ),
       child: isSelfChat
-          ? const Icon(Icons.bookmark, color: AppColors.white, size: 22)
+          ? Icon(Icons.bookmark, color: AppColors.white, size: size * 0.44)
           : (isGroup && !hasPhoto)
-          ? const Icon(Icons.groups, color: AppColors.white, size: 26)
+          ? Icon(Icons.groups, color: AppColors.white, size: size * 0.52)
           : hasPhoto
           ? CachedImage(
               photoUrl!,
               fit: BoxFit.cover,
-              width: 50,
-              height: 50,
+              width: size,
+              height: size,
               errorBuilder: (context, error, stackTrace) => Text(
                 initials,
                 style: AppTextStyles.titleMedium.copyWith(
@@ -2521,50 +3359,150 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-/// Slim "Message requests (N) ›" banner shown atop the Chats tab.
+/// Friend/message requests, shown with faces at the top of the inbox.
+///
+/// A request is the one thing in an inbox that expires *socially* — leave it
+/// long enough and answering it is worse than never seeing it. It used to be
+/// a count behind a tab you had to know existed. Now it names the person,
+/// shows their face, and offers Accept inline for the single-request case,
+/// which is the overwhelmingly common one.
 class _RequestsBanner extends StatelessWidget {
-  const _RequestsBanner({required this.count, required this.onTap});
-  final int count;
+  const _RequestsBanner({
+    required this.requests,
+    required this.messageRequests,
+    required this.onTap,
+    required this.onAccept,
+  });
+
+  final List<PendingFriendRequest> requests;
+  final List<Conversation> messageRequests;
   final VoidCallback onTap;
+  final void Function(PendingFriendRequest) onAccept;
 
   @override
   Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppColors.primaryBlue.withValues(alpha: 0.20),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.person_add_alt_1,
-                  color: AppColors.primaryBlue,
-                  size: 20,
+    final palette = context.palette;
+    final total = requests.length + messageRequests.length;
+    final faces = <({String name, String? photo})>[
+      for (final r in requests.take(3))
+        (name: r.requesterName, photo: r.requesterPhotoUrl),
+      for (final c in messageRequests.take(3))
+        (name: c.otherUserName, photo: c.otherUserPhotoUrl),
+    ].take(3).toList();
+
+    final lead = requests.isNotEmpty
+        ? requests.first.requesterName.split(' ').first
+        : messageRequests.first.otherUserName.split(' ').first;
+    final title = total == 1
+        ? '$lead wants to connect'
+        : '$lead and ${total - 1} other${total - 1 == 1 ? '' : 's'}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
+      child: PressEffect(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.22),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    count == 1
-                        ? '1 message / friend request'
-                        : '$count message / friend requests',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w700,
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 32.0 + (faces.length - 1) * 20,
+                    height: 40,
+                    child: Stack(
+                      children: [
+                        for (var i = 0; i < faces.length; i++)
+                          Positioned(
+                            left: i * 20.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: palette.scaffoldBg,
+                                  width: 2,
+                                ),
+                              ),
+                              child: _Avatar(
+                                name: faces[i].name,
+                                photoUrl: faces[i].photo,
+                                size: 36,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                ),
-                const Icon(Icons.chevron_right, color: AppColors.primaryBlue),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          total == 1
+                              ? 'Tap to review'
+                              : '$total requests · tap to review',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: palette.textMuted,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // One request is the common case, and it deserves a
+                  // one-tap answer rather than a trip through another screen.
+                  if (total == 1 && requests.isNotEmpty)
+                    _ActionButton(
+                      label: 'Accept',
+                      filled: true,
+                      onTap: () => onAccept(requests.first),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$total',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

@@ -11,7 +11,10 @@ import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/screen_shell.dart';
 
 /// WhatsApp-style "New group": name + optional icon + description, pick
 /// members, create. On success it opens the new group chat.
@@ -160,130 +163,301 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
-      appBar: AppBar(
-        title: const Text('New group'),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-              child: Row(
-                children: [
-                  _GroupIconPicker(
-                    photoUrl: _photoUrl,
-                    uploading: _uploadingPhoto,
-                    onTap: _pickIcon,
+      backgroundColor: palette.scaffoldBg,
+      body: Column(
+        children: [
+          const ScreenHero(
+            title: 'New group',
+            tagline: 'Advent Chat',
+            fallbackRoute: 'messages',
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
+              children: [
+                // Identity first: the icon, the name and what it's for, in
+                // one card. Three loose inputs stacked down the screen read
+                // as a form; this reads as the thing being made.
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: palette.card,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: TextField(
-                      controller: _nameController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: InputDecoration(
-                        hintText: 'Group name',
-                        filled: true,
-                        fillColor: context.palette.inputFill,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          _GroupIconPicker(
+                            photoUrl: _photoUrl,
+                            uploading: _uploadingPhoto,
+                            onTap: _pickIcon,
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: TextField(
+                              controller: _nameController,
+                              textCapitalization: TextCapitalization.words,
+                              onChanged: (_) => setState(() {}),
+                              style: AppTextStyles.titleMedium.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                border: InputBorder.none,
+                                hintText: 'Group name',
+                                hintStyle: AppTextStyles.titleMedium.copyWith(
+                                  color: palette.textMuted,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Divider(color: palette.divider, height: 22),
+                      TextField(
+                        controller: _descController,
+                        textCapitalization: TextCapitalization.sentences,
+                        maxLines: 2,
+                        minLines: 1,
+                        style: AppTextStyles.bodyMedium.copyWith(fontSize: 13.5),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          hintText: 'What is this group for? (optional)',
+                          hintStyle: AppTextStyles.bodyMedium.copyWith(
+                            color: palette.textMuted,
+                            fontSize: 13.5,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: TextField(
-                controller: _descController,
-                textCapitalization: TextCapitalization.sentences,
-                maxLines: 2,
-                minLines: 1,
-                decoration: InputDecoration(
-                  hintText: 'Description (optional)',
-                  filled: true,
-                  fillColor: context.palette.inputFill,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
+                    ],
                   ),
                 ),
-              ),
-            ),
-            if (_selected.isNotEmpty)
-              SizedBox(
-                height: 92,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                const SizedBox(height: 16),
+                Row(
                   children: [
-                    for (final m in _selected.values)
-                      _SelectedChip(
-                        member: m,
-                        onRemove: () => _toggle(m),
+                    Text(
+                      _selected.isEmpty
+                          ? 'ADD MEMBERS'
+                          : '${_selected.length} SELECTED',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (_selected.isNotEmpty)
+                      GestureDetector(
+                        onTap: () => setState(_selected.clear),
+                        child: Text(
+                          'Clear',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                   ],
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearch,
-                decoration: InputDecoration(
-                  hintText: 'Search people',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: context.palette.inputFill,
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide.none,
+                const SizedBox(height: 8),
+                if (_selected.isNotEmpty)
+                  SizedBox(
+                    height: 84,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        for (final m in _selected.values)
+                          _SelectedChip(member: m, onRemove: () => _toggle(m)),
+                      ],
+                    ),
                   ),
+                _SearchField(
+                  controller: _searchController,
+                  onChanged: _onSearch,
+                ),
+                const SizedBox(height: 10),
+                if (_loadingPeople)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(child: BrandSpinner(size: 30)),
+                  )
+                else if (_results.isEmpty)
+                  _buildPeopleEmptyState(context)
+                else
+                  for (final m in _results)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _PersonPickTile(
+                        member: m,
+                        selected: _selected.containsKey(m.userId),
+                        onTap: () => _toggle(m),
+                      ),
+                    ),
+              ],
+            ),
+          ),
+          _buildCreateBar(context),
+        ],
+      ),
+    );
+  }
+
+  /// Groups are friends-only (the server rejects non-friends in
+  /// add_group_members, patch_118). An empty picker with no explanation was
+  /// indistinguishable from a broken screen — say why, and offer the fix.
+  Widget _buildPeopleEmptyState(BuildContext context) {
+    final searching = _searchController.text.trim().isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 30, 16, 10),
+      child: Column(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.diversity_3,
+              size: 32,
+              color: AppColors.primaryBlue,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            searching
+                ? 'No friends match that name.'
+                : 'You can only add friends to a group. Add a few friends '
+                      'first and they\'ll show up here.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: context.palette.textMuted,
+              height: 1.5,
+            ),
+          ),
+          if (!searching) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 190,
+              child: PrimaryGradientButton(
+                label: 'Find people',
+                icon: Icons.person_search_rounded,
+                onTap: () => context.pushNamed('new_chat'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Sticky create bar. A FAB that only appears once somebody is selected
+  /// gave no hint that a group needs members at all — this states the
+  /// requirement up front and stays disabled until it's met.
+  Widget _buildCreateBar(BuildContext context) {
+    final palette = context.palette;
+    final ready = _nameController.text.trim().isNotEmpty && _selected.isNotEmpty;
+    final hint = _nameController.text.trim().isEmpty
+        ? 'Name the group to continue'
+        : _selected.isEmpty
+        ? 'Add at least one member'
+        : '${_selected.length} member${_selected.length == 1 ? '' : 's'}';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: BoxDecoration(
+        color: palette.card,
+        border: Border(top: BorderSide(color: palette.divider)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                hint,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: palette.textMuted,
+                  fontSize: 12,
                 ),
               ),
             ),
-            Expanded(
-              child: _loadingPeople
-                  ? const Center(child: BrandSpinner(size: 30))
-                  : ListView.builder(
-                      itemCount: _results.length,
-                      itemBuilder: (context, i) {
-                        final m = _results[i];
-                        final selected = _selected.containsKey(m.userId);
-                        return _PersonPickTile(
-                          member: m,
-                          selected: selected,
-                          onTap: () => _toggle(m),
-                        );
-                      },
-                    ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 148,
+              child: PrimaryGradientButton(
+                label: 'Create group',
+                busy: _creating,
+                onTap: ready && !_creating ? _create : null,
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: _selected.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              backgroundColor: AppColors.primaryBlue,
-              foregroundColor: AppColors.white,
-              onPressed: _creating ? null : _create,
-              icon: _creating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.white,
-                      ),
-                    )
-                  : const Icon(Icons.check),
-              label: Text('Create (${_selected.length})'),
+    );
+  }
+}
+
+/// Pill search field, matching the inbox and the people picker.
+class _SearchField extends StatelessWidget {
+  const _SearchField({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.cardMuted,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: palette.divider),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 14),
+          Icon(Icons.search, size: 19, color: palette.textMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.text,
+                fontSize: 14,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: 'Search your friends',
+                hintStyle: AppTextStyles.bodyMedium.copyWith(
+                  color: palette.textMuted,
+                  fontSize: 14,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
     );
   }
 }
@@ -400,29 +574,76 @@ class _PersonPickTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final name = (member.fullName ?? '').trim().isEmpty
         ? 'Member'
         : member.fullName!.trim();
-    return ListTile(
+    final church = (member.churchName ?? '').trim();
+    return Pressable(
       onTap: onTap,
-      leading: _Avatar(photoUrl: member.profilePhotoUrl, name: name, size: 44),
-      title: Text(
-        name,
-        style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
-      ),
-      subtitle: (member.churchName ?? '').trim().isEmpty
-          ? null
-          : Text(
-              member.churchName!.trim(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.palette.textMuted,
+      pressedScale: 0.98,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          // Selected rows tint rather than only flipping a small trailing
+          // glyph — at a glance you can see who's in without reading down
+          // the right-hand edge.
+          color: selected
+              ? Color.alphaBlend(
+                  AppColors.primaryBlue.withValues(alpha: 0.10),
+                  palette.card,
+                )
+              : palette.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? AppColors.primaryBlue : palette.divider,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            _Avatar(photoUrl: member.profilePhotoUrl, name: name, size: 42),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (church.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      church,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.textMuted,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-      trailing: Icon(
-        selected ? Icons.check_circle : Icons.radio_button_unchecked,
-        color: selected ? AppColors.primaryBlue : context.palette.divider,
+            const SizedBox(width: 8),
+            Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked,
+              color: selected ? AppColors.primaryBlue : palette.divider,
+              size: 22,
+            ),
+          ],
+        ),
       ),
     );
   }

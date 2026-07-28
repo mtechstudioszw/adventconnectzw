@@ -16,6 +16,8 @@ import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../theme/app_tokens.dart';
+import '../../widgets/screen_shell.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/verified_tick.dart';
@@ -465,57 +467,117 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   @override
   Widget build(BuildContext context) {
     final group = _group;
+    final palette = context.palette;
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
-      appBar: AppBar(
-        title: Text(
-          _isChannel
-              ? 'Channel info'
-              : _isChurch
-              ? 'Group info'
-              : 'Group info',
-        ),
-        actions: [
-          if (_amAdmin)
-            IconButton(icon: const Icon(Icons.edit), onPressed: _editGroup),
-        ],
-      ),
+      backgroundColor: palette.scaffoldBg,
       body: _loading
           ? const Center(child: BrandSpinner(size: 30))
           : ListView(
+              padding: EdgeInsets.zero,
               children: [
-                const SizedBox(height: 16),
-                Center(
-                  child: GestureDetector(
-                    onTap: () =>
-                        FullImageViewer.show(context, group?.otherUserPhotoUrl),
-                    child: _GroupIcon(
-                      photoUrl: group?.otherUserPhotoUrl,
-                      name: group?.otherUserName ?? 'Group',
+                ScreenHero(
+                  title: _isChannel ? 'Channel info' : 'Group info',
+                  tagline: 'Advent Chat',
+                  fallbackRoute: 'messages',
+                  trailing: _amAdmin
+                      ? ScreenHeroTrailing(
+                          icon: Icons.edit_outlined,
+                          onTap: _editGroup,
+                        )
+                      : null,
+                ),
+                // Identity card rather than a bare centred stack. The photo,
+                // the name and what kind of group this is are one object, and
+                // the card is what makes it read as the group's own page
+                // rather than a settings list with a picture on top.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 22,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.card,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () => FullImageViewer.show(
+                            context,
+                            group?.otherUserPhotoUrl,
+                          ),
+                          child: _GroupIcon(
+                            photoUrl: group?.otherUserPhotoUrl,
+                            name: group?.otherUserName ?? 'Group',
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                group?.otherUserName ?? 'Group',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.titleLarge.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 20,
+                                ),
+                              ),
+                            ),
+                            if (_isChurch) const VerifiedTick(size: 17),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Type + size as one pill, so a channel is legible
+                        // as a channel without reading the paragraph below.
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.09),
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _isChannel
+                                    ? Icons.campaign_outlined
+                                    : Icons.groups_outlined,
+                                size: 14,
+                                color: AppColors.primaryBlue,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _isChannel
+                                    ? 'Announcements · ${_members.length} members'
+                                    : '${_members.length} member'
+                                          '${_members.length == 1 ? '' : 's'}',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.primaryBlue,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    group?.otherUserName ?? 'Group',
-                    style: AppTextStyles.titleLarge.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Center(
-                  child: Text(
-                    _isChannel
-                        ? '${_members.length} members · Channel'
-                        : '${_members.length} members',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.textMuted,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
 
                 // ---- CHURCH ANNOUNCEMENTS CHANNEL ----------------------
                 // WhatsApp-channel style: description + member count only,

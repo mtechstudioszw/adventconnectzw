@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback, SystemUiOverlayStyle;
 import 'package:go_router/go_router.dart';
@@ -45,11 +47,30 @@ class _ShortsScreenState extends State<ShortsScreen> {
   late final PageController _pager;
   late final YoutubePlayerController _player;
 
+  /// Stable identity for the one player widget.
+  ///
+  /// The player moves between PageView children as you swipe. Without a
+  /// GlobalKey, Flutter treats that as "destroy the widget at the old index,
+  /// create a new one at the new index" — which tears down and re-attaches
+  /// the underlying WebView every single swipe, and that is the flash people
+  /// see. With it, the element is *re-parented* and the WebView survives.
+  final GlobalKey _playerKey = GlobalKey(debugLabel: 'shorts-player');
+
   final List<YoutubeVideo> _shorts = [];
   late int _index;
   bool _loadingMore = false;
   bool _hasMore = true;
   bool _muted = false;
+  bool _paused = false;
+
+  /// True once the current clip is actually rendering a frame. Until then the
+  /// still stays over the player, because a cueing WebView paints black.
+  bool _ready = false;
+
+  StreamSubscription<YoutubePlayerValue>? _stateSub;
+  Timer? _cueDebounce;
+  Timer? _historyTimer;
+  Timer? _readyFallback;
 
   @override
   void initState() {
@@ -71,27 +92,60 @@ class _ShortsScreenState extends State<ShortsScreen> {
         mute: false,
       ),
     );
+    _stateSub = _player.stream.listen((value) {
+      final playing =
+          value.playerState == PlayerState.playing ||
+          value.playerState == PlayerState.paused;
+      if (playing && !_ready && mounted) setState(() => _ready = true);
+    });
     if (_shorts.isNotEmpty) _cue(_shorts[_index]);
     _maybeLoadMore();
   }
 
   @override
   void dispose() {
+    _cueDebounce?.cancel();
+    _historyTimer?.cancel();
+    _readyFallback?.cancel();
+    _stateSub?.cancel();
     _pager.dispose();
     _player.close();
     super.dispose();
   }
 
+  /// Point the one player at [v].
+  ///
+  /// Debounced: a fling crosses several pages and `onPageChanged` fires for
+  /// each one, so loading on every callback thrashed the WebView with cue
+  /// requests it would never finish. We only load the clip you actually
+  /// stopped on.
   void _cue(YoutubeVideo v) {
-    _player.loadVideoById(videoId: v.videoId);
-    // Shorts are watched to the end far more often than long videos, so
-    // history is recorded on open rather than on a progress tick.
-    YoutubeService.recordProgress(
-      v.videoId,
-      positionSeconds: 0,
-      durationSeconds: v.durationSeconds,
-      completed: true,
-    );
+    if (_ready && mounted) setState(() => _ready = false);
+    _cueDebounce?.cancel();
+    _cueDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted) return;
+      _player.loadVideoById(videoId: v.videoId);
+      // Belt and braces: if the player never reports playing (autoplay
+      // blocked, a dead clip), show it anyway rather than sitting on the
+      // still forever.
+      _readyFallback?.cancel();
+      _readyFallback = Timer(const Duration(milliseconds: 1600), () {
+        if (mounted && !_ready) setState(() => _ready = true);
+      });
+    });
+
+    // History was written on every page change, so a fling through twenty
+    // clips wrote twenty rows — and marked each one completed. Only count it
+    // once you've actually stayed on the clip.
+    _historyTimer?.cancel();
+    _historyTimer = Timer(const Duration(seconds: 2), () {
+      YoutubeService.recordProgress(
+        v.videoId,
+        positionSeconds: 0,
+        durationSeconds: v.durationSeconds,
+        completed: true,
+      );
+    });
   }
 
   Future<void> _maybeLoadMore() async {
@@ -113,7 +167,12 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
   void _onPageChanged(int i) {
     HapticFeedback.selectionClick();
-    setState(() => _index = i);
+    // A new clip always starts playing — carrying the paused flag across a
+    // swipe would land you on a still frame with no obvious way out.
+    setState(() {
+      _index = i;
+      _paused = false;
+    });
     _cue(_shorts[i]);
     _maybeLoadMore();
   }
@@ -121,6 +180,13 @@ class _ShortsScreenState extends State<ShortsScreen> {
   void _toggleMute() {
     setState(() => _muted = !_muted);
     _muted ? _player.mute() : _player.unMute();
+  }
+
+  /// Tap anywhere to pause/resume — the gesture every short-form feed has,
+  /// and the only way to hold on a verse long enough to read it.
+  void _togglePlay() {
+    setState(() => _paused = !_paused);
+    _paused ? _player.pauseVideo() : _player.playVideo();
   }
 
   Future<void> _share(YoutubeVideo v) async {
@@ -152,10 +218,18 @@ class _ShortsScreenState extends State<ShortsScreen> {
               scrollDirection: Axis.vertical,
               itemCount: _shorts.length,
               onPageChanged: _onPageChanged,
+              // Build the neighbouring pages so their stills are already
+              // decoded when they slide in — a swipe onto an undecoded image
+              // is the other half of the "glitchy" feel.
+              allowImplicitScrolling: true,
               itemBuilder: (context, i) => _ShortPage(
                 video: _shorts[i],
                 // Only the centred page gets the live player.
                 player: i == _index ? _player : null,
+                playerKey: _playerKey,
+                ready: _ready,
+                paused: _paused && i == _index,
+                onTogglePlay: _togglePlay,
                 muted: _muted,
                 onToggleMute: _toggleMute,
                 onShare: () => _share(_shorts[i]),
@@ -200,6 +274,10 @@ class _ShortPage extends StatelessWidget {
   const _ShortPage({
     required this.video,
     required this.player,
+    required this.playerKey,
+    required this.ready,
+    required this.paused,
+    required this.onTogglePlay,
     required this.muted,
     required this.onToggleMute,
     required this.onShare,
@@ -208,6 +286,10 @@ class _ShortPage extends StatelessWidget {
 
   final YoutubeVideo video;
   final YoutubePlayerController? player;
+  final GlobalKey playerKey;
+  final bool ready;
+  final bool paused;
+  final VoidCallback onTogglePlay;
   final bool muted;
   final VoidCallback onToggleMute;
   final VoidCallback onShare;
@@ -217,31 +299,83 @@ class _ShortPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final thumb = video.thumbnailUrl;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // The still sits under the player so a swipe never flashes black
-        // while the WebView cues the next clip.
-        if (thumb != null && thumb.isNotEmpty)
-          CachedImage(
+    final still = (thumb != null && thumb.isNotEmpty)
+        ? CachedImage(
             thumb,
             fit: BoxFit.cover,
             errorBuilder: (_, _, _) => const ThumbFallback(),
           )
-        else
-          const ThumbFallback(),
+        : const ThumbFallback();
 
+    return Stack(
+      fit: StackFit.expand,
+      children: [
         if (player != null)
           Center(
+            // Keyed so swiping re-parents this player instead of rebuilding
+            // it — see _ShortsScreenState._playerKey.
             child: YoutubePlayer(
+              key: playerKey,
               controller: player!,
               aspectRatio: 9 / 16,
+            ),
+          ),
+
+        // The still sits OVER the player, not under it: a WebView that is
+        // still cueing paints solid black, which is what covered the
+        // thumbnail and made every open flash. Fade it out only once the
+        // player reports a frame.
+        IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: (player != null && ready) ? 0 : 1,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOut,
+            child: still,
+          ),
+        ),
+
+        // Tap anywhere to pause/resume. Sits above the player so the WebView
+        // can't swallow the tap, but below the caption and rail so their
+        // buttons still win.
+        if (player != null)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTogglePlay,
+              child: const SizedBox.expand(),
             ),
           ),
 
         // Scrim only where the caption and buttons sit.
         const IgnorePointer(
           child: MediaScrim(topAlpha: 0x40, bottomAlpha: 0xC0),
+        ),
+
+        // Paused affordance — without it a tapped-to-pause clip is
+        // indistinguishable from one that has stalled on a bad connection.
+        IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: paused ? 1 : 0,
+            duration: const Duration(milliseconds: 160),
+            child: Center(
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppColors.darkNavy.withValues(alpha: 0.42),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.white.withValues(alpha: 0.28),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: AppColors.white,
+                  size: 40,
+                ),
+              ),
+            ),
+          ),
         ),
 
         // Caption block.

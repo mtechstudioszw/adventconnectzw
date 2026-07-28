@@ -447,17 +447,38 @@ class _AdventConnectAppState extends State<AdventConnectApp>
           builder: (context, child) => Stack(
             children: [
               OfflineBanner(child: child ?? const SizedBox.shrink()),
-              // Global voice-note bar — shows at the top whenever a note plays
-              // outside its own chat (WhatsApp parity).
-              const Align(
-                alignment: Alignment.topCenter,
-                child: VoiceMiniBar(),
-              ),
-              // Docked video + music bars — whatever is still playing stays
-              // reachable from anywhere, above the navigation island.
-              const Align(
-                alignment: Alignment.bottomCenter,
-                child: GlobalMediaBars(),
+              // The bars below sit ABOVE the router's Navigator, so they
+              // inherit no Overlay. Anything that resolves an Overlay lazily
+              // — Tooltip, Slider's value indicator, popup menus — throws
+              // "No Overlay widget found" there, and the ErrorWidget that
+              // replaces the failed subtree expands to its biggest
+              // constraints, which is where the giant bottom overflow came
+              // from. Give the layer its own Overlay instead of banning
+              // those widgets from it one at a time.
+              Positioned.fill(
+                child: Overlay(
+                  initialEntries: [
+                    OverlayEntry(
+                      builder: (_) => const Stack(
+                        children: [
+                          // Global voice-note bar — shows at the top whenever
+                          // a note plays outside its own chat (WhatsApp).
+                          Align(
+                            alignment: Alignment.topCenter,
+                            child: VoiceMiniBar(),
+                          ),
+                          // Docked video + music bars — whatever is still
+                          // playing stays reachable from anywhere, above the
+                          // navigation island.
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: GlobalMediaBars(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

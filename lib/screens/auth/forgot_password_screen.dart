@@ -5,7 +5,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import 'widgets/auth_hero.dart';
+import 'widgets/auth_shell.dart';
 
 /// Dedicated screen for requesting a password-reset email. Replaces the
 /// inline dialog that used to live inside login.
@@ -22,34 +22,19 @@ class ForgotPasswordScreen extends StatefulWidget {
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
-    with SingleTickerProviderStateMixin {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-
-  late final AnimationController _entrance;
-  late final Animation<double> _fade;
-  late final Animation<double> _slide;
 
   bool _sending = false;
   String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _entrance = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 16, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
-  }
+  // No entrance controller here any more — AuthShell owns the staggered
+  // rise for every screen in the flow, so they all enter identically
+  // instead of each one inventing its own fade.
 
   @override
   void dispose() {
-    _entrance.dispose();
     _emailController.dispose();
     super.dispose();
   }
@@ -82,48 +67,60 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            AuthHero(
-              title: 'Forgot password?',
-              // A CODE, not a link. AuthService.sendPasswordReset sends no
-              // redirectTo, so Supabase emails a 6-digit recovery code
-              // which is entered on the next screen — a deep link was
-              // unreliable on mobile. This copy said "reset link" in three
-              // places, so members sat waiting for a link that was never
-              // coming and never opened the email they did get.
-              subtitle: 'Enter your email and we\'ll send you a 6-digit '
-                  'reset code.\nStuck? Call or WhatsApp +263 77 809 2494.',
-              tagline: 'Account recovery',
-              onBack: () => context.canPop()
-                  ? context.pop()
-                  : context.goNamed('login'),
+    // AuthShell, not AuthHero: the curved navy slab is gone (see
+    // auth_shell.dart). The intro film's light field keeps running
+    // behind this, so arriving here from onboarding is continuous
+    // rather than a cut to an unrelated template header.
+    //
+    // No local "check your inbox" state either: on success we push
+    // straight to the code-entry screen, which is where the user needs
+    // to be. The old `_sent` branch was dead code — nothing ever set
+    // the flag — and it told people to "tap the link in that email".
+    return AuthShell(
+      eyebrow: 'Account recovery',
+      title: 'Forgot your\npassword?',
+      // A CODE, not a link. AuthService.sendPasswordReset sends no
+      // redirectTo, so Supabase emails a 6-digit recovery code which is
+      // entered on the next screen — a deep link was unreliable on
+      // mobile. This copy said "reset link" in three places, so members
+      // sat waiting for a link that was never coming and never opened
+      // the email they did get.
+      subtitle: 'Enter your email and we\'ll send you a 6-digit reset '
+          'code. It arrives in under a minute.',
+      icon: Icons.lock_reset_rounded,
+      onBack: () =>
+          context.canPop() ? context.pop() : context.goNamed('login'),
+      footer: _buildFooter(),
+      child: _buildForm(),
+    );
+  }
+
+  /// Support route, pinned at the bottom. It used to be jammed into the
+  /// header subtitle as "if dosent work contact us at +263…", which put a
+  /// phone number in the middle of an instruction.
+  Widget _buildFooter() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton(
+          onPressed: () => context.goNamed('login'),
+          child: Text(
+            'Back to sign in',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w700,
             ),
-            AnimatedBuilder(
-              animation: _entrance,
-              builder: (context, child) => Opacity(
-                opacity: _fade.value,
-                child: Transform.translate(
-                  offset: Offset(0, _slide.value),
-                  child: child,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                // No local "check your inbox" state: on success we push
-                // straight to the code-entry screen, which is where the
-                // user needs to be. The old `_sent` branch was dead code
-                // — nothing ever set the flag — and it told people to
-                // "tap the link in that email".
-                child: _buildForm(),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        Text(
+          'Still stuck? Call or WhatsApp +263 77 809 2494',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: context.palette.textMuted,
+            fontSize: 12,
+          ),
+        ),
+      ],
     );
   }
 
@@ -236,24 +233,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             busy: _sending,
             onTap: _sending ? null : _send,
           ),
-          const SizedBox(height: 18),
-          Center(
-            child: TextButton(
-              onPressed: () => context.goNamed('login'),
-              child: Text(
-                'Back to sign in',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.primaryBlue,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
+          // "Back to sign in" lives in the shell's footer now, pinned to
+          // the bottom of the screen rather than floating under the
+          // submit button where it competed with it.
         ],
       ),
     );
   }
-
 }
 
 class _GradientButton extends StatelessWidget {

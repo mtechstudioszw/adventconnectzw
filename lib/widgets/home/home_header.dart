@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter, lerpDouble;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show FloatingHeaderSnapConfiguration;
@@ -6,20 +6,11 @@ import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 
 import '../../services/sabbath_service.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../cached_image.dart';
 import '../motion/pressable.dart';
-
-/// Set false if the frosted header ever janks on low-end hardware.
-///
-/// True device-tier detection needs a plugin we don't ship, so the blur is
-/// gated on two cheap proxies instead: it only composites once the header is
-/// actually collapsing (at rest it costs nothing), and it turns itself off
-/// when the OS "remove animations" flag is set.
-const bool kHomeHeaderBlur = true;
 
 /// What the header's status line is currently saying.
 enum SabbathPhase { inSabbath, approaching, ordinary }
@@ -80,9 +71,16 @@ class SabbathStatus {
 /// flipping at a threshold, so the header tracks the finger and reverses
 /// exactly when you scroll back up.
 ///
-/// On Sabbath (Friday sundown → Saturday sundown) the whole bar adopts a
-/// warm sundown gradient and the greeting becomes "Sabata yakanaka". That is
-/// the ONE gold moment on this screen — see CLAUDE.md's one-highlight rule.
+/// On Sabbath (Friday sundown → Saturday sundown) the day announces
+/// itself WITHOUT changing the surface: a faint sundown wash over the
+/// same flat background, a gold horizon line along the header's bottom
+/// edge that stays lit all day, and the "Happy Sabbath" greeting. That
+/// gold edge is the ONE gold moment on this screen — see CLAUDE.md's
+/// one-highlight rule.
+///
+/// It used to swap in a darkNavy→gold gradient with white text, which
+/// was the last navy header in the app and put a visible seam between
+/// the bar and the feed on the one day that most wants to feel whole.
 class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   HomeHeaderDelegate({
     required this.topInset,
@@ -171,17 +169,28 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
     final palette = context.palette;
     final isSabbath = sabbath.isSabbath;
 
-    // Sabbath sundown gradient, blended from two palette colours so we stay
-    // inside the approved scheme rather than inventing a warm hue.
+    // SABBATH IS MARKED, BUT NOT WITH A NAVY SLAB.
+    //
+    // This header used to switch to a darkNavy→gold gradient with white
+    // text for the whole of Sabbath — the last navy header left in the
+    // app, and the exact shape the flat-header rule retired everywhere
+    // else. It also reintroduced the two-backgrounds seam on the one day
+    // it most wanted to feel special.
+    //
+    // The day still announces itself (founder, 29 Jul: "there should be
+    // a change meaning sabbath is here"), just in the app's own
+    // language: the background stays flat and shared with the page, and
+    // Sabbath arrives as a warm sundown wash across the top plus a gold
+    // horizon line at the header's edge. Foreground text stays
+    // palette.text, so nothing has to be re-coloured to stay readable —
+    // which is where the old white-on-navy conversions kept going wrong.
     final sundownEnd = Color.lerp(
-      AppColors.darkNavy,
       AppColors.goldAccent,
-      0.38,
+      AppColors.white,
+      0.55,
     )!;
-    final onHeader = isSabbath ? AppColors.white : palette.text;
-    final onHeaderMuted = isSabbath
-        ? AppColors.white.withValues(alpha: 0.78)
-        : palette.textMuted;
+    final onHeader = palette.text;
+    final onHeaderMuted = palette.textMuted;
 
     // Heights add up to exactly the current body height (4px slack when
     // expanded) so the header can never overflow mid-scroll. Branded, the
@@ -245,14 +254,12 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                       _HeaderIcon(
                         icon: Icons.search_rounded,
                         onTap: onSearchTap,
-                        isSabbath: isSabbath,
                         tooltip: 'Search',
                       ),
                       const SizedBox(width: AppSpace.sm),
                       _HeaderIcon(
                         icon: Icons.notifications_none_rounded,
                         onTap: onBellTap,
-                        isSabbath: isSabbath,
                         badge: unreadNotifications,
                         tooltip: 'Notifications',
                       ),
@@ -287,9 +294,12 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
       ],
     );
 
-    // Status-bar icons must flip to light over the Sabbath gradient.
+    // Status-bar icons follow the THEME only. They used to flip light on
+    // Sabbath because the bar behind them was navy; the Sabbath header is
+    // light now, so keeping that would have painted white icons onto a
+    // near-white background — invisible for a whole day.
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final lightIcons = isSabbath || dark;
+    final lightIcons = dark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -331,61 +341,64 @@ class _Background extends StatelessWidget {
     //
     // Opaque scaffoldBg means header, chips and feed are one continuous
     // colour, and content passing under the bar is simply hidden.
-    final blurring =
-        isSabbath && kHomeHeaderBlur && t > 0.05 && AppMotion.enabled(context);
-
-    Widget surface = DecoratedBox(
-      decoration: BoxDecoration(
-        color: isSabbath ? null : palette.scaffoldBg,
-        gradient: isSabbath
-            ? LinearGradient(
-                colors: [AppColors.darkNavy, sundownEnd],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-      ),
+    // Always opaque, always the page's own colour. Sabbath adds warmth
+    // ON TOP of it rather than replacing it, so the header and the feed
+    // are still one continuous surface either way.
+    final Widget surface = DecoratedBox(
+      decoration: BoxDecoration(color: palette.scaffoldBg),
     );
-
-    if (blurring) {
-      surface = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18 * t, sigmaY: 18 * t),
-        child: surface,
-      );
-    }
 
     return ClipRect(
       child: Stack(
         fit: StackFit.expand,
         children: [
           surface,
-          // Soft top-left bloom. Sabbath only — over the flat scaffold it
-          // was tinting the header lighter than the page, which is the
-          // other half of the "two different backgrounds" seam.
+          // Sundown wash — a low, wide warmth rising from the header's
+          // bottom edge, the way light does at sunset. Kept faint: it
+          // has to read as "the light has changed", not as a coloured
+          // banner stuck to the top of the page.
           if (isSabbath)
             IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(-0.7, -0.9),
-                    radius: 1.1,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                     colors: [
-                      AppColors.white.withValues(alpha: 0.12),
-                      AppColors.white.withValues(alpha: 0),
+                      AppColors.goldAccent.withValues(alpha: 0.05),
+                      sundownEnd.withValues(alpha: 0.16),
                     ],
                   ),
                 ),
               ),
             ),
-          // Hairline that fades in only once the bar is fully collapsed, so
-          // the content below reads as scrolling *under* the header.
+          // The horizon. On Sabbath this is a gold line held at full
+          // strength for the whole day — the one edge that says which
+          // day it is even after the header has collapsed and the wash
+          // above has scrolled away. On any other day it is the ordinary
+          // divider, and it fades in only once the bar is fully
+          // collapsed so content reads as scrolling *under* the header.
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: Opacity(
-              opacity: ((t - 0.7) / 0.3).clamp(0.0, 1.0),
-              child: Container(height: 1, color: palette.divider),
+              opacity: isSabbath ? 1.0 : ((t - 0.7) / 0.3).clamp(0.0, 1.0),
+              child: Container(
+                height: isSabbath ? 2 : 1,
+                decoration: isSabbath
+                    ? const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0x00C8A951),
+                            AppColors.goldAccent,
+                            Color(0x00C8A951),
+                          ],
+                        ),
+                      )
+                    : null,
+                color: isSabbath ? null : palette.divider,
+              ),
             ),
           ),
         ],
@@ -677,14 +690,12 @@ class _HeaderIcon extends StatelessWidget {
   const _HeaderIcon({
     required this.icon,
     required this.onTap,
-    required this.isSabbath,
     required this.tooltip,
     this.badge = 0,
   });
 
   final IconData icon;
   final VoidCallback onTap;
-  final bool isSabbath;
   final String tooltip;
   final int badge;
 
@@ -692,19 +703,22 @@ class _HeaderIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final fg = isSabbath ? AppColors.white : palette.text;
+
+    // No Sabbath branch any more. These used to go white-on-frosted for
+    // the day because the bar behind them was navy — on the light
+    // Sabbath header that is a white icon on a near-white disc, i.e.
+    // invisible, which is precisely the failure mode CLAUDE.md warns
+    // about when a navy surface is flattened. The header is light in
+    // every state now, so the ordinary treatment is the only one.
+    final fg = palette.text;
 
     // A raised control rather than a flat grey disc. The old #E4E9F2 blob sat
     // *into* the background and read as a placeholder; a card-coloured face
     // with a hairline edge, a top sheen and a soft drop shadow reads as
-    // something you can press. On Sabbath it becomes frosted white so it
-    // still separates from the sundown gradient.
-    final face = isSabbath
-        ? AppColors.white.withValues(alpha: 0.18)
-        : (dark ? palette.cardMuted : palette.card);
-    final edge = isSabbath
-        ? AppColors.white.withValues(alpha: 0.30)
-        : (dark ? AppColors.white.withValues(alpha: 0.10) : palette.divider);
+    // something you can press.
+    final face = dark ? palette.cardMuted : palette.card;
+    final edge =
+        dark ? AppColors.white.withValues(alpha: 0.10) : palette.divider;
 
     return Tooltip(
       message: tooltip,
@@ -738,7 +752,7 @@ class _HeaderIcon extends StatelessWidget {
                       face,
                     ],
                   ),
-                  boxShadow: isSabbath ? null : AppShadows.card(context),
+                  boxShadow: AppShadows.card(context),
                 ),
                 alignment: Alignment.center,
                 child: Icon(icon, color: fg, size: 20),
@@ -757,9 +771,7 @@ class _HeaderIcon extends StatelessWidget {
                       color: AppColors.red,
                       borderRadius: BorderRadius.circular(9),
                       border: Border.all(
-                        color: isSabbath
-                            ? AppColors.darkNavy
-                            : context.palette.scaffoldBg,
+                        color: context.palette.scaffoldBg,
                         width: 1.5,
                       ),
                     ),

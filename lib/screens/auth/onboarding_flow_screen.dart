@@ -17,7 +17,8 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
-import '../onboarding/widgets/film_scenes.dart' show GoldRingPainter;
+import '../onboarding/widgets/film_scenes.dart'
+    show AmbientPainter, GoldRingPainter;
 import 'package:cached_network_image/cached_network_image.dart';
 
 /// Single-screen post-signup onboarding. PageView drives 6 steps:
@@ -45,6 +46,9 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
 
   final PageController _page = PageController();
   int _index = 0;
+
+  /// The intro film's light field, still running behind the wizard.
+  late final AnimationController _ambient;
 
   // ---------------- profile step ----------------
   final _nameController = TextEditingController();
@@ -86,18 +90,37 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     final fullName = ((meta['full_name'] as String?) ?? '').trim();
     final nameParts = fullName.split(RegExp(r'\s+'));
     _nameController.text = nameParts.isNotEmpty ? nameParts.first : '';
-    _surnameController.text =
-        nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+    _surnameController.text = nameParts.length > 1
+        ? nameParts.sublist(1).join(' ')
+        : '';
     _usernameController.text = (meta['username'] as String?) ?? '';
     _bioController.text = (meta['bio'] as String?) ?? '';
     _profilePhotoUrl = meta['profile_photo_url'] as String?;
     _coverPhotoUrl = meta['cover_photo_url'] as String?;
     _homeChurchId = meta['church_id'] as String?;
     _loadChurches();
+    // Same light field as the intro film and AuthShell, so the whole
+    // first-run path — intro → sign in → verify → set up — sits on one
+    // continuously moving backdrop instead of three unrelated ones.
+    _ambient = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.enabled(context)) {
+      if (!_ambient.isAnimating) _ambient.repeat();
+    } else {
+      _ambient.stop();
+    }
   }
 
   @override
   void dispose() {
+    _ambient.dispose();
     _page.dispose();
     _nameController.dispose();
     _surnameController.dispose();
@@ -136,20 +159,26 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
       // Real first name + surname, both junk-filtered — this is where Google
       // sign-ups get caught (they skip the signup form) and nobody can bypass
       // it by leaving one blank or typing a number.
-      final firstErr =
-          NameValidator.namePart(_nameController.text, 'First name');
+      final firstErr = NameValidator.namePart(
+        _nameController.text,
+        'First name',
+      );
       if (firstErr != null) {
         setState(() => _error = firstErr);
         return;
       }
-      final surnameErr =
-          NameValidator.namePart(_surnameController.text, 'Surname');
+      final surnameErr = NameValidator.namePart(
+        _surnameController.text,
+        'Surname',
+      );
       if (surnameErr != null) {
         setState(() => _error = surnameErr);
         return;
       }
-      final name =
-          NameValidator.combine(_nameController.text, _surnameController.text);
+      final name = NameValidator.combine(
+        _nameController.text,
+        _surnameController.text,
+      );
       final username = _usernameController.text.trim();
       final usernameErr = NameValidator.username(username);
       if (usernameErr != null) {
@@ -297,9 +326,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     // Don't block "Enter App" on this network write — a slow connection here
     // made the blue reveal hang ~3s. Home loads immediately; the completion
     // flag persists in the background.
-    unawaited(
-      AuthService.updateMetadataDirect({'onboarding_completed': true}),
-    );
+    unawaited(AuthService.updateMetadataDirect({'onboarding_completed': true}));
     if (!mounted) return;
     context.goNamed('home');
   }
@@ -367,43 +394,63 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     ];
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _FlowProgress(page: _page, index: _index, total: _stepCount),
-            Expanded(
-              child: PageView(
-                controller: _page,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (i) => setState(() => _index = i),
-                children: [
-                  for (var i = 0; i < pages.length; i++)
-                    _StepDepth(
-                      page: _page,
-                      index: i,
-                      active: _index == i,
-                      child: pages[i],
-                    ),
-                ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Continues the intro / AuthShell backdrop. Own repaint layer
+          // so the form on top never re-rasterises with it.
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _ambient,
+              builder: (context, _) => CustomPaint(
+                painter: AmbientPainter(loop: _ambient.value, film: 1.0),
               ),
             ),
-            if (_index != 0 && _index != _stepCount - 1)
-              _NavBar(
-                index: _index,
-                saving: _saving,
-                error: _error,
-                onBack: () => _go(_index - 1),
-                // Church step is now SKIPPABLE (user decision 2026-07-02;
-                // it was previously mandatory per patch_065). Picking one
-                // still auto-follows it; skipping just means no home
-                // church until they set it later from a church page.
-                onNext: (_index == 2 && _homeChurchId == null)
-                    ? null
-                    : _saveAndNext,
-                onSkip: () => _go(_index + 1),
-              ),
-          ],
-        ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                // Progress bars ARE right here, unlike the intro film. This
+                // is a six-step form: the user is being asked to complete
+                // something and needs to know how much is left. The film had
+                // them removed because they made a continuous piece look
+                // like slides — the opposite situation.
+                _FlowProgress(page: _page, index: _index, total: _stepCount),
+                Expanded(
+                  child: PageView(
+                    controller: _page,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (i) => setState(() => _index = i),
+                    children: [
+                      for (var i = 0; i < pages.length; i++)
+                        _StepDepth(
+                          page: _page,
+                          index: i,
+                          active: _index == i,
+                          child: pages[i],
+                        ),
+                    ],
+                  ),
+                ),
+                if (_index != 0 && _index != _stepCount - 1)
+                  _NavBar(
+                    index: _index,
+                    saving: _saving,
+                    error: _error,
+                    onBack: () => _go(_index - 1),
+                    // Church step is now SKIPPABLE (user decision 2026-07-02;
+                    // it was previously mandatory per patch_065). Picking one
+                    // still auto-follows it; skipping just means no home
+                    // church until they set it later from a church page.
+                    onNext: (_index == 2 && _homeChurchId == null)
+                        ? null
+                        : _saveAndNext,
+                    onSkip: () => _go(_index + 1),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

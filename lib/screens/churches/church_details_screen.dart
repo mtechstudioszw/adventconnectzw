@@ -16,10 +16,17 @@ class ChurchDetailsScreen extends StatefulWidget {
     super.key,
     required this.churchId,
     this.initialChurch,
+    this.autoLoad = true,
   });
 
   final String churchId;
   final Church? initialChurch;
+
+  /// Whether to read the signed-in user and fetch follow/admin state on
+  /// mount. True in the app. False lets a widget test exercise the hero
+  /// against an [initialChurch] without a Supabase client. Same seam as
+  /// [SearchScreen.autoLoad] and [SplashScreen.autoNavigate].
+  final bool autoLoad;
 
   @override
   State<ChurchDetailsScreen> createState() => _ChurchDetailsScreenState();
@@ -53,6 +60,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     super.initState();
     _church = widget.initialChurch;
     _loading = widget.initialChurch == null;
+    if (!widget.autoLoad) return;
     _homeChurchId = AuthService.currentUser?.userMetadata?['church_id']
         ?.toString();
     _bootstrap();
@@ -237,37 +245,65 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     );
   }
 
+  /// Diameter of the church logo where it overlaps the cover.
+  static const double _avatarSize = 92;
+
+  /// How much of the avatar hangs below the cover's bottom edge. Exactly
+  /// half, so the logo sits ON the seam rather than near it.
+  static const double _avatarDrop = _avatarSize / 2;
+
   Widget _buildHero(Church church) {
     return Stack(
+      // The avatar deliberately hangs past the cover's bottom edge.
+      clipBehavior: Clip.none,
       children: [
-        SizedBox(
-          width: double.infinity,
-          height: 180,
-          child: church.coverPhotoUrl == null || church.coverPhotoUrl!.isEmpty
-              ? Container(
-                  decoration: const BoxDecoration(
-                    gradient: AppColors.appBarGradient,
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.church, size: 56, color: AppColors.white),
-                  ),
-                )
-              : GestureDetector(
-                  onTap: () =>
-                      FullImageViewer.show(context, church.coverPhotoUrl),
-                  child: CachedImage(
-                    church.coverPhotoUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: context.palette.cardMuted,
+        Padding(
+          // Reserves the space the avatar drops into, so the header below
+          // starts clear of it instead of being overlapped.
+          padding: const EdgeInsets.only(bottom: _avatarDrop),
+          child: AspectRatio(
+            // 16:9 — the SAME ratio the admin frames their upload against
+            // in edit_church_screen. The public profile used to be a fixed
+            // 180dp at full width, which is ~2:1 on a 360dp phone and
+            // wider still on a 412dp one, so the composition an admin
+            // carefully arranged was cropped top and bottom the moment a
+            // member looked at it. Matching the ratio is what makes an
+            // upload "just fit".
+            aspectRatio: 16 / 9,
+            child: church.coverPhotoUrl == null || church.coverPhotoUrl!.isEmpty
+                ? Container(
+                    decoration: const BoxDecoration(
+                      gradient: AppColors.appBarGradient,
+                    ),
+                    child: const Center(
                       child: Icon(
-                        Icons.broken_image_outlined,
+                        Icons.church,
                         size: 56,
-                        color: context.palette.textMuted,
+                        color: AppColors.white,
+                      ),
+                    ),
+                  )
+                : GestureDetector(
+                    onTap: () =>
+                        FullImageViewer.show(context, church.coverPhotoUrl),
+                    child: CachedImage(
+                      church.coverPhotoUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: context.palette.cardMuted,
+                        // Centred: CachedImage hands its errorBuilder TIGHT
+                        // constraints, so a bare child paints top-left.
+                        child: Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            size: 56,
+                            color: context.palette.textMuted,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+          ),
         ),
         Positioned(
           top: 12,
@@ -287,32 +323,78 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
             ),
           ),
         ),
+        Positioned(left: 20, bottom: 0, child: _buildAvatar(church)),
       ],
     );
   }
 
-  /// Round church logo/avatar (churches.profile_photo_url) shown next to
-  /// the name. Renders nothing when no logo is set so unbranded churches
-  /// keep the original full-width title.
+  /// Round church logo (churches.profile_photo_url), sitting on the
+  /// cover's bottom edge.
+  ///
+  /// It used to render NOTHING when no logo was set — and no church in
+  /// production has one, so in practice every church profile had no
+  /// avatar at all and the identity slot simply wasn't there. It always
+  /// renders now: a branded church gets its logo, an unbranded one gets
+  /// the church glyph on the brand gradient, which is a placeholder an
+  /// admin can see and want to replace.
+  ///
+  /// The ring is painted by an OUTER container and the image is given an
+  /// explicit size, because `Container(alignment:)` hands its child LOOSE
+  /// constraints — an unsized image floats inside the circle and leaves a
+  /// visible rim. Same reason the fallback is wrapped in `Center`:
+  /// `CachedImage` hands its errorBuilder TIGHT constraints, so a bare
+  /// child paints top-left.
   Widget _buildAvatar(Church church) {
     final url = church.profilePhotoUrl;
-    if (url == null || url.isEmpty) return const SizedBox.shrink();
+    final hasLogo = url != null && url.isNotEmpty;
+    final palette = context.palette;
+
+    Widget fallback() => Container(
+      width: _avatarSize,
+      height: _avatarSize,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: AppColors.primaryGradient,
+      ),
+      child: const Center(
+        child: Icon(Icons.church, color: AppColors.white, size: 40),
+      ),
+    );
+
     return GestureDetector(
-      onTap: () => FullImageViewer.show(context, url),
+      onTap: hasLogo ? () => FullImageViewer.show(context, url) : null,
       child: Container(
-        width: 56,
-        height: 56,
+        width: _avatarSize + 8,
+        height: _avatarSize + 8,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: context.palette.cardMuted,
-          border: Border.all(color: context.palette.divider, width: 1.5),
+          // The ring reads as the page's surface, so the logo looks
+          // punched through the cover rather than pasted onto it.
+          color: palette.scaffoldBg,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: CachedImage(
-          url,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              Icon(Icons.church, color: context.palette.textMuted, size: 26),
+        child: Center(
+          child: ClipOval(
+            child: SizedBox(
+              width: _avatarSize,
+              height: _avatarSize,
+              child: hasLogo
+                  ? CachedImage(
+                      url,
+                      width: _avatarSize,
+                      height: _avatarSize,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => fallback(),
+                    )
+                  : fallback(),
+            ),
+          ),
         ),
       ),
     );
@@ -327,10 +409,9 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildAvatar(church),
-              if (church.profilePhotoUrl != null &&
-                  church.profilePhotoUrl!.isNotEmpty)
-                const SizedBox(width: 14),
+              // The logo lives on the cover's edge now, not inline beside
+              // the name — so the name gets the full width at every
+              // church, branded or not.
               Expanded(
                 child: Text(church.name, style: AppTextStyles.displayMedium),
               ),
@@ -346,35 +427,51 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
+          // Wrap, not Row. As a Row these two stats had no Flexible and no
+          // room to give: at 2.5x system text they overflowed the right
+          // edge by 97px on a 360dp phone. They stack now when the line
+          // runs out, which is what a pair of independent facts should do.
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 18,
-                color: context.palette.textMuted,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: 18,
+                    color: context.palette.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    church.city.isEmpty ? 'Unknown city' : church.city,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: context.palette.text,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 6),
-              Text(
-                church.city.isEmpty ? 'Unknown city' : church.city,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: context.palette.text,
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Icon(
-                Icons.people_outline,
-                size: 18,
-                color: AppColors.primaryBlue,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                // Exact follower count, honestly labelled — the app has
-                // no data on real congregation membership.
-                '${church.membersCount} on Advent',
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.primaryBlue,
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.people_outline,
+                    size: 18,
+                    color: AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    // Exact follower count, honestly labelled — the app
+                    // has no data on real congregation membership.
+                    '${church.membersCount} on Advent',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -627,10 +724,10 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
           onTap: church == null
               ? null
               : () => context.pushNamed(
-                    'claim_church',
-                    pathParameters: {'id': church.id},
-                    extra: church,
-                  ),
+                  'claim_church',
+                  pathParameters: {'id': church.id},
+                  extra: church,
+                ),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -673,10 +770,10 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                       Text(
                         claimed
                             ? 'Already claimed. If you believe you have the '
-                                'right to manage it, tell us and we\'ll look '
-                                'into it.'
+                                  'right to manage it, tell us and we\'ll look '
+                                  'into it.'
                             : 'Pastors and elders can claim it to post '
-                                'announcements and events.',
+                                  'announcements and events.',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: context.palette.textMuted,
                           height: 1.35,

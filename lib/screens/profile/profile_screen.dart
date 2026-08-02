@@ -76,6 +76,11 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
   Future<void> _loadMinistryTags() async {
     final id = AuthService.currentUser?.id;
     if (id == null) return;
+    // Paint the cached chips first. They used to arrive only after a
+    // round-trip, so the ministry / spiritual-gifts section popped in
+    // late on every visit and was simply blank offline.
+    final cached = MinistryService.cachedMine();
+    if (cached.isNotEmpty && mounted) setState(() => _myTags = cached);
     try {
       final tags = await MinistryService.fetchForProfile(id);
       if (mounted) setState(() => _myTags = tags);

@@ -1,7 +1,13 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
@@ -29,8 +35,66 @@ Future<void> showFriendQrSheet(BuildContext context) {
   );
 }
 
-class _FriendQrSheet extends StatelessWidget {
+class _FriendQrSheet extends StatefulWidget {
   const _FriendQrSheet();
+
+  @override
+  State<_FriendQrSheet> createState() => _FriendQrSheetState();
+}
+
+class _FriendQrSheetState extends State<_FriendQrSheet> {
+  /// Wraps the QR card so it can be rasterised for sharing.
+  final GlobalKey _qrKey = GlobalKey();
+  bool _sharing = false;
+
+  /// Share the code as a real PNG, not just a link.
+  ///
+  /// A friend code is something people hold up across a hall or drop into
+  /// a church WhatsApp group — as a bare URL it's unrecognisable and
+  /// unscannable. We rasterise the same card that's on screen (white
+  /// background baked in, so it survives dark mode and any chat app's
+  /// bubble colour) and attach the deep link as text for anyone whose
+  /// client strips images.
+  Future<void> _share(String userId, String name) async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final boundary =
+          _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) throw StateError('QR not laid out');
+      // 3x so the code stays crisp if the recipient zooms or reshares.
+      final ui.Image image = await boundary.toImage(pixelRatio: 3);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw StateError('encode failed');
+      final bytes = byteData.buffer.asUint8List();
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/advent-friend-code.png');
+      await file.writeAsBytes(bytes, flush: true);
+
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'image/png')],
+        text: 'Scan my Advent Connect ZW friend code to open my profile.\n'
+            '$name\n${friendQrPayload(userId)}',
+      );
+    } catch (_) {
+      // Rasterising can fail on odd devices; the link alone is still
+      // useful, so fall back rather than telling them it didn't work.
+      try {
+        await Share.share(
+          'Scan my Advent Connect ZW friend code to open my profile.\n'
+          '$name\n${friendQrPayload(userId)}',
+        );
+      } catch (_) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not open the share sheet.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,65 +150,126 @@ class _FriendQrSheet extends StatelessWidget {
                 ),
               )
             else
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  // The QR itself must stay dark-on-white in BOTH themes —
-                  // scanners read contrast, not brand palettes, and an
-                  // inverted code in dark mode is unreliable to scan.
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 18,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: QrImageView(
-                  data: friendQrPayload(id),
-                  version: QrVersions.auto,
-                  size: 210,
-                  backgroundColor: AppColors.white,
-                  eyeStyle: const QrEyeStyle(
-                    eyeShape: QrEyeShape.square,
-                    color: AppColors.darkNavy,
+              // RepaintBoundary so the card can be rasterised for
+              // sharing. The name is baked INTO the shared image — a QR
+              // with no name attached tells the recipient nothing about
+              // whose code they're about to scan.
+              RepaintBoundary(
+                key: _qrKey,
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    // The QR itself must stay dark-on-white in BOTH themes
+                    // — scanners read contrast, not brand palettes, and an
+                    // inverted code in dark mode is unreliable to scan.
+                    // Baked white also means the shared PNG survives
+                    // whatever bubble colour a chat app puts behind it.
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 18,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  dataModuleStyle: const QrDataModuleStyle(
-                    dataModuleShape: QrDataModuleShape.square,
-                    color: AppColors.darkNavy,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      QrImageView(
+                        data: friendQrPayload(id),
+                        version: QrVersions.auto,
+                        size: 210,
+                        backgroundColor: AppColors.white,
+                        eyeStyle: const QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: AppColors.darkNavy,
+                        ),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: AppColors.darkNavy,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        name,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.darkNavy,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'Advent Connect ZW',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.textMuted,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            const SizedBox(height: 14),
-            Text(
-              name,
-              style: AppTextStyles.titleMedium.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
             const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  context.pushNamed('scan_friend');
-                },
-                icon: const Icon(Icons.qr_code_scanner, size: 19),
-                label: Text(
-                  'Scan a code',
-                  style: AppTextStyles.buttonText.copyWith(fontSize: 15),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+            Row(
+              children: [
+                if (id != null) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _sharing ? null : () => _share(id, name),
+                      icon: _sharing
+                          ? const SizedBox(
+                              width: 17,
+                              height: 17,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                color: AppColors.primaryBlue,
+                              ),
+                            )
+                          : const Icon(Icons.ios_share_rounded, size: 19),
+                      label: Text(
+                        _sharing ? 'Preparing…' : 'Share code',
+                        style: AppTextStyles.buttonText.copyWith(
+                          fontSize: 15,
+                          color: AppColors.primaryBlue,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryBlue,
+                        side: const BorderSide(color: AppColors.primaryBlue),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.pushNamed('scan_friend');
+                    },
+                    icon: const Icon(Icons.qr_code_scanner, size: 19),
+                    label: Text(
+                      'Scan',
+                      style: AppTextStyles.buttonText.copyWith(fontSize: 15),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

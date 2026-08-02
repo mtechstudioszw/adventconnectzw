@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/friendship_model.dart';
 import '../models/story_model.dart';
+import '../services/auth_service.dart';
 import '../services/block_service.dart';
 import '../services/feed_service.dart';
 import '../services/messaging_service.dart';
@@ -70,6 +72,10 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
   bool _busy = false;
   bool _blockedByMe = false;
 
+  /// Accepted friendship with this person. Gates presence — see the note
+  /// where `presence` is built.
+  bool _isFriend = false;
+
   bool get _hasStory => _stories.isNotEmpty;
 
   @override
@@ -86,15 +92,23 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       FeedService.fetchMyViewedStoryIds(),
       MessagingService.fetchConversationStates(),
       MessagingService.isBlockedByMe(widget.userId),
+      FeedService.fetchMyFriendships(),
     ]);
     if (!mounted) return;
     final allStories = results[2] as List<Story>;
     final viewed = results[3] as Set<String>;
     final mine = allStories.where((s) => s.authorId == widget.userId).toList();
     final states = results[4] as Map;
+    final me = AuthService.currentUser?.id;
+    final friend = (results[6] as List).cast<Friendship>().any((f) {
+      if (!f.isAccepted) return false;
+      final other = f.requesterId == me ? f.addresseeId : f.requesterId;
+      return other == widget.userId;
+    });
     setState(() {
       _profile = results[0] as PublicUserProfile?;
       _lastSeen = results[1] as DateTime?;
+      _isFriend = friend;
       _stories = mine;
       _allViewed = mine.isNotEmpty && mine.every((s) => viewed.contains(s.id));
       _blockedByMe = results[5] == true;
@@ -197,12 +211,19 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
     final bio = _profile?.bio?.trim() ?? '';
     final coverUrl = _profile?.coverPhotoUrl;
 
-    final isOnline = PresenceService.isOnline(widget.userId);
-    final presence = isOnline
-        ? 'Online'
-        : (_lastSeen != null
-            ? 'Last seen ${PresenceService.formatLastSeen(_lastSeen!)}'
-            : 'Offline');
+    // Presence is friends-only. This sheet opens from a tap on ANY post
+    // author's avatar in the home feed, so it was telling you whether a
+    // complete stranger was at their phone right now — and showing their
+    // last-seen time on top of that. Neither belongs to someone you have
+    // no relationship with. Friends still see the full line.
+    final isOnline = _isFriend && PresenceService.isOnline(widget.userId);
+    final presence = !_isFriend
+        ? null
+        : isOnline
+            ? 'Online'
+            : (_lastSeen != null
+                ? 'Last seen ${PresenceService.formatLastSeen(_lastSeen!)}'
+                : 'Offline');
 
     return DraggableScrollableSheet(
       initialChildSize: 0.62,
@@ -300,30 +321,35 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                           const VerifiedTick(size: 18),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (isOnline) ...[
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: AppColors.successGreen,
-                              shape: BoxShape.circle,
+                    // The whole row disappears for non-friends rather than
+                    // degrading to "Offline" — which would still be a
+                    // statement about where they are.
+                    if (presence != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (isOnline) ...[
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.successGreen,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(
+                            presence,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: context.palette.textMuted,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(width: 6),
                         ],
-                        Text(
-                          presence,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: context.palette.textMuted,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ],
                 ),
               ),

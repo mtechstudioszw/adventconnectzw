@@ -42,6 +42,16 @@ class MinistryTag {
     );
   }
 
+  /// Round-trips through [MinistryTag.fromJson] — used by the local
+  /// cache so the chips survive a cold start and render offline.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'code': code,
+        'label': label,
+        'kind': kind.code,
+        'sort_order': sortOrder,
+      };
+
   @override
   bool operator ==(Object other) => other is MinistryTag && other.id == id;
 

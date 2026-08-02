@@ -425,7 +425,15 @@ class _NewChatScreenState extends State<NewChatScreen> {
                 photoUrl: m.profilePhotoUrl,
                 church: m.churchName,
                 verified: m.isVerified,
-                online: online.contains(m.userId),
+                // Presence is for FRIENDS only. This used to light up for
+                // anyone in the Explore list, so browsing strangers
+                // broadcast who was at their phone right now to someone
+                // they have no relationship with — and "Online now" on a
+                // person you've never met reads as surveillance, not a
+                // feature. A pending request doesn't count either;
+                // accepting is what grants it.
+                online: (_bonds[m.userId] == _Bond.friends) &&
+                    online.contains(m.userId),
                 bond: _bonds[m.userId] ?? _Bond.none,
                 busy: _sending.contains(m.userId),
                 // In Friends mode the bond is a given, so the trailing

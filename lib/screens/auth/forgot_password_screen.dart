@@ -7,10 +7,14 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'widgets/auth_hero.dart';
 
-/// Dedicated screen for requesting a password-reset email. Replaces
-/// the inline dialog that used to live inside login. Once the email
-/// goes out we show a confirmation state — the actual password change
-/// happens in reset_password_screen after the user opens the link.
+/// Dedicated screen for requesting a password-reset email. Replaces the
+/// inline dialog that used to live inside login.
+///
+/// Supabase emails a **6-digit code**, not a link (see
+/// [AuthService.sendPasswordReset] — no `redirectTo`, because deep links
+/// were unreliable on mobile). On success this pushes straight to
+/// reset_password_screen, where the code and the new password are
+/// entered. Keep every string on this screen talking about a CODE.
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
 
@@ -28,7 +32,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   late final Animation<double> _slide;
 
   bool _sending = false;
-  bool _sent = false;
   String? _error;
 
   @override
@@ -86,7 +89,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           children: [
             AuthHero(
               title: 'Forgot password?',
-              subtitle: 'Enter your email and we\'ll send you a reset link.\n if dosent work contact us at +263 778092494',
+              // A CODE, not a link. AuthService.sendPasswordReset sends no
+              // redirectTo, so Supabase emails a 6-digit recovery code
+              // which is entered on the next screen — a deep link was
+              // unreliable on mobile. This copy said "reset link" in three
+              // places, so members sat waiting for a link that was never
+              // coming and never opened the email they did get.
+              subtitle: 'Enter your email and we\'ll send you a 6-digit '
+                  'reset code.\nStuck? Call or WhatsApp +263 77 809 2494.',
               tagline: 'Account recovery',
               onBack: () => context.canPop()
                   ? context.pop()
@@ -103,7 +113,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                child: _sent ? _buildSent() : _buildForm(),
+                // No local "check your inbox" state: on success we push
+                // straight to the code-entry screen, which is where the
+                // user needs to be. The old `_sent` branch was dead code
+                // — nothing ever set the flag — and it told people to
+                // "tap the link in that email".
+                child: _buildForm(),
               ),
             ),
           ],
@@ -217,7 +232,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           ],
           const SizedBox(height: 24),
           _GradientButton(
-            label: _sending ? 'Sending...' : 'Send reset link',
+            label: _sending ? 'Sending…' : 'Send reset code',
             busy: _sending,
             onTap: _sending ? null : _send,
           ),
@@ -239,93 +254,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     );
   }
 
-  Widget _buildSent() {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.successGreen.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.mark_email_read_outlined,
-              color: AppColors.successGreen,
-              size: 38,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Check your inbox',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.headlineMedium.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'We sent a reset link to',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _emailController.text.trim(),
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.primaryBlue,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Tap the link in that email to choose a new password. The link expires in 1 hour.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textMuted,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _GradientButton(
-            label: 'Back to sign in',
-            busy: false,
-            onTap: () => context.goNamed('login'),
-          ),
-          const SizedBox(height: 10),
-          TextButton(
-            onPressed: () => setState(() {
-              _sent = false;
-              _error = null;
-            }),
-            child: Text(
-              'Use a different email',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.primaryBlue,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _GradientButton extends StatelessWidget {
@@ -342,7 +270,10 @@ class _GradientButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Opacity(
-      opacity: onTap == null && !busy ? 0.6 : 1,
+      // Dimmed whenever it can't be pressed, INCLUDING while sending —
+      // the old condition excluded the busy case, so a button that was
+      // mid-request still looked fully enabled.
+      opacity: onTap == null ? 0.6 : 1,
       child: Container(
         decoration: BoxDecoration(
           gradient: AppColors.primaryGradient,

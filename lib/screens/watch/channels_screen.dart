@@ -26,12 +26,26 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   @override
   void initState() {
     super.initState();
+    // Paint whatever we already have on the FIRST frame. The channel list
+    // is ~17 rows that change about never, so blocking the screen on a
+    // round-trip every single visit bought nothing but a spinner.
+    _channels = YoutubeService.cachedChannels();
+    _loading = _channels.isEmpty;
     _load();
   }
 
+  /// Refresh from the server. With a warm cache this runs behind the
+  /// already-visible list and swaps it out only if something changed, so
+  /// there is no flash and no scroll jump.
   Future<void> _load() async {
     final c = await YoutubeService.fetchChannels();
     if (!mounted) return;
+    if (c.isEmpty && _channels.isNotEmpty) {
+      // The fetch failed and fell back to an empty list — keep showing the
+      // cached rows rather than blanking a screen that was working.
+      setState(() => _loading = false);
+      return;
+    }
     setState(() {
       _channels = c;
       _loading = false;

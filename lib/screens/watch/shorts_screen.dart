@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../../models/youtube_video.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/youtube_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
@@ -67,10 +68,19 @@ class _ShortsScreenState extends State<ShortsScreen> {
   /// still stays over the player, because a cueing WebView paints black.
   bool _ready = false;
 
+  /// The clip is taking unusually long — show a spinner and a way out
+  /// rather than a frozen-looking still.
+  bool _stalled = false;
+
+  /// No connection at all. Distinct from [_stalled]: one is worth waiting
+  /// out, the other isn't.
+  bool _offline = false;
+
   StreamSubscription<YoutubePlayerValue>? _stateSub;
+  StreamSubscription<bool>? _connSub;
   Timer? _cueDebounce;
   Timer? _historyTimer;
-  Timer? _readyFallback;
+  Timer? _stallTimer;
 
   @override
   void initState() {
@@ -92,22 +102,45 @@ class _ShortsScreenState extends State<ShortsScreen> {
         mute: false,
       ),
     );
-    _stateSub = _player.stream.listen((value) {
-      final playing =
-          value.playerState == PlayerState.playing ||
-          value.playerState == PlayerState.paused;
-      if (playing && !_ready && mounted) setState(() => _ready = true);
+    _stateSub = _player.stream.listen(_onPlayerValue);
+    _offline = !ConnectivityService.isOnline;
+    _connSub = ConnectivityService.onChanged.listen((online) {
+      if (!mounted) return;
+      setState(() => _offline = !online);
+      // Coming back online with a clip that never started: re-cue it
+      // rather than leaving the viewer on a dead still.
+      if (online && !_ready && _shorts.isNotEmpty) _cue(_shorts[_index]);
     });
     if (_shorts.isNotEmpty) _cue(_shorts[_index]);
     _maybeLoadMore();
+  }
+
+  /// Only a frame actually being painted counts as ready.
+  ///
+  /// This used to also flip ready on a blind 1.6s timer, which is the
+  /// "glitching on shorts" people see on slow data: the thumbnail fades
+  /// out on schedule and uncovers a WebView that is still black because
+  /// nothing has downloaded yet. The still now stays until the player says
+  /// it is playing, and a stall gets its own honest indicator.
+  void _onPlayerValue(YoutubePlayerValue value) {
+    final s = value.playerState;
+    final live = s == PlayerState.playing || s == PlayerState.paused;
+    if (live && !_ready && mounted) {
+      _stallTimer?.cancel();
+      setState(() {
+        _ready = true;
+        _stalled = false;
+      });
+    }
   }
 
   @override
   void dispose() {
     _cueDebounce?.cancel();
     _historyTimer?.cancel();
-    _readyFallback?.cancel();
+    _stallTimer?.cancel();
     _stateSub?.cancel();
+    _connSub?.cancel();
     _pager.dispose();
     _player.close();
     super.dispose();
@@ -120,17 +153,23 @@ class _ShortsScreenState extends State<ShortsScreen> {
   /// requests it would never finish. We only load the clip you actually
   /// stopped on.
   void _cue(YoutubeVideo v) {
-    if (_ready && mounted) setState(() => _ready = false);
+    if (mounted && (_ready || _stalled)) {
+      setState(() {
+        _ready = false;
+        _stalled = false;
+      });
+    }
     _cueDebounce?.cancel();
     _cueDebounce = Timer(const Duration(milliseconds: 180), () {
       if (!mounted) return;
       _player.loadVideoById(videoId: v.videoId);
-      // Belt and braces: if the player never reports playing (autoplay
-      // blocked, a dead clip), show it anyway rather than sitting on the
-      // still forever.
-      _readyFallback?.cancel();
-      _readyFallback = Timer(const Duration(milliseconds: 1600), () {
-        if (mounted && !_ready) setState(() => _ready = true);
+      // If the clip hasn't started after a generous window, say so. We do
+      // NOT reveal the player — an unloaded WebView is a black rectangle,
+      // and showing that instead of the thumbnail is what made a slow
+      // connection look like a broken app.
+      _stallTimer?.cancel();
+      _stallTimer = Timer(const Duration(seconds: 12), () {
+        if (mounted && !_ready) setState(() => _stalled = true);
       });
     });
 
@@ -228,6 +267,9 @@ class _ShortsScreenState extends State<ShortsScreen> {
                 player: i == _index ? _player : null,
                 playerKey: _playerKey,
                 ready: _ready,
+                stalled: i == _index && _stalled,
+                offline: i == _index && _offline,
+                onRetry: () => _cue(_shorts[i]),
                 paused: _paused && i == _index,
                 onTogglePlay: _togglePlay,
                 muted: _muted,
@@ -276,6 +318,9 @@ class _ShortPage extends StatelessWidget {
     required this.player,
     required this.playerKey,
     required this.ready,
+    required this.stalled,
+    required this.offline,
+    required this.onRetry,
     required this.paused,
     required this.onTogglePlay,
     required this.muted,
@@ -288,6 +333,15 @@ class _ShortPage extends StatelessWidget {
   final YoutubePlayerController? player;
   final GlobalKey playerKey;
   final bool ready;
+
+  /// This clip has been loading far longer than it should.
+  final bool stalled;
+
+  /// The device has no connection.
+  final bool offline;
+
+  /// Re-cue the clip.
+  final VoidCallback onRetry;
   final bool paused;
   final VoidCallback onTogglePlay;
   final bool muted;
@@ -350,6 +404,110 @@ class _ShortPage extends StatelessWidget {
         const IgnorePointer(
           child: MediaScrim(topAlpha: 0x40, bottomAlpha: 0xC0),
         ),
+
+        // Loading / stalled / offline state for the CENTRED clip.
+        //
+        // A short-form feed lives or dies on whether a swipe lands on
+        // something moving. When it doesn't, the viewer needs to know
+        // which of the three it is — still fetching, struggling, or no
+        // signal — instead of staring at a motionless thumbnail and
+        // concluding the app is broken.
+        if (player != null && !ready)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !(stalled || offline),
+              child: Center(
+                child: (stalled || offline)
+                    ? Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.xl,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpace.lg,
+                          vertical: AppSpace.lg,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkNavy.withValues(alpha: 0.72),
+                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          border: Border.all(
+                            color: AppColors.white.withValues(alpha: 0.16),
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              offline
+                                  ? Icons.wifi_off_rounded
+                                  : Icons.hourglass_bottom_rounded,
+                              color: AppColors.white,
+                              size: 28,
+                            ),
+                            const SizedBox(height: AppSpace.sm),
+                            Text(
+                              offline
+                                  ? 'You\'re offline'
+                                  : 'Slow connection',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              offline
+                                  ? 'This short will start when you\'re back.'
+                                  : 'This short is taking a while to load.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.white.withValues(alpha: 0.78),
+                                height: 1.35,
+                              ),
+                            ),
+                            if (!offline) ...[
+                              const SizedBox(height: AppSpace.md),
+                              Pressable(
+                                onTap: onRetry,
+                                pressedScale: 0.94,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpace.lg,
+                                    vertical: AppSpace.sm + 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryBlue,
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadius.pill),
+                                  ),
+                                  child: Text(
+                                    'Try again',
+                                    style: AppTextStyles.labelMedium.copyWith(
+                                      color: AppColors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      )
+                    // Ordinary buffering: a quiet ring, no words. The
+                    // thumbnail is still doing the visual work.
+                    : const SizedBox(
+                        width: 34,
+                        height: 34,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppColors.white,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ),
 
         // Paused affordance — without it a tapped-to-pause clip is
         // indistinguishable from one that has stalled on a bad connection.

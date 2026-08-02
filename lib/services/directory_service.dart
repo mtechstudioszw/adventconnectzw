@@ -229,12 +229,22 @@ class DirectoryService {
   /// search had to gain a matching path or the user could see a name
   /// on the home tab and then fail to find it in search.
   ///
-  /// Cascading fallback: try the strict query first (is_discoverable +
-  /// is_banned). If that returns empty (or 400s because the columns
-  /// don't exist on this deployment) retry without those filters so
-  /// users can actually find each other by name. This was the cause
-  /// of "I search and see nothing" — users hadn't set is_discoverable
-  /// to true (or the column never shipped).
+  /// Goes through the `search_profiles` RPC (patch_179), which does
+  /// per-word matching plus a pg_trgm fuzzy fallback over BOTH full_name
+  /// and username, and returns them ranked.
+  ///
+  /// What this replaced, and why: the old path ran a single contiguous
+  /// `full_name ILIKE '%term%'`. That cannot match "Tanatswa Mikuwa"
+  /// against "Tanatswa Michael Mikuwa" (the words aren't adjacent), it is
+  /// order-sensitive, it never looked at usernames, and one wrong letter
+  /// returned nothing. The three-pass cascade wrapped around it only
+  /// relaxed the is_discoverable / is_banned filters — all three passes
+  /// ran the same broken LIKE, so a name the member could see on Home
+  /// still couldn't be found in search. That is the bug people were
+  /// reporting.
+  ///
+  /// Falls back to the old LIKE if the RPC isn't deployed yet, so an app
+  /// build ahead of the migration still searches rather than breaking.
   static Future<List<MemberDirectoryEntry>> searchProfilesByName(
     String query, {
     int limit = 30,
@@ -242,25 +252,35 @@ class DirectoryService {
     final term = query.trim();
     if (term.isEmpty) return const [];
 
-    // Pass 1 — strict filter.
-    final strict = await _searchByNameOnce(
-      term,
-      limit: limit,
-      filters: const {'is_discoverable': true, 'is_banned': false},
-    );
-    if (strict.isNotEmpty) return strict;
-
-    // Pass 2 — drop the discoverable flag (column might be missing,
-    // or nobody opted in).
-    final loose = await _searchByNameOnce(
-      term,
-      limit: limit,
-      filters: const {'is_banned': false},
-    );
-    if (loose.isNotEmpty) return loose;
-
-    // Pass 3 — name-only, no flag filters at all.
-    return _searchByNameOnce(term, limit: limit, filters: const {});
+    try {
+      final rows = await _client.rpc(
+        'search_profiles',
+        params: {'p_query': term, 'p_limit': limit},
+      );
+      return (rows as List)
+          .map((row) => row as Map<String, dynamic>)
+          .map((row) => MemberDirectoryEntry(
+                id: row['id'].toString(),
+                userId: row['id'].toString(),
+                isVisible: true,
+                fullName: row['full_name'] as String?,
+                profilePhotoUrl: row['profile_photo_url'] as String?,
+                province: row['province'] as String?,
+                city: row['city'] as String?,
+                bio: row['bio'] as String?,
+                isVerified: row['is_verified'] == true ||
+                    row['is_verified_admin'] == true,
+              ))
+          .toList();
+    } catch (_) {
+      // RPC missing on this deployment — keep the old behaviour rather
+      // than showing an empty result set.
+      return _searchByNameOnce(
+        term,
+        limit: limit,
+        filters: const {'is_banned': false},
+      );
+    }
   }
 
   static Future<List<MemberDirectoryEntry>> _searchByNameOnce(

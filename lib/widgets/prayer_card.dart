@@ -65,47 +65,58 @@ class PrayerCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            // Stack, NOT a Row with CrossAxisAlignment.stretch. A stretched
+            // Row hands its own cross-axis extent to its children as a TIGHT
+            // constraint, and inside a ListView that extent is infinite — so
+            // every card threw "BoxConstraints forces an infinite height"
+            // during layout and the whole prayer list painted nothing. Here
+            // the content is the only unpositioned child, so it sizes the
+            // card, and the rail stretches to whatever height that turns out
+            // to be. No IntrinsicHeight — this is a scrolling list.
+            child: Stack(
               children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(answered ? 13 : 16, 16, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeaderRow(context),
+                      const SizedBox(height: 12),
+                      Text(
+                        prayer.content,
+                        maxLines: answered ? 3 : 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          color: context.palette.text,
+                          fontSize: 14.5,
+                          height: 1.5,
+                          // The request is context once it's answered;
+                          // the testimony below is the headline.
+                          fontStyle:
+                              answered ? FontStyle.italic : FontStyle.normal,
+                        ),
+                      ),
+                      if (answered && prayer.testimony != null) ...[
+                        const SizedBox(height: 10),
+                        _buildTestimony(context, prayer.testimony!),
+                      ],
+                      const SizedBox(height: 14),
+                      _buildActionRow(context),
+                      ?_buildPrayedBySummary(context),
+                    ],
+                  ),
+                ),
                 // Answered prayers carry a green rail down the left edge —
                 // the one visual that reads as "this one resolved" while
                 // scrolling, before any text is parsed.
                 if (answered)
-                  Container(width: 3, color: AppColors.successGreen),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(answered ? 13 : 16, 16, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeaderRow(context),
-                        const SizedBox(height: 12),
-                        Text(
-                          prayer.content,
-                          maxLines: answered ? 3 : 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodyLarge.copyWith(
-                            color: context.palette.text,
-                            fontSize: 14.5,
-                            height: 1.5,
-                            // The request is context once it's answered;
-                            // the testimony below is the headline.
-                            fontStyle:
-                                answered ? FontStyle.italic : FontStyle.normal,
-                          ),
-                        ),
-                        if (answered && prayer.testimony != null) ...[
-                          const SizedBox(height: 10),
-                          _buildTestimony(context, prayer.testimony!),
-                        ],
-                        const SizedBox(height: 14),
-                        _buildActionRow(context),
-                        ?_buildPrayedBySummary(context),
-                      ],
-                    ),
+                  const Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 3,
+                    child: ColoredBox(color: AppColors.successGreen),
                   ),
-                ),
               ],
             ),
           ),

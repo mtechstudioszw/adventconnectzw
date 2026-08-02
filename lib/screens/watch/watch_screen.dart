@@ -579,8 +579,13 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
         WatchSectionHeader(
           title: 'Shorts',
           icon: Icons.bolt_rounded,
-          actionLabel: 'See all',
-          onAction: () => _selectFilter(_Filter.shorts),
+          // Opens the full-screen vertical feed, not the grid. Shorts are a
+          // format you swipe through, and burying that behind a grid of
+          // thumbnails hid the only part of it that feels like shorts. The
+          // grid still exists on the Shorts filter chip for people who want
+          // to pick a specific clip.
+          actionLabel: 'Watch',
+          onAction: () => _openShorts(_shorts, 0),
         ),
         SizedBox(
           height: 116 * 16 / 9,

@@ -53,6 +53,7 @@ class QuizSfx {
 
   static const _kMuted = 'quiz_sfx_muted';
   static const _kHaptics = 'quiz_haptics_off';
+  static const _kVolume = 'quiz_sfx_volume';
 
   static final Map<QuizSound, AudioPlayer> _players = {};
   static bool _initialised = false;
@@ -62,6 +63,30 @@ class QuizSfx {
   static bool _muted = false;
 
   static bool get muted => _muted;
+
+  /// Master volume, 0.0–1.0, multiplied into each clip's own trim.
+  ///
+  /// The arena had a mute switch and nothing between "off" and "full",
+  /// which is not a volume control — you either played in silence or woke
+  /// the house. Defaults to 0.85.
+  static double _volume = 0.85;
+
+  static double get volume => _volume;
+
+  /// Notifies the arena UI so a slider and the mute button stay in sync
+  /// wherever they're drawn.
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  static Future<void> setVolume(double value) async {
+    _volume = value.clamp(0.0, 1.0);
+    await CacheService.writePref(_kVolume, _volume.toStringAsFixed(2));
+    for (final entry in _players.entries) {
+      try {
+        await entry.value.setVolume(entry.key.volume * _volume);
+      } catch (_) {}
+    }
+    revision.value++;
+  }
 
   /// Haptics are opt-OUT: on by default, because the tap tick is a core part
   /// of how the arena feels. Stored inverted (`quiz_haptics_off`) so an
@@ -98,17 +123,27 @@ class QuizSfx {
     _initialising = true;
     _muted = CacheService.readPref(_kMuted) == '1';
     _hapticsOff = CacheService.readPref(_kHaptics) == '1';
+    _volume = double.tryParse(CacheService.readPref(_kVolume) ?? '')
+            ?.clamp(0.0, 1.0) ??
+        0.85;
     try {
       for (final sound in QuizSound.values) {
         final player = AudioPlayer(playerId: 'quiz_${sound.name}');
         await player.setReleaseMode(ReleaseMode.stop);
-        await player.setPlayerMode(PlayerMode.lowLatency);
+        // NOT PlayerMode.lowLatency. On Android that routes through
+        // SoundPool, which ignores most of the AudioContext below and
+        // applies volume only at load time — so the arena could end up
+        // playing at zero with no way to tell. mediaPlayer honours
+        // setVolume and the context, and these clips are short and
+        // pre-loaded, so the extra latency isn't perceptible.
+        await player.setPlayerMode(PlayerMode.mediaPlayer);
         await player.setAudioContext(_context);
         await player.setSourceAsset(sound.asset);
-        await player.setVolume(sound.volume);
+        await player.setVolume(sound.volume * _volume);
         _players[sound] = player;
       }
       _initialised = true;
+      revision.value++;
     } catch (e) {
       // Leave _initialised false — play() degrades to haptics only.
       debugPrint('QuizSfx.init failed: $e');
@@ -138,21 +173,52 @@ class QuizSfx {
           await player.stop();
         } catch (_) {}
       }
+    } else {
+      // stop() released the sources above; re-attach so unmuting
+      // actually produces sound again.
+      for (final entry in _players.entries) {
+        try {
+          await entry.value.setSourceAsset(entry.key.asset);
+          await entry.value.setVolume(entry.key.volume * _volume);
+        } catch (_) {}
+      }
     }
+    revision.value++;
   }
 
   static Future<void> toggleMute() => setMuted(!_muted);
 
-  /// Play [sound]. Silent (and cheap) when muted or not initialised.
+  /// Play [sound]. Silent (and cheap) when muted.
+  ///
+  /// Self-healing: if the pool isn't up yet (the round screen fires its
+  /// countdown before `init()` has finished, and the lobby releases the
+  /// pool on the way out) this kicks off initialisation instead of
+  /// silently dropping every effect for the whole round.
   static void play(QuizSound sound) {
-    if (_muted || !_initialised) return;
+    if (_muted) return;
+    if (!_initialised) {
+      unawaited(init());
+      return;
+    }
     final player = _players[sound];
     if (player == null) return;
     unawaited(() async {
       try {
-        await player.stop(); // restart if it's still ringing out
+        // seek(0), NOT stop(). On Android `stop()` tears the prepared
+        // MediaPlayer down, and the resume() that follows has nothing
+        // left to play — a rapid second tap fell silent. Seeking rewinds
+        // a clip that's still ringing out without releasing it.
+        await player.seek(Duration.zero);
         await player.resume();
-      } catch (_) {}
+      } catch (_) {
+        // Source lost (backgrounded, focus stolen). Re-attach once and
+        // let the next call play it.
+        try {
+          await player.setSourceAsset(sound.asset);
+          await player.setVolume(sound.volume * _volume);
+          await player.resume();
+        } catch (_) {}
+      }
     }());
   }
 

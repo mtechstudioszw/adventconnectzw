@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'music_tab.dart';
 import '../../models/bible_translation.dart';
+import '../../models/devotion_model.dart';
 import '../../models/library_item_model.dart';
 import '../../services/bible_prefs_service.dart';
 import '../../services/bible_service.dart';
@@ -50,6 +51,13 @@ class _BibleTabState extends State<BibleTab>
     // Bring back the translation the user last read in.
     BibleTranslationService.restore();
     BibleTranslationService.active.addListener(_onPrefs);
+    // Refresh the shared devotion from here too. Opening the Library
+    // WITHOUT visiting Home first used to leave the verse card on a
+    // day-old cache (or on its unrelated hard-coded fallback), which is
+    // half of why the two screens quoted different verses. Home does the
+    // same call; whichever runs first settles it for both.
+    DevotionService.primeFromCache();
+    unawaited(DevotionService.fetchToday());
   }
 
   @override
@@ -502,6 +510,17 @@ class _VerseOfDayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild whenever the shared devotion changes, so this card follows
+    // Home instead of freezing on whatever was cached when the Library
+    // happened to be built. DevotionService.current is the single source
+    // both screens read.
+    return ValueListenableBuilder<Devotion?>(
+      valueListenable: DevotionService.current,
+      builder: (context, _, _) => _buildCard(context),
+    );
+  }
+
+  Widget _buildCard(BuildContext context) {
     final resolved = _resolveFromDevotion() ?? _resolveFallback();
     if (resolved == null) return const SizedBox.shrink();
     final (book, chapter, verse) = resolved;

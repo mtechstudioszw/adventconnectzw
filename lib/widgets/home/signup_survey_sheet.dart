@@ -16,11 +16,14 @@ import '../motion/pressable.dart';
 class SignupSurveySheet extends StatefulWidget {
   const SignupSurveySheet({super.key});
 
-  /// Show it once if the user hasn't answered/dismissed before.
+  /// Show it once, to genuinely new accounts that haven't answered yet.
   static Future<void> maybeShow(BuildContext context) async {
-    if (!SignupSurveyService.shouldPrompt()) return;
-    // Mark shown immediately so a back-press or crash doesn't re-trigger it.
-    await SignupSurveyService.markShown();
+    if (!await SignupSurveyService.shouldPrompt()) return;
+    // Deliberately NOT marked as shown here. Marking up front meant a
+    // failed submit (which was every non-admin submit — see patch_180)
+    // silently lost the answer and never asked again. The sheet can't be
+    // dismissed without answering, so the only way to see it twice is to
+    // kill the app mid-question, which is the right trade.
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -68,8 +71,23 @@ class _SignupSurveySheetState extends State<SignupSurveySheet> {
         },
       );
     } catch (_) {
-      // Swallowed — markShown already ran so we never nag again; the founder
-      // just misses this one response.
+      // The write failed (offline, or a server-side rejection). Mark it
+      // shown anyway so a member can never be trapped behind a sheet they
+      // are not allowed to dismiss — but let them see that it didn't send,
+      // rather than reporting success for a response nobody received.
+      await SignupSurveyService.markShown();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.red,
+            content: Text(
+              'Couldn\'t send your answer — thanks anyway!',
+              style:
+                  AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+            ),
+          ),
+        );
+      }
     }
     if (mounted) Navigator.of(context).pop();
   }

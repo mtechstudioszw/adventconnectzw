@@ -752,15 +752,16 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  /// Shona greeting — this is a Zimbabwean app, so the default language is
-  /// Shona and English is the alternate. Section titles stay English; only
-  /// the greeting is localised for now.
+  /// English greeting. This was Shona ("Mangwanani / Masikati / Manheru",
+  /// "Sabata yakanaka") — reverted on the founder's instruction, 29 Jul
+  /// 2026, so the header matches the English used everywhere else in the
+  /// app rather than being the one localised string in it.
   String _greeting() {
-    if (SabbathService.isSabbathNow()) return 'Sabata yakanaka';
+    if (SabbathService.isSabbathNow()) return 'Happy Sabbath';
     final h = DateTime.now().hour;
-    if (h < 12) return 'Mangwanani';
-    if (h < 17) return 'Masikati';
-    return 'Manheru';
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 
   String _firstName() {

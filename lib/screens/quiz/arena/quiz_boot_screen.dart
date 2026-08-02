@@ -324,6 +324,49 @@ class _QuizSettingsSheetState extends State<_QuizSettingsSheet> {
               ),
               activeThumbColor: ArenaTheme.gold,
             ),
+            // A real level, not just on/off. Plays a tap on release so the
+            // chosen loudness is something you hear, not guess at.
+            AnimatedOpacity(
+              opacity: QuizSfx.muted ? 0.4 : 1,
+              duration: const Duration(milliseconds: 180),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.xl,
+                  0,
+                  AppSpace.xl,
+                  AppSpace.sm,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.volume_down_rounded,
+                      size: 18,
+                      color: ArenaTheme.textMutedOnNavy,
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: QuizSfx.volume,
+                        activeColor: ArenaTheme.gold,
+                        label: '${(QuizSfx.volume * 100).round()}%',
+                        divisions: 10,
+                        onChanged: QuizSfx.muted
+                            ? null
+                            : (v) {
+                                QuizSfx.setVolume(v);
+                                setState(() {});
+                              },
+                        onChangeEnd: (_) => QuizSfx.play(QuizSound.tap),
+                      ),
+                    ),
+                    Icon(
+                      Icons.volume_up_rounded,
+                      size: 18,
+                      color: ArenaTheme.textMutedOnNavy,
+                    ),
+                  ],
+                ),
+              ),
+            ),
             SwitchListTile.adaptive(
               value: QuizSfx.hapticsEnabled,
               onChanged: (on) async {

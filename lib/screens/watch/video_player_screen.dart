@@ -9,6 +9,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../../models/youtube_video.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/mini_player_service.dart';
 import '../../services/youtube_prefs.dart';
 import '../../services/youtube_service.dart';
@@ -56,7 +57,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _playerStarted = false; // player webview has come alive
   bool _loadTimedOut = false; // slow/no network — show retry
   bool _isFullscreen = false; // player is in fullscreen (landscape)
+  bool _offline = false; // no connection at all (vs merely slow)
+  bool _buffering = false; // playing but stalled mid-stream
   Timer? _loadTimer;
+  Timer? _rotationUnlockTimer;
+  StreamSubscription<bool>? _connSub;
+
+  /// How many times we've re-armed the load watchdog for this video.
+  ///
+  /// A ZW mobile-data connection can genuinely need 30s+ for the iframe
+  /// and the first media segment. The old 12s deadline declared failure
+  /// well inside a normal load, and its Retry button called
+  /// `loadVideoById` — which threw away the in-flight request and started
+  /// the same doomed 12s over. That is why "videos don't play on mobile
+  /// data but do on Wi-Fi": the app was cancelling its own downloads.
+  int _loadAttempt = 0;
   // Scripture references detected in the title/description (tap-a-verse).
   List<VerseRef> _verses = const [];
 
@@ -75,16 +90,30 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _video = widget.initialVideo;
     _scroll.addListener(_onScroll);
     _maybeShowInterstitial();
-    // The app is locked to portrait globally; allow landscape WHILE the
-    // player is open so the YouTube fullscreen button can rotate. Restored
-    // to portrait-only in dispose.
-    SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // NOTE: the orientation lock is deliberately NOT relaxed here.
+    //
+    // It used to allow all four orientations for the whole life of this
+    // screen, which fought the player's own `autoFullScreen` watcher: that
+    // watcher enters fullscreen whenever the device is physically
+    // landscape, so tapping "exit fullscreen" while still holding the
+    // phone sideways re-entered fullscreen on the very next frame. That
+    // loop is the "landscape button glitching". Landscape is now unlocked
+    // only WHILE fullscreen is on — see _applyFullscreen.
+    _watchConnectivity();
     _init();
+  }
+
+  /// Auto-recover when the connection comes back. On ZW mobile data the
+  /// player frequently boots into a dead webview because the request went
+  /// out during a dropout; without this the viewer has to know to press
+  /// Retry, which reads as "the app doesn't work on data".
+  void _watchConnectivity() {
+    _connSub = ConnectivityService.onChanged.listen((online) {
+      if (!mounted) return;
+      setState(() => _offline = !online);
+      if (online && !_playerStarted) _retryLoad();
+    });
+    _offline = !ConnectivityService.isOnline;
   }
 
   Future<void> _init() async {
@@ -172,10 +201,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     // The player has "come alive" once it reaches any real state — until
     // then we keep a thumbnail + spinner over it so a slow webview boot /
     // poor network reads as "loading", not a broken black box.
+    //
+    // `unStarted` counts. It is the state the iframe reports the moment
+    // the API is up but the first media segment hasn't arrived, which on
+    // mobile data is exactly where a video sits for tens of seconds. It
+    // used to be excluded, so a player that was loading perfectly well
+    // was declared timed-out and covered with an error.
     if (!_playerStarted &&
         (s == PlayerState.playing ||
             s == PlayerState.paused ||
             s == PlayerState.buffering ||
+            s == PlayerState.unStarted ||
             s == PlayerState.cued)) {
       _loadTimer?.cancel();
       setState(() {
@@ -183,6 +219,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         _loadTimedOut = false;
       });
     }
+    // Mid-stream stalls get their own quiet indicator. Without it a
+    // buffering video is visually identical to a frozen app, which is the
+    // "struggling to load, looks broken" complaint on low bandwidth.
+    final buffering = s == PlayerState.buffering;
+    if (buffering != _buffering) setState(() => _buffering = buffering);
     if (s == PlayerState.ended && !_ended) {
       _ended = true;
       _saveProgress(completed: true);
@@ -194,47 +235,81 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _cancelAutoplayCountdown();
     }
     _wasPlaying = s == PlayerState.playing || s == PlayerState.buffering;
-    // Force landscape + immersive when the player enters fullscreen (the
-    // bare YoutubePlayer overlay doesn't rotate on its own with the app's
-    // portrait lock); restore on exit.
     final fs = value.fullScreenOption.enabled;
-    if (fs != _isFullscreen) {
-      _isFullscreen = fs;
-      if (fs) {
-        SystemChrome.setPreferredOrientations(const [
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      } else {
-        SystemChrome.setPreferredOrientations(const [
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.portraitDown,
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      }
+    if (fs != _isFullscreen) _applyFullscreen(fs);
+  }
+
+  /// Enter or leave fullscreen, owning the orientation lock on both sides.
+  ///
+  /// Three things were wrong before and each one was visible:
+  ///
+  /// 1. `_isFullscreen` was assigned WITHOUT setState, so this screen's own
+  ///    layout never reacted to the change at all.
+  /// 2. On exit it re-enabled all four orientations while the phone was
+  ///    still physically sideways. `YoutubePlayer.autoFullScreen` watches
+  ///    device metrics and re-enters fullscreen whenever it sees landscape,
+  ///    so the exit button bounced straight back in. We now pin portrait on
+  ///    exit and only re-open rotation once the device has actually settled
+  ///    back — and `autoFullScreen` is off, so nothing fights us.
+  /// 3. The page underneath still laid out a 16:9 player plus a details
+  ///    list at landscape dimensions, which is where the overflow stripes
+  ///    came from. The player box is clamped in [build] now.
+  void _applyFullscreen(bool fs) {
+    _rotationUnlockTimer?.cancel();
+    setState(() => _isFullscreen = fs);
+    if (fs) {
+      SystemChrome.setPreferredOrientations(const [
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      // Pin portrait so the device leaves landscape instead of sitting
+      // there waiting to be dragged back into fullscreen.
+      SystemChrome.setPreferredOrientations(const [
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+      // The rotation itself takes a few hundred ms. Nothing to re-open
+      // afterwards: this screen is portrait-only unless fullscreen is on,
+      // which is what makes the whole flow deterministic.
+      _rotationUnlockTimer = Timer(const Duration(milliseconds: 400), () {
+        if (mounted) setState(() {});
+      });
     }
   }
 
-  /// Start (or restart) the "still loading?" watchdog — if the player hasn't
-  /// come alive in ~12s it's almost certainly the network, so we surface a
-  /// friendly retry instead of an endless spinner.
+  /// Start (or restart) the "still loading?" watchdog.
+  ///
+  /// The deadline is generous and grows with each attempt, because the
+  /// failure mode we were shipping was the opposite of a hang: a healthy
+  /// but slow mobile-data load being declared dead and cancelled. Give the
+  /// first attempt 30s, then 45s, then 60s. Offline is reported instantly
+  /// instead — that one we actually know.
   void _armLoadWatchdog() {
     _loadTimer?.cancel();
     _playerStarted = false;
     _loadTimedOut = false;
-    _loadTimer = Timer(const Duration(seconds: 12), () {
+    final seconds = switch (_loadAttempt) {
+      0 => 30,
+      1 => 45,
+      _ => 60,
+    };
+    _loadTimer = Timer(Duration(seconds: seconds), () {
       if (mounted && !_playerStarted) setState(() => _loadTimedOut = true);
     });
   }
 
+  /// Retry after a timeout. Only ever reloads the video when the player
+  /// genuinely never came alive — reloading a player that is mid-download
+  /// is what made a slow connection into a permanent failure.
   void _retryLoad() {
     final v = _video;
     if (v == null) return;
+    _loadAttempt++;
     _armLoadWatchdog();
-    setState(() {});
+    setState(() => _offline = !ConnectivityService.isOnline);
     _controller?.loadVideoById(videoId: v.videoId);
   }
 
@@ -493,8 +568,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       MiniPlayerService.instance.dock(v, atSeconds: _lastPosition);
     }
     _loadTimer?.cancel();
+    _rotationUnlockTimer?.cancel();
     _autoplayTimer?.cancel();
     _progressTimer?.cancel();
+    _connSub?.cancel();
     _sub?.cancel();
     _controller?.close();
     _scroll.dispose();
@@ -544,6 +621,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
     // YoutubePlayer handles fullscreen internally (via OverlayPortal) in
     // 6.x, so no YoutubePlayerScaffold wrapper is needed.
+    //
+    // The player box is CLAMPED. `YoutubePlayer` renders an AspectRatio,
+    // and a 16:9 box on a landscape phone is taller than the screen — in a
+    // Column that is an unavoidable RenderFlex overflow, which is exactly
+    // the striped bar seen when rotating. Capping the height at 60% of the
+    // viewport keeps the ratio in portrait (where 9/16 of the width is
+    // nowhere near the cap) and letterboxes gracefully in landscape.
+    final maxPlayerHeight = MediaQuery.sizeOf(context).height * 0.6;
     return Scaffold(
       backgroundColor: palette.scaffoldBg,
       // No top SafeArea — the player runs full-bleed under the status bar
@@ -551,25 +636,53 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       // respects the status-bar inset.
       body: Column(
         children: [
-          Stack(
-            children: [
-              YoutubePlayer(controller: _controller!, aspectRatio: 16 / 9),
-              if (!_playerStarted) Positioned.fill(child: _loadingOverlay()),
-              if (_autoplayIn != null && _upNext.isNotEmpty)
-                Positioned.fill(child: _autoplayOverlay(_upNext.first)),
-              Positioned(
-                left: 4,
-                top: MediaQuery.of(context).padding.top + 4,
-                child: Material(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  shape: const CircleBorder(),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: AppColors.white),
-                    onPressed: () => Navigator.of(context).maybePop(),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxPlayerHeight),
+            child: Stack(
+              children: [
+                YoutubePlayer(
+                  controller: _controller!,
+                  aspectRatio: 16 / 9,
+                  // OFF. Its device-rotation watcher re-entered fullscreen
+                  // the instant the exit button left it, because the phone
+                  // was still sideways — see _applyFullscreen. Fullscreen
+                  // is now driven by the button (and the back gesture)
+                  // only, and this screen owns the orientation lock.
+                  autoFullScreen: false,
+                ),
+                if (!_playerStarted) Positioned.fill(child: _loadingOverlay()),
+                if (_playerStarted && _buffering)
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: LinearProgressIndicator(
+                      minHeight: 2.5,
+                      backgroundColor: Color(0x22FFFFFF),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primaryBlue,
+                      ),
+                    ),
+                  ),
+                if (_autoplayIn != null && _upNext.isNotEmpty)
+                  Positioned.fill(child: _autoplayOverlay(_upNext.first)),
+                Positioned(
+                  left: 4,
+                  top: MediaQuery.of(context).padding.top + 4,
+                  child: Material(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: AppColors.white,
+                      ),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           if (_video?.isLive ?? false) _chatToggle(palette),
           Expanded(
@@ -669,39 +782,58 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               ),
             ),
           Center(
-            child: _loadTimedOut
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.wifi_off_rounded,
-                        color: AppColors.white,
-                        size: 34,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Slow connection',
-                        style: AppTextStyles.bodyMedium.copyWith(
+            child: (_loadTimedOut || _offline)
+                // "You're offline" and "this is taking a while" need
+                // different words and different expectations. Telling
+                // someone on a working-but-slow ZW data connection to
+                // "check your network" sends them to fix something that
+                // isn't broken; telling someone with no signal that it's
+                // merely slow makes them wait for nothing.
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _offline
+                              ? Icons.wifi_off_rounded
+                              : Icons.hourglass_bottom_rounded,
                           color: AppColors.white,
-                          fontWeight: FontWeight.w700,
+                          size: 34,
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Check your network and try again.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.8),
+                        const SizedBox(height: 10),
+                        Text(
+                          _offline ? 'You\'re offline' : 'Still loading',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primaryBlue,
+                        const SizedBox(height: 2),
+                        Text(
+                          _offline
+                              ? 'We\'ll start the video the moment you\'re '
+                                  'back online.'
+                              : 'Your connection is slow right now. Keep '
+                                  'waiting, or try again.',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.white.withValues(alpha: 0.8),
+                            height: 1.4,
+                          ),
                         ),
-                        onPressed: _retryLoad,
-                        child: const Text('Retry'),
-                      ),
-                    ],
+                        if (!_offline) ...[
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primaryBlue,
+                            ),
+                            onPressed: _retryLoad,
+                            child: const Text('Try again'),
+                          ),
+                        ],
+                      ],
+                    ),
                   )
                 : Column(
                     mainAxisSize: MainAxisSize.min,

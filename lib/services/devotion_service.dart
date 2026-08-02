@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/devotion_model.dart';
@@ -15,6 +16,30 @@ class DevotionService {
 
   static const _cacheKey = 'devotion_today_v1';
 
+  /// The ONE devotion the whole app shows, so Home's card and the
+  /// Library's verse-of-the-day can never disagree.
+  ///
+  /// They did disagree, daily. Home called [fetchToday] and re-rendered
+  /// with the fresh devotion; the Library's verse card only ever read
+  /// [cachedToday] at build time — and [cachedToday] deliberately returns
+  /// YESTERDAY's devotion until a refresh lands. So every morning, and on
+  /// any open where the Library was built before Home's fetch returned,
+  /// the two screens quoted different verses. Worse, with an empty cache
+  /// the Library fell through to its own hard-coded day-of-year list,
+  /// which shares nothing with the server's devotion at all.
+  ///
+  /// Both screens now watch this notifier, so whichever one refreshes
+  /// first updates both.
+  static final ValueNotifier<Devotion?> current =
+      ValueNotifier<Devotion?>(null);
+
+  /// Seed [current] from the cache. Safe to call repeatedly; call it once
+  /// during app start so the very first screen painted already agrees
+  /// with every other one.
+  static void primeFromCache() {
+    current.value ??= _readCache();
+  }
+
   static String _today() =>
       DateTime.now().toUtc().toIso8601String().substring(0, 10);
 
@@ -26,7 +51,9 @@ class DevotionService {
   /// on slow networks (nothing cached "for today" until the fetch
   /// succeeded). A one-day-stale devotion is better than a hole at the
   /// top of Home — fetchToday() replaces it the moment the network lands.
-  static Devotion? cachedToday() {
+  static Devotion? cachedToday() => current.value ?? _readCache();
+
+  static Devotion? _readCache() {
     final raw = CacheService.readStringStale(_cacheKey);
     if (raw == null || raw.isEmpty) return null;
     try {
@@ -51,6 +78,9 @@ class DevotionService {
         _cacheKey,
         jsonEncode({'date': _today(), 'devotion': devotion.toJson()}),
       );
+      // Publish to every listening screen at once — this is what keeps
+      // Home and the Library quoting the same verse.
+      current.value = devotion;
       return devotion;
     } catch (_) {
       return null;

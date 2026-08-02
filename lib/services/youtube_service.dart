@@ -534,17 +534,35 @@ class YoutubeService {
           _channelsKey, jsonEncode(list.map((c) => c.toJson()).toList()));
       return list;
     } catch (_) {
-      final raw = CacheService.readStringStale(_channelsKey);
-      if (raw == null) return const [];
-      try {
-        return (jsonDecode(raw) as List)
-            .map((e) => YoutubeChannel.fromJson(e as Map<String, dynamic>))
-            .toList();
-      } catch (_) {
-        return const [];
-      }
+      return cachedChannels();
     }
   }
+
+  /// Synchronously-read cached channel list, so the Channels tab paints
+  /// its rows on the FIRST frame instead of showing a full-screen spinner
+  /// on every visit. There are 17 channels and they change about never —
+  /// making people wait on a round-trip for a list that is effectively
+  /// static is the whole complaint. Callers still refresh in the
+  /// background and swap in the fresh list when it lands.
+  ///
+  /// Reads the STALE entry deliberately: an out-of-date channel list is
+  /// vastly better than an empty screen, and the refresh corrects it
+  /// within a second.
+  static List<YoutubeChannel> cachedChannels() {
+    final raw = CacheService.readStringStale(_channelsKey);
+    if (raw == null) return const [];
+    try {
+      return (jsonDecode(raw) as List)
+          .map((e) => YoutubeChannel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// When the cached channel list was last refreshed — null when there is
+  /// no cache yet.
+  static DateTime? get channelsCachedAt => CacheService.cachedAt(_channelsKey);
 
   static Future<List<YoutubeVideo>> fetchByChannel(
     String channelId, {

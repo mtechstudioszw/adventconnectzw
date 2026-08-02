@@ -16,17 +16,62 @@ class SignupSurveyService {
 
   static Future<void> markShown() => CacheService.writePref(_kShownPref, '1');
 
-  /// True when we should prompt: signed in and not yet shown locally.
-  static bool shouldPrompt() =>
-      _client.auth.currentUser != null && !shownLocally;
+  /// Only ask accounts that are genuinely new. Anything older than this is
+  /// an existing member who reinstalled, cleared data, or just signed in
+  /// on a second device — asking them "how did you hear about us?" months
+  /// later is the bug people reported.
+  static const _newAccountWindow = Duration(days: 14);
 
-  /// Save the response (upsert on user_id). Always marks shown locally so the
-  /// prompt won't reappear even if the network write fails.
+  /// Whether to prompt this launch.
+  ///
+  /// Was a one-line local-flag check, which is why existing members kept
+  /// getting the sheet on every fresh install: the flag lives in local
+  /// storage, so a reinstall looks exactly like a brand-new account. Now
+  /// it also requires the account to actually BE new, and checks whether
+  /// an answer already exists server-side (readable since patch_180).
+  static Future<bool> shouldPrompt() async {
+    final user = _client.auth.currentUser;
+    if (user == null || shownLocally) return false;
+
+    // Old account, new device → never ask.
+    final created = DateTime.tryParse(user.createdAt);
+    if (created != null &&
+        DateTime.now().toUtc().difference(created.toUtc()) >
+            _newAccountWindow) {
+      await markShown();
+      return false;
+    }
+
+    // Already answered before (other device / previous install).
+    try {
+      final row = await _client
+          .from('signup_surveys')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      if (row != null) {
+        await markShown();
+        return false;
+      }
+    } catch (_) {
+      // Offline or unreadable — better to ask a new account twice than
+      // to lose the answer entirely.
+    }
+    return true;
+  }
+
+  /// Save the response (upsert on user_id).
+  ///
+  /// Marks "shown" only AFTER the write lands. It used to mark first and
+  /// swallow the failure, so when the write was rejected the answer was
+  /// gone for good and the prompt never came back to retry. Every
+  /// non-admin submission WAS being rejected — `signup_surveys` had no
+  /// SELECT policy for members, and PostgREST's upsert returns the row,
+  /// so RLS raised 42501 on the RETURNING. See patch_180.
   static Future<void> submit({
     required String source,
     Map<String, dynamic> answers = const {},
   }) async {
-    await markShown();
     final user = _client.auth.currentUser;
     if (user == null) return;
     await _client.from('signup_surveys').upsert({
@@ -34,6 +79,7 @@ class SignupSurveyService {
       'source': source,
       'answers': answers,
     }, onConflict: 'user_id');
+    await markShown();
   }
 
   // ---- Super-admin insights ------------------------------------------------

@@ -545,28 +545,59 @@ Widget _cover(
               ),
               // A generated spine-style cover beats a generic file icon when
               // the upload has no artwork — most of them won't.
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.auto_stories_rounded,
-                        color: AppColors.goldAccent, size: 20),
-                    const SizedBox(height: 6),
-                    Text(
-                      item.title,
-                      maxLines: 3,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 9,
-                        height: 1.25,
-                      ),
+              //
+              // Sized against the box it actually got, because this same
+              // builder serves the 3-across grid AND the 46x66 thumbnail
+              // in list view. The old fixed layout — 20px icon + 6 gap +
+              // three 11.25px lines — needs ~60px of the 50px a list-mode
+              // cover has, so every EGW book without artwork overflowed
+              // the moment you switched to list view.
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  const pad = 8.0;
+                  const fontSize = 9.0;
+                  const lineHeight = 1.25;
+                  final avail = c.maxHeight - pad * 2;
+                  // Text scales with the system font; the box doesn't.
+                  final line = MediaQuery.textScalerOf(context)
+                          .scale(fontSize) *
+                      lineHeight;
+                  // Icon + its gap only earn their space if at least one
+                  // line of title survives alongside them.
+                  final showIcon = avail >= 26 + line;
+                  final forText = avail - (showIcon ? 26 : 0);
+                  final lines = (forText / line).floor().clamp(1, 3);
+                  return Padding(
+                    padding: const EdgeInsets.all(pad),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showIcon) ...[
+                          const Icon(Icons.auto_stories_rounded,
+                              color: AppColors.goldAccent, size: 20),
+                          const SizedBox(height: 6),
+                        ],
+                        // Flexible so a mis-estimate clips instead of
+                        // painting stripes.
+                        Flexible(
+                          child: Text(
+                            item.title,
+                            maxLines: lines,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: fontSize,
+                              height: lineHeight,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
     ),

@@ -306,7 +306,12 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                         topic: 'Church claim dispute — ${widget.church.name}',
                       ),
                       icon: const Icon(Icons.support_agent_outlined),
-                      label: const Text('Contact support'),
+                      // Names the thing the person actually wants to do.
+                      // "Contact support" reads as a dead end when you've
+                      // just been told the church is taken; this is the
+                      // appeal, and the sheet tags it as a claim dispute
+                      // so it lands somewhere it will be read.
+                      label: const Text('I should manage this church'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primaryBlue,
                         side: BorderSide(

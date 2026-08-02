@@ -389,13 +389,18 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     // a built-in audience for their first announcement. Just warn
     // first so expectations are calibrated, and surface the claim
     // flow inline so the right person can take it over.
-    if (_hasAdmin) {
-      return _buildFollowButton();
-    }
+    //
+    // A CLAIMED church now keeps a claim entry too. Hiding it entirely
+    // meant a pastor who arrived after someone else had claimed their
+    // congregation had no route at all to say so — and the claim screen
+    // already handles that case properly ("This church is already
+    // claimed… if you believe it was claimed by the wrong person,
+    // contact support"). The door was closed on a room that was
+    // furnished.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildUnclaimedNotice(),
+        if (!_hasAdmin) _buildUnclaimedNotice(),
         _buildFollowButton(),
         _buildClaimLink(),
       ],
@@ -601,33 +606,94 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         ),
       );
     }
+    // A CARD, not a text link.
+    //
+    // This was a 13.5pt TextButton tucked under the follow button, and
+    // members reported not knowing the feature existed at all. Claiming
+    // is how a congregation gets a voice in the app — it deserves to look
+    // like an offer, not a footnote. On a claimed church it stays present
+    // but quiet: the wording changes to an appeal, and the claim screen
+    // explains the situation and routes to support.
+    final claimed = _hasAdmin;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-      child: TextButton.icon(
-        onPressed: church == null
-            ? null
-            : () => context.pushNamed(
-                'claim_church',
-                pathParameters: {'id': church.id},
-                extra: church,
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+      child: Material(
+        color: claimed
+            ? Colors.transparent
+            : AppColors.primaryBlue.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: church == null
+              ? null
+              : () => context.pushNamed(
+                    'claim_church',
+                    pathParameters: {'id': church.id},
+                    extra: church,
+                  ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: claimed
+                    ? context.palette.divider
+                    : AppColors.primaryBlue.withValues(alpha: 0.28),
               ),
-        icon: const Icon(
-          Icons.verified_user_outlined,
-          size: 16,
-          color: AppColors.primaryBlue,
-        ),
-        label: Text(
-          'Is this your church? Claim it',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.primaryBlue,
-            fontWeight: FontWeight.w700,
-            fontSize: 13.5,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  claimed
+                      ? Icons.help_outline_rounded
+                      : Icons.verified_user_outlined,
+                  size: 20,
+                  color: claimed
+                      ? context.palette.textMuted
+                      : AppColors.primaryBlue,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        claimed
+                            ? 'Is this your church?'
+                            : 'Is this your church? Claim it',
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: claimed
+                              ? context.palette.text
+                              : AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        claimed
+                            ? 'Already claimed. If you believe you have the '
+                                'right to manage it, tell us and we\'ll look '
+                                'into it.'
+                            : 'Pastors and elders can claim it to post '
+                                'announcements and events.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.palette.textMuted,
+                          height: 1.35,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: context.palette.textMuted,
+                ),
+              ],
+            ),
           ),
-        ),
-        style: TextButton.styleFrom(
-          minimumSize: const Size(0, 36),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),
     );

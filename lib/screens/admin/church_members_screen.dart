@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -39,9 +40,24 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
 
   Future<List<ChurchMember>> _load() async {
     final list = await ChurchService.fetchMembers(widget.role.churchId);
+    // The admin viewing this list goes first, tagged. They are the one
+    // person on it whose position is predictable, and hunting for your
+    // own name in a congregation-sized alphabetical list to confirm
+    // you're actually a member of the church you administer is a silly
+    // thing to make someone do.
+    final me = AuthService.currentUser?.id;
+    if (me != null) {
+      final mine = list.indexWhere((m) => m.userId == me);
+      if (mine > 0) {
+        final self = list.removeAt(mine);
+        list.insert(0, self);
+      }
+    }
     _all = list;
     return list;
   }
+
+  bool _isMe(ChurchMember m) => m.userId == AuthService.currentUser?.id;
 
   List<ChurchMember> get _shown {
     if (_query.trim().isEmpty) return _all;
@@ -164,14 +180,43 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    m.fullName,
+                                    _isMe(m) ? '${m.fullName} (you)' : m.fullName,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.titleSmall.copyWith(
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: _isMe(m)
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
                                     ),
                                   ),
                                 ),
+                                if (_isMe(m)) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.goldAccent
+                                          .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(100),
+                                      border: Border.all(
+                                        color: AppColors.goldAccent
+                                            .withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'ADMIN',
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: AppColors.goldAccent,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 Icon(
                                   Icons.chevron_right,
                                   color: palette.textMuted,

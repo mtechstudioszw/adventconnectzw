@@ -20,6 +20,29 @@ import '../theme/app_text_styles.dart';
 String friendQrPayload(String userId) =>
     'io.supabase.adventconnect://user/$userId';
 
+/// Geometry of the code and the hole punched in the middle of it.
+///
+/// These three numbers are a scanning budget, not a layout preference.
+/// The plate hides a circle of pi*(kQrPlate/2)^2 out of kQrSize^2 — about
+/// 7% of the symbol — against level H's ~30% recovery. The gap between
+/// [kQrPlate] and [kQrLogo] is the mark's quiet zone; closing it puts the
+/// logo's edge against live modules.
+///
+/// Verified by [qrOcclusionFraction] in test/friend_qr_test.dart, which
+/// fails if a future tweak spends more of the budget than this.
+const double kQrSize = 210;
+const double kQrPlate = 62;
+const double kQrLogo = 44;
+
+/// Fraction of the symbol's area the centre plate covers.
+double qrOcclusionFraction({
+  double size = kQrSize,
+  double plate = kQrPlate,
+}) {
+  final radius = plate / 2;
+  return (3.141592653589793 * radius * radius) / (size * size);
+}
+
 /// Adventists meet in person — camp meeting, a rally, a visiting choir.
 /// Scanning beats spelling a name into a search box in a noisy hall.
 ///
@@ -177,37 +200,77 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      QrImageView(
-                        data: friendQrPayload(id),
-                        version: QrVersions.auto,
-                        size: 210,
-                        backgroundColor: AppColors.white,
-                        // HIGH error correction is required, not
-                        // cosmetic: the embedded logo physically covers
-                        // data modules, and only level H (~30% recovery)
-                        // leaves enough redundancy for the code to still
-                        // scan. Do not lower this while the logo is here.
-                        errorCorrectionLevel: QrErrorCorrectLevel.H,
-                        // Decoded down first: logo.png is a ~2MB launcher
-                        // asset and this draws it at 44dp. 132px covers
-                        // the 3x rasterisation used when sharing.
-                        embeddedImage: const ResizeImage(
-                          AssetImage('assets/icon/logo.png'),
-                          width: 132,
-                        ),
-                        embeddedImageStyle: const QrEmbeddedImageStyle(
-                          // ~20% of the code's width. Larger starts
-                          // eating more modules than level H can rebuild.
-                          size: Size(44, 44),
-                        ),
-                        eyeStyle: const QrEyeStyle(
-                          eyeShape: QrEyeShape.square,
-                          color: AppColors.darkNavy,
-                        ),
-                        dataModuleStyle: const QrDataModuleStyle(
-                          dataModuleShape: QrDataModuleShape.square,
-                          color: AppColors.darkNavy,
-                        ),
+                      // The logo sits IN the code, not ON it: a solid
+                      // white round plate punches a hole through the
+                      // modules and the mark is seated inside it, the way
+                      // WhatsApp and Instagram do it.
+                      //
+                      // qr_flutter's own `embeddedImage` was what made it
+                      // look pasted on — it paints the asset straight over
+                      // the modules, so dark squares show through around a
+                      // non-square mark and there is no quiet zone at all.
+                      // Drawing our own plate is what buys the quiet zone;
+                      // the ring of white inside it is the whole point,
+                      // not padding.
+                      //
+                      // Occlusion budget: the plate is $kQrPlate across a
+                      // $kQrSize code, so it hides pi*($kQrPlate/2)^2 —
+                      // about 7% of the symbol's area. Level H rebuilds
+                      // ~30%, so this sits comfortably inside it. Grow the
+                      // plate and that headroom is what you are spending.
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          QrImageView(
+                            data: friendQrPayload(id),
+                            version: QrVersions.auto,
+                            size: kQrSize,
+                            backgroundColor: AppColors.white,
+                            // HIGH error correction is required, not
+                            // cosmetic: the plate physically covers data
+                            // modules, and only level H (~30% recovery)
+                            // leaves enough redundancy for the code to
+                            // still scan. Do not lower this while the
+                            // logo is here.
+                            errorCorrectionLevel: QrErrorCorrectLevel.H,
+                            eyeStyle: const QrEyeStyle(
+                              eyeShape: QrEyeShape.square,
+                              color: AppColors.darkNavy,
+                            ),
+                            dataModuleStyle: const QrDataModuleStyle(
+                              dataModuleShape: QrDataModuleShape.square,
+                              color: AppColors.darkNavy,
+                            ),
+                          ),
+                          Container(
+                            width: kQrPlate,
+                            height: kQrPlate,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.white,
+                            ),
+                            // The white ring between plate edge and mark
+                            // IS the quiet zone. Without it the mark's own
+                            // edge touches live modules and readers that
+                            // binarise aggressively start failing.
+                            padding: const EdgeInsets.all(
+                              (kQrPlate - kQrLogo) / 2,
+                            ),
+                            child: const ClipOval(
+                              // Decoded down first: logo.png is a ~2MB
+                              // launcher asset and this draws it at
+                              // ${kQrLogo}dp. 132px covers the 3x
+                              // rasterisation used when sharing.
+                              child: Image(
+                                image: ResizeImage(
+                                  AssetImage('assets/icon/logo.png'),
+                                  width: 132,
+                                ),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 10),
                       Text(

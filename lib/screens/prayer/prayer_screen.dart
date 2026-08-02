@@ -452,10 +452,18 @@ class _PrayerScreenState extends State<PrayerScreen> {
       // Prayer stays ad-free (faith-sensitive) — per the app's ad rules.
       showAd: false,
       title: 'Prayer',
-      // Prayer is reached from inside Profile (My prayers), so we highlight
-      // the Profile tab. Per master reference Part 7, Prayer is not a
-      // top-level tab.
-      currentIndex: 4,
+      // Prayer is PUSHED (from Home's Prayer action and from Profile's My
+      // prayers), not a tab — so it hides the island and shows the AppBar
+      // back button, the same way Events does.
+      //
+      // It used to pass `currentIndex: 4`, which lit the Profile pill while
+      // the member was on Prayer: the bar said "you are in Profile" and
+      // tapping that pill did nothing. Highlighting a tab you are not on is
+      // worse than highlighting none, and an island with nothing active is
+      // itself a tab bar that doesn't work — which is the false affordance
+      // the founder reported (2 Aug 2026).
+      currentIndex: 0,
+      showNav: false,
       floatingActionButton: const PostFab(
         routeName: 'post_prayer',
         tooltip: 'Share a prayer',

@@ -117,7 +117,9 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
         child: Center(child: BrandSpinner(size: 30)),
       );
     }
-    if (_error != null) return ErrorBanner(message: _error!);
+    if (_error != null) {
+      return ErrorBanner(message: _error!, onRetry: _load);
+    }
     if (_items.isEmpty) {
       return EmptyStateCard(
         icon: Icons.lock_open_outlined,

@@ -48,6 +48,15 @@ class _NewChatScreenState extends State<NewChatScreen> {
   List<MemberDirectoryEntry> _friends = const [];
   List<MemberDirectoryEntry> _results = const [];
   bool _loading = true;
+
+  /// Set when a load FAILED, so the screen can say so.
+  ///
+  /// Without this the catches below just stopped the spinner, `_results`
+  /// stayed empty, and the empty state cheerfully announced "No friends
+  /// yet. Tap Find people to discover members" — which is a lie when the
+  /// request never landed. A failed load and an empty directory look
+  /// identical to the member and need opposite reactions from them.
+  String? _error;
   bool _opening = false;
   // false = your friends only (default). true = explore everyone on Advent.
   bool _explore = false;
@@ -87,9 +96,14 @@ class _NewChatScreenState extends State<NewChatScreen> {
         _friends = list;
         if (!_explore) _results = list;
         _loading = false;
+        _error = null;
       });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not load your friends.';
+      });
     }
   }
 
@@ -173,9 +187,14 @@ class _NewChatScreenState extends State<NewChatScreen> {
       setState(() {
         _results = all.where((m) => !friendIds.contains(m.userId)).toList();
         _loading = false;
+        _error = null;
       });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not load members.';
+      });
     }
   }
 
@@ -210,9 +229,14 @@ class _NewChatScreenState extends State<NewChatScreen> {
         setState(() {
           _results = list;
           _loading = false;
+          _error = null;
         });
       } catch (_) {
-        if (mounted) setState(() => _loading = false);
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = 'Could not search members.';
+        });
       }
     });
   }
@@ -398,6 +422,19 @@ class _NewChatScreenState extends State<NewChatScreen> {
     final showQuickActions =
         !_explore && _searchController.text.trim().isEmpty;
 
+    // A failed load is NOT an empty directory. Show the failure and a way
+    // to re-run it; the search field, the Friends/Find-people toggle and
+    // the quick actions above stay live throughout.
+    if (_error != null && _results.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
+        children: [
+          if (showQuickActions) _quickActions(),
+          ErrorBanner(message: _error!, onRetry: _retryLoad),
+        ],
+      );
+    }
+
     if (_results.isEmpty && !showQuickActions) return _buildEmptyState(context);
 
     return ValueListenableBuilder<Set<String>>(
@@ -482,6 +519,24 @@ class _NewChatScreenState extends State<NewChatScreen> {
         ],
       ),
     );
+  }
+
+  /// Re-runs whichever load failed, without leaving the screen.
+  void _retryLoad() {
+    setState(() {
+      _error = null;
+      _loading = true;
+    });
+    if (_explore) {
+      final q = _searchController.text.trim();
+      if (q.isEmpty) {
+        _loadExploreSuggestions();
+      } else {
+        _onSearch(q);
+      }
+    } else {
+      _loadFriends();
+    }
   }
 
   Widget _buildEmptyState(BuildContext context) {

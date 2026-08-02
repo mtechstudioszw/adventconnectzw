@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/feed_service.dart';
 import '../services/prayer_circle_service.dart';
 import '../theme/app_colors.dart';
+import 'screen_shell.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
@@ -36,6 +37,11 @@ class _CirclesSheet extends StatefulWidget {
 class _CirclesSheetState extends State<_CirclesSheet> {
   List<PrayerCircle> _circles = const [];
   bool _loading = true;
+
+  /// A failed fetch, kept apart from "you have no circles yet" — the two
+  /// look identical to the member and mean opposite things.
+  String? _error;
+
   bool _changed = false;
 
   @override
@@ -51,10 +57,14 @@ class _CirclesSheetState extends State<_CirclesSheet> {
       setState(() {
         _circles = circles;
         _loading = false;
+        _error = null;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _error = 'Could not load your prayer circles.';
+      });
     }
   }
 
@@ -238,6 +248,11 @@ class _CirclesSheetState extends State<_CirclesSheet> {
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      child: ErrorBanner(message: _error!, onRetry: _load),
+                    )
                   : ListView(
                       controller: scrollController,
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
@@ -390,7 +405,11 @@ class _MembersSheetState extends State<_MembersSheet> {
   List<({String id, String name})> _friends = const [];
   final Set<String> _busy = <String>{};
   bool _loading = true;
+
   bool _changed = false;
+
+  /// A failed fetch of people who could be added.
+  String? _pickError;
 
   String? get _myId => AuthService.currentUser?.id;
 
@@ -430,10 +449,14 @@ class _MembersSheetState extends State<_MembersSheet> {
               (id: f.id, name: 'Friend'),
         ];
         _loading = false;
+        _pickError = null;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _pickError = 'Could not load people to add.';
+      });
     }
   }
 
@@ -523,7 +546,15 @@ class _MembersSheetState extends State<_MembersSheet> {
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : _friends.isEmpty
+                  : _pickError != null
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                          child: ErrorBanner(
+                            message: _pickError!,
+                            onRetry: _load,
+                          ),
+                        )
+                      : _friends.isEmpty
                       ? Center(
                           child: Padding(
                             padding: const EdgeInsets.all(28),

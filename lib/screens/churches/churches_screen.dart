@@ -31,13 +31,13 @@ class ChurchesScreen extends StatefulWidget {
 }
 
 /// Filter chip identifiers per master reference Part 15.
-/// All â€” show every church (sorted alphabetically, or by distance
+/// All — show every church (sorted alphabetically, or by distance
 ///       if location is granted).
-/// Nearby â€” top 5 churches by GPS distance. Tapping requests
+/// Nearby — top 5 churches by GPS distance. Tapping requests
 ///          location permission if not already granted.
-/// Verified â€” churches that have at least one approved admin
+/// Verified — churches that have at least one approved admin
 ///            (church.is_verified = true).
-/// My Province â€” churches whose province matches the viewer's
+/// My Province — churches whose province matches the viewer's
 ///               profiles.province. Hidden if the viewer hasn't
 ///               set a province yet.
 class _ChurchesScreenState extends State<ChurchesScreen> {
@@ -212,7 +212,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     }
   }
 
-  /// Visible list â€” composes the active chip filter with the loaded
+  /// Visible list — composes the active chip filter with the loaded
   /// _churches. Falls back to the full list if a chip's data isn't
   /// available yet (e.g. location not granted while Nearby is
   /// selected, or no churches have province set).
@@ -356,10 +356,16 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   Widget build(BuildContext context) {
     return MainScaffold(
       title: 'Churches',
-      // Churches gave up its nav slot to Advent Chat (2026-07-27). It is now
-      // pushed from Home / Profile, so no tab renders as active — the island
-      // stays only so members can jump straight to another section.
-      currentIndex: -1,
+      // Churches gave up its nav slot to Advent Chat (2026-07-27) and is now
+      // PUSHED from Home / Profile. It used to keep the island with
+      // `currentIndex: -1` so members could jump to another section, but an
+      // island with no active pill still reads as a tab bar — one that
+      // claims you are nowhere. That false affordance is what the founder
+      // reported (2 Aug 2026), so the island goes, as it did for Events.
+      // The header carries a back button instead (this screen draws its own,
+      // so there is no AppBar to auto-add one).
+      currentIndex: 0,
+      showNav: false,
       // The screen draws its own flat hero instead: a bare "Churches"
       // title told the member nothing, and there was nowhere to put
       // Suggest-a-church.
@@ -403,10 +409,14 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 6, 12, 2),
+            padding: const EdgeInsets.fromLTRB(4, 6, 12, 2),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                // The only way back now that the island is gone. Shared with
+                // ScreenHero so the glyph and its tap target match every
+                // other flat header.
+                const ScreenHeroBackButton(fallbackRoute: 'home'),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -574,8 +584,8 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
 
   Widget _buildLocationErrorBanner() {
     // Pick the right action button for the failure type. permission-
-    // deniedForever â†’ Settings (the OS won't show the prompt again).
-    // servicesDisabled â†’ Location toggle. Everything else â†’ just a
+    // deniedForever → Settings (the OS won't show the prompt again).
+    // servicesDisabled → Location toggle. Everything else → just a
     // dismiss button since "try again" reopens the picker via the FAB.
     final (
       String? actionLabel,

@@ -46,7 +46,6 @@ import '../screens/profile/my_events_screen.dart';
 import '../screens/profile/notification_preferences_screen.dart';
 import '../screens/profile/sabbath_timer_screen.dart';
 import '../screens/profile/saved_listings_screen.dart';
-import '../screens/utility/offline_screen.dart';
 import '../screens/utility/report_submitted_screen.dart';
 import '../services/church_service.dart';
 import '../models/church_model.dart';
@@ -821,11 +820,6 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const AdminQuizScreen(),
         ),
       ],
-    ),
-    GoRoute(
-      path: '/offline',
-      name: 'offline',
-      builder: (context, state) => const OfflineScreen(),
     ),
     GoRoute(
       path: '/report-submitted',

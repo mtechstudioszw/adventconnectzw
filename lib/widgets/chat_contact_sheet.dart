@@ -559,9 +559,12 @@ class _StoryRingAvatar extends StatelessWidget {
           width: hasStory ? 3 : 0,
         ),
       ),
+      // No `alignment` here on purpose — it would wrap the child in an
+      // Align and hand it LOOSE constraints, leaving the photo floating
+      // inside the circle with a rim of cardMuted around it. cardMuted
+      // stays as the placeholder the photo fades in over.
       child: Container(
         clipBehavior: Clip.antiAlias,
-        alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: hasPhoto ? null : AppColors.primaryGradient,
           color: hasPhoto ? context.palette.cardMuted : null,
@@ -573,9 +576,9 @@ class _StoryRingAvatar extends StatelessWidget {
                 photoUrl!,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) =>
-                    _initials(initials),
+                    Center(child: _initials(initials)),
               )
-            : _initials(initials),
+            : Center(child: _initials(initials)),
       ),
     );
   }

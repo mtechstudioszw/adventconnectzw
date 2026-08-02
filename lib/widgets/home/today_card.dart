@@ -15,6 +15,7 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../cached_image.dart';
+import '../verse_share_card.dart';
 import '../motion/pressable.dart';
 
 /// Home's spiritual anchor: one hero card carrying today's devotion, this
@@ -250,6 +251,7 @@ class _PageShell extends StatelessWidget {
   const _PageShell({
     required this.label,
     required this.icon,
+    this.action,
     required this.child,
     required this.onTap,
     this.backdrop,
@@ -257,6 +259,10 @@ class _PageShell extends StatelessWidget {
 
   final String label;
   final IconData icon;
+
+  /// Optional action pinned to the right of the eyebrow row. Only the
+  /// devotion page uses it, to share the verse as an image.
+  final Widget? action;
   final Widget child;
   final VoidCallback onTap;
 
@@ -298,6 +304,10 @@ class _PageShell extends StatelessWidget {
                         letterSpacing: 1.5,
                       ),
                     ),
+                    if (action != null) ...[
+                      const Spacer(),
+                      action!,
+                    ],
                   ],
                 ),
                 const SizedBox(height: AppSpace.md),
@@ -320,6 +330,14 @@ class _DevotionPage extends StatelessWidget {
     return _PageShell(
       label: "TODAY'S DEVOTION",
       icon: Icons.wb_twilight_rounded,
+      // Home showed the verse and gave no way to send it on — the whole
+      // point of a verse of the day. Reuses the Library's generator
+      // rather than a second one, so a verse shared from Home and the
+      // same verse shared from the reader produce an identical image.
+      action: _ShareVerseButton(
+        reference: devotion.bibleRef,
+        text: devotion.bibleText,
+      ),
       onTap: () => context.pushNamed('library', extra: 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -368,6 +386,46 @@ class _DevotionPage extends StatelessWidget {
   }
 }
 
+/// Share affordance on the devotion page's eyebrow row.
+///
+/// Its own tap target inside a card that is itself tappable, so the
+/// GestureDetector has to sit ABOVE the Pressable in the tree — which it
+/// does, being a child of the shell rather than a sibling.
+class _ShareVerseButton extends StatelessWidget {
+  const _ShareVerseButton({required this.reference, required this.text});
+
+  final String reference;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Share this verse',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          VerseShareSheet.open(context, reference: reference, text: text);
+        },
+        child: Padding(
+          // Padding rather than a fixed box: this sits in a row of text
+          // that grows with the system font.
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.sm,
+            vertical: AppSpace.xs,
+          ),
+          child: Icon(
+            Icons.ios_share_rounded,
+            size: 15,
+            color: AppColors.white.withValues(alpha: 0.85),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LessonPage extends StatelessWidget {
   const _LessonPage({required this.quarterly});
   final Quarterly quarterly;
@@ -378,7 +436,10 @@ class _LessonPage extends StatelessWidget {
     return _PageShell(
       label: 'SABBATH SCHOOL',
       icon: Icons.school_outlined,
-      onTap: () => context.pushNamed('library', extra: 1),
+      onTap: () {
+        LibraryLaunchIntent.quarterlyId = quarterly.id;
+        context.pushNamed('library', extra: 1);
+      },
       backdrop: cover.isEmpty ? null : _ArtBackdrop(url: cover),
       // The quarterly cover now appears as a real thumbnail, not only as a
       // wash behind the text. At 26% opacity under a 92% navy scrim the
@@ -493,7 +554,13 @@ class _HymnPage extends StatelessWidget {
     return _PageShell(
       label: 'HYMN OF THE DAY',
       icon: Icons.queue_music_outlined,
-      onTap: () => context.pushNamed('library', extra: 2),
+      // Carries the hymn's id so the reader opens on THIS hymn rather
+      // than the member landing in the hymnal to search for the thing
+      // they just tapped.
+      onTap: () {
+        LibraryLaunchIntent.hymnId = hymn.id;
+        context.pushNamed('library', extra: 2);
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -559,7 +626,14 @@ class _LibraryPickPage extends StatelessWidget {
   final bool playOnOpen;
 
   void _open(BuildContext context) {
-    if (playOnOpen) LibraryLaunchIntent.musicItemId = item.id;
+    // Both kinds now name their target. Music starts playing; a book
+    // opens in the reader. Which field is set is what tells the receiving
+    // tab this was a deep link rather than an ordinary visit.
+    if (playOnOpen) {
+      LibraryLaunchIntent.musicItemId = item.id;
+    } else {
+      LibraryLaunchIntent.egwItemId = item.id;
+    }
     context.pushNamed('library', extra: tabIndex);
   }
 

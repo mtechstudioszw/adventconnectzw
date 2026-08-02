@@ -6,8 +6,8 @@ import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/cached_image.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/user_avatar.dart';
 
 /// Church-admin "Members" — every member following this church, by name
 /// (patch_139). Searchable. Tap a member to open their profile.
@@ -173,9 +173,10 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
                             ),
                             child: Row(
                               children: [
-                                _Avatar(
+                                UserAvatar(
                                   name: m.fullName,
                                   photoUrl: m.profilePhotoUrl,
+                                  size: 44,
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -234,37 +235,6 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
           },
         ),
       ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, this.photoUrl});
-  final String name;
-  final String? photoUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
-    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
-    return Container(
-      width: 44,
-      height: 44,
-      clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: hasPhoto ? null : AppColors.primaryGradient,
-      ),
-      child: hasPhoto
-          ? CachedImage(photoUrl!, fit: BoxFit.cover)
-          : Text(
-              initial,
-              style: AppTextStyles.titleMedium.copyWith(
-                color: AppColors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
     );
   }
 }

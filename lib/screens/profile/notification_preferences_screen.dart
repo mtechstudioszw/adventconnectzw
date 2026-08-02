@@ -128,7 +128,9 @@ class _NotificationPreferencesScreenState
         child: Center(child: BrandSpinner(size: 30)),
       );
     }
-    if (_error != null) return ErrorBanner(message: _error!);
+    if (_error != null) {
+      return ErrorBanner(message: _error!, onRetry: _load);
+    }
     if (_prefs.isEmpty) {
       return EmptyStateCard(
         icon: Icons.notifications_off_outlined,

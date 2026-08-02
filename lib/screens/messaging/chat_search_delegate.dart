@@ -8,7 +8,7 @@ import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/cached_image.dart';
+import '../../widgets/user_avatar.dart';
 import '../../widgets/motion/brand_spinner.dart';
 
 /// WhatsApp-style scoped search for Advent Chat. One search field, a row of
@@ -211,7 +211,8 @@ class ChatSearchDelegate extends SearchDelegate<void> {
             final convo = _convoById(h.conversationId);
             final title = convo?.otherUserName ?? 'Conversation';
             return ListTile(
-              leading: _Avatar(name: title, photoUrl: convo?.otherUserPhotoUrl),
+              leading: UserAvatar(
+                  name: title, photoUrl: convo?.otherUserPhotoUrl, size: 44),
               title: Text(
                 title,
                 maxLines: 1,
@@ -253,9 +254,10 @@ class ChatSearchDelegate extends SearchDelegate<void> {
       itemBuilder: (_, i) {
         final c = list[i];
         return ListTile(
-          leading: _Avatar(
+          leading: UserAvatar(
             name: c.otherUserName,
             photoUrl: c.otherUserPhotoUrl,
+            size: 44,
           ),
           title: Text(
             c.otherUserName,
@@ -304,7 +306,8 @@ class ChatSearchDelegate extends SearchDelegate<void> {
         final reel = authors[i].value;
         final a = reel.first;
         return ListTile(
-          leading: _Avatar(name: a.authorName, photoUrl: a.authorPhotoUrl),
+          leading: UserAvatar(
+              name: a.authorName, photoUrl: a.authorPhotoUrl, size: 44),
           title: Text(
             a.authorName,
             maxLines: 1,
@@ -365,7 +368,8 @@ class ChatSearchDelegate extends SearchDelegate<void> {
                 ? 'Member'
                 : m.fullName!.trim();
             return ListTile(
-              leading: _Avatar(name: name, photoUrl: m.profilePhotoUrl),
+              leading: UserAvatar(
+                  name: name, photoUrl: m.profilePhotoUrl, size: 44),
               title: Text(
                 name,
                 maxLines: 1,
@@ -407,35 +411,4 @@ class ChatSearchDelegate extends SearchDelegate<void> {
       ),
     ),
   );
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, this.photoUrl});
-  final String name;
-  final String? photoUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
-    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
-    return Container(
-      width: 44,
-      height: 44,
-      clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: hasPhoto ? null : AppColors.primaryGradient,
-      ),
-      child: hasPhoto
-          ? CachedImage(photoUrl!, fit: BoxFit.cover)
-          : Text(
-              initial,
-              style: AppTextStyles.titleMedium.copyWith(
-                color: AppColors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-    );
-  }
 }

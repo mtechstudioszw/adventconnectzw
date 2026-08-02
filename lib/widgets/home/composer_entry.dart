@@ -179,12 +179,17 @@ class HomeShortcutChips extends StatelessWidget {
   const HomeShortcutChips({
     super.key,
     required this.onChurches,
-    required this.onEvent,
+    required this.onEvents,
     required this.onDonate,
   });
 
   final VoidCallback onChurches;
-  final VoidCallback onEvent;
+
+  /// Named for the destination, not for a post kind. It was `onEvent`
+  /// once, and Home duly wired it to the *create an event* composer
+  /// while its two neighbours navigated — the chip said "Events" and
+  /// opened a form. Plural, like the screen it opens.
+  final VoidCallback onEvents;
   final VoidCallback onDonate;
 
   @override
@@ -212,7 +217,7 @@ class HomeShortcutChips extends StatelessWidget {
               icon: Icons.event_outlined,
               label: 'Events',
               tint: AppColors.darkNavy,
-              onTap: onEvent,
+              onTap: onEvents,
             ),
           ),
           const SizedBox(width: AppSpace.sm),

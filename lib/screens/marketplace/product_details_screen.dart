@@ -95,7 +95,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       final saved = await MarketplaceService.isSaved(widget.productId);
       if (mounted) setState(() => _saved = saved);
     } catch (_) {
-      // Signed out â€” heart stays hollow and taps prompt to sign in.
+      // Signed out — heart stays hollow and taps prompt to sign in.
     }
   }
 
@@ -445,7 +445,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             ),
           ),
 
-        // Counter rather than dots â€” a listing can carry many photos and a
+        // Counter rather than dots — a listing can carry many photos and a
         // row of ten dots is unreadable.
         if (images.length > 1)
           Positioned(
@@ -529,7 +529,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  /// The four columns the old screen collected and threw away â€”
+  /// The four columns the old screen collected and threw away —
   /// condition, subcategory, province and location. They were being
   /// stored on every product and shown nowhere.
   Widget _buildFacts(Product product) {
@@ -764,9 +764,9 @@ class _ActionBar extends StatelessWidget {
                     ),
                     const SizedBox(width: AppSpace.md),
                     // One contact route, and it says what it is. There used to
-                    // be two unlabelled glyphs here â€” a speech bubble for
+                    // be two unlabelled glyphs here — a speech bubble for
                     // in-app chat and a second, near-identical bubble for
-                    // WhatsApp â€” so the button that actually reaches the
+                    // WhatsApp — so the button that actually reaches the
                     // seller was a coin flip.
                     _WhatsAppButton(onTap: onWhatsApp),
                     const SizedBox(width: AppSpace.sm),
@@ -858,7 +858,7 @@ class _UnavailableBar extends StatelessWidget {
 /// this marketplace actually closes, and members recognise the destination by
 /// its colour before they read anything. A brand-blue button here does not
 /// tell anyone which app is about to open. Treat this as scoped to third-party
-/// brand affordances â€” do not let green leak anywhere else.
+/// brand affordances — do not let green leak anywhere else.
 ///
 /// The word mark, not the logo: shipping WhatsApp's glyph would mean bundling
 /// a trademarked asset, and the label plus the colour is unambiguous already.

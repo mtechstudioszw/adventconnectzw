@@ -6,9 +6,9 @@ import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../../config/share_config.dart';
-import '../../../theme/app_colors.dart';
-import '../../../theme/app_text_styles.dart';
+import '../config/share_config.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_text_styles.dart';
 
 /// Share a verse as a designed IMAGE, not a wall of text.
 ///
@@ -216,7 +216,19 @@ class _VerseShareSheetState extends State<VerseShareSheet> {
 
   /// The card itself. Square (1:1) because that is what every social surface
   /// crops to without loss.
+  ///
+  /// Rendered at a FIXED text scale, deliberately ignoring the phone's
+  /// font setting. This is an image, not UI: the person receiving it does
+  /// not share the sender's accessibility settings, so honouring them
+  /// would mean the same verse produced a different picture on every
+  /// phone — and at 2.5x the KJV/brand footer row overflowed the square
+  /// by 25px, which is what a widget test caught. Font size inside the
+  /// card is chosen below, from the verse's own length.
   Widget _card(_CardStyle style) {
+    return MediaQuery.withNoTextScaling(child: _cardBody(style));
+  }
+
+  Widget _cardBody(_CardStyle style) {
     // Long verses need to step down or they overflow the fixed square.
     final length = widget.text.length;
     final fontSize = length > 320

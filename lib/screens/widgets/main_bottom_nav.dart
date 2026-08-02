@@ -101,16 +101,34 @@ class MainBottomNav extends StatelessWidget {
   /// person glyph — the one place in the nav that should feel like *theirs*.
   /// Falls back to their initials on the brand gradient, matching how avatars
   /// degrade everywhere else in the app.
+  /// The member's photo URL and the initial to fall back to.
+  ///
+  /// Reading auth during `build` is unusual, and it is deliberate: the
+  /// Profile tab shows the member's own face. The read is guarded because
+  /// the island paints on every screen in the app — including before
+  /// Supabase has finished initialising and immediately after sign-out —
+  /// and an exception here would take the whole navigation bar down with
+  /// it. A generic '?' avatar for one frame is the right failure. It also
+  /// makes the bar renderable in a widget test, which is how the
+  /// wrong-tab-highlight regression is now covered.
+  static (String, String) _viewerIdentity() {
+    try {
+      final user = AuthService.currentUser;
+      final meta = user?.userMetadata ?? const {};
+      final photo = (meta['profile_photo_url'] as String?)?.trim() ?? '';
+      final name = (meta['full_name'] as String?)?.trim() ?? '';
+      final email = user?.email ?? '';
+      final initial = name.isNotEmpty
+          ? name.substring(0, 1).toUpperCase()
+          : (email.isEmpty ? '?' : email.substring(0, 1).toUpperCase());
+      return (photo, initial);
+    } catch (_) {
+      return ('', '?');
+    }
+  }
+
   static Widget _profileAvatar({required bool active, required double size}) {
-    final user = AuthService.currentUser;
-    final meta = user?.userMetadata ?? const {};
-    final photo = (meta['profile_photo_url'] as String?)?.trim() ?? '';
-    final name = (meta['full_name'] as String?)?.trim() ?? '';
-    final initial = name.isNotEmpty
-        ? name.substring(0, 1).toUpperCase()
-        : ((user?.email ?? '?').isEmpty
-            ? '?'
-            : (user?.email ?? '?').substring(0, 1).toUpperCase());
+    final (photo, initial) = _viewerIdentity();
 
     final fallback = Text(
       initial,

@@ -7,6 +7,7 @@ import '../../config/share_config.dart';
 import '../../models/library_item_model.dart';
 import '../../services/cache_service.dart';
 import '../../services/download_service.dart';
+import '../../services/library_launch_intent.dart';
 import '../../services/library_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -72,7 +73,25 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
   Future<List<LibraryItem>> _load() async {
     final items = await LibraryService.fetchItems(widget.kind);
     if (mounted) setState(() => _all = items);
+    _consumeLaunchIntent(items);
     return items;
+  }
+
+  /// Opens the book Home asked for, if it asked for one.
+  ///
+  /// "EGW read of the day" named a book and then opened the shelf. Only
+  /// the EGW tab consumes this, so the music tab's intent is untouched
+  /// when both are mounted at once inside the Library's TabBarView.
+  void _consumeLaunchIntent(List<LibraryItem> items) {
+    if (widget.kind != 'egw') return;
+    final wanted = LibraryLaunchIntent.takeEgw();
+    if (wanted == null || !mounted) return;
+    for (final item in items) {
+      if (item.id == wanted) {
+        _open(item);
+        return;
+      }
+    }
   }
 
   Future<void> _refresh() async {

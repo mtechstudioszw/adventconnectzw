@@ -37,6 +37,12 @@ class OrderDetailsScreen extends StatefulWidget {
 class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   MarketOrder? _order;
   bool _loading = true;
+
+  /// Set when the fetch FAILED, as opposed to succeeding and finding
+  /// nothing. Without it a dropped connection rendered "Order not found",
+  /// which for something the member has paid for is both false and
+  /// alarming.
+  String? _error;
   bool _updating = false;
 
   @override
@@ -54,10 +60,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       setState(() {
         _order = order ?? _order;
         _loading = false;
+        _error = null;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _error = 'Could not load this order.';
+      });
     }
   }
 
@@ -98,8 +108,26 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       body: _loading && order == null
           ? const Center(child: BrandSpinner(size: 32))
           : order == null
-          ? _notFound()
+          ? (_error != null ? _loadFailed() : _notFound())
           : _buildBody(order),
+    );
+  }
+
+  /// The fetch failed. Distinct from [_notFound]: the order is probably
+  /// fine, we just could not reach it — so this offers a retry instead of
+  /// telling the member their order is gone.
+  Widget _loadFailed() {
+    return ListView(
+      children: [
+        const ScreenHero(
+          title: 'Order',
+          fallbackRoute: 'marketplace',
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: ErrorBanner(message: _error!, onRetry: _load),
+        ),
+      ],
     );
   }
 

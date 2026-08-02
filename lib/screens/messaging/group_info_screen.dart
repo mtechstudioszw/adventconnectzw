@@ -18,7 +18,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/screen_shell.dart';
-import '../../widgets/cached_image.dart';
+import '../../widgets/user_avatar.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/verified_tick.dart';
 import '../../widgets/motion/brand_spinner.dart';
@@ -38,6 +38,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   Conversation? _group;
   List<GroupMember> _members = const [];
   bool _loading = true;
+
+  /// A failed load, kept apart from an empty group.
+  String? _error;
 
   String get _myId => AuthService.currentUser?.id ?? '';
   bool get _amAdmin =>
@@ -76,9 +79,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         _group = convo;
         _members = members;
         _loading = false;
+        _error = null;
       });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not load this group.';
+      });
     }
   }
 
@@ -475,6 +483,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           : ListView(
               padding: EdgeInsets.zero,
               children: [
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: ErrorBanner(message: _error!, onRetry: _load),
+                  ),
                 ScreenHero(
                   title: _isChannel ? 'Channel info' : 'Group info',
                   tagline: 'Advent Chat',
@@ -515,9 +528,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                             context,
                             group?.otherUserPhotoUrl,
                           ),
-                          child: _GroupIcon(
+                          child: UserAvatar(
                             photoUrl: group?.otherUserPhotoUrl,
                             name: group?.otherUserName ?? 'Group',
+                            fallbackIcon: Icons.groups,
+                            size: 104,
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -699,30 +714,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 }
 
-class _GroupIcon extends StatelessWidget {
-  const _GroupIcon({required this.photoUrl, required this.name});
-  final String? photoUrl;
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
-    return Container(
-      width: 104,
-      height: 104,
-      clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: hasPhoto ? null : AppColors.primaryGradient,
-      ),
-      child: hasPhoto
-          ? CachedImage(photoUrl!, fit: BoxFit.cover)
-          : const Icon(Icons.groups, color: AppColors.white, size: 48),
-    );
-  }
-}
-
 class _ActionTile extends StatelessWidget {
   const _ActionTile({
     required this.icon,
@@ -764,30 +755,12 @@ class _MemberTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto = (member.photoUrl ?? '').trim().isNotEmpty;
-    final initial = member.fullName.trim().isEmpty
-        ? '?'
-        : member.fullName.trim()[0];
     return ListTile(
       onTap: onTap,
-      leading: Container(
-        width: 44,
-        height: 44,
-        clipBehavior: Clip.antiAlias,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: hasPhoto ? null : AppColors.primaryGradient,
-        ),
-        child: hasPhoto
-            ? CachedImage(member.photoUrl!, fit: BoxFit.cover)
-            : Text(
-                initial.toUpperCase(),
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+      leading: UserAvatar(
+        photoUrl: member.photoUrl,
+        name: member.fullName,
+        size: 44,
       ),
       title: Row(
         children: [
@@ -841,6 +814,10 @@ class _AddMembersSheetState extends State<_AddMembersSheet> {
   List<MemberDirectoryEntry> _friends = const [];
   List<MemberDirectoryEntry> _results = const [];
   bool _loading = true;
+
+  /// A failed friends fetch, so the picker can say so instead of
+  /// rendering an empty list that reads as "you have no friends".
+  String? _addError;
   final Set<String> _selected = {};
 
   @override
@@ -867,9 +844,14 @@ class _AddMembersSheetState extends State<_AddMembersSheet> {
         _friends = filtered;
         _results = filtered;
         _loading = false;
+        _addError = null;
       });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _addError = 'Could not load your friends.';
+      });
     }
   }
 
@@ -924,6 +906,14 @@ class _AddMembersSheetState extends State<_AddMembersSheet> {
           Expanded(
             child: _loading
                 ? const Center(child: BrandSpinner(size: 30))
+                : _addError != null
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    child: ErrorBanner(
+                      message: _addError!,
+                      onRetry: _loadSuggested,
+                    ),
+                  )
                 : ListView.builder(
                     controller: controller,
                     itemCount: _results.length,

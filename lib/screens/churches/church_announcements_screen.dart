@@ -5,15 +5,26 @@ import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/announcement_reaction_bar.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/brand_spinner.dart';
 
 /// Read-only feed of a single church's announcements.
 class ChurchAnnouncementsScreen extends StatefulWidget {
-  const ChurchAnnouncementsScreen({super.key, required this.church});
+  const ChurchAnnouncementsScreen({
+    super.key,
+    required this.church,
+    this.autoLoad = true,
+  });
 
   final Church church;
+
+  /// Test seam. `initState` fetches announcements, marks them read and
+  /// batch-fetches reactions — three Supabase calls that a widget test has
+  /// no client for. Same convention as `ChurchDetailsScreen.autoLoad` and
+  /// `SearchScreen.autoLoad`.
+  final bool autoLoad;
 
   @override
   State<ChurchAnnouncementsScreen> createState() =>
@@ -25,10 +36,19 @@ class _ChurchAnnouncementsScreenState extends State<ChurchAnnouncementsScreen> {
   String? _error;
   List<ChurchAnnouncement> _items = const [];
 
+  /// Reactions per announcement id. Held here rather than in the card so
+  /// one batched fetch fills every card, and so an optimistic tap has a
+  /// single place to roll back to.
+  Map<String, AnnouncementReactionState> _reactions = const {};
+
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.autoLoad) {
+      _load();
+    } else {
+      _loading = false;
+    }
   }
 
   Future<void> _load() async {
@@ -52,6 +72,14 @@ class _ChurchAnnouncementsScreenState extends State<ChurchAnnouncementsScreen> {
       for (final a in items) {
         ChurchService.markAnnouncementRead(a.id).ignore();
       }
+      // One call for the whole list, after the cards are already on screen
+      // — the announcement is the content, the faces are decoration, and
+      // waiting on them would delay the thing the member came to read.
+      final reactions = await ChurchService.fetchAnnouncementReactions(
+        items.map((a) => a.id).toList(growable: false),
+      );
+      if (!mounted) return;
+      setState(() => _reactions = reactions);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -59,6 +87,22 @@ class _ChurchAnnouncementsScreenState extends State<ChurchAnnouncementsScreen> {
         _error = 'Could not load announcements. Pull to retry.';
       });
     }
+  }
+
+  /// Applies the tap locally before the server hears about it.
+  ///
+  /// The founder's rule is that premium reads as FAST, so the face fills
+  /// on touch and the number moves with it. `set_announcement_reaction`
+  /// returns the authoritative tally in the same round trip, so the
+  /// reconcile below is a correction, not a second render — and on failure
+  /// it puts back exactly what was there before.
+  Future<void> _react(String id, AnnouncementReaction tapped) async {
+    final before = _reactions[id] ?? AnnouncementReactionState.empty;
+    setState(() => _reactions = {..._reactions, id: before.afterTapping(tapped)});
+
+    final server = await ChurchService.setAnnouncementReaction(id, tapped);
+    if (!mounted) return;
+    setState(() => _reactions = {..._reactions, id: server ?? before});
   }
 
   @override
@@ -96,7 +140,9 @@ class _ChurchAnnouncementsScreenState extends State<ChurchAnnouncementsScreen> {
         child: Center(child: BrandSpinner(size: 30)),
       );
     }
-    if (_error != null) return ErrorBanner(message: _error!);
+    if (_error != null) {
+      return ErrorBanner(message: _error!, onRetry: _load);
+    }
     if (_items.isEmpty) {
       return EmptyStateCard(
         icon: Icons.campaign_outlined,
@@ -111,7 +157,11 @@ class _ChurchAnnouncementsScreenState extends State<ChurchAnnouncementsScreen> {
         for (final a in _items)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _AnnouncementCard(item: a),
+            child: _AnnouncementCard(
+              item: a,
+              reactions: _reactions[a.id] ?? AnnouncementReactionState.empty,
+              onReact: (kind) => _react(a.id, kind),
+            ),
           ),
       ],
     );
@@ -119,9 +169,15 @@ class _ChurchAnnouncementsScreenState extends State<ChurchAnnouncementsScreen> {
 }
 
 class _AnnouncementCard extends StatelessWidget {
-  const _AnnouncementCard({required this.item});
+  const _AnnouncementCard({
+    required this.item,
+    required this.reactions,
+    required this.onReact,
+  });
 
   final ChurchAnnouncement item;
+  final AnnouncementReactionState reactions;
+  final ValueChanged<AnnouncementReaction> onReact;
 
   Color _accentFor(String category) {
     switch (category) {
@@ -260,6 +316,10 @@ class _AnnouncementCard extends StatelessWidget {
               height: 1.55,
             ),
           ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: context.palette.divider),
+          const SizedBox(height: 10),
+          AnnouncementReactionBar(state: reactions, onReact: onReact),
         ],
       ),
     );

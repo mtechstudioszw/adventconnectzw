@@ -15,7 +15,6 @@ import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/job_card.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
-import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
@@ -135,13 +134,10 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      bottomNavigationBar: HideOnScroll(
-        visible: navVisible,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [AdBanner(), MainBottomNav(currentIndex: 3)],
-        ),
-      ),
+      // No island: Jobs is pushed from Home, not a tab. It used to light
+      // the Marketplace pill — the same lie Prayer told with the Profile
+      // pill. Its ScreenHero already carries the back button.
+      bottomNavigationBar: const SafeArea(top: false, child: AdBanner()),
       floatingActionButton: const PostFab(
         routeName: 'post_job',
         tooltip: 'Post a job',

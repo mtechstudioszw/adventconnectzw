@@ -59,6 +59,22 @@ class QuizSfx {
   static bool _initialised = false;
   static bool _initialising = false;
 
+  /// Bumped by [dispose]. [init] captures it before its first await and
+  /// re-checks it after every one, so a pool that was torn down while it
+  /// was still being built is abandoned instead of half-published.
+  ///
+  /// This is what "the quiz has no sound" was. [init] used to write each
+  /// player into [_players] as it created it, and [dispose] releases and
+  /// clears that same map — so when the lobby went away while the round's
+  /// init was still looping (lobby.dispose() and round.initState() both
+  /// run on the same frame), every sound built before the clear was
+  /// disposed and dropped, while init carried on and still set
+  /// [_initialised] to true. play() only self-heals when that flag is
+  /// false, so those clips stayed dead for the rest of the session — and
+  /// being first in the enum, they were tap, tick and count: the tap on
+  /// every answer and the countdown ticks.
+  static int _generation = 0;
+
   /// Cached so the arena can render its mute button without a disk read.
   static bool _muted = false;
 
@@ -126,6 +142,10 @@ class QuizSfx {
     _volume = double.tryParse(CacheService.readPref(_kVolume) ?? '')
             ?.clamp(0.0, 1.0) ??
         0.85;
+    final generation = _generation;
+    // Built off to the side and published in one go at the end, so a
+    // concurrent dispose() can never find a half-filled pool.
+    final loaded = <QuizSound, AudioPlayer>{};
     try {
       for (final sound in QuizSound.values) {
         final player = AudioPlayer(playerId: 'quiz_${sound.name}');
@@ -140,11 +160,21 @@ class QuizSfx {
         await player.setAudioContext(_context);
         await player.setSourceAsset(sound.asset);
         await player.setVolume(sound.volume * _volume);
-        _players[sound] = player;
+        loaded[sound] = player;
+
+        // dispose() ran underneath us. Everything built so far belongs to
+        // a pool nobody wants; release it rather than publishing players
+        // the arena has already walked away from.
+        if (generation != _generation) {
+          await _releaseAll(loaded.values);
+          return;
+        }
       }
+      _players.addAll(loaded);
       _initialised = true;
       revision.value++;
     } catch (e) {
+      await _releaseAll(loaded.values);
       // Leave _initialised false — play() degrades to haptics only.
       debugPrint('QuizSfx.init failed: $e');
     } finally {
@@ -152,16 +182,26 @@ class QuizSfx {
     }
   }
 
-  /// Free the players when the arena closes. The arena is the only caller.
-  static Future<void> dispose() async {
-    for (final player in _players.values) {
+  static Future<void> _releaseAll(Iterable<AudioPlayer> players) async {
+    for (final player in players) {
       try {
         await player.release();
         await player.dispose();
       } catch (_) {}
     }
+  }
+
+  /// Free the players when the arena closes. The arena is the only caller.
+  ///
+  /// Bumping [_generation] first is what tells an init() that is still
+  /// looping to abandon its work instead of publishing into a pool this
+  /// call is tearing down.
+  static Future<void> dispose() async {
+    _generation++;
+    final players = List<AudioPlayer>.of(_players.values);
     _players.clear();
     _initialised = false;
+    await _releaseAll(players);
   }
 
   static Future<void> setMuted(bool value) async {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/sabbath_school_model.dart';
 import '../../services/sabbath_school_prefs.dart';
+import '../../services/library_launch_intent.dart';
 import '../../services/sabbath_school_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -39,8 +40,40 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
   void initState() {
     super.initState();
     _lang = SabbathSchoolService.language();
-    _future = SabbathSchoolService.quarterlies(lang: _lang);
+    final future = SabbathSchoolService.quarterlies(lang: _lang);
+    _future = future;
+    future.then(_consumeLaunchIntent).catchError((_) {});
     SabbathSchoolPrefs.revision.addListener(_onPrefs);
+  }
+
+  /// Opens the quarterly Home asked for, if it asked for one.
+  ///
+  /// "Sabbath School" on the Today card named a quarterly and then opened
+  /// the shelf. It carries the quarterly's id now.
+  ///
+  /// Deferred to after the frame: this runs off a future that can complete
+  /// while the tab is still building its first frame, and pushing a route
+  /// mid-build throws.
+  void _consumeLaunchIntent(List<Quarterly> all) {
+    final wanted = LibraryLaunchIntent.takeQuarterly();
+    if (wanted == null || all.isEmpty) return;
+    Quarterly? target;
+    for (final q in all) {
+      if (q.id == wanted) {
+        target = q;
+        break;
+      }
+    }
+    if (target == null) return;
+    final quarterly = target;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SsLessonListScreen(quarterly: quarterly, lang: _lang),
+        ),
+      );
+    });
   }
 
   @override

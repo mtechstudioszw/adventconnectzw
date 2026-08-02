@@ -1249,7 +1249,7 @@ class _HomeScreenState extends State<HomeScreen>
                   // tiles, feed.
                   HomeShortcutChips(
                     onChurches: () => context.pushNamed('churches'),
-                    onEvent: () => _handleCreate(CreateKind.event),
+                    onEvents: () => context.pushNamed('events'),
                     onDonate: () => context.pushNamed('donate'),
                   ),
                 ],

@@ -19,7 +19,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import 'widgets/translation_picker.dart';
-import 'widgets/verse_share_card.dart';
+import '../../widgets/verse_share_card.dart';
 
 /// Library → Bible tab. Bundled offline KJV with a full modern reader:
 /// verse-of-the-day, reading streak, fast book/chapter picking, swipe between

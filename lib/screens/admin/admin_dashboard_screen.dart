@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/home/composer_sheet.dart';
+import '../../widgets/announcement_responses_card.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 
@@ -29,6 +30,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   List<ChurchAnnouncement> _items = const [];
   ChurchAdminStats _stats = const ChurchAdminStats();
   List<AnnouncementReach> _reach = const [];
+  List<AnnouncementReactionStat> _responses = const [];
   List<AdminTask> _tasks = const [];
   List<ChurchAdminMember> _admins = const [];
 
@@ -49,6 +51,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ChurchService.fetchAnnouncementReach(churchId),
       ChurchService.fetchNeedsYou(churchId),
       ChurchService.fetchChurchAdmins(churchId),
+      ChurchService.fetchAnnouncementReactionStats(churchId),
     ]);
     if (!mounted) return;
     setState(() {
@@ -56,6 +59,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       _reach = results[1] as List<AnnouncementReach>;
       _tasks = results[2] as List<AdminTask>;
       _admins = results[3] as List<ChurchAdminMember>;
+      _responses = results[4] as List<AnnouncementReactionStat>;
     });
   }
 
@@ -266,6 +270,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       const SizedBox(height: 16),
                       _ReachCard(reach: _reach),
                     ],
+                    // Reach says whether it was opened; this says how it
+                    // landed. They sit together because one is the
+                    // denominator of the other.
+                    if (_responses.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      AnnouncementResponsesCard(stats: _responses),
+                    ],
                     const SizedBox(height: 16),
                     _AdminsCard(
                       admins: _admins,
@@ -316,7 +327,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         child: Center(child: BrandSpinner(size: 30)),
                       )
                     else if (_error != null)
-                      ErrorBanner(message: _error!)
+                      ErrorBanner(message: _error!, onRetry: _load)
                     else if (_items.isEmpty)
                       EmptyStateCard(
                         icon: Icons.campaign_outlined,
@@ -1502,6 +1513,10 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
   List<ChurchMember> _members = const [];
   bool _loading = true;
 
+  /// A failed member fetch, so the picker says so rather than looking
+  /// like a church with no members.
+  String? _membersError;
+
   @override
   void initState() {
     super.initState();
@@ -1521,10 +1536,15 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
         setState(() {
           _members = list;
           _loading = false;
+          _membersError = null;
         });
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _membersError = 'Could not load members.';
+      });
     }
   }
 
@@ -1571,6 +1591,16 @@ class _MemberPickerSheetState extends State<_MemberPickerSheet> {
           ),
           if (_loading)
             const Expanded(child: Center(child: BrandSpinner(size: 28)))
+          else if (_membersError != null)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: ErrorBanner(
+                  message: _membersError!,
+                  onRetry: _load,
+                ),
+              ),
+            )
           else if (filtered.isEmpty)
             Expanded(
               child: Center(

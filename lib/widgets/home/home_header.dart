@@ -665,15 +665,19 @@ class _Avatar extends StatelessWidget {
                 ? Border.all(color: AppColors.goldAccent, width: 1.6)
                 : null,
           ),
+          // No `alignment` here on purpose. Setting it makes Container
+          // wrap the child in an Align, which hands it LOOSE constraints —
+          // the photo then lays out at its own size and floats inside the
+          // circle, leaving a visible rim. Without it the tight
+          // constraints pass straight through and BoxFit.cover fills.
           child: Container(
             clipBehavior: Clip.antiAlias,
-            alignment: Alignment.center,
             decoration: const BoxDecoration(
               gradient: AppColors.primaryGradient,
               shape: BoxShape.circle,
             ),
             child: url == null || url.isEmpty
-                ? fallback
+                ? Center(child: fallback)
                 : CachedImage(
                     url,
                     fit: BoxFit.cover,

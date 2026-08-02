@@ -13,6 +13,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/user_avatar.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -521,7 +522,7 @@ class _SelectedChip extends StatelessWidget {
         children: [
           Stack(
             children: [
-              _Avatar(photoUrl: member.profilePhotoUrl, name: name, size: 50),
+              UserAvatar(photoUrl: member.profilePhotoUrl, name: name, size: 50),
               Positioned(
                 right: 0,
                 top: 0,
@@ -603,7 +604,7 @@ class _PersonPickTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _Avatar(photoUrl: member.profilePhotoUrl, name: name, size: 42),
+            UserAvatar(photoUrl: member.profilePhotoUrl, name: name, size: 42),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -645,38 +646,6 @@ class _PersonPickTile extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.photoUrl, required this.name, this.size = 44});
-  final String? photoUrl;
-  final String name;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
-    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
-    return Container(
-      width: size,
-      height: size,
-      clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: hasPhoto ? null : AppColors.primaryGradient,
-      ),
-      child: hasPhoto
-          ? CachedImage(photoUrl!, fit: BoxFit.cover)
-          : Text(
-              initial,
-              style: AppTextStyles.titleMedium.copyWith(
-                color: AppColors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
     );
   }
 }

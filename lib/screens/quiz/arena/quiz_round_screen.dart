@@ -60,17 +60,10 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   /// Spent on the current question — all reset by [_next].
   final Set<Lifeline> _usedThisQuestion = {};
 
-  /// Second Chance is once per ROUND, not per question; it's the expensive
-  /// one and un-losing a Survival run repeatedly would make the mode moot.
-  bool _secondChanceUsed = false;
   Lifeline? _lifelineBusy;
 
   /// Mutable because Extra Time lengthens the current question's clock.
   late int _questionSeconds = _mode.secondsPerQuestion;
-
-  /// The combo going INTO the current question, so Second Chance can put it
-  /// back rather than leaving the player revived but reset to zero.
-  late int _comboBeforeQuestion = widget.config.startCombo;
 
   // ---- Animation ----------------------------------------------------------
   late final AnimationController _timer;
@@ -94,7 +87,18 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   QuizMode get _mode => widget.config.mode;
   List<QuizQuestion> get _questions => widget.config.questions;
   QuizQuestion get _question => _questions[_index];
-  bool get _answered => _chosen != null;
+
+  /// The per-question clock ran out before a choice was made.
+  ///
+  /// Kept separate from [_chosen] rather than faking a selection: the
+  /// answer tiles read [_chosen] to decide which one the player picked,
+  /// and a sentinel there would light a tile nobody touched. With this
+  /// flag set and [_chosen] still null, [_stateFor] reveals the correct
+  /// answer and dims the rest — which is exactly the "time's up" state.
+  bool _timedOut = false;
+
+  /// True once the question is closed, whether by a choice or the clock.
+  bool get _answered => _chosen != null || _timedOut;
 
   @override
   void initState() {
@@ -103,7 +107,9 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     _timer = AnimationController(
       vsync: this,
       duration: Duration(seconds: _mode.secondsPerQuestion),
-    )..addListener(_onTimerTick);
+    )
+      ..addListener(_onTimerTick)
+      ..addStatusListener(_onTimerStatus);
 
     _roundTimer = AnimationController(
       vsync: this,
@@ -132,6 +138,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   void dispose() {
     _timer
       ..removeListener(_onTimerTick)
+      ..removeStatusListener(_onTimerStatus)
       ..dispose();
     _roundTimer.dispose();
     _entrance.dispose();
@@ -177,6 +184,67 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     if (secondsLeft <= 5 && secondsLeft > 0 && secondsLeft != _lastTickSecond) {
       _lastTickSecond = secondsLeft;
       QuizSfx.play(QuizSound.tick);
+    }
+  }
+
+  void _onTimerStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) unawaited(_timeUp());
+  }
+
+  /// The clock beat the player to it.
+  ///
+  /// Founder's call (2 Aug 2026): running out of time IS getting the
+  /// question wrong, and there is no second attempt at it — the round
+  /// records the miss, shows what the answer was, and moves on by itself
+  /// until every question has been seen.
+  ///
+  /// Before this, the per-question controller had a listener for the
+  /// ticking sound and no status listener at all, so reaching zero did
+  /// nothing whatsoever: the ring sat empty and the question stayed open
+  /// indefinitely, which made the countdown decorative.
+  Future<void> _timeUp() async {
+    if (_answered || _finishing || !mounted) return;
+
+    _timer.stop();
+
+    setState(() {
+      _timedOut = true;
+      // A miss breaks the streak exactly as a wrong answer does.
+      _combo = 0;
+      _lastPoints = 0;
+      _lastMultiplier = 1;
+      _floatAt = null;
+      _flashColor = ArenaTheme.wrongOnNavy;
+    });
+
+    _answers.add(QuizAnswer(
+      questionId: _question.id,
+      // -1 is the established "never chose" sentinel, shared with Skip.
+      chosenIndex: -1,
+      correct: false,
+      elapsedMs: _questionSeconds * 1000,
+      points: 0,
+      comboAfter: 0,
+    ));
+
+    _flash.forward(from: 0);
+    unawaited(QuizProgressService.recordAnswer(false));
+    // The same cue as a wrong answer, because that is what this is. No
+    // separate clip: the sound set is authored, and inventing an asset
+    // name that does not exist is how a sound silently stops playing.
+    QuizSfx.wrong();
+    if (_mode.tracksMistakes) {
+      unawaited(QuizProgressService.addMistake(_question));
+    }
+
+    // Long enough to read the answer that was missed, short enough that
+    // the round never feels stalled. Sudden death ends here instead.
+    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    if (!mounted || _finishing) return;
+    if (_mode.suddenDeath) {
+      _finish();
+    } else {
+      _next();
     }
   }
 
@@ -240,14 +308,13 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
       }
     }
 
-    // Sudden death — but never auto-end the run while a Second Chance is
-    // still on the table. That lifeline exists precisely for this moment,
-    // and ending the round from under the player would make it unusable.
+    // Sudden death ends on a wrong answer. This used to hold the round
+    // open when a Second Chance was still available; that lifeline is
+    // retired, so waiting would have left the run frozen on the question
+    // it should have ended on.
     if (!correct && _mode.suddenDeath) {
-      if (_secondChanceUsed) {
-        await Future<void>.delayed(const Duration(milliseconds: 1200));
-        if (mounted && !_finishing) _finish();
-      }
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      if (mounted && !_finishing) _finish();
       return;
     }
 
@@ -266,6 +333,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     setState(() {
       _index++;
       _chosen = null;
+      _timedOut = false;
       _hidden.clear();
       _usedThisQuestion.clear();
       _lifelineBusy = null;
@@ -273,9 +341,6 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
       _lastPoints = 0;
       _floatAt = null;
     });
-    // Snapshot the combo so Second Chance can restore it if this question
-    // goes wrong.
-    _comboBeforeQuestion = _combo;
     _timer.duration = Duration(seconds: _questionSeconds);
     _persist();
     _startQuestion();
@@ -366,10 +431,15 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     if (_usedThisQuestion.contains(lifeline)) return false;
     switch (lifeline) {
       case Lifeline.secondChance:
-        // Offered only in response to a wrong answer, once per round.
-        return !_secondChanceUsed &&
-            _answered &&
-            !_question.isCorrect(_chosen!);
+        // Retired 2 Aug 2026 by founder call: "no try option until you
+        // finish all questions". A question you got wrong — or let the
+        // clock take — stays wrong, and the run continues to the end.
+        //
+        // Closed off here rather than deleted from the enum, because
+        // Lifeline values are persisted on finished rounds and dropping
+        // one would change how old rounds decode. The rail filters on
+        // this method, so the button simply stops being offered.
+        return false;
       case Lifeline.fiftyFifty:
         return !_answered && _hidden.isEmpty;
       case Lifeline.skip:
@@ -415,7 +485,8 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
       case Lifeline.extraTime:
         _applyExtraTime();
       case Lifeline.secondChance:
-        _applySecondChance();
+        // Unreachable: _lifelineAvailable never offers it any more.
+        break;
     }
   }
 
@@ -448,36 +519,6 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     _timer.value =
         (1 - ((secondsLeft + LifelineInfo.extraSeconds) / newTotal))
             .clamp(0.0, 1.0);
-    _timer.forward();
-  }
-
-  /// Undo a wrong answer and re-open the question.
-  ///
-  /// The wrong answer is removed from [_answers] and the lifetime accuracy
-  /// stat is walked back too — otherwise a revived question would be
-  /// counted twice, once wrong and once right.
-  void _applySecondChance() {
-    final chosen = _chosen;
-    if (chosen == null) return;
-    _answers.removeWhere((a) => a.questionId == _question.id);
-    unawaited(QuizProgressService.undoAnswer(correct: false));
-    if (_mode.tracksMistakes) {
-      unawaited(QuizProgressService.clearMistake(_question.id));
-    }
-
-    setState(() {
-      _secondChanceUsed = true;
-      _chosen = null;
-      // Put back the streak they had walking into this question, rather
-      // than reviving them onto a zeroed combo.
-      _combo = _comboBeforeQuestion;
-      _flashColor = ArenaTheme.correctOnNavy;
-      _lastPoints = 0;
-      _floatAt = null;
-      // The answer they just tried is off the table — that's the mercy.
-      _hidden.add(chosen);
-    });
-    _entrance.forward(from: 0.55);
     _timer.forward();
   }
 

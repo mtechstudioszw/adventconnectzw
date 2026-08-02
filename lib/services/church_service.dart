@@ -942,6 +942,33 @@ class AnnouncementReactionState {
 
   static const empty = AnnouncementReactionState(counts: {});
 
+  /// What this state becomes when the member taps [tapped], computed
+  /// locally so the UI can paint the tap before the server answers.
+  ///
+  /// Mirrors `set_announcement_reaction` exactly: tapping the reaction you
+  /// already left CLEARS it, and moving between reactions decrements the
+  /// old one as it increments the new. Kept here rather than in the screen
+  /// so the optimistic path and the server agree by construction — if they
+  /// drift, the count visibly jumps when the RPC returns.
+  AnnouncementReactionState afterTapping(AnnouncementReaction tapped) {
+    final next = Map<AnnouncementReaction, int>.from(counts);
+    final current = mine;
+
+    if (current != null) {
+      final remaining = (next[current] ?? 1) - 1;
+      if (remaining > 0) {
+        next[current] = remaining;
+      } else {
+        next.remove(current);
+      }
+    }
+    if (current == tapped) {
+      return AnnouncementReactionState(counts: next, mine: null);
+    }
+    next[tapped] = (next[tapped] ?? 0) + 1;
+    return AnnouncementReactionState(counts: next, mine: tapped);
+  }
+
   factory AnnouncementReactionState.fromJson(Map<String, dynamic> json) {
     final raw = json['counts'];
     final counts = <AnnouncementReaction, int>{};

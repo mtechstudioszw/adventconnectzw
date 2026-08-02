@@ -35,7 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _sabbathMode = SabbathService.sabbathModeEnabled();
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
   ThemeMode _themeMode = ThemeService.current;
-  // Watch (YouTube) preferences â€” synchronous reads from local prefs.
+  // Watch (YouTube) preferences — synchronous reads from local prefs.
   bool _ytAutoplayNext = YoutubePrefs.autoplayNext;
   bool _isSuperAdmin = false;
   bool _biometricAvailable = false;
@@ -90,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     setState(() {
       _biometricBusy = false;
       // setEnabled(false) is unconditional, setEnabled(true) only
-      // returns true once the OS prompt is satisfied â€” so this
+      // returns true once the OS prompt is satisfied — so this
       // single expression covers cancel-flip-back too.
       _biometricEnabled = ok && next;
     });
@@ -108,7 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
 
-  /// Optimistic write â€” flip the local toggle immediately so the
+  /// Optimistic write — flip the local toggle immediately so the
   /// Switch animates, then fire-and-forget the persist call. The
   /// service swallows network errors silently; if the write fails
   /// the toggle simply doesn't survive a reload, and the user can
@@ -280,7 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 onTap: () async {
                   final url = Uri.parse(
                     'https://wa.me/${_supportWhatsApp.replaceAll(RegExp(r"[^0-9+]"), "")}'
-                    '?text=${Uri.encodeComponent("Hi Advent Connect ZW team â€” ")}',
+                    '?text=${Uri.encodeComponent("Hi Advent Connect ZW team — ")}',
                   );
                   Navigator.of(ctx).pop();
                   await launchUrl(url,
@@ -298,7 +298,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     scheme: 'mailto',
                     path: _supportEmail,
                     queryParameters: {
-                      'subject': 'Advent Connect ZW â€” Support',
+                      'subject': 'Advent Connect ZW — Support',
                     },
                   );
                   Navigator.of(ctx).pop();
@@ -327,7 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// Opens the shared Donate screen rather than a sheet local to Settings.
   ///
   /// Home gained a Donate button, and two copies of the EcoCash number in two
-  /// files is one copy too many â€” see [DonateScreen] for the number and for
+  /// files is one copy too many — see [DonateScreen] for the number and for
   /// why the flow deliberately collects nothing in-app.
   Future<void> _openDonation() async {
     await context.pushNamed('donate');
@@ -344,7 +344,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  // Theme picker â€” kept available for the v1.1 dark-mode update.
+  // Theme picker — kept available for the v1.1 dark-mode update.
   // The Settings row that triggers it is hidden in build() until
   // the remaining ~45 screens are migrated to context.palette.
   // ignore: unused_element
@@ -769,7 +769,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         const _Divider(),
                         _ToggleRow(
                           icon: Icons.play_circle_outline,
-                          label: 'Watch â€” new videos & live',
+                          label: 'Watch — new videos & live',
                           value: _categoryPrefs.watch,
                           onChanged: (v) {
                             _setCategory(_categoryPrefs.copyWith(watch: v));
@@ -1007,7 +1007,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(height: 24),
                     Center(
                       child: Text(
-                        'Made with care â€¢ MyTech Studios Zw',
+                        'Made with care • MyTech Studios Zw',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: AppColors.textMuted,
                           fontSize: 11,
@@ -1319,7 +1319,7 @@ class _NavRow extends StatelessWidget {
   final IconData icon;
   final String label;
   // Nullable so callers can render a passive (non-tappable) row when
-  // there is nothing left to do â€” e.g. "Google linked" once linking
+  // there is nothing left to do — e.g. "Google linked" once linking
   // has succeeded. A null onTap also disables InkWell's ripple.
   final VoidCallback? onTap;
   final String? trailing;
@@ -1628,13 +1628,13 @@ class _ThemeSheet extends StatelessWidget {
       ThemeMode.light,
       'Light',
       Icons.light_mode_outlined,
-      'Bright surfaces â€” best in daylight.',
+      'Bright surfaces — best in daylight.',
     ),
     (
       ThemeMode.dark,
       'Dark',
       Icons.dark_mode_outlined,
-      'Dim surfaces â€” easier on the eyes at night.',
+      'Dim surfaces — easier on the eyes at night.',
     ),
   ];
 
@@ -1838,7 +1838,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   final _formKey = GlobalKey<FormState>();
   bool _busy = false;
   String? _error;
-  // Independent obscure flags for each field â€” tapping the eye on the
+  // Independent obscure flags for each field — tapping the eye on the
   // current-password field doesn't reveal the new one, and vice versa.
   bool _obscureCurrent = true;
   bool _obscureNew = true;
@@ -1997,7 +1997,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
           style: FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
           onPressed: _busy ? null : _save,
           child: Text(
-            _busy ? 'Savingâ€¦' : 'Save',
+            _busy ? 'Saving…' : 'Save',
             style: AppTextStyles.labelLarge,
           ),
         ),

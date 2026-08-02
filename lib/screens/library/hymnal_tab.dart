@@ -12,6 +12,7 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../services/library_launch_intent.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
@@ -74,6 +75,21 @@ class _HymnalTabState extends State<HymnalTab>
       _all = hymns;
       _loading = false;
     });
+    _consumeLaunchIntent(hymns);
+  }
+
+  /// Opens the hymn Home asked for, if it asked for one.
+  ///
+  /// "Hymn of the day" named a hymn and then opened the whole hymnal,
+  /// leaving the member to search for the thing they had just tapped.
+  /// The reader is handed the FULL list rather than a single hymn so
+  /// swiping to the next hymn still works exactly as it does from a row.
+  void _consumeLaunchIntent(List<Hymn> hymns) {
+    final wanted = LibraryLaunchIntent.takeHymn();
+    if (wanted == null || !mounted) return;
+    final index = hymns.indexWhere((h) => h.id == wanted);
+    if (index < 0) return;
+    _openReader(hymns, index);
   }
 
   /// Pull-to-refresh. Silent by design — the bundled hymns are already

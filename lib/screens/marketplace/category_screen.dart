@@ -137,7 +137,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 
   Widget _buildResultsContent() {
-    if (_error != null) return ErrorBanner(message: _error!);
+    if (_error != null) {
+      return ErrorBanner(message: _error!, onRetry: _load);
+    }
     if (_products.isEmpty) {
       return EmptyStateCard(
         icon: Icons.shopping_bag_outlined,

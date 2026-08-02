@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:go_router/go_router.dart';
 
+import '../services/connectivity_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -347,12 +348,45 @@ class PrimaryGradientButton extends StatelessWidget {
   }
 }
 
+/// A failed load, stated in place and offered a way out.
+///
+/// This is the app's most-used error surface — eight screens render it as
+/// their ENTIRE body when a fetch fails. Until 2 Aug 2026 it had no retry
+/// affordance of any kind, so a load that failed on a flaky connection was
+/// a dead end: the member's only move was to leave the screen and come
+/// back. That is the blocking behaviour an offline audit exists to remove.
+///
+/// Two things it now does:
+///
+///  * **Offers [onRetry]**, which re-runs only the operation that failed.
+///    The rest of the screen keeps working throughout — this is a banner
+///    inside the layout, never a route and never an overlay.
+///  * **Tells the truth about why.** A dropped connection and a server
+///    error need different words: "check your connection" is useless
+///    advice when the connection is fine. When the device is offline the
+///    banner says so and ignores the caller's server-shaped [message].
+///
+/// The retry button is deliberately part of the banner rather than left to
+/// each caller, because eight callers meant eight chances to forget it.
 class ErrorBanner extends StatelessWidget {
-  const ErrorBanner({super.key, required this.message});
+  const ErrorBanner({super.key, required this.message, this.onRetry});
+
+  /// What went wrong. Overridden by the offline copy when the device has
+  /// no connection, since the cause is then known and more specific.
   final String message;
+
+  /// Re-runs the failed operation. When null the banner still explains
+  /// itself but cannot offer a way forward — pass this wherever a load
+  /// function exists.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final offline = !ConnectivityService.isOnline;
+    final text = offline
+        ? 'You\'re offline. Check your internet connection and try again.'
+        : message;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -360,19 +394,47 @@ class ErrorBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.red.withValues(alpha: 0.3)),
       ),
-      child: Row(
+      // Column, not Row: the message wraps and the button sits under it,
+      // so neither has to give up width to the other at large text scales.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: AppColors.red, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: AppTextStyles.bodySmall.copyWith(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                offline ? Icons.wifi_off_rounded : Icons.error_outline,
                 color: AppColors.red,
-                fontWeight: FontWeight.w500,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.red,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Try again'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.red,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

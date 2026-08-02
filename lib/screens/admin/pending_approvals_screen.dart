@@ -141,7 +141,9 @@ class _PendingApprovalsScreenState extends State<PendingApprovalsScreen> {
         child: Center(child: BrandSpinner(size: 30)),
       );
     }
-    if (_error != null) return ErrorBanner(message: _error!);
+    if (_error != null) {
+      return ErrorBanner(message: _error!, onRetry: _load);
+    }
     if (_events.isEmpty && _edits.isEmpty) {
       return EmptyStateCard(
         icon: Icons.task_alt_outlined,

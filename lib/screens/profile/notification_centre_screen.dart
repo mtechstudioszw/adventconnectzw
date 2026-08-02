@@ -298,7 +298,9 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
         child: Center(child: BrandSpinner(size: 30)),
       );
     }
-    if (_error != null) return ErrorBanner(message: _error!);
+    if (_error != null) {
+      return ErrorBanner(message: _error!, onRetry: _load);
+    }
     if (_items.isEmpty) {
       return EmptyStateCard(
         icon: Icons.notifications_none_outlined,

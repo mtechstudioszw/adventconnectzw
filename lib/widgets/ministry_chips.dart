@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/ministry_tag_model.dart';
 import '../services/ministry_service.dart';
 import '../theme/app_colors.dart';
+import 'screen_shell.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'motion/pressable.dart';
@@ -199,6 +200,11 @@ class _MinistryPickerSheetState extends State<_MinistryPickerSheet> {
   late final Set<int> _selected = {...widget.initial};
   List<MinistryTag> _vocab = const [];
   bool _loading = true;
+
+  /// A failed vocabulary fetch. Without it the sheet rendered every
+  /// section header with nothing under it, which reads as "there are no
+  /// ministries" rather than "this did not load".
+  String? _error;
   bool _saving = false;
 
   @override
@@ -214,10 +220,14 @@ class _MinistryPickerSheetState extends State<_MinistryPickerSheet> {
       setState(() {
         _vocab = vocab;
         _loading = false;
+        _error = null;
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _error = 'Could not load ministries.';
+      });
     }
   }
 
@@ -292,6 +302,11 @@ class _MinistryPickerSheetState extends State<_MinistryPickerSheet> {
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                      child: ErrorBanner(message: _error!, onRetry: _load),
+                    )
                   : ListView(
                       controller: scrollController,
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),

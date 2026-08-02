@@ -9,6 +9,7 @@ import '../../services/cache_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
@@ -309,278 +310,346 @@ class _PostComposerState extends State<_PostComposer> {
         if (await _confirmDiscard()) navigator.pop();
       },
       child: Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.palette.sheet,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: context.palette.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Text(
-                    'New post',
-                    style: AppTextStyles.titleLarge.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
+        padding: EdgeInsets.only(bottom: bottom),
+        child: Container(
+          decoration: BoxDecoration(
+            color: context.palette.sheet,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: context.palette.divider,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  // Church updates are always public to everyone — no
-                  // audience picker. The personal Public/Friends toggle only
-                  // appears for an individual's own post.
-                  if (widget.churchId == null) ...[
-                    const SizedBox(width: 10),
-                    _VisibilityPill(
-                      visibility: _visibility,
-                      onTap: _toggleVisibility,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Text(
+                      'New post',
+                      style: AppTextStyles.titleLarge.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                    // Church updates are always public to everyone — no
+                    // audience picker. The personal Public/Friends toggle only
+                    // appears for an individual's own post.
+                    if (widget.churchId == null) ...[
+                      const SizedBox(width: 10),
+                      _VisibilityPill(
+                        visibility: _visibility,
+                        onTap: _toggleVisibility,
+                      ),
+                    ],
+                    const Spacer(),
+                    // The primary action of the whole sheet. It was a bare
+                    // TextButton — the same weight as "Preview" and "Add a
+                    // photo" below it — so the one thing the member came
+                    // here to do carried no more emphasis than the two
+                    // things they might do on the way. It is a gradient
+                    // pill now, and it fills only once there is something
+                    // to publish, so the button going live IS the signal
+                    // that the post is ready.
+                    _PostButton(
+                      enabled: hasContent,
+                      busy: _publishing,
+                      onTap: _publish,
                     ),
                   ],
-                  const Spacer(),
-                  _publishing
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: AppColors.primaryBlue,
-                          ),
-                        )
-                      : TextButton(
-                          onPressed: hasContent ? _publish : null,
-                          child: Text(
-                            'Post',
-                            style: AppTextStyles.buttonText.copyWith(
-                              color: hasContent
-                                  ? AppColors.primaryBlue
-                                  : context.palette.textMuted,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: context.palette.inputFill,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: context.palette.divider),
                 ),
-                child: TextField(
-                  controller: _controller,
-                  minLines: 4,
-                  maxLines: 8,
-                  // Enforced here so the member is stopped AT the limit,
-                  // instead of the database rejecting the insert afterwards
-                  // with an unexplained "Could not publish".
-                  maxLength: _maxBody,
-                  textCapitalization: TextCapitalization.sentences,
-                  autofocus: true,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 15,
-                    color: context.palette.text,
-                  ),
-                  buildCounter: (
-                    context, {
-                    required currentLength,
-                    required isFocused,
-                    required maxLength,
-                  }) {
-                    // Silent until it's nearly full — a counter on an empty
-                    // box just nags.
-                    if (currentLength < _counterFrom) return null;
-                    final left = (maxLength ?? _maxBody) - currentLength;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12, bottom: 6),
-                      child: Text(
-                        '$left left',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: left <= 50
-                              ? AppColors.red
-                              : context.palette.textMuted,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    );
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'What\'s on your mind today?',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.textMuted,
-                      fontSize: 15,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.all(14),
-                  ),
-                  // The controller listener already rebuilds + autosaves.
-                ),
-              ),
-              if (_photos.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                // Square thumbnails in a wrap: one photo reads as a single
-                // preview, four tile into a 2x2 without any special-casing.
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final single = _photos.length == 1;
-                    final size = single
-                        ? constraints.maxWidth
-                        : (constraints.maxWidth - 8) / 2;
-                    return Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (var i = 0; i < _photos.length; i++)
-                          SizedBox(
-                            width: size,
-                            height: size,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  CachedImage(_photos[i], fit: BoxFit.cover),
-                                  Positioned(
-                                    top: 6,
-                                    right: 6,
-                                    child: Material(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.55,
-                                      ),
-                                      shape: const CircleBorder(),
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () {
-                                          setState(() => _photos.removeAt(i));
-                                          _saveDraft();
-                                        },
-                                        child: const Padding(
-                                          padding: EdgeInsets.all(6),
-                                          child: Icon(
-                                            Icons.close,
-                                            size: 16,
-                                            color: AppColors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  // Order matters — the first photo is what
-                                  // lands in `image_url` and is all a v1.3.0
-                                  // client will ever see.
-                                  if (i == 0 && _photos.length > 1)
-                                    Positioned(
-                                      left: 6,
-                                      bottom: 6,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.55,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          'Cover',
-                                          style: AppTextStyles.labelSmall
-                                              .copyWith(
-                                            color: AppColors.white,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                Container(
+                  decoration: BoxDecoration(
+                    color: context.palette.inputFill,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: context.palette.divider),
+                  ),
+                  child: TextField(
+                    controller: _controller,
+                    minLines: 4,
+                    maxLines: 8,
+                    // Enforced here so the member is stopped AT the limit,
+                    // instead of the database rejecting the insert afterwards
+                    // with an unexplained "Could not publish".
+                    maxLength: _maxBody,
+                    textCapitalization: TextCapitalization.sentences,
+                    autofocus: true,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontSize: 15,
+                      color: context.palette.text,
+                    ),
+                    buildCounter:
+                        (
+                          context, {
+                          required currentLength,
+                          required isFocused,
+                          required maxLength,
+                        }) {
+                          // Silent until it's nearly full — a counter on an empty
+                          // box just nags.
+                          if (currentLength < _counterFrom) return null;
+                          final left = (maxLength ?? _maxBody) - currentLength;
+                          return Padding(
+                            padding: const EdgeInsets.only(
+                              right: 12,
+                              bottom: 6,
+                            ),
+                            child: Text(
+                              '$left left',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: left <= 50
+                                    ? AppColors.red
+                                    : context.palette.textMuted,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ),
-                      ],
-                    );
-                  },
+                          );
+                        },
+                    decoration: InputDecoration(
+                      hintText: 'What\'s on your mind today?',
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(
+                        color: context.palette.textMuted,
+                        fontSize: 15,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                    // The controller listener already rebuilds + autosaves.
+                  ),
                 ),
-              ],
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: _uploadingImage || _photos.length >= _maxPhotos
-                        ? null
-                        : _pickImage,
-                    icon: _uploadingImage
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.primaryBlue,
+                if (_photos.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  // Square thumbnails in a wrap: one photo reads as a single
+                  // preview, four tile into a 2x2 without any special-casing.
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final single = _photos.length == 1;
+                      final size = single
+                          ? constraints.maxWidth
+                          : (constraints.maxWidth - 8) / 2;
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (var i = 0; i < _photos.length; i++)
+                            SizedBox(
+                              width: size,
+                              height: size,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    CachedImage(_photos[i], fit: BoxFit.cover),
+                                    Positioned(
+                                      top: 6,
+                                      right: 6,
+                                      child: Material(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.55,
+                                        ),
+                                        shape: const CircleBorder(),
+                                        child: InkWell(
+                                          customBorder: const CircleBorder(),
+                                          onTap: () {
+                                            setState(() => _photos.removeAt(i));
+                                            _saveDraft();
+                                          },
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(6),
+                                            child: Icon(
+                                              Icons.close,
+                                              size: 16,
+                                              color: AppColors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    // Order matters — the first photo is what
+                                    // lands in `image_url` and is all a v1.3.0
+                                    // client will ever see.
+                                    if (i == 0 && _photos.length > 1)
+                                      Positioned(
+                                        left: 6,
+                                        bottom: 6,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.55,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'Cover',
+                                            style: AppTextStyles.labelSmall
+                                                .copyWith(
+                                                  color: AppColors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          )
-                        : const Icon(
-                            Icons.add_photo_alternate_outlined,
-                            color: AppColors.primaryBlue,
-                            size: 20,
-                          ),
-                    label: Text(
-                      _photos.isEmpty
-                          ? 'Add a photo'
-                          : _photos.length >= _maxPhotos
-                              ? 'Max $_maxPhotos photos'
-                              : 'Add another (${_photos.length}/$_maxPhotos)',
-                      style: AppTextStyles.buttonText.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13.5,
+                        ],
+                      );
+                    },
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: _uploadingImage || _photos.length >= _maxPhotos
+                          ? null
+                          : _pickImage,
+                      icon: _uploadingImage
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primaryBlue,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.add_photo_alternate_outlined,
+                              color: AppColors.primaryBlue,
+                              size: 20,
+                            ),
+                      label: Text(
+                        _photos.isEmpty
+                            ? 'Add a photo'
+                            : _photos.length >= _maxPhotos
+                            ? 'Max $_maxPhotos photos'
+                            : 'Add another (${_photos.length}/$_maxPhotos)',
+                        style: AppTextStyles.buttonText.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13.5,
+                        ),
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  // Disabled on an empty post — there is nothing to preview.
-                  TextButton.icon(
-                    onPressed: hasContent ? _openPreview : null,
-                    icon: Icon(
-                      Icons.visibility_outlined,
-                      size: 19,
-                      color: hasContent
-                          ? AppColors.primaryBlue
-                          : context.palette.textMuted,
-                    ),
-                    label: Text(
-                      'Preview',
-                      style: AppTextStyles.buttonText.copyWith(
+                    const Spacer(),
+                    // Disabled on an empty post — there is nothing to preview.
+                    TextButton.icon(
+                      onPressed: hasContent ? _openPreview : null,
+                      icon: Icon(
+                        Icons.visibility_outlined,
+                        size: 19,
                         color: hasContent
                             ? AppColors.primaryBlue
                             : context.palette.textMuted,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13.5,
+                      ),
+                      label: Text(
+                        'Preview',
+                        style: AppTextStyles.buttonText.copyWith(
+                          color: hasContent
+                              ? AppColors.primaryBlue
+                              : context.palette.textMuted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13.5,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The composer's primary action. Deliberately the only filled control
+/// on the sheet: everything else here is something you *might* do, and
+/// this is the thing you came to do.
+///
+/// It animates between three states rather than swapping widgets, so the
+/// moment a post becomes publishable the button fills in place — the
+/// member sees "ready" instead of having to work it out from a colour
+/// change on a text label.
+class _PostButton extends StatelessWidget {
+  const _PostButton({
+    required this.enabled,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final bool enabled;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final live = enabled && !busy;
+    return AnimatedContainer(
+      duration: AppMotion.maybe(context, AppMotion.quick),
+      curve: AppMotion.ease,
+      decoration: BoxDecoration(
+        gradient: live ? AppColors.primaryGradient : null,
+        color: live ? null : context.palette.cardMuted,
+        borderRadius: BorderRadius.circular(AppRadius.button),
+        boxShadow: live
+            ? [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.30),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: live ? onTap : null,
+          borderRadius: BorderRadius.circular(AppRadius.button),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: busy
+                // Sized to the label it replaces so the header doesn't
+                // reflow the instant you tap Post.
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: AppColors.primaryBlue,
+                    ),
+                  )
+                : Text(
+                    'Post',
+                    style: AppTextStyles.buttonText.copyWith(
+                      color: live ? AppColors.white : context.palette.textMuted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+          ),
+        ),
       ),
     );
   }
@@ -807,8 +876,9 @@ class _StoryComposerState extends State<_StoryComposer> {
             )
           : await FeedService.createStory(
               mediaUrl: _mediaUrl!,
-              caption:
-                  _caption.text.trim().isEmpty ? null : _caption.text.trim(),
+              caption: _caption.text.trim().isEmpty
+                  ? null
+                  : _caption.text.trim(),
             );
       if (!mounted) return;
       Navigator.of(context).pop(story);
@@ -826,7 +896,7 @@ class _StoryComposerState extends State<_StoryComposer> {
     }
   }
 
-Color _storyTextColor(int bgArgb) {
+  Color _storyTextColor(int bgArgb) {
     final r = (bgArgb >> 16) & 0xFF;
     final g = (bgArgb >> 8) & 0xFF;
     final b = bgArgb & 0xFF;
@@ -908,10 +978,11 @@ Color _storyTextColor(int bgArgb) {
                                 style: AppTextStyles.buttonText.copyWith(
                                   color: _textMode
                                       ? AppColors.white.withValues(
-                                          alpha: _canShare ? 1 : 0.5)
+                                          alpha: _canShare ? 1 : 0.5,
+                                        )
                                       : (_canShare
-                                          ? AppColors.primaryBlue
-                                          : context.palette.textMuted),
+                                            ? AppColors.primaryBlue
+                                            : context.palette.textMuted),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
                                 ),
@@ -932,53 +1003,60 @@ Color _storyTextColor(int bgArgb) {
                           // The sheet itself is already the chosen colour, so
                           // the field is seamless (no inner card / white box).
                           // White text, picked font, centred.
-                        ConstrainedBox(
+                          ConstrainedBox(
                             constraints: const BoxConstraints(minHeight: 220),
                             child: Center(
-                              child: Builder(builder: (context) {
-                                final textCol = _storyTextColor(_bgColors[_bgIndex]);
-                                return Theme(
-                                  data: Theme.of(context).copyWith(
-                                    inputDecorationTheme:
-                                        const InputDecorationTheme(
-                                      filled: false,
-                                      border: InputBorder.none,
-                                      enabledBorder: InputBorder.none,
-                                      focusedBorder: InputBorder.none,
+                              child: Builder(
+                                builder: (context) {
+                                  final textCol = _storyTextColor(
+                                    _bgColors[_bgIndex],
+                                  );
+                                  return Theme(
+                                    data: Theme.of(context).copyWith(
+                                      inputDecorationTheme:
+                                          const InputDecorationTheme(
+                                            filled: false,
+                                            border: InputBorder.none,
+                                            enabledBorder: InputBorder.none,
+                                            focusedBorder: InputBorder.none,
+                                          ),
                                     ),
-                                  ),
-                                  child: TextField(
-                                    controller: _statusText,
-                                    autofocus: true,
-                                    textAlign: TextAlign.center,
-                                    minLines: 1,
-                                    maxLines: null,
-                                    maxLength: 700,
-                                    keyboardType: TextInputType.multiline,
-                                    textCapitalization:
-                                        TextCapitalization.sentences,
-                                    style: storyFontStyle(
-                                      kStoryFontKeys[_fontIndex],
-                                      color: textCol,
-                                      fontSize: 30,
+                                    child: TextField(
+                                      controller: _statusText,
+                                      autofocus: true,
+                                      textAlign: TextAlign.center,
+                                      minLines: 1,
+                                      maxLines: null,
+                                      maxLength: 700,
+                                      keyboardType: TextInputType.multiline,
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
+                                      style: storyFontStyle(
+                                        kStoryFontKeys[_fontIndex],
+                                        color: textCol,
+                                        fontSize: 30,
+                                      ),
+                                      cursorColor: textCol,
+                                      decoration: InputDecoration(
+                                        isDense: true,
+                                        filled: false,
+                                        counterText: '',
+                                        border: InputBorder.none,
+                                        enabledBorder: InputBorder.none,
+                                        focusedBorder: InputBorder.none,
+                                        hintText: 'Type a story…',
+                                        hintStyle: TextStyle(
+                                          color: textCol.withValues(
+                                            alpha: 0.55,
+                                          ),
+                                          fontSize: 24,
+                                        ),
+                                      ),
+                                      onChanged: (_) => setState(() {}),
                                     ),
-                                    cursorColor: textCol,
-                                    decoration: InputDecoration(
-                                      isDense: true,
-                                      filled: false,
-                                      counterText: '',
-                                      border: InputBorder.none,
-                                      enabledBorder: InputBorder.none,
-                                      focusedBorder: InputBorder.none,
-                                      hintText: 'Type a story…',
-                                      hintStyle: TextStyle(
-                                          color: textCol.withValues(alpha: 0.55),
-                                          fontSize: 24),
-                                    ),
-                                    onChanged: (_) => setState(() {}),
-                                  ),
-                                );
-                              }),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -993,12 +1071,14 @@ Color _storyTextColor(int bgArgb) {
                               itemBuilder: (_, i) => GestureDetector(
                                 onTap: () => setState(() => _fontIndex = i),
                                 child: Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     color: AppColors.white.withValues(
-                                        alpha: _fontIndex == i ? 0.25 : 0.10),
+                                      alpha: _fontIndex == i ? 0.25 : 0.10,
+                                    ),
                                     borderRadius: BorderRadius.circular(18),
                                     border: Border.all(
                                       color: _fontIndex == i
@@ -1056,26 +1136,36 @@ Color _storyTextColor(int bgArgb) {
                             child: TextButton.icon(
                               onPressed: _uploading ? null : _pickImage,
                               style: TextButton.styleFrom(
-                                backgroundColor:
-                                    AppColors.white.withValues(alpha: 0.18),
+                                backgroundColor: AppColors.white.withValues(
+                                  alpha: 0.18,
+                                ),
                                 foregroundColor: AppColors.white,
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 18, vertical: 10),
+                                  horizontal: 18,
+                                  vertical: 10,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20),
                                   side: BorderSide(
-                                      color: AppColors.white
-                                          .withValues(alpha: 0.4)),
+                                    color: AppColors.white.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                  ),
                                 ),
                               ),
-                              icon: const Icon(Icons.image_outlined,
-                                  color: AppColors.white, size: 20),
-                              label: Text('Use a photo instead',
-                                  style: AppTextStyles.buttonText.copyWith(
-                                    color: AppColors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13.5,
-                                  )),
+                              icon: const Icon(
+                                Icons.image_outlined,
+                                color: AppColors.white,
+                                size: 20,
+                              ),
+                              label: Text(
+                                'Use a photo instead',
+                                style: AppTextStyles.buttonText.copyWith(
+                                  color: AppColors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                ),
+                              ),
                             ),
                           ),
                         ] else ...[
@@ -1090,8 +1180,10 @@ Color _storyTextColor(int bgArgb) {
                               borderRadius: BorderRadius.circular(14),
                               child: AspectRatio(
                                 aspectRatio: 4 / 5,
-                                child: CachedImage(_mediaUrl!,
-                                    fit: BoxFit.cover),
+                                child: CachedImage(
+                                  _mediaUrl!,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                           const SizedBox(height: 12),
@@ -1099,15 +1191,15 @@ Color _storyTextColor(int bgArgb) {
                             decoration: BoxDecoration(
                               color: context.palette.inputFill,
                               borderRadius: BorderRadius.circular(14),
-                              border:
-                                  Border.all(color: context.palette.divider),
+                              border: Border.all(
+                                color: context.palette.divider,
+                              ),
                             ),
                             child: TextField(
                               controller: _caption,
                               minLines: 1,
                               maxLines: 3,
-                              textCapitalization:
-                                  TextCapitalization.sentences,
+                              textCapitalization: TextCapitalization.sentences,
                               style: AppTextStyles.bodyMedium.copyWith(
                                 fontSize: 14.5,
                                 color: context.palette.text,
@@ -1129,27 +1221,37 @@ Color _storyTextColor(int bgArgb) {
                             children: [
                               TextButton.icon(
                                 onPressed: _uploading ? null : _pickImage,
-                                icon: const Icon(Icons.image_outlined,
-                                    color: AppColors.primaryBlue, size: 20),
-                                label: Text('Replace photo',
-                                    style: AppTextStyles.buttonText.copyWith(
-                                      color: AppColors.primaryBlue,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13.5,
-                                    )),
+                                icon: const Icon(
+                                  Icons.image_outlined,
+                                  color: AppColors.primaryBlue,
+                                  size: 20,
+                                ),
+                                label: Text(
+                                  'Replace photo',
+                                  style: AppTextStyles.buttonText.copyWith(
+                                    color: AppColors.primaryBlue,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
                               ),
                               const Spacer(),
                               TextButton.icon(
                                 onPressed: () =>
                                     setState(() => _textMode = true),
-                                icon: const Icon(Icons.text_fields,
-                                    color: AppColors.primaryBlue, size: 20),
-                                label: Text('Text',
-                                    style: AppTextStyles.buttonText.copyWith(
-                                      color: AppColors.primaryBlue,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13.5,
-                                    )),
+                                icon: const Icon(
+                                  Icons.text_fields,
+                                  color: AppColors.primaryBlue,
+                                  size: 20,
+                                ),
+                                label: Text(
+                                  'Text',
+                                  style: AppTextStyles.buttonText.copyWith(
+                                    color: AppColors.primaryBlue,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
                               ),
                             ],
                           ),

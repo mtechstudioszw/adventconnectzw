@@ -38,22 +38,38 @@ double pulse(double t, double a, double b) {
 class FilmTimeline {
   FilmTimeline._();
 
-  static const s0 = (0.000, 0.125); // brand open
-  static const s1 = (0.108, 0.270); // churches
-  static const s2 = (0.253, 0.415); // prayer
-  static const s3 = (0.398, 0.545); // chat
-  static const s4 = (0.528, 0.690); // marketplace + jobs
-  static const s5 = (0.673, 0.830); // watch (video + live)
-  static const s6 = (0.812, 1.000); // sabbath finale + CTA
+  // Ten scenes. It was seven, and three of the app's biggest reasons to
+  // sign up never appeared at all: the offline Library (the whole Bible,
+  // Sabbath School, ~995 hymns and EGW, all usable with no signal), the
+  // home feed itself, and the Quiz Arena. The film is the pitch — leaving
+  // out the offline Library in particular was leaving out the answer to
+  // "why this app and not a browser".
+  //
+  // Windows overlap by ~0.017 so every exit is somebody else's entrance;
+  // nothing ever page-cuts.
+  static const s0 = (0.000, 0.088); // brand open
+  static const s1 = (0.075, 0.190); // churches
+  static const s2 = (0.176, 0.292); // prayer
+  static const s3 = (0.278, 0.383); // chat
+  static const s4 = (0.370, 0.486); // marketplace + jobs
+  static const s5 = (0.472, 0.588); // watch (video + live)
+  static const s6 = (0.574, 0.700); // library — offline scripture
+  static const s7 = (0.686, 0.792); // home feed + stories
+  static const s8 = (0.778, 0.874); // quiz arena
+  static const s9 = (0.860, 1.000); // sabbath finale + CTA
 
-  /// Tap-to-skip-ahead targets.
+  /// Tap-to-advance targets. The film still scrubs THROUGH the frames in
+  /// between rather than cutting, so tapping never breaks continuity.
   static const boundaries = <double>[
-    0.125,
-    0.270,
-    0.415,
-    0.545,
-    0.690,
-    0.830,
+    0.088,
+    0.190,
+    0.292,
+    0.383,
+    0.486,
+    0.588,
+    0.700,
+    0.792,
+    0.874,
     1.0,
   ];
 
@@ -494,15 +510,25 @@ class SceneChurch extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              Text(
-                                '$followers members',
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.primaryBlue,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 11,
+                              // Flexible: the count grows while the scene
+                              // plays and the Follow pill's label widens
+                              // from "Follow" to "Following", so this row
+                              // outgrew its Expanded mid-shot and painted
+                              // overflow stripes across the card. Caught
+                              // by test/onboarding_film_test.dart.
+                              Flexible(
+                                child: Text(
+                                  '$followers members',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.primaryBlue,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ),
-                              const Spacer(),
+                              const SizedBox(width: 6),
                               // Follow pill fills brand blue.
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -746,10 +772,14 @@ class SceneChatMarket extends StatelessWidget {
             children: [
               SizedBox(
                 width: 300,
-                // Two bubbles only — sized so nothing overflows on
-                // small screens (the old 150 stage clipped by ~10px).
-                height: 104,
+                // Width is fixed; HEIGHT is not. A hard 104 was a guess
+                // at how tall two bubbles come out, and it is wrong the
+                // moment a bubble wraps to a second line — which depends
+                // on the font actually resolved and on the system text
+                // scale, neither of which this file controls. Letting the
+                // column size itself removes the guess entirely.
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Incoming: typing dots morph into the message bubble.
                     Align(
@@ -829,11 +859,21 @@ class SceneChatMarket extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                'Happy Sabbath, family!',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.white,
-                                  fontWeight: FontWeight.w600,
+                              // Flexible: _ChatBubble puts no bound on its
+                              // own width, so this Row could exceed the
+                              // 300px stage and paint overflow stripes —
+                              // which it did, by 18px, at the end of the
+                              // scene. Text metrics vary with the font
+                              // actually resolved on the device, so the
+                              // bubble must be able to shrink rather than
+                              // rely on the string measuring small enough.
+                              Flexible(
+                                child: Text(
+                                  'Happy Sabbath, family!',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 6),
@@ -1269,7 +1309,7 @@ class SceneSabbathFinale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (a, b) = FilmTimeline.s6;
+    final (a, b) = FilmTimeline.s9;
     final ringIn = seg(t, a, a + 0.04, Curves.easeOutCubic);
     final sweep = seg(t, a + 0.02, a + 0.085, Curves.easeInOutCubic);
     final lineIn = seg(t, a + 0.05, a + 0.095, Curves.easeOutCubic);

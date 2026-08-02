@@ -11,21 +11,31 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/pressable.dart';
 import 'widgets/film_scenes.dart';
+import 'widgets/film_scenes_library.dart';
 
 /// First-run intro — a continuous, auto-playing motion piece, not
-/// slides. One master timeline drives five overlapping scenes (brand →
-/// churches → prayer → chat/marketplace → sabbath finale); elements
-/// transform into each other instead of page-cutting, an ambient light
-/// field keeps even resting moments breathing, and the final scene
-/// settles into the sign-up CTA so intro → auth feels like the same
-/// film continuing.
+/// slides. One master timeline drives TEN overlapping scenes (brand →
+/// churches → prayer → chat → marketplace/jobs → watch → offline
+/// Library → feed → quiz → sabbath finale); elements transform into each
+/// other instead of page-cutting, an ambient light field keeps even
+/// resting moments breathing, and the final scene settles into the
+/// sign-up CTA so intro → auth feels like the same film continuing.
+///
+/// The film is the pitch, so it has to actually cover the product. It
+/// was seven scenes and silently omitted the three things most likely to
+/// win a member: the offline Library, the feed they'll live in, and the
+/// quiz. See FilmTimeline.
 ///
 /// Interaction model (stories-style):
 /// * it plays itself — no static frame ever waits for a swipe;
 /// * tap = fast-forward to the next scene boundary (the film scrubs
 ///   through the in-between frames, so continuity is preserved);
-/// * press-and-hold = pause, release = resume;
-/// * Skip = glide straight to the end state.
+/// * press-and-hold = pause, release = resume.
+///
+/// There is deliberately NO Skip and no progress bar (founder, 29 Jul).
+/// Segmented bars are the universal "these are slides" tell, and a Skip
+/// in the corner invites people out before the pitch lands. Tap-to-
+/// advance covers anyone in a hurry without advertising itself.
 ///
 /// Accessibility: with "remove animations" on, the film parks on its
 /// final frame immediately — headline + CTA, fully usable.
@@ -57,9 +67,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   void initState() {
     super.initState();
+    // 42s for ten scenes ≈ 4.2s each — was 31s for seven. Holding the
+    // per-scene pace matters more than the total: each scene has to
+    // finish its move AND let a two-line caption be read, and the new
+    // ones (Library, feed, quiz) carry more detail than the early ones.
     _film = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 31),
+      duration: const Duration(seconds: 42),
     )..addListener(_onFilmTick);
     _ambient = AnimationController(
       vsync: this,
@@ -153,17 +167,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
   }
 
-  void _skipToEnd() {
-    HapticFeedback.selectionClick();
-    _holdTimer?.cancel();
-    _holdPaused = false;
-    _film.animateTo(
-      1.0,
-      duration: AppMotion.maybe(context, const Duration(milliseconds: 700)),
-      curve: Curves.easeInOutCubic,
-    );
-  }
-
   Future<void> _finish() async {
     HapticFeedback.mediumImpact();
     // Fire-and-forget: the secure-storage write can take a beat on some
@@ -214,8 +217,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         child: _buildStage(t),
                       ),
                     ),
-                    _buildProgressBars(t),
-                    _buildSkip(t),
+                    // No progress bars and no Skip (founder, 29 Jul).
+                    // Segmented bars across the top are the universal
+                    // signal for "these are slides you page through",
+                    // which is the opposite of what this is — one
+                    // continuous film. Skip went with them: the piece is
+                    // the pitch, and an escape hatch in the corner
+                    // invites people to leave before it makes it.
+                    // Tap-to-advance still works, unlabelled, so nobody
+                    // is actually trapped.
                     _buildCta(t),
                   ],
                 );
@@ -243,82 +253,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           if (live(FilmTimeline.s3)) SceneChatMarket(t: t),
           if (live(FilmTimeline.s4)) SceneMarketJobs(t: t),
           if (live(FilmTimeline.s5)) SceneWatch(t: t),
-          if (t > FilmTimeline.s6.$1 - 0.01) SceneSabbathFinale(t: t),
+          if (live(FilmTimeline.s6)) SceneLibrary(t: t),
+          if (live(FilmTimeline.s7)) SceneFeed(t: t),
+          if (live(FilmTimeline.s8)) SceneQuiz(t: t),
+          if (t > FilmTimeline.s9.$1 - 0.01) SceneSabbathFinale(t: t),
         ],
-      ),
-    );
-  }
-
-  /// Stories-style progress: five thin bars filling with the timeline,
-  /// bowing out as the CTA arrives.
-  Widget _buildProgressBars(double t) {
-    final fade = 1 - seg(t, 0.86, 0.92);
-    if (fade <= 0) return const SizedBox.shrink();
-    var prev = 0.0;
-    final bars = <Widget>[];
-    for (final boundary in FilmTimeline.boundaries) {
-      final fill = seg(t, prev, boundary);
-      prev = boundary;
-      bars.add(
-        Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.darkNavy.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: fill,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return Positioned(
-      top: 14,
-      left: 20,
-      right: 20,
-      child: Opacity(
-        opacity: fade,
-        child: Row(children: bars),
-      ),
-    );
-  }
-
-  Widget _buildSkip(double t) {
-    final fade = 1 - seg(t, 0.78, 0.85);
-    if (fade <= 0) return const SizedBox.shrink();
-    return Positioned(
-      top: 26,
-      right: 12,
-      child: Opacity(
-        opacity: fade,
-        child: IgnorePointer(
-          ignoring: fade < 0.5,
-          child: TextButton(
-            onPressed: _skipToEnd,
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            ),
-            child: Text(
-              'Skip',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: AppColors.textMuted,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                letterSpacing: 0.4,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

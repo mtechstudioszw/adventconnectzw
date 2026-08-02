@@ -897,9 +897,18 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
   }
 
   Widget _buildAboutTab() {
+    // The completeness card hides itself at 100%, so the gap after it has
+    // to be conditional — a fixed SizedBox would leave a hole on a
+    // finished profile. Without it the card sat flush against the About
+    // card below, the only pair on the tab with no space between them.
+    final showCompleteness =
+        _completenessItems().any((i) => !i.value);
     return Column(
       children: [
-        _buildCompletenessCard(),
+        if (showCompleteness) ...[
+          _buildCompletenessCard(),
+          const SizedBox(height: 16),
+        ],
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _buildBioCard(),
@@ -1299,9 +1308,19 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
             ],
           ),
           child: photoUrl == null
-              ? Center(child: _avatarInitials())
+              // No photo is itself an incomplete profile, so the tap
+              // always goes to the editor here.
+              ? GestureDetector(
+                  onTap: () => context.pushNamed('edit_profile'),
+                  child: Center(child: _avatarInitials()),
+                )
               : GestureDetector(
-                  onTap: () => FullImageViewer.show(context, photoUrl),
+                  // The avatar wears the completeness ring, so tapping it
+                  // acts on that ring: an unfinished profile opens the
+                  // editor to finish it, a finished one opens the photo.
+                  onTap: () => _profileCompletion() < 1.0
+                      ? context.pushNamed('edit_profile')
+                      : FullImageViewer.show(context, photoUrl),
                   // Explicitly sized. The parent Container sets
                   // `alignment: Alignment.center`, which hands its child
                   // LOOSE constraints — so an unsized CachedImage laid

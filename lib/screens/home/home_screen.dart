@@ -231,6 +231,10 @@ class _HomeScreenState extends State<HomeScreen>
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) RatingPromptService.maybeRequestReview();
     });
+    // "Finish your profile" nudge. The RPC re-checks completeness and
+    // won't fire more than once a fortnight, so this is safe to call on
+    // every launch and needs no local flag.
+    unawaited(NotificationService.maybeNudgeProfileIncomplete());
   }
 
   /// Dismissible "update available" prompt shown when ForceUpdateService

@@ -14,6 +14,24 @@ class NotificationService {
   static const _table = 'notifications';
   static const _cacheKey = 'notifications';
 
+  /// Ask the server to drop a "finish your profile" nudge in this user's
+  /// notifications, if their profile really is incomplete.
+  ///
+  /// Server-side by necessity: `notifications` has no client INSERT
+  /// policy (rows come from triggers), so this goes through the
+  /// patch_181 SECURITY DEFINER RPC. That function re-checks
+  /// completeness itself and rate-limits to one nudge per 14 days, so
+  /// calling this on every launch is safe and cheap.
+  static Future<void> maybeNudgeProfileIncomplete() async {
+    if (_client.auth.currentUser == null) return;
+    try {
+      await _client.rpc('nudge_profile_incomplete');
+    } catch (_) {
+      // Offline, or the migration hasn't been applied to this
+      // deployment. A missing nudge is never worth surfacing.
+    }
+  }
+
   static Future<List<AppNotification>> fetchAll({int limit = 100}) async {
     final user = _client.auth.currentUser;
     if (user == null) return const [];

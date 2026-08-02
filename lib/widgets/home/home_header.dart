@@ -317,11 +317,26 @@ class _Background extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final blurring = kHomeHeaderBlur && t > 0.05 && AppMotion.enabled(context);
+    // Sabbath keeps its sundown gradient and its frosted behaviour. The
+    // ORDINARY header is now fully opaque, and here is why.
+    //
+    // It used to paint scaffoldBg at 86% alpha, and it is a *floating*
+    // header — so the feed scrolls underneath it. At 86% the chips and
+    // post cards passing behind stayed faintly visible through the bar,
+    // which read as a second, slightly-off background laid over the
+    // first: the header band looked like a different shade from the page,
+    // and the shortcut chips looked half-covered rather than cleanly
+    // scrolled away. The blur only engaged past t > 0.05, so at rest
+    // there wasn't even frosting to justify the translucency.
+    //
+    // Opaque scaffoldBg means header, chips and feed are one continuous
+    // colour, and content passing under the bar is simply hidden.
+    final blurring =
+        isSabbath && kHomeHeaderBlur && t > 0.05 && AppMotion.enabled(context);
 
     Widget surface = DecoratedBox(
       decoration: BoxDecoration(
-        color: isSabbath ? null : palette.scaffoldBg.withValues(alpha: 0.86),
+        color: isSabbath ? null : palette.scaffoldBg,
         gradient: isSabbath
             ? LinearGradient(
                 colors: [AppColors.darkNavy, sundownEnd],
@@ -344,21 +359,24 @@ class _Background extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           surface,
-          // Soft top-left bloom — reads as depth without adding a colour.
-          IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-0.7, -0.9),
-                  radius: 1.1,
-                  colors: [
-                    AppColors.white.withValues(alpha: isSabbath ? 0.12 : 0.06),
-                    AppColors.white.withValues(alpha: 0),
-                  ],
+          // Soft top-left bloom. Sabbath only — over the flat scaffold it
+          // was tinting the header lighter than the page, which is the
+          // other half of the "two different backgrounds" seam.
+          if (isSabbath)
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.7, -0.9),
+                    radius: 1.1,
+                    colors: [
+                      AppColors.white.withValues(alpha: 0.12),
+                      AppColors.white.withValues(alpha: 0),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           // Hairline that fades in only once the bar is fully collapsed, so
           // the content below reads as scrolling *under* the header.
           Positioned(

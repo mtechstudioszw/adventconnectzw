@@ -27,8 +27,15 @@ import '../motion/staggered_reveal.dart';
 class LibraryTiles extends StatelessWidget {
   const LibraryTiles({super.key});
 
-  /// Row height. The pill itself is 40dp; the rest is breathing room.
-  static const double _rowHeight = 44;
+  /// Row height. The pill itself is 40dp; the rest is room for its
+  /// SHADOW.
+  ///
+  /// This was 44, which left 4dp — and the Quiz pill casts a 12dp blur at
+  /// a 5dp offset, so its glow was being sliced off by the list viewport
+  /// and the whole row read as cramped and slightly misaligned against
+  /// the sections above and below it. 64 clears the shadow and gives the
+  /// row the same optical breathing space as the cards around it.
+  static const double _rowHeight = 64;
 
   // (label, icon, library tab index, isHero). Tab indexes map 1:1 onto
   // LibraryScreen's TabBar order — keep the two in sync.
@@ -50,7 +57,7 @@ class LibraryTiles extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
         itemCount: _items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppSpace.sm),
+        separatorBuilder: (_, _) => const SizedBox(width: AppSpace.md),
         itemBuilder: (context, i) {
           final (label, icon, tab, hero) = _items[i];
           // Only six items and they all build at once, so a stagger here
@@ -59,13 +66,20 @@ class LibraryTiles extends StatelessWidget {
             index: i,
             rise: 12,
             interval: const Duration(milliseconds: 40),
-            child: _Tile(
-              label: label,
-              icon: icon,
-              hero: hero,
-              onTap: () => tab < 0
-                  ? context.pushNamed('quiz')
-                  : context.pushNamed('library', extra: tab),
+            // Centred in the row. A horizontal list hands its children
+            // loose vertical constraints, so the 40dp pill would sit
+            // against the TOP of the 64dp row and put all the slack
+            // underneath it — the row would look pushed up against the
+            // card above.
+            child: Center(
+              child: _Tile(
+                label: label,
+                icon: icon,
+                hero: hero,
+                onTap: () => tab < 0
+                    ? context.pushNamed('quiz')
+                    : context.pushNamed('library', extra: tab),
+              ),
             ),
           );
         },

@@ -35,9 +35,7 @@ class ChurchService {
     // re-sorts nearest-first client-side via _sortByDistance.) The
     // previous members_count ordering was the unintended "filter
     // change" the user reported.
-    final response = await query
-        .order('name', ascending: true)
-        .limit(limit);
+    final response = await query.order('name', ascending: true).limit(limit);
 
     return (response as List)
         .map((row) => Church.fromJson(row as Map<String, dynamic>))
@@ -55,22 +53,20 @@ class ChurchService {
   }
 
   static Future<List<String>> fetchAvailableCities() async {
-    final response = await _client
-        .from(_table)
-        .select('city')
-        .order('city');
+    final response = await _client.from(_table).select('city').order('city');
     // Some church rows have malformed `city` values from earlier
     // imports — bare punctuation like "(", whitespace-only strings,
     // or fragments of a parenthesised suburb that leaked into the
     // city column. Filter to entries that actually look like a place
     // name (at least one letter, length >= 2) so the filter chip row
     // doesn't get polluted.
-    final cities = (response as List)
-        .map((row) => (row['city'] ?? '').toString().trim())
-        .where(_looksLikeCity)
-        .toSet()
-        .toList()
-      ..sort();
+    final cities =
+        (response as List)
+            .map((row) => (row['city'] ?? '').toString().trim())
+            .where(_looksLikeCity)
+            .toSet()
+            .toList()
+          ..sort();
     return cities;
   }
 
@@ -86,9 +82,7 @@ class ChurchService {
         .from(_followsTable)
         .select('church_id')
         .eq('user_id', user.id);
-    return (response as List)
-        .map((row) => row['church_id'].toString())
-        .toSet();
+    return (response as List).map((row) => row['church_id'].toString()).toSet();
   }
 
   static Future<bool> isFollowing(String churchId) async {
@@ -235,8 +229,10 @@ class ChurchService {
     final id = int.tryParse(churchId);
     if (id == null) return null;
     try {
-      final res = await _client
-          .rpc('get_church_claim_state', params: {'p_church_id': id});
+      final res = await _client.rpc(
+        'get_church_claim_state',
+        params: {'p_church_id': id},
+      );
       // RPC returns a single-row table → a list with one map.
       final row = res is List && res.isNotEmpty ? res.first : res;
       if (row is Map<String, dynamic>) return ChurchClaimState.fromJson(row);
@@ -305,8 +301,7 @@ class ChurchService {
     final res = await _client.rpc('admin_list_pending_church_admins');
     if (res is! List) return const [];
     return res
-        .map((row) =>
-            PendingChurchAdmin.fromJson(row as Map<String, dynamic>))
+        .map((row) => PendingChurchAdmin.fromJson(row as Map<String, dynamic>))
         .toList();
   }
 
@@ -315,8 +310,10 @@ class ChurchService {
   }
 
   static Future<void> rejectChurchAdmin(int id, {String? reason}) async {
-    await _client.rpc('admin_reject_church_admin',
-        params: {'p_id': id, 'p_reason': reason});
+    await _client.rpc(
+      'admin_reject_church_admin',
+      params: {'p_id': id, 'p_reason': reason},
+    );
   }
 
   /// Fetch a church's announcements feed. Filters out expired rows, and
@@ -342,8 +339,7 @@ class ChurchService {
         .order('created_at', ascending: false)
         .limit(100);
     return (response as List)
-        .map((row) =>
-            ChurchAnnouncement.fromJson(row as Map<String, dynamic>))
+        .map((row) => ChurchAnnouncement.fromJson(row as Map<String, dynamic>))
         .toList();
   }
 
@@ -358,13 +354,106 @@ class ChurchService {
     final id = int.tryParse(announcementId);
     if (id == null) return;
     try {
-      await _client.from('announcement_reads').upsert(
-        {'announcement_id': id, 'user_id': user.id},
-        onConflict: 'announcement_id,user_id',
-        ignoreDuplicates: true,
-      );
+      await _client
+          .from('announcement_reads')
+          .upsert(
+            {'announcement_id': id, 'user_id': user.id},
+            onConflict: 'announcement_id,user_id',
+            ignoreDuplicates: true,
+          );
     } catch (_) {
       // Analytics must never break reading an announcement.
+    }
+  }
+
+  /// Set, change or clear my reaction on an announcement, returning the
+  /// fresh tally.
+  ///
+  /// Passing null — or the reaction already set — CLEARS it, so tapping
+  /// the same face twice un-reacts. Returns null if the call failed, so
+  /// the caller can roll its optimistic update back.
+  ///
+  /// Goes through an RPC rather than a client `.upsert()` on purpose. An
+  /// upsert is `INSERT … ON CONFLICT DO UPDATE … RETURNING`, which needs
+  /// SELECT *and* UPDATE policies or it raises 42501 into a catch and
+  /// fails silently — that has bitten this project three times. The RPC
+  /// also hands back the new counts in the SAME round trip, so the UI
+  /// never has to re-query to show the number it just changed.
+  static Future<AnnouncementReactionState?> setAnnouncementReaction(
+    String announcementId,
+    AnnouncementReaction? reaction,
+  ) async {
+    final id = int.tryParse(announcementId);
+    if (id == null) return null;
+    try {
+      final res = await _client.rpc(
+        'set_announcement_reaction',
+        params: {'p_announcement_id': id, 'p_reaction': reaction?.id},
+      );
+      if (res is! Map) return null;
+      return AnnouncementReactionState.fromJson(Map<String, dynamic>.from(res));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reactions for a batch of announcements, keyed by announcement id.
+  ///
+  /// Batched because the list screen renders many announcements at once
+  /// and one call per row would be N round trips.
+  static Future<Map<String, AnnouncementReactionState>>
+  fetchAnnouncementReactions(List<String> announcementIds) async {
+    final ids = announcementIds
+        .map(int.tryParse)
+        .whereType<int>()
+        .toList(growable: false);
+    if (ids.isEmpty) return const {};
+    try {
+      final res = await _client.rpc(
+        'announcement_reactions_for',
+        params: {'p_ids': ids},
+      );
+      if (res is! List) return const {};
+      final out = <String, AnnouncementReactionState>{};
+      for (final row in res) {
+        final m = Map<String, dynamic>.from(row as Map);
+        out[m['announcement_id'].toString()] =
+            AnnouncementReactionState.fromJson(m);
+      }
+      return out;
+    } catch (_) {
+      // Reactions are decoration on top of the announcement — never let
+      // them stop it rendering.
+      return const {};
+    }
+  }
+
+  /// Reaction analytics for the admin dashboard. Returns empty for anyone
+  /// who isn't an approved admin of the church (the RPC enforces it).
+  static Future<List<AnnouncementReactionStat>> fetchAnnouncementReactionStats(
+    String churchId, {
+    int limit = 8,
+  }) async {
+    try {
+      final res = await _client.rpc(
+        'church_announcement_reactions',
+        params: {
+          'p_church_id': int.tryParse(churchId) ?? churchId,
+          'p_limit': limit,
+        },
+      );
+      if (res is! List) return const [];
+      return res
+          .map(
+            (r) => AnnouncementReactionStat.fromJson(
+              Map<String, dynamic>.from(r as Map),
+            ),
+          )
+          .toList()
+          .reversed // oldest → newest, matching the reach sparkline
+          .toList();
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -384,8 +473,10 @@ class ChurchService {
       );
       if (res is! List) return const [];
       return res
-          .map((r) => AnnouncementReach.fromJson(
-              Map<String, dynamic>.from(r as Map)))
+          .map(
+            (r) =>
+                AnnouncementReach.fromJson(Map<String, dynamic>.from(r as Map)),
+          )
           .toList()
           .reversed // oldest → newest, so the sparkline reads left to right
           .toList();
@@ -406,8 +497,10 @@ class ChurchService {
         .toList(growable: false);
     if (ids.isEmpty) return const {};
     try {
-      final res = await _client
-          .rpc('church_friend_counts', params: {'p_church_ids': ids});
+      final res = await _client.rpc(
+        'church_friend_counts',
+        params: {'p_church_ids': ids},
+      );
       if (res is! List) return const {};
       return {
         for (final r in res)
@@ -475,13 +568,16 @@ class ChurchService {
             .order('created_at', ascending: true)
             .limit(20);
         for (final r in (rows as List).cast<Map<String, dynamic>>()) {
-          out.add(AdminTask(
-            id: r['id'].toString(),
-            kind: kind,
-            title: title(r),
-            waitingSince:
-                DateTime.tryParse(r['created_at']?.toString() ?? '')?.toLocal(),
-          ));
+          out.add(
+            AdminTask(
+              id: r['id'].toString(),
+              kind: kind,
+              title: title(r),
+              waitingSince: DateTime.tryParse(
+                r['created_at']?.toString() ?? '',
+              )?.toLocal(),
+            ),
+          );
         }
       } catch (_) {
         // One unreadable queue must not blank the whole card.
@@ -489,12 +585,21 @@ class ChurchService {
     }
 
     await Future.wait([
-      collect('events', AdminTaskKind.event,
-          (r) => (r['title'] ?? 'Untitled event').toString()),
-      collect('church_edit_suggestions', AdminTaskKind.edit,
-          (r) => 'Suggested edit to your church details'),
-      collect('church_admins', AdminTaskKind.admin,
-          (r) => 'Admin nomination awaiting approval'),
+      collect(
+        'events',
+        AdminTaskKind.event,
+        (r) => (r['title'] ?? 'Untitled event').toString(),
+      ),
+      collect(
+        'church_edit_suggestions',
+        AdminTaskKind.edit,
+        (r) => 'Suggested edit to your church details',
+      ),
+      collect(
+        'church_admins',
+        AdminTaskKind.admin,
+        (r) => 'Admin nomination awaiting approval',
+      ),
     ]);
 
     // Longest wait first. That IS the ordering the queue is for: a
@@ -524,8 +629,10 @@ class ChurchService {
       );
       if (res is! List) return const [];
       return res
-          .map((r) => ChurchAdminMember.fromJson(
-              Map<String, dynamic>.from(r as Map)))
+          .map(
+            (r) =>
+                ChurchAdminMember.fromJson(Map<String, dynamic>.from(r as Map)),
+          )
           .toList();
     } catch (_) {
       return const [];
@@ -538,10 +645,13 @@ class ChurchService {
     required String churchId,
     required String userId,
   }) async {
-    await _client.rpc('church_admin_nominate', params: {
-      'p_church_id': int.tryParse(churchId) ?? churchId,
-      'p_user_id': userId,
-    });
+    await _client.rpc(
+      'church_admin_nominate',
+      params: {
+        'p_church_id': int.tryParse(churchId) ?? churchId,
+        'p_user_id': userId,
+      },
+    );
   }
 
   static Future<void> revokeChurchAdmin(int id) async {
@@ -555,7 +665,9 @@ class ChurchService {
   /// so a tap has to make this hop before it can open anything. Returns
   /// null when the announcement (or its church) is gone, so callers can
   /// fall back rather than push a broken route.
-  static Future<Church?> fetchChurchForAnnouncement(String announcementId) async {
+  static Future<Church?> fetchChurchForAnnouncement(
+    String announcementId,
+  ) async {
     final row = await _client
         .from('announcements')
         .select('church_id')
@@ -592,8 +704,7 @@ class ChurchService {
       'body': body.trim(),
       'category': category,
       'is_pinned': isPinned,
-      if (publishAt != null)
-        'publish_at': publishAt.toUtc().toIso8601String(),
+      if (publishAt != null) 'publish_at': publishAt.toUtc().toIso8601String(),
     });
   }
 
@@ -740,12 +851,15 @@ class ChurchAnnouncement {
       body: (json['body'] ?? '') as String,
       category: (json['category'] ?? 'general') as String,
       isPinned: json['is_pinned'] == true,
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
-      publishAt:
-          DateTime.tryParse(json['publish_at']?.toString() ?? '')?.toLocal(),
-      notifiedAt:
-          DateTime.tryParse(json['notified_at']?.toString() ?? '')?.toLocal(),
+      publishAt: DateTime.tryParse(
+        json['publish_at']?.toString() ?? '',
+      )?.toLocal(),
+      notifiedAt: DateTime.tryParse(
+        json['notified_at']?.toString() ?? '',
+      )?.toLocal(),
     );
   }
 }
@@ -788,6 +902,102 @@ class AdminTask {
 }
 
 /// One bar of the admin dashboard's reach sparkline (patch_173).
+/// The four reactions a member can leave on a church announcement. The DB
+/// enforces the same set with a CHECK constraint — an open text column
+/// would become an emoji dumping ground and make the admin breakdown
+/// impossible to aggregate.
+enum AnnouncementReaction {
+  amen('amen', 'Amen', '\u{1F64F}'),
+  praise('praise', 'Praise', '\u{1F64C}'),
+  pray('pray', 'Praying', '\u{1F91D}'),
+  love('love', 'Love', '\u{2764}\u{FE0F}');
+
+  const AnnouncementReaction(this.id, this.label, this.emoji);
+
+  /// Matches `announcement_reactions.reaction` exactly.
+  final String id;
+  final String label;
+  final String emoji;
+
+  static AnnouncementReaction? fromId(String? id) {
+    if (id == null) return null;
+    for (final r in AnnouncementReaction.values) {
+      if (r.id == id) return r;
+    }
+    // An unknown value means the DB gained a reaction this build predates.
+    // Drop it rather than crash the announcement list.
+    return null;
+  }
+}
+
+/// How one announcement was received: the tally per reaction, and which
+/// one the signed-in member left (null if they haven't reacted).
+class AnnouncementReactionState {
+  const AnnouncementReactionState({required this.counts, this.mine});
+
+  final Map<AnnouncementReaction, int> counts;
+  final AnnouncementReaction? mine;
+
+  int get total => counts.values.fold(0, (a, b) => a + b);
+
+  static const empty = AnnouncementReactionState(counts: {});
+
+  factory AnnouncementReactionState.fromJson(Map<String, dynamic> json) {
+    final raw = json['counts'];
+    final counts = <AnnouncementReaction, int>{};
+    if (raw is Map) {
+      raw.forEach((key, value) {
+        final kind = AnnouncementReaction.fromId(key?.toString());
+        final n = (value as num?)?.toInt() ?? 0;
+        if (kind != null && n > 0) counts[kind] = n;
+      });
+    }
+    return AnnouncementReactionState(
+      counts: counts,
+      mine: AnnouncementReaction.fromId(json['mine'] as String?),
+    );
+  }
+}
+
+/// One announcement's row in the admin dashboard: how many opened it and
+/// how they responded. Deliberately shaped like [AnnouncementReach] so the
+/// dashboard can put reach and reactions side by side.
+class AnnouncementReactionStat {
+  const AnnouncementReactionStat({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.createdAt,
+    required this.readCount,
+    required this.reactions,
+  });
+
+  final String id;
+  final String title;
+  final String category;
+  final DateTime createdAt;
+
+  /// Members who opened it (announcement_reads, patch_173).
+  final int readCount;
+
+  final AnnouncementReactionState reactions;
+
+  int get reactionCount => reactions.total;
+
+  factory AnnouncementReactionStat.fromJson(Map<String, dynamic> json) {
+    return AnnouncementReactionStat(
+      id: json['id'].toString(),
+      title: (json['title'] as String?) ?? '',
+      category: (json['category'] as String?) ?? '',
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal() ??
+          DateTime.now(),
+      readCount: (json['read_count'] as num?)?.toInt() ?? 0,
+      reactions: AnnouncementReactionState.fromJson(json),
+    );
+  }
+}
+
 class AnnouncementReach {
   const AnnouncementReach({
     required this.id,
@@ -819,8 +1029,10 @@ class AnnouncementReach {
         title: (json['title'] ?? '') as String,
         category: (json['category'] ?? 'general') as String,
         createdAt:
-            DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal() ??
-                DateTime.now(),
+            DateTime.tryParse(
+              json['created_at']?.toString() ?? '',
+            )?.toLocal() ??
+            DateTime.now(),
         sentCount: (json['sent_count'] as num?)?.toInt() ?? 0,
         readCount: (json['read_count'] as num?)?.toInt() ?? 0,
       );
@@ -861,8 +1073,9 @@ class ChurchAdminMember {
         photoUrl: json['photo_url'] as String?,
         role: (json['role'] ?? 'standard') as String,
         status: (json['status'] ?? 'pending') as String,
-        createdAt:
-            DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal(),
+        createdAt: DateTime.tryParse(
+          json['created_at']?.toString() ?? '',
+        )?.toLocal(),
       );
 }
 
@@ -1023,7 +1236,8 @@ class PendingChurchAdmin {
       applicantPhone: (json['applicant_phone'] as String?) ?? '',
       applicantEmail: json['applicant_email'] as String?,
       note: json['note'] as String?,
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );
   }

@@ -776,10 +776,20 @@ class FeedService {
         // (story_id, user_id) PK — the plain insert threw a duplicate-key
         // error when the local state was stale, which made likes appear to
         // "forget then remember".
-        await _client.from('story_likes').upsert({
-          'story_id': storyId,
-          'user_id': user.id,
-        }, onConflict: 'story_id,user_id');
+        //
+        // ignoreDuplicates is what makes that actually work.
+        // `story_likes` has SELECT and INSERT policies but NO UPDATE
+        // policy, so a bare upsert becomes ON CONFLICT DO UPDATE and RLS
+        // rejects it with 42501 — meaning the precise stale-state case
+        // this upsert was written for still failed, silently, because
+        // the catch below just returns the old value. DO NOTHING needs
+        // only the INSERT policy, and there is nothing to update anyway:
+        // the row is the (story, user) pair and nothing else.
+        await _client.from('story_likes').upsert(
+          {'story_id': storyId, 'user_id': user.id},
+          onConflict: 'story_id,user_id',
+          ignoreDuplicates: true,
+        );
         return true;
       }
     } catch (_) {

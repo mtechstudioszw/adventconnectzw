@@ -678,9 +678,17 @@ class YoutubeService {
     if (uid == null) return;
     try {
       if (subscribed) {
+        // ignoreDuplicates: `youtube_subscriptions` has SELECT and INSERT
+        // policies but no UPDATE one, so a bare upsert becomes ON
+        // CONFLICT DO UPDATE and RLS rejects it (42501). That fires
+        // whenever the local subscribed-set is stale — subscribed on
+        // another device, or a cache that missed a refresh — and the
+        // member sees Subscribe simply not work. Nothing on the row is
+        // updatable regardless: it is just (user, channel).
         await _c.from('youtube_subscriptions').upsert(
           {'user_id': uid, 'channel_id': channelId},
           onConflict: 'user_id,channel_id',
+          ignoreDuplicates: true,
         );
       } else {
         await _c

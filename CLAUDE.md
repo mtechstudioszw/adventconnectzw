@@ -8,7 +8,7 @@
 
 Primary Blue:   #1565C0  // Buttons, active states, highlights
 
-Dark Navy:      #0D1B3E  // Headers, app bar, dark sections
+Dark Navy:      #0D1B3E  // Body text, icons, dark sections. NOT headers.
 
 White:          #FFFFFF  // Card backgrounds
 
@@ -79,6 +79,34 @@ Success Green:  #2E7D32  // Status badges ONLY
   \- Dark Navy #0D1B3E is still valid for body text, icons and dark
 
     sections. It is the \*header\* use that is retired.
+
+  \- \*\*Auth flow (2026-07-29):\*\* the `AuthHero` navy slab with the curved
+
+    bottom edge is retired. Every account screen — forgot password, reset,
+
+    email verification, profile setup, biometric unlock — uses
+
+    \*\*`AuthShell`\*\* (lib/screens/auth/widgets/auth\_shell.dart), which
+
+    paints the onboarding film's own `AmbientPainter` on `scaffoldBg` so
+
+    intro → auth is continuous, and owns the shared staggered entrance.
+
+    Screens must NOT add their own entrance controller.
+
+  \- \*\*Sabbath on Home (2026-07-29):\*\* also flat. The day is marked by a
+
+    faint sundown wash, a gold horizon line on the header's bottom edge
+
+    that stays lit all day, gold status/avatar accents and the "Happy
+
+    Sabbath" greeting — \*\*not\*\* by a navy→gold gradient with white text.
+
+    When flattening any navy surface, re-check every foreground that
+
+    assumed a dark backdrop: status-bar icon brightness, white-on-frosted
+
+    buttons and badge borders all broke silently when this one changed.
 
 \- \*\*Uploaded images:\*\* Square via AspectRatio(1.0) — avatars, church logos,
 

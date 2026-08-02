@@ -5637,12 +5637,19 @@ class _Avatar extends StatelessWidget {
               fit: BoxFit.cover,
               width: size,
               height: size,
-              errorBuilder: (context, error, stackTrace) => Text(
-                initials,
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: size * 0.32,
+              // Centred: the error widget gets TIGHT constraints of the
+              // image box, and a bare Text paints at its top-left — so
+              // the initial sat at the top of the circle whenever the
+              // photo couldn't load.
+              errorBuilder: (context, error, stackTrace) => Center(
+                child: Text(
+                  initials,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: size * 0.32,
+                  ),
                 ),
               ),
             )

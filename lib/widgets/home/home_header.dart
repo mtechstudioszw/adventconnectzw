@@ -646,7 +646,7 @@ class _Avatar extends StatelessWidget {
                 : CachedImage(
                     url,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => fallback,
+                    errorBuilder: (_, _, _) => Center(child: fallback),
                   ),
           ),
         ),

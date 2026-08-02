@@ -746,12 +746,22 @@ class _StoryViewerState extends State<StoryViewer>
               : CachedImage(
                   story.authorPhotoUrl!,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Text(
-                    initial,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                  // Sized so the photo fills the circle (the parent's
+                  // `alignment` hands out loose constraints, which let an
+                  // unsized image sit inside the circle leaving a rim),
+                  // and the fallback initial centred instead of pinned to
+                  // the top of the box.
+                  width: 36,
+                  height: 36,
+                  errorBuilder: (context, error, stackTrace) => Center(
+                    child: Text(
+                      initial,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),

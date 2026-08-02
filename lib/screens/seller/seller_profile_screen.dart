@@ -339,6 +339,12 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
       context: context,
       backgroundColor: context.palette.sheet,
       shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
+      // Without this the sheet is capped at 9/16 of the screen, and the
+      // five reasons plus the header and button do not fit inside that —
+      // hence "BOTTOM OVERFLOWED BY 3.7 PIXELS". The sheet itself also
+      // scrolls now, so a small phone or a large system font can't
+      // reintroduce it.
+      isScrollControlled: true,
       builder: (ctx) => _ReportSheet(
         sellerName: _seller?.businessName ?? 'this seller',
         onSubmit: (reason) async {
@@ -364,7 +370,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
 
     try {
       final ok = await launchUrl(
-        Uri.parse('https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}'),
+        Uri.parse(
+          'https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}',
+        ),
         mode: LaunchMode.externalApplication,
       );
       if (ok) return;
@@ -676,8 +684,9 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
             left: AppSpace.lg,
             top: _coverHeight - _logoOverlap,
             child: GestureDetector(
-              onTap:
-                  hasPhoto ? () => FullImageViewer.show(context, photo) : null,
+              onTap: hasPhoto
+                  ? () => FullImageViewer.show(context, photo)
+                  : null,
               child: Container(
                 width: _logoSize,
                 height: _logoSize,
@@ -798,9 +807,7 @@ class _IdentityStrip extends StatelessWidget {
         ),
       );
     } else {
-      bits.add(
-        const _Bit(icon: Icons.fiber_new_rounded, text: 'New shop'),
-      );
+      bits.add(const _Bit(icon: Icons.fiber_new_rounded, text: 'New shop'));
     }
     if (place.isNotEmpty) {
       bits.add(_Bit(icon: Icons.place_outlined, text: place));
@@ -831,8 +838,18 @@ class _IdentityStrip extends StatelessWidget {
 
   static String _monthYear(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month - 1]} ${d.year}';
   }
@@ -1131,7 +1148,9 @@ class _DeliveryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.primaryBlue.withValues(alpha: 0.06),
         borderRadius: AppRadius.lgAll,
-        border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.18)),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.18),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1763,97 +1782,103 @@ class _ReportSheetState extends State<_ReportSheet> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: context.palette.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpace.lg),
-            Text(
-              'Report ${widget.sellerName}',
-              style: AppTextStyles.headlineSmall.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: AppSpace.xs),
-            Text(
-              'Reports are reviewed by the Advent Connect ZW team.',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.palette.textMuted,
-              ),
-            ),
-            const SizedBox(height: 18),
-            for (final r in _reasons)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                child: Pressable(
-                  onTap: () => setState(() => _selected = r),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpace.lg,
-                      vertical: AppSpace.md + 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _selected == r
-                          ? AppColors.primaryBlue.withValues(alpha: 0.08)
-                          : context.palette.chipBg,
-                      borderRadius: AppRadius.buttonAll,
-                      border: Border.all(
-                        color: _selected == r
-                            ? AppColors.primaryBlue
-                            : Colors.transparent,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _selected == r
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_off,
-                          color: _selected == r
-                              ? AppColors.primaryBlue
-                              : context.palette.textMuted,
-                          size: 20,
-                        ),
-                        const SizedBox(width: AppSpace.md),
-                        Expanded(
-                          child: Text(
-                            r,
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: _selected == r
-                                  ? AppColors.primaryBlue
-                                  : context.palette.text,
-                              fontWeight: _selected == r
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+      child: ConstrainedBox(
+        // Never taller than most of the screen; scrolls beyond that.
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: context.palette.divider,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
-            const SizedBox(height: AppSpace.sm),
-            PrimaryGradientButton(
-              label: 'Submit report',
-              onTap: _selected == null
-                  ? null
-                  : () => widget.onSubmit(_selected!),
-            ),
-          ],
+              const SizedBox(height: AppSpace.lg),
+              Text(
+                'Report ${widget.sellerName}',
+                style: AppTextStyles.headlineSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                'Reports are reviewed by the Advent Connect ZW team.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.palette.textMuted,
+                ),
+              ),
+              const SizedBox(height: 18),
+              for (final r in _reasons)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpace.sm),
+                  child: Pressable(
+                    onTap: () => setState(() => _selected = r),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpace.lg,
+                        vertical: AppSpace.md + 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _selected == r
+                            ? AppColors.primaryBlue.withValues(alpha: 0.08)
+                            : context.palette.chipBg,
+                        borderRadius: AppRadius.buttonAll,
+                        border: Border.all(
+                          color: _selected == r
+                              ? AppColors.primaryBlue
+                              : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _selected == r
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                            color: _selected == r
+                                ? AppColors.primaryBlue
+                                : context.palette.textMuted,
+                            size: 20,
+                          ),
+                          const SizedBox(width: AppSpace.md),
+                          Expanded(
+                            child: Text(
+                              r,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: _selected == r
+                                    ? AppColors.primaryBlue
+                                    : context.palette.text,
+                                fontWeight: _selected == r
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: AppSpace.sm),
+              PrimaryGradientButton(
+                label: 'Submit report',
+                onTap: _selected == null
+                    ? null
+                    : () => widget.onSubmit(_selected!),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -146,7 +146,7 @@ class MainBottomNav extends StatelessWidget {
               fit: BoxFit.cover,
               width: size,
               height: size,
-              errorBuilder: (_, _, _) => fallback,
+              errorBuilder: (_, _, _) => Center(child: fallback),
             ),
     );
   }

@@ -3463,12 +3463,18 @@ class _Avatar extends StatelessWidget {
               fit: BoxFit.cover,
               width: size,
               height: size,
-              errorBuilder: (context, error, stackTrace) => Text(
-                initials,
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
+              // Centred — see the note on the chat header avatar. A bare
+              // Text under the image box's tight constraints paints at
+              // the top-left, not the middle of the circle.
+              errorBuilder: (context, error, stackTrace) => Center(
+                child: Text(
+                  initials,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             )

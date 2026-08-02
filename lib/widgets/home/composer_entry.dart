@@ -106,7 +106,7 @@ class ComposerEntry extends StatelessWidget {
                                 fit: BoxFit.cover,
                                 width: 40,
                                 height: 40,
-                                errorBuilder: (_, _, _) => fallback,
+                                errorBuilder: (_, _, _) => Center(child: fallback),
                               ),
                       ),
                     ),

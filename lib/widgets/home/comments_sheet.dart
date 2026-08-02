@@ -533,12 +533,20 @@ class _CommentRow extends StatelessWidget {
                 : CachedImage(
                     url,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Text(
-                      initial,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: AppColors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
+                    // Sized so BoxFit.cover actually fills the circle
+                    // instead of the photo floating inside it, and the
+                    // fallback initial centred rather than top-aligned.
+                    width: 32,
+                    height: 32,
+                    errorBuilder: (context, error, stackTrace) => Center(
+                      child: Text(
+                        initial,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ),

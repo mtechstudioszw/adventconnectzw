@@ -277,6 +277,18 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
         .toUpperCase();
   }
 
+  /// The initials glyph for the big profile avatar. One builder for both
+  /// the "no photo" and the "photo failed" paths so they can't drift.
+  Widget _avatarInitials() => Text(
+        _initials(),
+        textAlign: TextAlign.center,
+        style: AppTextStyles.displayMedium.copyWith(
+          color: AppColors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 38,
+        ),
+      );
+
   String _bio() {
     final user = AuthService.currentUser;
     final meta = user?.userMetadata ?? const {};
@@ -1287,27 +1299,28 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
             ],
           ),
           child: photoUrl == null
-              ? Text(
-                  _initials(),
-                  style: AppTextStyles.displayMedium.copyWith(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 38,
-                  ),
-                )
+              ? Center(child: _avatarInitials())
               : GestureDetector(
                   onTap: () => FullImageViewer.show(context, photoUrl),
+                  // Explicitly sized. The parent Container sets
+                  // `alignment: Alignment.center`, which hands its child
+                  // LOOSE constraints — so an unsized CachedImage laid
+                  // itself out at the photo's own size and sat centred
+                  // inside the circle, leaving a ring of card colour
+                  // around it. That ring is the "white edges". With the
+                  // box pinned to the circle, BoxFit.cover fills it.
                   child: CachedImage(
                     photoUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Text(
-                      _initials(),
-                      style: AppTextStyles.displayMedium.copyWith(
-                        color: AppColors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 38,
-                      ),
-                    ),
+                    width: 118,
+                    height: 118,
+                    // Centred, because the error widget is handed TIGHT
+                    // constraints of the image box and a bare Text then
+                    // paints at the top-left of it — which is why the
+                    // initial sat at the top of the circle whenever the
+                    // photo failed to load (i.e. offline).
+                    errorBuilder: (context, error, stackTrace) =>
+                        Center(child: _avatarInitials()),
                   ),
                 ),
         ),

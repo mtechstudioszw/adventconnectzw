@@ -422,7 +422,7 @@ class _ChannelAvatar extends StatelessWidget {
               fit: BoxFit.cover,
               width: 34,
               height: 34,
-              errorBuilder: (_, _, _) => fallback,
+              errorBuilder: (_, _, _) => Center(child: fallback),
             ),
     );
   }

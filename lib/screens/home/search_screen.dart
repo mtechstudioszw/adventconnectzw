@@ -23,6 +23,7 @@ import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/inline_action.dart';
@@ -43,7 +44,14 @@ import '../../widgets/shimmer_loaders.dart';
 /// fills in from the directory's suggested-members cache — the same
 /// people the home tab surfaces — so the search never feels empty.
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.autoLoad = true});
+
+  /// Whether to fetch recents, suggestions and the viewer's relationships
+  /// on mount. True in the app. False lets a widget test exercise the
+  /// screen's layout — the field, the filter rail, the empty state —
+  /// without a Supabase client behind it. Same seam as
+  /// [SplashScreen.autoNavigate] and [BiometricLockScreen.autoPrompt].
+  final bool autoLoad;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -51,13 +59,25 @@ class SearchScreen extends StatefulWidget {
 
 enum _Filter { all, people, posts, churches, events, marketplace, jobs, videos }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen>
+    with TickerProviderStateMixin {
   static const _recentKey = 'recent_searches_v1';
   static const _maxRecent = 20;
 
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   Timer? _debounce;
+
+  /// Drives the staggered rise of whatever list is on screen. Restarted
+  /// every time the content underneath changes identity (a new query
+  /// lands, a filter chip flips), so results arrive as a considered
+  /// sequence rather than a block of rows appearing at once.
+  late final AnimationController _listEnter;
+
+  /// True while the field has focus — the field lifts and its ring
+  /// lights up, so the screen responds to being used instead of sitting
+  /// inert.
+  bool _focused = false;
 
   bool _searching = false;
   String _lastQuery = '';
@@ -108,14 +128,48 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
-    _loadRecent();
-    _loadSuggestions();
-    _loadRelationships();
+    _listEnter = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 620),
+    );
+    _focusNode.addListener(() {
+      if (!mounted || _focusNode.hasFocus == _focused) return;
+      setState(() => _focused = _focusNode.hasFocus);
+    });
+    if (widget.autoLoad) {
+      _loadRecent();
+      _loadSuggestions();
+      _loadRelationships();
+    }
     // Keeps Add / Pending / Friends honest while this screen is open.
     FeedService.friendshipsChanged.addListener(_onFriendshipsChanged);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _focusNode.requestFocus(),
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Honour "remove animations": land the list on its finished frame
+    // instead of playing the stagger.
+    if (AppMotion.enabled(context)) {
+      if (_listEnter.value == 0) _listEnter.forward();
+    } else {
+      _listEnter.value = 1;
+    }
+  }
+
+  /// Replay the stagger. Called whenever the list underneath changes
+  /// identity — a query lands, a chip flips scope — so the new content
+  /// arrives rather than swapping in place.
+  void _replayListEnter() {
+    if (!mounted) return;
+    if (!AppMotion.enabled(context)) {
+      _listEnter.value = 1;
+      return;
+    }
+    _listEnter.forward(from: 0);
   }
 
   void _onFriendshipsChanged() {
@@ -273,6 +327,7 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounce?.cancel();
     _controller.dispose();
     _focusNode.dispose();
+    _listEnter.dispose();
     super.dispose();
   }
 
@@ -415,6 +470,9 @@ class _SearchScreenState extends State<SearchScreen> {
       _videos = videos;
       _searching = false;
     });
+    // A new answer just landed — let it arrive in sequence rather than
+    // replacing the previous result set in a single frame.
+    _replayListEnter();
     final hasAny =
         people.isNotEmpty ||
         churches.isNotEmpty ||
@@ -559,56 +617,99 @@ class _SearchScreenState extends State<SearchScreen> {
               icon: Icon(Icons.arrow_back, color: context.palette.text),
               splashRadius: 22,
             ),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: context.palette.inputFill,
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                onChanged: _onChanged,
-                onSubmitted: _submit,
-                textInputAction: TextInputAction.search,
-                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
-                decoration: InputDecoration(
-                  hintText: 'Search for friends, churches, events, products...',
-                  hintStyle: AppTextStyles.bodyMedium.copyWith(
-                    color: context.palette.textMuted,
-                    fontSize: 14,
+            Expanded(
+              // The field is the subject of this screen, so it behaves like
+              // one: on focus the ring lights up in primary blue and a soft
+              // shadow lifts it off the canvas; unfocused it settles back to
+              // a hairline. It used to be an inert grey pill that gave no
+              // sign it had been tapped.
+              child: AnimatedContainer(
+                duration: AppMotion.maybe(context, AppMotion.quick),
+                curve: AppMotion.ease,
+                decoration: BoxDecoration(
+                  color: context.palette.inputFill,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: _focused
+                        ? AppColors.primaryBlue
+                        : context.palette.divider,
+                    width: _focused ? 1.6 : 1,
                   ),
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: context.palette.textMuted,
-                    size: 20,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _focused
+                          ? AppColors.primaryBlue.withValues(alpha: 0.16)
+                          : Colors.black.withValues(alpha: 0.04),
+                      blurRadius: _focused ? 18 : 10,
+                      offset: Offset(0, _focused ? 6 : 3),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  onChanged: _onChanged,
+                  onSubmitted: _submit,
+                  textInputAction: TextInputAction.search,
+                  style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText:
+                        'Search for friends, churches, events, products...',
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: context.palette.textMuted,
+                      fontSize: 14,
+                    ),
+                    // The glyph picks up the accent with the ring, so the
+                    // whole control reads as one focused object.
+                    prefixIcon: AnimatedContainer(
+                      duration: AppMotion.maybe(context, AppMotion.quick),
+                      child: Icon(
+                        Icons.search,
+                        color: _focused
+                            ? AppColors.primaryBlue
+                            : context.palette.textMuted,
+                        size: 20,
+                      ),
+                    ),
+                    // Scale-in rather than a hard appear: the clear button
+                    // arrives on the first keystroke, and a control that
+                    // pops into existence mid-type is exactly the kind of
+                    // seam that reads as unfinished.
+                    suffixIcon: AnimatedSwitcher(
+                      duration: AppMotion.maybe(context, AppMotion.quick),
+                      transitionBuilder: (child, animation) => ScaleTransition(
+                        scale: animation,
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
+                      child: _controller.text.isEmpty
+                          ? const SizedBox.shrink(key: ValueKey('empty'))
+                          : IconButton(
+                              key: const ValueKey('clear'),
+                              tooltip: 'Clear search',
+                              icon: Icon(
+                                Icons.close,
+                                color: context.palette.textMuted,
+                                size: 18,
+                              ),
+                              onPressed: () {
+                                _controller.clear();
+                                _onChanged('');
+                                setState(() {});
+                              },
+                            ),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 4,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                   ),
-                  suffixIcon: _controller.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: Icon(
-                            Icons.close,
-                            color: context.palette.textMuted,
-                            size: 18,
-                          ),
-                          onPressed: () {
-                            _controller.clear();
-                            _onChanged('');
-                            setState(() {});
-                          },
-                        ),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 4,
-                  ),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
                 ),
               ),
             ),
-          ),
           ],
         ),
       ),
@@ -616,35 +717,52 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildFilterChips() {
+    // Each scope carries its own glyph. With eight text-only pills the
+    // rail was a wall of similar words you had to read one by one; an
+    // icon makes the one you want findable at a glance, and makes the
+    // active chip obvious from the corner of the eye.
     final chips = <_FilterDef>[
-      const _FilterDef(_Filter.all, 'All'),
-      const _FilterDef(_Filter.videos, 'Videos'),
-      const _FilterDef(_Filter.people, 'People'),
-      const _FilterDef(_Filter.posts, 'Posts'),
-      const _FilterDef(_Filter.churches, 'Churches'),
-      const _FilterDef(_Filter.events, 'Events'),
-      const _FilterDef(_Filter.marketplace, 'Marketplace'),
-      const _FilterDef(_Filter.jobs, 'Jobs'),
+      const _FilterDef(_Filter.all, 'All', Icons.auto_awesome_rounded),
+      const _FilterDef(_Filter.videos, 'Videos', Icons.play_circle_outline),
+      const _FilterDef(_Filter.people, 'People', Icons.people_alt_outlined),
+      const _FilterDef(_Filter.posts, 'Posts', Icons.article_outlined),
+      const _FilterDef(_Filter.churches, 'Churches', Icons.church_outlined),
+      const _FilterDef(_Filter.events, 'Events', Icons.event_outlined),
+      const _FilterDef(
+        _Filter.marketplace,
+        'Marketplace',
+        Icons.storefront_outlined,
+      ),
+      const _FilterDef(_Filter.jobs, 'Jobs', Icons.work_outline_rounded),
     ];
     return Container(
       color: context.palette.scaffoldBg,
-      padding: const EdgeInsets.only(bottom: 8),
-      child: SizedBox(
-        height: 38,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          itemCount: chips.length,
-          separatorBuilder: (context, index) => const SizedBox(width: 8),
-          itemBuilder: (ctx, i) {
-            final c = chips[i];
-            final active = c.filter == _filter;
-            return _FilterChip(
-              label: c.label,
-              active: active,
-              onTap: () => setState(() => _filter = c.filter),
-            );
-          },
+      padding: const EdgeInsets.only(bottom: 10),
+      // No fixed height. The rail used to be pinned at 38dp with text
+      // inside it that scales with the system font — at large
+      // accessibility sizes the labels simply clipped (silently: there is
+      // no Flex here, so nothing throws). Let the content size the row.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            for (var i = 0; i < chips.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              _FilterChip(
+                label: chips[i].label,
+                icon: chips[i].icon,
+                active: chips[i].filter == _filter,
+                onTap: () {
+                  if (chips[i].filter == _filter) return;
+                  setState(() => _filter = chips[i].filter);
+                  // The list underneath is now a different set of rows,
+                  // so it arrives rather than swapping in place.
+                  _replayListEnter();
+                },
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -783,8 +901,8 @@ class _SearchScreenState extends State<SearchScreen> {
               state: _friendIds.contains(p.userId)
                   ? _FriendState.friends
                   : _pendingFriendIds.contains(p.userId)
-                      ? _FriendState.pending
-                      : _FriendState.none,
+                  ? _FriendState.pending
+                  : _FriendState.none,
               busy: _actionBusy.contains(p.userId),
               onAdd: () => _addFriend(p.userId),
               onTap: () => context.pushNamed(
@@ -997,8 +1115,8 @@ class _SearchScreenState extends State<SearchScreen> {
                 state: _friendIds.contains(p.userId)
                     ? _FriendState.friends
                     : _pendingFriendIds.contains(p.userId)
-                        ? _FriendState.pending
-                        : _FriendState.none,
+                    ? _FriendState.pending
+                    : _FriendState.none,
                 busy: _actionBusy.contains(p.userId),
                 onAdd: () => _addFriend(p.userId),
                 onTap: () => _openResult(
@@ -1066,175 +1184,180 @@ class _SearchScreenState extends State<SearchScreen> {
     List<T> cap<T>(List<T> items) =>
         grouped ? items.take(allCap).toList() : items;
 
+    final sections = <Widget>[
+      if (showPeople)
+        _Section(
+          label: 'PEOPLE',
+          count: _people.length,
+          onSeeAll: grouped && _people.length > allCap
+              ? () => setState(() => _filter = _Filter.people)
+              : null,
+          children: [
+            for (final p in cap(_people))
+              _PersonResultRow(
+                person: p,
+                query: _lastQuery,
+                state: _friendIds.contains(p.userId)
+                    ? _FriendState.friends
+                    : _pendingFriendIds.contains(p.userId)
+                    ? _FriendState.pending
+                    : _FriendState.none,
+                busy: _actionBusy.contains(p.userId),
+                onAdd: () => _addFriend(p.userId),
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => context.pushNamed(
+                    'user_profile',
+                    pathParameters: {'userId': p.userId},
+                  ),
+                ),
+              ),
+          ],
+        ),
+      if (showChurches)
+        _Section(
+          label: 'CHURCHES',
+          count: _churches.length,
+          onSeeAll: grouped && _churches.length > allCap
+              ? () => setState(() => _filter = _Filter.churches)
+              : null,
+          children: [
+            for (final c in cap(_churches))
+              _ChurchResultRow(
+                church: c,
+                query: _lastQuery,
+                following: _followedChurchIds.contains(c.id),
+                busy: _actionBusy.contains(c.id),
+                onToggleFollow: () => _toggleFollowChurch(c.id),
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => context.pushNamed(
+                    'church_details',
+                    pathParameters: {'id': c.id},
+                    extra: c,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      if (showEvents)
+        _Section(
+          label: 'EVENTS',
+          count: _events.length,
+          onSeeAll: grouped && _events.length > allCap
+              ? () => setState(() => _filter = _Filter.events)
+              : null,
+          children: [
+            for (final e in cap(_events))
+              _EventResultRow(
+                event: e,
+                query: _lastQuery,
+                going: _rsvpedEventIds.contains(e.id),
+                busy: _actionBusy.contains(e.id),
+                onToggleRsvp: () => _toggleRsvp(e.id),
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => context.pushNamed(
+                    'event_details',
+                    pathParameters: {'id': e.id},
+                    extra: e,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      if (showPosts)
+        _Section(
+          label: 'POSTS',
+          count: _posts.length,
+          onSeeAll: grouped && _posts.length > allCap
+              ? () => setState(() => _filter = _Filter.posts)
+              : null,
+          children: [
+            for (final post in cap(_posts))
+              _PostResultRow(
+                post: post,
+                query: _lastQuery,
+                onTap: () =>
+                    _openResult(_lastQuery, () => Navigator.pop(context)),
+              ),
+          ],
+        ),
+      if (showVideos)
+        _Section(
+          label: 'VIDEOS',
+          count: _videos.length,
+          onSeeAll: grouped && _videos.length > allCap
+              ? () => setState(() => _filter = _Filter.videos)
+              : null,
+          children: [
+            for (final v in cap(_videos))
+              YoutubeVideoCard(
+                video: v,
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => context.pushNamed(
+                    'watch_video',
+                    pathParameters: {'id': v.videoId},
+                    extra: v,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      if (showProducts)
+        _Section(
+          label: 'MARKETPLACE',
+          count: _products.length,
+          onSeeAll: grouped && _products.length > allCap
+              ? () => setState(() => _filter = _Filter.marketplace)
+              : null,
+          children: [
+            for (final p in cap(_products))
+              _ProductResultRow(
+                product: p,
+                query: _lastQuery,
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => context.pushNamed(
+                    'product_details',
+                    pathParameters: {'id': p.id},
+                    extra: p,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      if (showJobs)
+        _Section(
+          label: 'JOBS',
+          count: _jobs.length,
+          onSeeAll: grouped && _jobs.length > allCap
+              ? () => setState(() => _filter = _Filter.jobs)
+              : null,
+          children: [
+            for (final j in cap(_jobs))
+              _JobResultRow(
+                job: j,
+                query: _lastQuery,
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => context.pushNamed(
+                    'job_details',
+                    pathParameters: {'id': j.id},
+                    extra: j,
+                  ),
+                ),
+              ),
+          ],
+        ),
+    ];
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
-        if (showPeople)
-          _Section(
-            label: 'PEOPLE',
-            count: _people.length,
-            onSeeAll: grouped && _people.length > allCap
-                ? () => setState(() => _filter = _Filter.people)
-                : null,
-            children: [
-              for (final p in cap(_people))
-                _PersonResultRow(
-                  person: p,
-                  query: _lastQuery,
-                  state: _friendIds.contains(p.userId)
-                      ? _FriendState.friends
-                      : _pendingFriendIds.contains(p.userId)
-                          ? _FriendState.pending
-                          : _FriendState.none,
-                  busy: _actionBusy.contains(p.userId),
-                  onAdd: () => _addFriend(p.userId),
-                  onTap: () => _openResult(
-                    _lastQuery,
-                    () => context.pushNamed(
-                      'user_profile',
-                      pathParameters: {'userId': p.userId},
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        if (showChurches)
-          _Section(
-            label: 'CHURCHES',
-            count: _churches.length,
-            onSeeAll: grouped && _churches.length > allCap
-                ? () => setState(() => _filter = _Filter.churches)
-                : null,
-            children: [
-              for (final c in cap(_churches))
-                _ChurchResultRow(
-                  church: c,
-                  query: _lastQuery,
-                  following: _followedChurchIds.contains(c.id),
-                  busy: _actionBusy.contains(c.id),
-                  onToggleFollow: () => _toggleFollowChurch(c.id),
-                  onTap: () => _openResult(
-                    _lastQuery,
-                    () => context.pushNamed(
-                      'church_details',
-                      pathParameters: {'id': c.id},
-                      extra: c,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        if (showEvents)
-          _Section(
-            label: 'EVENTS',
-            count: _events.length,
-            onSeeAll: grouped && _events.length > allCap
-                ? () => setState(() => _filter = _Filter.events)
-                : null,
-            children: [
-              for (final e in cap(_events))
-                _EventResultRow(
-                  event: e,
-                  query: _lastQuery,
-                  going: _rsvpedEventIds.contains(e.id),
-                  busy: _actionBusy.contains(e.id),
-                  onToggleRsvp: () => _toggleRsvp(e.id),
-                  onTap: () => _openResult(
-                    _lastQuery,
-                    () => context.pushNamed(
-                      'event_details',
-                      pathParameters: {'id': e.id},
-                      extra: e,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        if (showPosts)
-          _Section(
-            label: 'POSTS',
-            count: _posts.length,
-            onSeeAll: grouped && _posts.length > allCap
-                ? () => setState(() => _filter = _Filter.posts)
-                : null,
-            children: [
-              for (final post in cap(_posts))
-                _PostResultRow(
-                  post: post,
-                  query: _lastQuery,
-                  onTap: () =>
-                      _openResult(_lastQuery, () => Navigator.pop(context)),
-                ),
-            ],
-          ),
-        if (showVideos)
-          _Section(
-            label: 'VIDEOS',
-            count: _videos.length,
-            onSeeAll: grouped && _videos.length > allCap
-                ? () => setState(() => _filter = _Filter.videos)
-                : null,
-            children: [
-              for (final v in cap(_videos))
-                YoutubeVideoCard(
-                  video: v,
-                  onTap: () => _openResult(
-                    _lastQuery,
-                    () => context.pushNamed(
-                      'watch_video',
-                      pathParameters: {'id': v.videoId},
-                      extra: v,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        if (showProducts)
-          _Section(
-            label: 'MARKETPLACE',
-            count: _products.length,
-            onSeeAll: grouped && _products.length > allCap
-                ? () => setState(() => _filter = _Filter.marketplace)
-                : null,
-            children: [
-              for (final p in cap(_products))
-                _ProductResultRow(
-                  product: p,
-                  query: _lastQuery,
-                  onTap: () => _openResult(
-                    _lastQuery,
-                    () => context.pushNamed(
-                      'product_details',
-                      pathParameters: {'id': p.id},
-                      extra: p,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        if (showJobs)
-          _Section(
-            label: 'JOBS',
-            count: _jobs.length,
-            onSeeAll: grouped && _jobs.length > allCap
-                ? () => setState(() => _filter = _Filter.jobs)
-                : null,
-            children: [
-              for (final j in cap(_jobs))
-                _JobResultRow(
-                  job: j,
-                  query: _lastQuery,
-                  onTap: () => _openResult(
-                    _lastQuery,
-                    () => context.pushNamed(
-                      'job_details',
-                      pathParameters: {'id': j.id},
-                      extra: j,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+        for (var i = 0; i < sections.length; i++)
+          _StaggerIn(listenable: _listEnter, index: i, child: sections[i]),
       ],
     );
   }
@@ -1261,48 +1384,121 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
+/// Fade-and-rise for item [index] of a list, sliced out of one shared
+/// controller. Results used to appear as a finished block the instant the
+/// query returned; arriving in sequence reads as the app answering you.
+///
+/// Deliberately cheap — an Opacity and a translate, no layout work — so a
+/// long result list still scrolls at 60fps on a mid-range Android.
+class _StaggerIn extends StatelessWidget {
+  const _StaggerIn({
+    required this.listenable,
+    required this.index,
+    required this.child,
+  });
+
+  final Animation<double> listenable;
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: listenable,
+      builder: (context, inner) {
+        // Each item opens a beat after the one above it. Capped so a
+        // twenty-row list doesn't take twenty beats to finish — past the
+        // first handful everything lands together.
+        const span = 0.5;
+        final start = (index * 0.06).clamp(0.0, 1 - span);
+        final v = Curves.easeOutCubic.transform(
+          ((listenable.value - start) / span).clamp(0.0, 1.0),
+        );
+        return Opacity(
+          opacity: v,
+          child: Transform.translate(
+            offset: Offset(0, 16 * (1 - v)),
+            child: inner,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
 class _FilterDef {
-  const _FilterDef(this.filter, this.label);
+  const _FilterDef(this.filter, this.label, this.icon);
   final _Filter filter;
   final String label;
+  final IconData icon;
 }
 
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
     required this.label,
+    required this.icon,
     required this.active,
     required this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final bool active;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return PressEffect(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          // Animated rather than a hard colour swap: the selected chip
+          // fills, its border lights and a soft blue shadow settles under
+          // it, so the eye can follow the selection moving along the rail
+          // instead of two chips blinking at once.
+          child: AnimatedContainer(
+            duration: AppMotion.maybe(context, AppMotion.quick),
+            curve: AppMotion.ease,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(
-              color: active ? AppColors.primaryBlue : context.palette.chipBg,
+              gradient: active ? AppColors.primaryGradient : null,
+              color: active ? null : palette.chipBg,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: active ? AppColors.primaryBlue : context.palette.divider,
+                color: active ? Colors.transparent : palette.divider,
               ),
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.28),
+                        blurRadius: 14,
+                        offset: const Offset(0, 5),
+                      ),
+                    ]
+                  : null,
             ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: active ? AppColors.white : context.palette.text,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 15,
+                  color: active ? AppColors.white : palette.textMuted,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: active ? AppColors.white : palette.text,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1594,10 +1790,7 @@ class _ResultShell extends StatelessWidget {
                 leading,
                 const SizedBox(width: 12),
                 Expanded(child: body),
-                if (trailing != null) ...[
-                  const SizedBox(width: 8),
-                  trailing!,
-                ],
+                if (trailing != null) ...[const SizedBox(width: 8), trailing!],
               ],
             ),
           ),
@@ -1632,8 +1825,10 @@ class _PersonResultRow extends StatelessWidget {
         ? 'Member'
         : person.fullName!.trim();
     final parts = <String>[
-      if ((person.churchName ?? '').trim().isNotEmpty) person.churchName!.trim(),
-      if ((person.profession ?? '').trim().isNotEmpty) person.profession!.trim(),
+      if ((person.churchName ?? '').trim().isNotEmpty)
+        person.churchName!.trim(),
+      if ((person.profession ?? '').trim().isNotEmpty)
+        person.profession!.trim(),
       if ((person.city ?? '').trim().isNotEmpty) person.city!.trim(),
     ];
     return _ResultShell(
@@ -1675,23 +1870,23 @@ class _PersonResultRow extends StatelessWidget {
       ),
       trailing: switch (state) {
         _FriendState.friends => InlineAction(
-            label: 'Friends',
-            icon: Icons.check,
-            filled: false,
-            onTap: null,
-          ),
+          label: 'Friends',
+          icon: Icons.check,
+          filled: false,
+          onTap: null,
+        ),
         _FriendState.pending => InlineAction(
-            label: 'Pending',
-            icon: Icons.hourglass_top_rounded,
-            filled: false,
-            onTap: null,
-          ),
+          label: 'Pending',
+          icon: Icons.hourglass_top_rounded,
+          filled: false,
+          onTap: null,
+        ),
         _FriendState.none => InlineAction(
-            label: 'Add',
-            icon: Icons.person_add_alt_1,
-            busy: busy,
-            onTap: onAdd,
-          ),
+          label: 'Add',
+          icon: Icons.person_add_alt_1,
+          busy: busy,
+          onTap: onAdd,
+        ),
       },
     );
   }
@@ -1821,8 +2016,18 @@ class _EventResultRow extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _months = [
-    'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-    'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
   ];
 
   @override
@@ -2103,7 +2308,6 @@ class _JobResultRow extends StatelessWidget {
     );
   }
 }
-
 
 class _PersonAvatar extends StatelessWidget {
   const _PersonAvatar({required this.photoUrl, required this.fullName});

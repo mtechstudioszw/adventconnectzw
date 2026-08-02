@@ -182,6 +182,24 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
                         version: QrVersions.auto,
                         size: 210,
                         backgroundColor: AppColors.white,
+                        // HIGH error correction is required, not
+                        // cosmetic: the embedded logo physically covers
+                        // data modules, and only level H (~30% recovery)
+                        // leaves enough redundancy for the code to still
+                        // scan. Do not lower this while the logo is here.
+                        errorCorrectionLevel: QrErrorCorrectLevel.H,
+                        // Decoded down first: logo.png is a ~2MB launcher
+                        // asset and this draws it at 44dp. 132px covers
+                        // the 3x rasterisation used when sharing.
+                        embeddedImage: const ResizeImage(
+                          AssetImage('assets/icon/logo.png'),
+                          width: 132,
+                        ),
+                        embeddedImageStyle: const QrEmbeddedImageStyle(
+                          // ~20% of the code's width. Larger starts
+                          // eating more modules than level H can rebuild.
+                          size: Size(44, 44),
+                        ),
                         eyeStyle: const QrEyeStyle(
                           eyeShape: QrEyeShape.square,
                           color: AppColors.darkNavy,

@@ -229,6 +229,47 @@ class DirectoryService {
   /// search had to gain a matching path or the user could see a name
   /// on the home tab and then fail to find it in search.
   ///
+  /// Friends the viewer and [userId] have in common (patch_182).
+  ///
+  /// Server-side by necessity, not preference: `friendships` is readable
+  /// only by the two parties to each row, so a client can see its OWN
+  /// friends and nothing about anyone else's — any mutual count computed
+  /// in Dart would always be zero. The RPC returns only the
+  /// intersection, never the other person's friend list, so it discloses
+  /// nothing the viewer couldn't already see.
+  ///
+  /// Returns the (capped) list plus the true total for "and N others".
+  static Future<({List<MemberDirectoryEntry> people, int total})>
+      fetchMutualFriends(String userId, {int limit = 12}) async {
+    if (userId.isEmpty) return (people: <MemberDirectoryEntry>[], total: 0);
+    try {
+      final rows = await _client.rpc(
+        'mutual_friends',
+        params: {'p_user': userId, 'p_limit': limit},
+      );
+      final list = (rows as List).cast<Map<String, dynamic>>();
+      return (
+        people: list
+            .map((row) => MemberDirectoryEntry(
+                  id: row['id'].toString(),
+                  userId: row['id'].toString(),
+                  isVisible: true,
+                  fullName: row['full_name'] as String?,
+                  profilePhotoUrl: row['profile_photo_url'] as String?,
+                  isVerified: row['is_verified'] == true ||
+                      row['is_verified_admin'] == true,
+                ))
+            .toList(),
+        // Every row carries the same total; absent when there are none.
+        total: list.isEmpty
+            ? 0
+            : (list.first['total'] as num?)?.toInt() ?? list.length,
+      );
+    } catch (_) {
+      return (people: <MemberDirectoryEntry>[], total: 0);
+    }
+  }
+
   /// Goes through the `search_profiles` RPC (patch_179), which does
   /// per-word matching plus a pg_trgm fuzzy fallback over BOTH full_name
   /// and username, and returns them ranked.

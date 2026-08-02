@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/friendship_model.dart';
+import '../../models/member_directory_model.dart';
 import '../../models/ministry_tag_model.dart';
 import '../../models/post_model.dart';
+import '../../services/directory_service.dart';
 import '../../services/ministry_service.dart';
 import '../../widgets/ministry_chips.dart';
 import '../../utils/date_format.dart';
@@ -53,6 +55,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   /// a profile should answer first. The RPC returns a count only, never
   /// the identities, so the friend graph stays private.
   ({String? churchName, int mutualFriends})? _peerContext;
+
+  /// The mutual friends themselves (patch_182) — faces and names, not
+  /// just the count above. A number tells you there is common ground;
+  /// seeing *who* is what actually makes a stranger's profile feel
+  /// placed. Empty until the RPC resolves, and for your own profile.
+  List<MemberDirectoryEntry> _mutuals = const [];
+  int _mutualTotal = 0;
 
   /// Their ministry involvement + spiritual gifts (patch_168). RLS
   /// returns nothing for a non-discoverable profile, so this stays
@@ -146,6 +155,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     } catch (_) {
       // Best-effort — the strip just doesn't render.
     }
+    // Who those mutuals actually are. Separate call so a failure here
+    // never costs the church/count strip above.
+    final mutual = await DirectoryService.fetchMutualFriends(widget.userId);
+    if (!mounted) return;
+    setState(() {
+      _mutuals = mutual.people;
+      _mutualTotal = mutual.total;
+    });
   }
 
   Future<void> _loadMinistryTags() async {
@@ -341,6 +358,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             // Shared church + mutual friends, above the bio — it is the
             // context you read the rest of the profile through.
             ?_buildPeerContextStrip(),
+            ?_buildMutualFriendsRow(),
             if (_profile!.isDiscoverable)
               ..._buildPublicSections()
             else
@@ -457,6 +475,99 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Overlapping faces + names of the friends you have in common, the way
+  /// Facebook does it: "Rutendo, Blessing and 6 others".
+  ///
+  /// Only the intersection is ever fetched (patch_182), so this shows the
+  /// viewer people they already know — it never discloses who else this
+  /// member is friends with. Renders nothing when there are none, rather
+  /// than announcing "0 mutual friends".
+  Widget? _buildMutualFriendsRow() {
+    if (_isSelf || _mutuals.isEmpty) return null;
+    final shown = _mutuals.take(3).toList();
+    final names = shown
+        .map((m) => (m.fullName ?? '').trim().split(RegExp(r'\s+')).first)
+        .where((n) => n.isNotEmpty)
+        .toList();
+    if (names.isEmpty) return null;
+    final others = _mutualTotal - names.length;
+    final summary = others > 0
+        ? '${names.join(', ')} and $others other${others == 1 ? '' : 's'}'
+        : names.join(', ');
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 28.0 + (shown.length - 1) * 18.0,
+            height: 28,
+            child: Stack(
+              children: [
+                for (var i = 0; i < shown.length; i++)
+                  Positioned(
+                    left: i * 18.0,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      clipBehavior: Clip.antiAlias,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: AppColors.primaryGradient,
+                        border: Border.all(
+                          color: context.palette.scaffoldBg,
+                          width: 2,
+                        ),
+                      ),
+                      child: (shown[i].profilePhotoUrl ?? '').isEmpty
+                          ? Center(child: _miniInitial(shown[i].fullName))
+                          : CachedImage(
+                              shown[i].profilePhotoUrl!,
+                              fit: BoxFit.cover,
+                              width: 28,
+                              height: 28,
+                              errorBuilder: (_, _, _) =>
+                                  Center(child: _miniInitial(shown[i].fullName)),
+                            ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$summary ${others > 0 || names.length > 1 ? 'are' : 'is'} '
+              'mutual friend${_mutualTotal == 1 ? '' : 's'}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniInitial(String? name) {
+    final trimmed = (name ?? '').trim();
+    return Text(
+      trimmed.isEmpty ? '?' : trimmed.substring(0, 1).toUpperCase(),
+      textAlign: TextAlign.center,
+      style: AppTextStyles.labelSmall.copyWith(
+        color: AppColors.white,
+        fontWeight: FontWeight.w800,
+        fontSize: 11,
+        height: 1,
       ),
     );
   }

@@ -44,6 +44,7 @@ class AuthShell extends StatefulWidget {
     this.eyebrow,
     this.onBack,
     this.icon,
+    this.hero,
     this.footer,
   });
 
@@ -63,6 +64,14 @@ class AuthShell extends StatefulWidget {
   /// flow its own identity without changing the furniture.
   final IconData? icon;
 
+  /// Replaces the 52dp brand ring entirely. Only for a screen whose own
+  /// mark IS the subject — the biometric lock screen's sonar badge is
+  /// already a gradient disc inside a gold ring, and stacking the brand
+  /// ring above it makes two of the same object at two sizes, which is
+  /// the exact noise this shell exists to remove. Ignored when null;
+  /// [icon] is then unused.
+  final Widget? hero;
+
   /// The screen's content, laid out under the heading.
   final Widget child;
 
@@ -74,8 +83,7 @@ class AuthShell extends StatefulWidget {
   State<AuthShell> createState() => _AuthShellState();
 }
 
-class _AuthShellState extends State<AuthShell>
-    with TickerProviderStateMixin {
+class _AuthShellState extends State<AuthShell> with TickerProviderStateMixin {
   /// Continues the intro's light field. Independent of the entrance so
   /// the background keeps breathing after everything has settled.
   late final AnimationController _ambient;
@@ -129,10 +137,7 @@ class _AuthShellState extends State<AuthShell>
     final v = _step(index);
     return Opacity(
       opacity: v,
-      child: Transform.translate(
-        offset: Offset(0, 22 * (1 - v)),
-        child: child,
-      ),
+      child: Transform.translate(offset: Offset(0, 22 * (1 - v)), child: child),
     );
   }
 
@@ -160,70 +165,87 @@ class _AuthShellState extends State<AuthShell>
               builder: (context, _) => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          height: 44,
-                          child: widget.onBack == null
-                              ? null
-                              : Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: _BackChip(onTap: widget.onBack!),
-                                ),
-                        ),
-                        const SizedBox(height: 12),
-                        _rise(0, _BrandRing(icon: widget.icon)),
-                        const SizedBox(height: 20),
-                        if (widget.eyebrow != null) ...[
+                  // Heading AND content share one scroll view. They used
+                  // to be split — a fixed heading block above an
+                  // Expanded scroll area — which meant the heading alone
+                  // could outgrow the viewport: at 2.5x text scale on a
+                  // 360x640 phone every screen in this flow overflowed
+                  // (95px on the lock screen) and the clipped part was
+                  // simply unreachable. iOS accessibility sizes go past
+                  // 3x, so that was reachable. Nothing moves at normal
+                  // scales, because there is nothing to scroll.
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            height: 44,
+                            child: widget.onBack == null
+                                ? null
+                                : Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: _BackChip(onTap: widget.onBack!),
+                                  ),
+                          ),
+                          const SizedBox(height: 12),
                           _rise(
-                            1,
+                            0,
+                            widget.hero ?? _BrandRing(icon: widget.icon),
+                          ),
+                          const SizedBox(height: 20),
+                          if (widget.eyebrow != null) ...[
+                            _rise(
+                              1,
+                              Text(
+                                widget.eyebrow!.toUpperCase(),
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.primaryBlue,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.8,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          _rise(
+                            2,
                             Text(
-                              widget.eyebrow!.toUpperCase(),
-                              style: AppTextStyles.labelSmall.copyWith(
-                                color: AppColors.primaryBlue,
-                                fontSize: 10.5,
+                              widget.title,
+                              style: AppTextStyles.displayMedium.copyWith(
+                                color: palette.text,
+                                fontSize: 30,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: 1.8,
+                                height: 1.12,
+                                letterSpacing: -0.6,
                               ),
                             ),
                           ),
                           const SizedBox(height: 8),
+                          _rise(
+                            3,
+                            Text(
+                              widget.subtitle,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: palette.textMuted,
+                                fontSize: 14,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 26),
+                          // Explicit full width: this Column is
+                          // start-aligned for the heading, but screens
+                          // hand us a `stretch` Column and expect the
+                          // viewport's width.
+                          SizedBox(
+                            width: double.infinity,
+                            child: _rise(4, widget.child),
+                          ),
                         ],
-                        _rise(
-                          2,
-                          Text(
-                            widget.title,
-                            style: AppTextStyles.displayMedium.copyWith(
-                              color: palette.text,
-                              fontSize: 30,
-                              fontWeight: FontWeight.w800,
-                              height: 1.12,
-                              letterSpacing: -0.6,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _rise(
-                          3,
-                          Text(
-                            widget.subtitle,
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: palette.textMuted,
-                              fontSize: 14,
-                              height: 1.45,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 26, 20, 24),
-                      child: _rise(4, widget.child),
+                      ),
                     ),
                   ),
                   if (widget.footer != null)
@@ -262,11 +284,7 @@ class _BackChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: palette.divider),
           ),
-          child: Icon(
-            Icons.arrow_back_ios_new,
-            size: 14,
-            color: palette.text,
-          ),
+          child: Icon(Icons.arrow_back_ios_new, size: 14, color: palette.text),
         ),
       ),
     );

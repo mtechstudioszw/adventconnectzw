@@ -4,6 +4,11 @@ import 'package:local_auth/local_auth.dart';
 
 import 'secure_storage_service.dart';
 
+/// Which sensor the device leads with. Drives the lock screen's glyph,
+/// its instruction copy and the shape of its scanning animation — a
+/// camera and a fingertip do not look like the same act.
+enum BiometricKind { fingerprint, face, iris }
+
 /// Wraps `local_auth` so screens don't have to know about platform
 /// quirks. Used by the Settings → biometric toggle.
 ///
@@ -15,6 +20,53 @@ class BiometricService {
 
   static final LocalAuthentication _auth = LocalAuthentication();
   static const _enabledKey = 'biometric_enabled';
+
+  /// What the device will actually use, so the lock screen can show the
+  /// right sensor and the right instruction. A phone that unlocks by face
+  /// should not be told to touch a fingerprint sensor, and sonar ripples
+  /// spreading from a fingertip are the wrong idea entirely for a camera.
+  static BiometricKind? _kindCache;
+
+  /// Last-known sensor kind, available synchronously once [primaryKind]
+  /// has run at least once this launch.
+  static BiometricKind? get kindCached => _kindCache;
+
+  /// Which sensor this device leads with. `getAvailableBiometrics()` is a
+  /// platform-channel round trip, so the result is cached for the launch —
+  /// enrolled hardware does not change while the app is open.
+  ///
+  /// Face wins when both are present: on a phone with both, the camera
+  /// fires first and the fingerprint is the fallback.
+  static Future<BiometricKind> primaryKind() async {
+    final cached = _kindCache;
+    if (cached != null) return cached;
+    try {
+      final available = await _auth.getAvailableBiometrics();
+      final kind = available.contains(BiometricType.face)
+          ? BiometricKind.face
+          : available.contains(BiometricType.iris)
+          ? BiometricKind.iris
+          : BiometricKind.fingerprint;
+      _kindCache = kind;
+      return kind;
+    } on PlatformException catch (e) {
+      debugPrint('BiometricService: primaryKind failed: $e');
+      // Fingerprint is the safe default — it is the overwhelmingly common
+      // sensor on the Android hardware this app actually runs on.
+      return BiometricKind.fingerprint;
+    }
+  }
+
+  /// Open the platform channel early so the FIRST [authenticate] call
+  /// isn't also paying for channel setup + hardware enumeration. Called
+  /// from the splash while the app is booting anyway. Never throws.
+  static Future<void> prewarm() async {
+    try {
+      await primaryKind();
+    } catch (_) {
+      // Best-effort only: this exists to save milliseconds, never to gate.
+    }
+  }
 
   // In-memory mirror of the stored flag so the Settings toggle paints the
   // right state instantly instead of flashing off → on after the async read.

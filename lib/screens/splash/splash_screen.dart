@@ -10,12 +10,22 @@ import '../../services/biometric_service.dart';
 import '../../services/force_update_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_motion.dart';
+import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../onboarding/onboarding_screen.dart';
-import '../onboarding/widgets/film_scenes.dart' show GoldRingPainter;
+import '../onboarding/widgets/film_scenes.dart'
+    show AmbientPainter, GoldRingPainter;
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({super.key, this.autoNavigate = true});
+
+  /// Whether to run the boot + routing sequence on mount. True in the
+  /// app. False lets a widget test exercise the brand panel's layout
+  /// without a Supabase client, a cache box or a router behind it —
+  /// _navigate()'s timeboxes otherwise leave pending timers. Same seam as
+  /// [BiometricLockScreen.autoPrompt].
+  final bool autoNavigate;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -49,6 +59,14 @@ class _SplashScreenState extends State<SplashScreen>
   // _exit fade instead so warm-start hand-offs stay snappy.
   late final AnimationController _blossom;
 
+  /// The intro film's own light field, started here. Cold start → intro →
+  /// auth is one continuous piece of motion: this screen holds the field
+  /// at `film: 0` (its opening position), the onboarding film pans it
+  /// across as the story runs, and AuthShell picks it up at `film: 1`.
+  /// The old backdrop was a static radial blue wash that belonged to
+  /// nothing else in the app.
+  late final AnimationController _ambient;
+
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
   late final Animation<double> _wordmarkOpacity;
@@ -68,6 +86,14 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..forward();
+
+    // Not started here — didChangeDependencies owns that, because whether
+    // a never-ending loop may run at all depends on MediaQuery's
+    // "remove animations".
+    _ambient = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    );
 
     _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
       CurvedAnimation(
@@ -113,17 +139,19 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 720),
     );
-    _blossomLogoScale = Tween<double>(begin: 1.0, end: 1.45).animate(
-      CurvedAnimation(parent: _blossom, curve: Curves.easeInOutCubic),
-    );
+    _blossomLogoScale = Tween<double>(
+      begin: 1.0,
+      end: 1.45,
+    ).animate(CurvedAnimation(parent: _blossom, curve: Curves.easeInOutCubic));
     _blossomLogoFade = CurvedAnimation(
       parent: _blossom,
       curve: const Interval(0.45, 1.0, curve: Curves.easeOut),
       reverseCurve: Curves.easeIn,
     );
-    _blossomWordmarkLift = Tween<double>(begin: 0, end: -28).animate(
-      CurvedAnimation(parent: _blossom, curve: Curves.easeOut),
-    );
+    _blossomWordmarkLift = Tween<double>(
+      begin: 0,
+      end: -28,
+    ).animate(CurvedAnimation(parent: _blossom, curve: Curves.easeOut));
     _blossomTaglineFade = CurvedAnimation(
       parent: _blossom,
       curve: const Interval(0.0, 0.55, curve: Curves.easeOut),
@@ -133,7 +161,21 @@ class _SplashScreenState extends State<SplashScreen>
       curve: const Interval(0.55, 1.0, curve: Curves.easeIn),
     );
 
-    _navigate();
+    if (widget.autoNavigate) _navigate();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.enabled(context)) {
+      if (!_ambient.isAnimating) _ambient.repeat();
+    } else {
+      // "Remove animations": hold the light field on its opening frame
+      // and land the brand entrance whole. The loader still runs — it
+      // reports real boot progress, so it is information, not decoration.
+      _ambient.stop();
+      _entrance.value = 1;
+    }
   }
 
   @override
@@ -142,6 +184,7 @@ class _SplashScreenState extends State<SplashScreen>
     _progress.dispose();
     _exit.dispose();
     _blossom.dispose();
+    _ambient.dispose();
     super.dispose();
   }
 
@@ -182,14 +225,25 @@ class _SplashScreenState extends State<SplashScreen>
         .then((_) => ForceUpdateService.check())
         .catchError((_) => UpdateCheck.none);
 
+    // Open the biometric platform channel NOW, while we are waiting on
+    // Supabase and the cache box anyway. Without this the first
+    // authenticate() call also pays for channel setup + hardware
+    // enumeration, right at the moment the user is staring at the screen
+    // waiting for a prompt. Fire-and-forget: it never gates anything.
+    unawaited(BiometricService.prewarm());
+
     await Future.wait([
       Future.delayed(_minLoaderDuration),
-      AppBootstrap.awaitSupabaseReady()
-          .timeout(const Duration(milliseconds: 2500), onTimeout: () {}),
+      AppBootstrap.awaitSupabaseReady().timeout(
+        const Duration(milliseconds: 2500),
+        onTimeout: () {},
+      ),
       // Cache box open (moved off the pre-runApp path). Timeboxed so a
       // large/slow box can't stall the splash — home tolerates no cache.
-      CacheService.initialize()
-          .timeout(const Duration(milliseconds: 1500), onTimeout: () {}),
+      CacheService.initialize().timeout(
+        const Duration(milliseconds: 1500),
+        onTimeout: () {},
+      ),
     ]);
     if (!mounted) return;
     // Bootstrap is ready — complete the loader so it reads as "done" instead
@@ -252,7 +306,15 @@ class _SplashScreenState extends State<SplashScreen>
       // after a successful unlock.
       if (await BiometricService.isEnabled()) {
         if (!mounted) return;
-        await _fadeOutThen(() => context.goNamed('biometric_lock'));
+        // Navigate DIRECTLY — no 320ms fade first. The unlock path is the
+        // one a returning user walks every single launch, and the founder's
+        // note was that it feels slow next to WhatsApp. A fade here is
+        // 320ms of nothing standing between the user and the OS prompt,
+        // and the lock screen paints on the same ambient backdrop the
+        // splash is already showing, so there is no visual cut to soften.
+        // (The warm-start → home path already skips the fade for the same
+        // reason.)
+        context.goNamed('biometric_lock');
         return;
       }
       // Gate the home tab behind profile completion. A user can sign
@@ -262,7 +324,8 @@ class _SplashScreenState extends State<SplashScreen>
       // the session is still refreshing (no currentUser yet) we can't
       // read the metadata — a returning user with a persisted session has
       // already onboarded, so default to completed and go home.
-      final completed = !AuthService.isSignedIn ||
+      final completed =
+          !AuthService.isSignedIn ||
           await AuthService.hasCompletedProfileSetup();
       if (!mounted) return;
       if (!completed) {
@@ -276,9 +339,8 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    final hasSeenOnboarding = await SecureStorageService.read(
-          OnboardingScreen.onboardingFlagKey,
-        ) ==
+    final hasSeenOnboarding =
+        await SecureStorageService.read(OnboardingScreen.onboardingFlagKey) ==
         'true';
     if (!mounted) return;
 
@@ -297,9 +359,12 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     // Splash background follows the theme so dark-mode users don't get a
     // white flash on cold start (the wordmark/atmosphere read fine on the
-    // deep-navy canvas too).
+    // deep-navy canvas too). Read from the palette, which is the same
+    // value AuthShell and the onboarding film use — the hand-off between
+    // them must not show a seam.
+    final scaffoldBg = context.palette.scaffoldBg;
     return Scaffold(
-      backgroundColor: AppColors.scaffold,
+      backgroundColor: scaffoldBg,
       body: AnimatedBuilder(
         animation: Listenable.merge([_exit, _blossom]),
         builder: (context, child) {
@@ -309,88 +374,85 @@ class _SplashScreenState extends State<SplashScreen>
           final exitOpacity = Curves.easeOut.transform(_exit.value);
           final backgroundOpacity =
               exitOpacity * (1 - _blossomBackgroundFade.value);
-          return Opacity(
-            opacity: backgroundOpacity,
-            child: child,
-          );
+          return Opacity(opacity: backgroundOpacity, child: child);
         },
         child: DecoratedBox(
-        decoration: BoxDecoration(color: AppColors.scaffold),
-        child: Stack(
-          children: [
-            _buildAtmosphereOverlay(),
-            SafeArea(
-              child: Stack(
-                children: [
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildLogoTile(),
-                        const SizedBox(height: 28),
-                        _buildWordmark(),
-                        const SizedBox(height: 12),
-                        _buildTagline(),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 30,
-                    child: AnimatedBuilder(
-                      animation: _blossom,
-                      builder: (context, child) => Opacity(
-                        opacity: 1 - _blossomTaglineFade.value,
-                        child: child,
-                      ),
+          decoration: BoxDecoration(color: scaffoldBg),
+          child: Stack(
+            children: [
+              _buildAtmosphereOverlay(),
+              SafeArea(
+                child: Stack(
+                  children: [
+                    Center(
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Single refined loader — the bouncing dots were
-                          // dropped (redundant alongside the progress bar
-                          // and part of the "busy / AI-generated" feel).
-                          _buildProgressBar(),
-                          const SizedBox(height: 18),
-                          Text(
-                            'MYTECH STUDIOS ZW',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.text.withValues(alpha: 0.35),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 2.0,
-                            ),
-                          ),
+                          _buildLogoTile(),
+                          const SizedBox(height: 28),
+                          _buildWordmark(),
+                          const SizedBox(height: 12),
+                          _buildTagline(),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 30,
+                      child: AnimatedBuilder(
+                        animation: _blossom,
+                        builder: (context, child) => Opacity(
+                          opacity: 1 - _blossomTaglineFade.value,
+                          child: child,
+                        ),
+                        child: Column(
+                          children: [
+                            // Single refined loader — the bouncing dots were
+                            // dropped (redundant alongside the progress bar
+                            // and part of the "busy / AI-generated" feel).
+                            _buildProgressBar(),
+                            const SizedBox(height: 18),
+                            Text(
+                              'MYTECH STUDIOS ZW',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.text.withValues(alpha: 0.35),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 2.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildAtmosphereOverlay() {
-    // Subtle blue halo behind the emblem on the white canvas — gives
-    // depth without the "busy" feel. Very low alpha so it reads as a
-    // soft premium glow, not a gradient.
+    // The intro film's ambient field rather than a bespoke radial wash.
+    // `film: 0` is its opening position — the onboarding film pans it
+    // across as the story runs and AuthShell resumes it at `film: 1`, so
+    // the light the user sees on the very first frame of a cold start is
+    // literally the same light that is still behind the sign-in form.
+    // Own repaint layer so the brand mark above never re-rasterises with
+    // it.
     return IgnorePointer(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0, -0.25),
-            radius: 0.9,
-            colors: [
-              AppColors.primaryBlue.withValues(alpha: 0.06),
-              AppColors.primaryBlue.withValues(alpha: 0.0),
-            ],
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _ambient,
+          builder: (context, _) => CustomPaint(
+            painter: AmbientPainter(loop: _ambient.value, film: 0),
+            child: const SizedBox.expand(),
           ),
         ),
-        child: const SizedBox.expand(),
       ),
     );
   }
@@ -427,10 +489,7 @@ class _SplashScreenState extends State<SplashScreen>
                 children: [
                   CustomPaint(
                     size: const Size(148, 148),
-                    painter: GoldRingPainter(
-                      sweep: ringSweep,
-                      strokeWidth: 3,
-                    ),
+                    painter: GoldRingPainter(sweep: ringSweep, strokeWidth: 3),
                   ),
                   Container(
                     width: 116,
@@ -446,8 +505,7 @@ class _SplashScreenState extends State<SplashScreen>
                           spreadRadius: 1,
                         ),
                         BoxShadow(
-                          color:
-                              AppColors.primaryBlue.withValues(alpha: 0.35),
+                          color: AppColors.primaryBlue.withValues(alpha: 0.35),
                           blurRadius: 24,
                           offset: const Offset(0, 10),
                         ),
@@ -541,10 +599,7 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [
-                        AppColors.primaryBlue,
-                        AppColors.goldAccent,
-                      ],
+                      colors: [AppColors.primaryBlue, AppColors.goldAccent],
                     ),
                     borderRadius: BorderRadius.circular(2),
                     boxShadow: [
@@ -562,5 +617,4 @@ class _SplashScreenState extends State<SplashScreen>
       },
     );
   }
-
 }

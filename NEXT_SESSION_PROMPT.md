@@ -1,80 +1,126 @@
-# Resume prompt — Stage 19/20 finish
+# NEXT SESSION — Advent Connect ZW
 
-Paste this into the next Claude Code session in this repo:
+Paste this whole file as the first message of the next session.
 
 ---
 
-We're mid-build on Stage 20 from `ADVENT_CONNECT_ZW_MASTER_REFERENCE_V4 (1).md`. Stage 19 (Firebase Analytics + Crashlytics) is fully wired. Stage 20 code is written and committed but **not yet compiled** because `flutter pub get` was hanging on slow internet at end of last session.
+## Where things stand (29 Jul 2026)
 
-## Step 1 — finish dep install
+All work is pushed. `main` head: **`Profile setup joins the shared
+first-run backdrop`**. `flutter analyze` is clean apart from **4
+pre-existing infos** in files nobody touched; **38/38 tests pass**.
+Migrations **178–182 are applied to production and verified** — do NOT
+re-apply them.
 
-Run `flutter pub get` (I'll do this myself if you ask — bandwidth limited). New packages added to pubspec:
+The 29 Jul session closed out **every reported bug (25 of them)** and
+started the redesign backlog. What remains is redesign work plus one
+feature.
 
-- `firebase_analytics ^11.3.3`, `firebase_crashlytics ^4.1.3` (already resolved last session)
-- `google_mobile_ads ^5.3.1`
-- `shimmer ^3.0.0`
-- `image_cropper ^8.0.2`
-- `hive ^2.2.3`, `hive_flutter ^1.1.0`
-- `connectivity_plus ^6.1.0`
-- `google_sign_in ^6.2.2`
-- `local_auth ^2.3.0`
-- `geolocator ^13.0.2`
+## Do this before writing any code
 
-If resolution hangs again, the offender last time was `cached_network_image ^3.4.1` which references a non-existent `cached_network_image_web ^1.3.1`. Already removed from pubspec. If a different conflict appears, surface the conflict line and propose a downgrade.
+1. Read `CLAUDE.md`. It was corrected on 29 Jul — the colour table used
+   to say Dark Navy was for "Headers, app bar", which is the *opposite*
+   of the rule twenty lines below it. **Headers are FLAT on
+   `palette.scaffoldBg`, never navy.** Account screens use `AuthShell`;
+   Home's Sabbath header is flat with a sundown wash + gold horizon.
+2. Read the memory files `bug-round-jul29` and `open-backlog-jul29`.
+3. `git -C adventconnectzw log --oneline -12`.
 
-## Step 2 — analyze + fix
+## Remaining work, in the order I'd take it
 
-Run `flutter analyze`. Likely remaining issues:
+### 1. Finish the first-run path — 2 screens
+`AuthShell` (`lib/screens/auth/widgets/auth_shell.dart`) already frames
+forgot-password and email-verification; profile-setup shares its ambient
+backdrop. Still to do:
 
-1. **`google_sign_in 6.x` API** — I called `GoogleSignIn().signIn()` / `.authentication` in `lib/services/auth_service.dart::signInWithGoogle()`. If v6 has dropped these (latest is v7 with different API), update to whichever shape pub resolved.
-2. **`image_cropper 8.x` API** — I called `_cropper.cropImage(sourcePath:...)` in `lib/services/storage_service.dart`. If v8 changed the signature, fix.
-3. **`hive_flutter`** — `Hive.openBox<String>(_boxName)` in `lib/services/cache_service.dart`. Verify.
-4. **`connectivity_plus 6.x`** — `onConnectivityChanged` returns `Stream<List<ConnectivityResult>>` in v5+; should be fine but check.
+- **`lib/screens/splash/biometric_lock_screen.dart`** → move onto
+  `AuthShell` with `onBack: null`. A locked screen must not offer a way
+  out; the shell handles that case and it is covered by
+  `test/auth_shell_test.dart`.
+- **`lib/screens/splash/splash_screen.dart`** → give it the same
+  `AmbientPainter` backdrop so cold start → intro → auth is one piece.
 
-Fix whatever analyze flags. **Do not** add new features in this pass — just make it green.
+**Rule:** a screen on `AuthShell` must NOT add its own entrance
+controller — the shell owns the staggered rise. Two screens had their
+own; both were deleted.
 
-## Step 3 — test on Android
+### 2. Remaining redesigns
+Founder's bar: premium, "not cheap or vibe coded", real motion.
 
-`flutter run`. Verify:
+- **Search screen** (`lib/screens/home/search_screen.dart`). The search
+  *bug* is already fixed (patch_179 `search_profiles` RPC — per-word
+  matching + pg_trgm fuzzy over full_name AND username). This is purely
+  visual.
+- **Home share/create sheet** — "the screen that comes when you click
+  share". `lib/widgets/home/create_sheet.dart` / `composer_sheet.dart`.
+- **Chat settings** (three-dots → chat settings) + new features.
+- **Church profile screen** — circular profile picture and a
+  background/cover, both sized so an admin's upload *just fits* the
+  space. Mind the loose-constraints trap below; that is exactly what
+  left white edges around the profile avatar.
 
-- App launches without Firebase crash
-- AdMob test banner appears at the bottom of Home, Churches, Events, Marketplace, Jobs (Google test ad — small banner)
-- Login screen shows the **Continue with Google** button (tap will fail until Supabase Auth → Google provider is configured with the right Android SHA-1; that's a separate setup task)
-- Settings → biometric toggle appears (only if device has fingerprint enrolled)
-- Churches list — distance sort kicks in after location permission grants
-- Offline banner appears when you turn off wifi
+### 3. The one remaining FEATURE
+**Announcement reactions.** Members react to church announcements; the
+admin sees reaction analytics in the dashboard; church admins get a
+notification (persisted) when someone reacts. Needs a migration.
 
-## Step 4 — wire what wasn't reached
+Build on what exists: `announcement_reads` (patch_173),
+`church_announcement_reach()`, and `nudge_profile_incomplete()`
+(patch_181) as the pattern for a SECURITY DEFINER notification writer —
+`notifications` has **no client INSERT policy**, by design.
 
-These were planned but not coded last session. Pick them up in order:
+## Traps that already cost real time — do not rediscover these
 
-1. **Hive cache hookup.** `CacheService` is built but no service writes to it. Add `CacheService.writeString('feed', jsonEncode(items))` after a successful home-feed load, and read it on cold start in `home_screen.dart._bootstrap()` when `ConnectivityService.isOnline` is false.
-2. **Message queue for offline sends.** When `MessagingService.sendMessage` throws on no network, push the payload into a hive box (`outbox`) and have `ConnectivityService.onChanged` trigger a flush.
-3. **Distance chip on church cards.** The `Church` model now has `latitude`/`longitude`/`hasLocation`. Update `lib/widgets/church_card.dart` to show `LocationService.formatDistance(...)` when the user's `Position` is available.
-4. **Real AdMob IDs.** Currently using Google test IDs in `AndroidManifest.xml`, `Info.plist`, and `lib/services/ads_service.dart`. Replace before release build per Part 24.
-5. **Code obfuscation on release.** Per Part 26: `flutter build apk --obfuscate --split-debug-info=build/debug-info`. Add to a release script.
+- **`CrossAxisAlignment.stretch` on a `Row` inside any scrollable is
+  always a bug.** It passes the Row's unbounded cross-axis extent to
+  children as a TIGHT constraint → "BoxConstraints forces an infinite
+  height" → in release the widget paints **nothing**: a blank grey area,
+  no red error box. This is what made the entire Prayer screen look
+  empty while the backend was provably fine.
+- **A supabase-dart `.upsert()` is `INSERT … ON CONFLICT DO UPDATE …
+  RETURNING`.** So the table needs **SELECT *and* UPDATE** policies, not
+  just INSERT. Missing either → 42501, usually swallowed by a `catch`.
+  This bit three times (`signup_surveys`, `story_likes`,
+  `youtube_subscriptions`). If the row is a pure membership tuple, pass
+  `ignoreDuplicates: true` (→ `DO NOTHING`, needs only INSERT).
+- **`Container(alignment: …)` hands its child LOOSE constraints**, so an
+  unsized `CachedImage` floats inside its circle and leaves a rim.
+  Meanwhile `CachedImage` hands its **errorBuilder TIGHT** constraints,
+  so a bare `Text` paints top-left. Size the image; `Center` the
+  fallback.
+- **Curves ending in `…Back` overshoot past 1.0 by design.** Feeding one
+  into `Opacity` asserts and crashes debug builds. Scale wants the
+  overshoot; opacity never does — clamp it.
+- **Flattening a navy surface means re-checking every foreground that
+  assumed a dark backdrop** — status-bar icon brightness, white-on-
+  frosted buttons, badge borders. None of these throw; they just go
+  invisible.
+- **Fixed height + text that can wrap** is the recurring overflow
+  source: the chat scene's `height: 104`, the EGW list-mode cover, the
+  library chip row's 44dp against a 12dp shadow. Let content size
+  itself.
 
-## What's already done (don't redo)
+## Environment
 
-- All 8 Part-30 analytics events wired into their services
-- Crashlytics + Firebase error routing in `main.dart`
-- AdMob `<meta-data>` in AndroidManifest, `GADApplicationIdentifier` + SKAdNetwork in Info.plist
-- Android Gradle plugin for Crashlytics declared in `settings.gradle.kts` + applied in `app/build.gradle.kts`
-- iOS permission strings: Camera, Photo, Location, FaceID, Microphone (already had)
-- `OfflineBanner` wrapped around the whole app in `main.dart`
-- `ImageCropper` square crop on profile photo upload (`storage_service.dart`)
-- `_GoogleButton` in `login_screen.dart`
-- Biometric toggle row in Settings → Account section (only renders if hardware enrolled)
-- Geolocator-based nearest-first sort in `churches_screen.dart` (graceful when permission denied or church has no lat/lng)
+- The working directory is the **PARENT** of the repo. Use
+  `-C adventconnectzw` or absolute paths; the Bash tool resets cwd
+  between calls.
+- **`python` is NOT installed; `node` v24 is.** Use node to JSON-encode
+  SQL for the Supabase Management API.
+- **Full APK builds are blocked on this machine.** Only `flutter
+  analyze`, `flutter test` and `flutter build bundle` can verify
+  anything — which is why the render tests exist. **Add one for any
+  screen you redesign.** `test/onboarding_film_test.dart` caught two
+  already-shipping overflows nobody had noticed, plus a crash in
+  brand-new code.
+- The Supabase PAT is not stored anywhere. Ask for it if a migration is
+  needed, and never write it to a file.
+- To reproduce the exact request the app makes, a real user JWT can be
+  minted: `POST /auth/v1/admin/generate_link` (service_role) → take
+  `hashed_token` → `POST /auth/v1/verify` with **`token_hash`** (not
+  `token`).
 
-## Files added last session
+## Nothing is blocked on the founder
 
-- `lib/services/ads_service.dart`
-- `lib/services/analytics_service.dart`
-- `lib/services/biometric_service.dart`
-- `lib/services/cache_service.dart`
-- `lib/services/connectivity_service.dart`
-- `lib/services/location_service.dart`
-- `lib/widgets/ad_banner.dart`
-- `lib/widgets/offline_banner.dart`
-- `lib/widgets/shimmer_loaders.dart`
+The claim-button discoverability question was answered by building it: a
+card instead of a text link, and claimed churches keep an appeal route.

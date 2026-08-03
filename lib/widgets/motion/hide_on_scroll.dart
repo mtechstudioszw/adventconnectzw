@@ -53,7 +53,20 @@ mixin NavVisibilityMixin<T extends StatefulWidget> on State<T> {
   bool navVisible = true;
 
   bool handleNavScroll(UserScrollNotification notification) {
-    if (notification.depth != 0) return false;
+    // Filter by AXIS, not depth.
+    //
+    // This used to be `if (notification.depth != 0) return false;`, which
+    // silently broke any screen whose list sits inside a TabBarView —
+    // a TabBarView is a horizontal PageView, so the vertical list's
+    // notifications reach this listener at depth 1 and were discarded.
+    // On Events that meant the ad banner could never hide, no matter how
+    // far you scrolled: the founder's "the ads are not allowing me to
+    // use the screen" (3 Aug 2026).
+    //
+    // Axis is the property actually being guarded against: a horizontal
+    // carousel (a stories rail, a chip row) must not drive the nav, and
+    // it still doesn't. A vertical list drives it at any depth.
+    if (notification.metrics.axis != Axis.vertical) return false;
     final direction = notification.direction;
     if (direction == ScrollDirection.reverse && navVisible) {
       setState(() => navVisible = false);

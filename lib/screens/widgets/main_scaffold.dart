@@ -62,6 +62,18 @@ class _MainScaffoldState extends State<MainScaffold> with NavVisibilityMixin {
       ),
       // Banner sits directly above the main bottom nav. AdBanner self-hides
       // (zero height) until an ad loads, so the nav never shifts on a miss.
+      //
+      // BOTH branches scroll away. They didn't used to: HideOnScroll was
+      // only on the showNav branch, so on a PUSHED screen (Events,
+      // Churches) the banner was pinned to the bottom permanently and
+      // never gave the space back. Those two screens already spend ~170dp
+      // on a search bar, a date filter and pill tabs, so a banner that
+      // never leaves is most of what's left — "the ads are not allowing
+      // me to use the screen" (founder, 3 Aug 2026).
+      //
+      // HideOnScroll collapses by height factor, a real layout collapse,
+      // so scrolling down hands those pixels back to the list and any
+      // scroll up returns the ad.
       bottomNavigationBar: widget.showNav
           ? HideOnScroll(
               visible: navVisible,
@@ -74,7 +86,10 @@ class _MainScaffoldState extends State<MainScaffold> with NavVisibilityMixin {
               ),
             )
           : (widget.showAd
-                ? const SafeArea(top: false, child: AdBanner())
+                ? HideOnScroll(
+                    visible: navVisible,
+                    child: const SafeArea(top: false, child: AdBanner()),
+                  )
                 : null),
       floatingActionButton: widget.floatingActionButton,
     );

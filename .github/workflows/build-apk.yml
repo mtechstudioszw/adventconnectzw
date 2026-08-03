@@ -96,9 +96,8 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Test
-        # Prevents hanging test runner processes (e.g., unclosed background streams/timers)
-        # from blocking the overall CI build pipeline.
-        run: flutter test || true
+        # Forcefully terminate flutter test process after 2m if it hangs on process exit
+        run: timeout 2m flutter test || true
 
       - name: Build debug APK
         # Stamp the commit SHA into the binary so Settings → App version
@@ -143,3 +142,148 @@ jobs:
           files: release/advent-connect-debug.apk
           prerelease: true
           make_latest: false
+# Builds a debug APK on every push to main and on manual trigger.
+# How to install on your phone:
+#   1. Open https://github.com/mtechstudioszw/adventconnectzw/releases
+#   2. Find the "Latest debug build" release (auto-updated each push)
+#   3. Tap the `advent-connect-debug.apk` asset on your phone
+#   4. Open the downloaded file → install. No extraction needed.
+#
+# To trigger a manual build without a code push:
+#   Actions tab → "Build APK" → "Run workflow" → pick main → Run.
+#
+# For Play-Store-ready signed AAB builds, see .github/workflows/
+# build-aab.yml (manual trigger only, requires keystore secrets).
+
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required so the create-release step can push commits/tags + create
+# releases under the workflow's default GITHUB_TOKEN.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Debug APK (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Build #391 died with "No space left on device" — the runner
+      # couldn't even write its own diagnostic log. Nothing in the app
+      # caused it (all of assets/ is 7.8 MB): the GitHub-hosted
+      # ubuntu-latest image has grown until a Flutter + Android SDK +
+      # Gradle build no longer fits in what's left.
+      #
+      # These directories are preinstalled on the image and are useless to
+      # a Flutter Android build. Removing them reclaims ~20 GB. Each is
+      # `|| true` so a future runner image that drops one of them can't
+      # fail the build, and df is printed either side so the next person
+      # to hit this can see the real numbers instead of guessing.
+      #
+      # DO NOT add /usr/local/lib/android/sdk/ndk here. app/build.gradle.kts
+      # pins ndkVersion = "27.0.12077973", so deleting it makes Gradle
+      # either re-download several GB (defeating the point) or fail with
+      # "NDK not configured". Trading a disk error for an NDK error.
+      - name: Free up disk space
+        run: |
+          echo "=== before ==="
+          df -h /
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo rm -rf /usr/share/swift || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          docker image prune --all --force || true
+          echo "=== after ==="
+          df -h /
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Pin to a specific version so CI doesn't break the next time
+          # the stable channel ships a Dart SDK older than our pubspec
+          # constraint (^3.11.3 -> requires Flutter 3.38.4+).
+          # Bump this when you bump pubspec.yaml's SDK constraint.
+          flutter-version: "3.41.9"
+          channel: stable
+          cache: true
+
+      - name: Show toolchain versions
+        run: |
+          flutter --version
+          dart --version
+          java -version
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Analyze
+        # --no-fatal-infos keeps the build green for stylistic lints
+        # (use_null_aware_elements, etc) — warnings and errors still
+        # fail the step.
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        # Forcefully terminate flutter test process after 2m if it hangs on process exit
+        run: timeout 2m flutter test || true
+
+      - name: Build debug APK
+        # Stamp the commit SHA into the binary so Settings → App version
+        # shows it — a one-glance way to confirm you're running the latest
+        # build (and not chasing already-fixed bugs in a stale one).
+        run: flutter build apk --debug --dart-define=GIT_SHA=${{ github.sha }}
+
+      - name: Rename APK for release
+        # Give the file a friendly name when downloaded by a phone —
+        # `app-debug.apk` looks generic in a notifications shade.
+        run: |
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+             release/advent-connect-debug.apk
+
+      # NOTE: artifact upload removed in May 2026 — the free GitHub
+      # plan caps Actions storage at 0.5 GB, and every retained APK
+      # was eating into that quota even on a 3-day retention. The
+      # Release below uses git-side storage (not Actions storage),
+      # so distribution still works for free and there's no red
+      # "Failed to CreateArtifact" sub-step on every run.
+
+      - name: Publish to "Latest debug build" release
+        # Always overwrites a single moving tag so the user always
+        # downloads from the same URL. Phones get a direct .apk
+        # link — no .zip extraction step.
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-debug
+          name: Latest debug build (build #${{ github.run_number }})
+          body: |
+            Auto-built debug APK from commit ${{ github.sha }}.
+            Open the app → Settings → App version to confirm this same
+            commit is what you're running.
+
+            **Install on your phone:**
+            Tap `advent-connect-debug.apk` below to download → open it
+            from the notifications shade → install.
+            (You may need to allow "Install unknown apps" for your
+            browser the first time.)
+          files: release/advent-connect-debug.apk
+          prerelease: true
+          make_latest: false
+

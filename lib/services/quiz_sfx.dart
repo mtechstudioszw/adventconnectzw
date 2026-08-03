@@ -80,7 +80,18 @@ class QuizSfx {
 
   static bool get muted => _muted;
 
-  /// Master volume, 0.0–1.0, multiplied into each clip's own trim.
+  /// The quietest the SLIDER may go.
+  ///
+  /// Not a stylistic floor — silence has to stay reachable only through
+  /// the mute button, which has an icon and an obvious way back. The
+  /// slider's own minimum used to be 0.0, so one drag to 0% persisted
+  /// "0.00", and from then on every clip played at volume zero in every
+  /// future session while the mute button still read UNMUTED. That is
+  /// indistinguishable from "the quiz has no sound", with nothing on
+  /// screen to explain it and no reason to suspect the slider.
+  static const double kMinVolume = 0.1;
+
+  /// Master volume, [kMinVolume]–1.0, multiplied into each clip's own trim.
   ///
   /// The arena had a mute switch and nothing between "off" and "full",
   /// which is not a volume control — you either played in silence or woke
@@ -94,7 +105,7 @@ class QuizSfx {
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
   static Future<void> setVolume(double value) async {
-    _volume = value.clamp(0.0, 1.0);
+    _volume = value.clamp(kMinVolume, 1.0);
     await CacheService.writePref(_kVolume, _volume.toStringAsFixed(2));
     for (final entry in _players.entries) {
       try {
@@ -139,8 +150,11 @@ class QuizSfx {
     _initialising = true;
     _muted = CacheService.readPref(_kMuted) == '1';
     _hapticsOff = CacheService.readPref(_kHaptics) == '1';
+    // Clamped to kMinVolume on the way IN as well, so a phone that already
+    // stored "0.00" before the slider had a floor heals itself on the next
+    // launch instead of staying silent forever.
     _volume = double.tryParse(CacheService.readPref(_kVolume) ?? '')
-            ?.clamp(0.0, 1.0) ??
+            ?.clamp(kMinVolume, 1.0) ??
         0.85;
     final generation = _generation;
     // Built off to the side and published in one go at the end, so a

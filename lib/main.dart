@@ -22,6 +22,7 @@ import 'services/music_player_service.dart';
 import 'services/premium_service.dart';
 import 'services/usage_analytics.dart';
 import 'services/presence_service.dart';
+import 'services/session_reset.dart';
 import 'services/sabbath_service.dart';
 import 'services/push_service.dart';
 import 'services/theme_service.dart';
@@ -176,9 +177,11 @@ Future<void> _initBackgroundServices() async {
         }
         break;
       case AuthChangeEvent.signedOut:
-        unawaited(PresenceService.stop());
-        unawaited(PremiumService.clear());
-        unawaited(UsageAnalytics.stop());
+        // The full reset, not a hand-picked subset. AuthService.signOut()
+        // already awaits this; repeating it here is what catches the
+        // sessions that never reach that method — a revoked token, or a
+        // refresh that finally gives up. It is idempotent.
+        unawaited(SessionReset.onSignOut());
         break;
       default:
         break;

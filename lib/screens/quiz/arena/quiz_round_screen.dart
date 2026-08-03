@@ -26,9 +26,23 @@ import 'widgets/countdown_overlay.dart';
 /// None of it blocks — every effect is fire-and-forget so a slow frame
 /// never delays the next question.
 class QuizRoundScreen extends StatefulWidget {
-  const QuizRoundScreen({super.key, required this.config});
+  const QuizRoundScreen({
+    super.key,
+    required this.config,
+    this.autoStart = true,
+  });
 
   final QuizRoundConfig config;
+
+  /// Whether to run the countdown film and boot the services the arena
+  /// needs (sound pool, rewarded ad, progress persistence).
+  ///
+  /// Tests pass false: those calls reach audioplayers, AdMob and Hive,
+  /// none of which exist under a headless binding, and the countdown
+  /// overlay stands between the test and the clock it wants to run out.
+  /// With it false the first question starts immediately and the round
+  /// logic — scoring, timeout, sudden death — is reachable on its own.
+  final bool autoStart;
 
   @override
   State<QuizRoundScreen> createState() => _QuizRoundScreenState();
@@ -44,7 +58,10 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   final List<QuizAnswer> _answers = [];
 
   int? _chosen;
-  bool _counting = true;
+
+  /// Showing the 3-2-1-GO film. Assigned in [initState] rather than here
+  /// because a field initializer runs before `widget` is consulted.
+  late bool _counting;
   bool _finishing = false;
 
   /// Points scored on the question just answered, for the floating label.
@@ -100,6 +117,17 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   /// True once the question is closed, whether by a choice or the clock.
   bool get _answered => _chosen != null || _timedOut;
 
+  /// Did the player get this question right?
+  ///
+  /// Running out of time is getting it WRONG (founder's call, 2 Aug 2026),
+  /// and on that path [_chosen] is deliberately still null — so asking
+  /// `_question.isCorrect(_chosen!)` threw `Null check operator used on a
+  /// null value` the instant the reveal rebuilt. Both reveal widgets are
+  /// gated on [_answered], which [_timedOut] alone satisfies, so the
+  /// crash was guaranteed on every timeout rather than occasional.
+  bool get _wasCorrect =>
+      _chosen != null && _question.isCorrect(_chosen!);
+
   @override
   void initState() {
     super.initState();
@@ -128,14 +156,58 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
       duration: AppMotion.celebrate,
     );
 
-    QuizSfx.init();
-    RewardedAdManager.loadAd();
-    QuizProgressService.markSeen(_questions);
-    _persist();
+    _counting = widget.autoStart;
+    if (widget.autoStart) {
+      QuizSfx.init();
+      RewardedAdManager.loadAd();
+      QuizProgressService.markSeen(_questions);
+      _persist();
+    }
+  }
+
+  /// Set once the first question's clock has been started by [autoStart]
+  /// being false. Normally the countdown film ends and calls
+  /// [_startRound] for us.
+  bool _startedWithoutCountdown = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.autoStart || _startedWithoutCountdown) return;
+    _startedWithoutCountdown = true;
+    // Here rather than a post-frame callback: _startQuestion reads
+    // AppMotion from the context, which is legal from this point on, and
+    // starting a controller from a post-frame callback hands its ticker a
+    // start time the first frame has already passed — which trips
+    // AnimationController's `elapsedInSeconds >= 0.0` assertion.
+    _startQuestion();
+  }
+
+  /// The "let them read what they missed" pause before the round moves on.
+  ///
+  /// A cancellable Timer rather than `await Future.delayed(...)`, because
+  /// `mounted` is NOT a sufficient guard here: while the widget tree is
+  /// being finalized an element is already deactivated but `mounted` still
+  /// reads true, so a delayed continuation that passed the check went on
+  /// to read an ancestor off a dead context. Leaving the quiz during the
+  /// reveal is the ordinary way to hit that. Cancelling in [dispose] means
+  /// the work simply never runs.
+  Timer? _pendingAdvance;
+
+  /// Runs [action] after [delay] unless the screen goes away first.
+  void _advanceAfter(Duration delay, VoidCallback action) {
+    _pendingAdvance?.cancel();
+    _pendingAdvance = Timer(delay, () {
+      _pendingAdvance = null;
+      if (!mounted || _finishing) return;
+      action();
+    });
   }
 
   @override
   void dispose() {
+    _pendingAdvance?.cancel();
+    _pendingAdvance = null;
     _timer
       ..removeListener(_onTimerTick)
       ..removeStatusListener(_onTimerStatus)
@@ -239,13 +311,13 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
 
     // Long enough to read the answer that was missed, short enough that
     // the round never feels stalled. Sudden death ends here instead.
-    await Future<void>.delayed(const Duration(milliseconds: 1400));
-    if (!mounted || _finishing) return;
-    if (_mode.suddenDeath) {
-      _finish();
-    } else {
-      _next();
-    }
+    _advanceAfter(const Duration(milliseconds: 1400), () {
+      if (_mode.suddenDeath) {
+        _finish();
+      } else {
+        _next();
+      }
+    });
   }
 
   Future<void> _answer(int choice, Offset? at) async {
@@ -313,15 +385,13 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     // retired, so waiting would have left the run frozen on the question
     // it should have ended on.
     if (!correct && _mode.suddenDeath) {
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      if (mounted && !_finishing) _finish();
+      _advanceAfter(const Duration(milliseconds: 1200), _finish);
       return;
     }
 
     // Speed round keeps moving; the other modes let you read the explanation.
     if (_mode == QuizMode.speed) {
-      await Future<void>.delayed(const Duration(milliseconds: 850));
-      if (mounted && !_finishing) _next();
+      _advanceAfter(const Duration(milliseconds: 850), _next);
     }
   }
 
@@ -808,7 +878,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   }
 
   Widget _buildExplanation() {
-    final correct = _question.isCorrect(_chosen!);
+    final correct = _wasCorrect;
     final explanation = _question.explanation ?? '';
     final reference = _question.reference ?? '';
     final hasReference = reference.isNotEmpty && reference != '-';
@@ -927,7 +997,9 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
 
   Widget _buildNextButton() {
     final isLast = _index >= _questions.length - 1;
-    final ended = _mode.suddenDeath && !_question.isCorrect(_chosen!);
+    // Timing out in sudden death ends the run, exactly as a wrong answer
+    // does — _wasCorrect is false either way.
+    final ended = _mode.suddenDeath && !_wasCorrect;
     return SafeArea(
       top: false,
       child: Padding(

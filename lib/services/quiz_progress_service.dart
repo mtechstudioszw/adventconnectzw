@@ -306,7 +306,15 @@ class QuizProgressService {
   static int mistakeCount() => mistakes().length;
 
   static Future<void> addMistake(QuizQuestion question) async {
-    final list = mistakes()
+    // List.of, not the returned list directly: [mistakes] hands back a
+    // `const []` when the pool is empty or unreadable, and mutating that
+    // throws "Cannot remove from an unmodifiable list".
+    //
+    // That threw on the FIRST mistake any player ever made — the one call
+    // where the pool is guaranteed empty — and every caller is
+    // `unawaited`, so it surfaced nowhere and the pool never received its
+    // first entry. Fix Your Mistakes was permanently empty as a result.
+    final list = List<QuizQuestion>.of(mistakes())
       ..removeWhere((q) => q.id == question.id)
       ..insert(0, question);
     final trimmed = list.take(maxMistakes).toList();
@@ -319,7 +327,11 @@ class QuizProgressService {
   /// Drop a question from the pool once it's been answered correctly in
   /// Fix Your Mistakes — the list should shrink as you learn.
   static Future<void> clearMistake(String id) async {
-    final list = mistakes()..removeWhere((q) => q.id == id);
+    // List.of for the same reason as [addMistake] — the empty pool is a
+    // const list, and clearing a mistake from an already-empty pool is a
+    // perfectly ordinary thing to happen.
+    final list = List<QuizQuestion>.of(mistakes())
+      ..removeWhere((q) => q.id == id);
     await CacheService.writePref(
       _kMistakes,
       jsonEncode([for (final q in list) q.toJson()]),

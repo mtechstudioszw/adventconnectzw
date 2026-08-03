@@ -449,6 +449,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       _SettingsEntry('Notification permissions', 'Preferences',
           Icons.notifications_active_outlined, AppColors.goldAccent,
           'alerts push permission', () => context.pushNamed('notification_permissions')),
+      _SettingsEntry('Sound & haptics', 'Preferences',
+          Icons.volume_up_outlined, AppColors.primaryBlue,
+          'sound volume mute audio effects vibration haptics quiz silent',
+          () => context.pushNamed('sound_settings')),
       _SettingsEntry('Appearance', 'Preferences', Icons.brightness_6_outlined,
           AppColors.primaryBlue, 'theme dark light mode display',
           () => _pickTheme()),
@@ -812,6 +816,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                           icon: Icons.shield_moon_outlined,
                           label: 'Permissions',
                           onTap: () => context.pushNamed('permissions'),
+                        ),
+                        const _Divider(),
+                        _NavRow(
+                          icon: Icons.volume_up_outlined,
+                          label: 'Sound & haptics',
+                          onTap: () => context.pushNamed('sound_settings'),
                         ),
                         const _Divider(),
                         _NavRow(
@@ -1199,7 +1209,7 @@ class _DonationCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       'Send a voluntary gift via EcoCash. Every '
-                      'contribution keeps the app free for the '
+                      'contribution helps keep the app running for the '
                       'Adventist community.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.white.withValues(alpha: 0.85),

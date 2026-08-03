@@ -43,6 +43,47 @@ double qrOcclusionFraction({
   return (3.141592653589793 * radius * radius) / (size * size);
 }
 
+/// The brand mark seated in the middle of the friend code.
+///
+/// The NAVY disc is load-bearing, not decoration. `assets/icon/logo.png`
+/// is a WHITE wordmark on a fully transparent background (verified:
+/// corner alpha 0, ink ~#E6E6E6), so painting it straight onto the code's
+/// white centre plate put white on white — the middle of the QR was an
+/// empty white dot with no mark in it at all. The disc is what makes the
+/// mark visible, and it fails SILENTLY without one, which is why
+/// test/friend_qr_test.dart pins it.
+///
+/// The white plate around this is still the quiet zone; this disc is the
+/// mark itself, the way WhatsApp seats its green dot.
+class QrCentreMark extends StatelessWidget {
+  const QrCentreMark({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.darkNavy,
+      ),
+      clipBehavior: Clip.antiAlias,
+      // The wordmark is 2:1 and spans ~90% of the asset's width, so it
+      // would otherwise run into the disc's edge. This inset is the navy
+      // margin the founder's own artwork has.
+      padding: const EdgeInsets.symmetric(horizontal: 2.5),
+      // Decoded down first: logo.png is a 3264px launcher asset and this
+      // draws it at kQrLogo dp. 132px covers the 3x rasterisation used
+      // when sharing.
+      //
+      // contain, NOT cover: the mark must stay whole. cover would crop
+      // its ends off.
+      child: const Image(
+        image: ResizeImage(AssetImage('assets/icon/logo.png'), width: 132),
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
+
 /// Adventists meet in person — camp meeting, a rally, a visiting choir.
 /// Scanning beats spelling a name into a search box in a noisy hall.
 ///
@@ -256,19 +297,7 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
                             padding: const EdgeInsets.all(
                               (kQrPlate - kQrLogo) / 2,
                             ),
-                            child: const ClipOval(
-                              // Decoded down first: logo.png is a ~2MB
-                              // launcher asset and this draws it at
-                              // ${kQrLogo}dp. 132px covers the 3x
-                              // rasterisation used when sharing.
-                              child: Image(
-                                image: ResizeImage(
-                                  AssetImage('assets/icon/logo.png'),
-                                  width: 132,
-                                ),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
+                            child: const QrCentreMark(),
                           ),
                         ],
                       ),

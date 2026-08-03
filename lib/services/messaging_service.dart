@@ -118,6 +118,43 @@ class MessagingService {
   /// True when at least one message is queued. Cheap synchronous check.
   static bool get hasPendingOutbox => (_outbox?.isNotEmpty ?? false);
 
+  /// Drop every trace of the signed-out account's chat state.
+  ///
+  /// Called from [SessionReset.onSignOut]. Four separate leaks live here,
+  /// all of them because this class is static and the Dart isolate keeps
+  /// running across a sign-out:
+  ///
+  /// * [unreadTotal] is painted by the bottom-nav badge on EVERY tab, so
+  ///   the next account saw the previous account's unread count until its
+  ///   own inbox fetch landed. This is the badge the founder saw.
+  /// * The outbox is a Hive box of already-composed payloads with account
+  ///   A's `sender_id` baked in. [flushOutbox] inserts them verbatim, so
+  ///   after a sign-out they are retried under account B's session — RLS
+  ///   rejects them, and because the loop `break`s on the first failure a
+  ///   single orphaned row jams the queue for the new account forever.
+  ///   It also leaves A's unsent private text on a shared phone.
+  /// * `_signedMediaCache` holds live signed URLs to account A's private
+  ///   chat_media objects, which stay valid until they expire.
+  /// * Drafts are `pref:`-prefixed so the 24h janitor spares them, which
+  ///   also means [CacheService.clearUserData] spares them. They are
+  ///   unsent private text and must not outlive the session.
+  static Future<void> clearOnSignOut() async {
+    unreadTotal.value = 0;
+    _signedMediaCache.clear();
+    try {
+      await _outbox?.clear();
+    } catch (e) {
+      debugPrint('MessagingService: outbox clear failed: $e');
+    }
+    try {
+      await CacheService.deletePrefsWithPrefix('pref:draft:');
+    } catch (e) {
+      debugPrint('MessagingService: draft clear failed: $e');
+    }
+    inboxLocalRevision.value++;
+    draftRevision.value++;
+  }
+
   /// Drains the outbox. Each row is removed only if its insert succeeds —
   /// transient failures keep the row for a future retry. Returns the
   /// number of rows successfully sent.
@@ -134,6 +171,16 @@ class MessagingService {
         try {
           payload = jsonDecode(raw) as Map<String, dynamic>;
         } catch (_) {
+          await box.delete(key);
+          continue;
+        }
+        // Never replay another account's queued message. The payload
+        // carries a baked-in sender_id; if the phone signed out and a
+        // different member signed in, RLS would reject the insert and the
+        // `break` below would jam the queue for the new account forever.
+        // Drop it instead — it can never succeed under this session.
+        final me = _client.auth.currentUser?.id;
+        if (me == null || payload['sender_id'] != me) {
           await box.delete(key);
           continue;
         }

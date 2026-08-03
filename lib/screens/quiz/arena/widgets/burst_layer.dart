@@ -110,12 +110,24 @@ class BurstLayer extends StatefulWidget {
 
 class _BurstLayerState extends State<BurstLayer>
     with SingleTickerProviderStateMixin {
-  late final Ticker _ticker = createTicker(_onTick);
+  /// Created in [initState], NOT as a lazy `late final` initializer.
+  ///
+  /// `createTicker` reads TickerMode off the context. As a lazy field it
+  /// was only built on first touch — and the first touch is `_onFire`,
+  /// which never happens in a round where no burst is ever fired (leave
+  /// the arena without answering anything correctly, or simply back out).
+  /// The next touch is `_ticker.dispose()` inside [dispose], so the
+  /// ticker got CREATED during disposal and its context lookup threw
+  /// "Looking up a deactivated widget's ancestor is unsafe" —
+  /// which aborted dispose() part-way and leaked the round screen's own
+  /// timer and animation controllers with it.
+  late final Ticker _ticker;
   Duration _now = Duration.zero;
 
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker(_onTick);
     widget.controller.addListener(_onFire);
   }
 

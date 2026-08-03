@@ -23,8 +23,10 @@
 // and the shipped plate sits at 6.8% — roughly 2.6x of headroom. This
 // test fails if a later tweak spends it.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:advent_connect_zw/theme/app_colors.dart';
 import 'package:advent_connect_zw/widgets/friend_qr_sheet.dart';
 
 void main() {
@@ -59,6 +61,73 @@ void main() {
       final double_ = qrOcclusionFraction(plate: 100);
 
       expect(double_ / small, closeTo(4.0, 0.01));
+    });
+  });
+
+  group('the centre mark is actually visible', () {
+    // Regression, 3 Aug 2026. assets/icon/logo.png is a WHITE wordmark on
+    // a fully transparent background, and it was being drawn straight onto
+    // the code's WHITE centre plate — so the middle of every friend code
+    // was a blank white dot. Nothing threw and nothing looked broken in
+    // code review; it just quietly had no logo in it.
+    testWidgets('seats the mark on a filled disc, not on bare white', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: kQrLogo,
+                height: kQrLogo,
+                child: QrCentreMark(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final decoration = tester
+          .widgetList<Container>(find.byType(Container))
+          .map((c) => c.decoration)
+          .whereType<BoxDecoration>()
+          .firstWhere((d) => d.shape == BoxShape.circle);
+
+      expect(
+        decoration.color,
+        isNotNull,
+        reason: 'the disc behind the wordmark is what makes it visible',
+      );
+      expect(
+        decoration.color,
+        isNot(AppColors.white),
+        reason: 'a white disc under a white wordmark is the original bug',
+      );
+      // Contrast against the plate is the actual requirement.
+      expect(decoration.color!.computeLuminance(), lessThan(0.3));
+    });
+
+    testWidgets('keeps the whole wordmark rather than cropping it', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: kQrLogo,
+                height: kQrLogo,
+                child: QrCentreMark(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // The mark is 2:1. BoxFit.cover on a square box would crop its ends
+      // off and leave an unreadable middle slice.
+      final image = tester.widget<Image>(find.byType(Image));
+      expect(image.fit, BoxFit.contain);
     });
   });
 

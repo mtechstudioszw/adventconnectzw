@@ -200,6 +200,22 @@ class CacheService {
     await _box?.delete(key);
   }
 
+  /// Drop every `pref:` entry whose key starts with [prefix].
+  ///
+  /// [clearUserData] deliberately spares the whole `pref:` namespace so
+  /// device settings (theme, Sabbath) survive sign-out — but a handful of
+  /// `pref:` keys are USER-scoped, not device-scoped, and those leak into
+  /// the next account on a shared phone. Sign-out deletes those by prefix.
+  /// See [SessionReset.onSignOut] for the list and why each one is there.
+  static Future<void> deletePrefsWithPrefix(String prefix) async {
+    final box = _box;
+    if (box == null) return;
+    final keys =
+        box.keys.whereType<String>().where((k) => k.startsWith(prefix)).toList();
+    if (keys.isEmpty) return;
+    await box.deleteAll(keys);
+  }
+
   /// Read a cached value WITHOUT the 24h freshness gate. Used for
   /// chat caches (`inbox`, `chat:<id>`) where the user expects to
   /// see old conversations / messages offline even after a multi-day

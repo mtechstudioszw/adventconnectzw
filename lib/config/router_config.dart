@@ -106,6 +106,7 @@ import '../services/usage_analytics.dart';
 import '../screens/premium/premium_screen.dart';
 import '../screens/settings/about_screen.dart';
 import '../screens/settings/permissions_screen.dart';
+import '../screens/settings/sound_settings_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/splash/biometric_lock_screen.dart';
 import '../screens/splash/splash_screen.dart';
@@ -932,6 +933,14 @@ final GoRouter appRouter = GoRouter(
           path: 'permissions',
           name: 'permissions',
           builder: (context, state) => const PermissionsScreen(),
+        ),
+        // Sound + haptics. These controls previously existed ONLY on the
+        // Quiz Arena's boot screen, which crossfades away after ~900ms —
+        // so they were visible for under a second per launch.
+        GoRoute(
+          path: 'sound',
+          name: 'sound_settings',
+          builder: (context, state) => const SoundSettingsScreen(),
         ),
         GoRoute(
           path: 'about',

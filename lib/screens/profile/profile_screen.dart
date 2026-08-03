@@ -547,6 +547,21 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                 ),
               ),
               const SizedBox(height: 14),
+              // Subscription entry point. Shown to everyone — paying is
+              // the only route to ad-free, so a church admin sees this
+              // exactly like anyone else. Listens so the label flips the
+              // moment a purchase lands, without reopening the sheet.
+              ValueListenableBuilder<bool>(
+                valueListenable: PremiumService.isPremium,
+                builder: (context, isPremium, _) => _MoreMenuRow(
+                  icon: isPremium
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded,
+                  label: isPremium ? 'Your Premium' : 'Go Premium',
+                  accent: AppColors.goldAccent,
+                  onTap: () => Navigator.pop(ctx, 'premium'),
+                ),
+              ),
               _MoreMenuRow(
                 icon: Icons.settings_outlined,
                 label: 'Settings',
@@ -575,6 +590,9 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
     );
     if (!mounted || result == null) return;
     switch (result) {
+      case 'premium':
+        context.pushNamed('premium');
+        break;
       case 'settings':
         context.pushNamed('settings');
         break;
@@ -1226,22 +1244,11 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                       onTap: () => showFriendQrSheet(context),
                     ),
                     const SizedBox(width: 8),
-                    // Subscription entry point. Shown to everyone —
-                    // paying is the only route to ad-free, so a church
-                    // admin sees this exactly like anyone else.
-                    ValueListenableBuilder<bool>(
-                      valueListenable: PremiumService.isPremium,
-                      builder: (context, isPremium, _) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: HeaderIconButton(
-                          icon: isPremium
-                              ? Icons.star_rounded
-                              : Icons.star_outline_rounded,
-                          tooltip: isPremium ? 'Your Premium' : 'Go Premium',
-                          onTap: () => context.pushNamed('premium'),
-                        ),
-                      ),
-                    ),
+                    // NOTE: the Premium entry is deliberately NOT a fourth
+                    // header icon — three icons crowded the top-right and
+                    // a star there read as "favourite", not "subscribe".
+                    // It lives in the ⋮ sheet with the other account
+                    // actions; see [_openMoreMenu].
                     HeaderIconButton(
                       icon: Icons.settings_outlined,
                       tooltip: 'Settings',
@@ -1970,6 +1977,7 @@ class _MoreMenuRow extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.destructive = false,
+    this.accent,
   });
 
   final IconData icon;
@@ -1977,9 +1985,14 @@ class _MoreMenuRow extends StatelessWidget {
   final VoidCallback onTap;
   final bool destructive;
 
+  /// Tints one row so it reads as an offer rather than an errand. Gold is
+  /// the scheme's single-highlight colour — keep it to ONE row.
+  final Color? accent;
+
   @override
   Widget build(BuildContext context) {
-    final color = destructive ? AppColors.red : context.palette.text;
+    final color =
+        destructive ? AppColors.red : (accent ?? context.palette.text);
     return PressEffect(
       child: Material(
         color: Colors.transparent,

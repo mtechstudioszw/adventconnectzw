@@ -189,8 +189,8 @@ class _GiftHero extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.md),
           Text(
-            'Advent Connect ZW is free, and stays free. Gifts cover the '
-            'servers, the data that keeps the hymnal and Sabbath School '
+            'Every feature of Advent Connect ZW is free to use. Gifts cover '
+            'the servers, the data that keeps the hymnal and Sabbath School '
             'available offline, and the work of building what comes next.',
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.white.withValues(alpha: 0.78),
@@ -422,7 +422,8 @@ class _TransparencyNote extends StatelessWidget {
             child: Text(
               'Giving is entirely voluntary. Every feature of Advent Connect '
               'ZW stays free and fully available whether or not you give — a '
-              'gift unlocks nothing. Money is sent directly through EcoCash, '
+              'gift unlocks nothing, and it is separate from Premium, so it '
+              'does not remove ads. Money is sent directly through EcoCash, '
               'outside the app.',
               style: AppTextStyles.caption.copyWith(
                 color: palette.textMuted,

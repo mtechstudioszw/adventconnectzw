@@ -348,7 +348,11 @@ class _QuizSettingsSheetState extends State<_QuizSettingsSheet> {
                         value: QuizSfx.volume,
                         activeColor: ArenaTheme.gold,
                         label: '${(QuizSfx.volume * 100).round()}%',
-                        divisions: 10,
+                        // Silence belongs to the mute button, which can be
+                        // seen and undone. A slider that reaches 0 just
+                        // looks like the quiz has no sound.
+                        min: QuizSfx.kMinVolume,
+                        divisions: 9,
                         onChanged: QuizSfx.muted
                             ? null
                             : (v) {

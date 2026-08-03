@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'cache_service.dart';
 import 'connectivity_service.dart';
 import 'secure_storage_service.dart';
+import 'session_reset.dart';
 
 class AuthResult {
   AuthResult.success(this.user)
@@ -800,6 +801,8 @@ class AuthService {
     } catch (_) {}
 
     await SecureStorageService.clearAll();
+    await CacheService.clearUserData();
+    await SessionReset.onSignOut();
 
     if (edgeFunctionError != null) {
       // Edge Function not deployed yet, or a transient error.
@@ -832,6 +835,12 @@ class AuthService {
     // account that logs in on this device never briefly sees the previous
     // user's data. Device prefs (theme, Sabbath) are preserved.
     await CacheService.clearUserData();
+    // ...and the in-memory half of the same problem. Storage is only
+    // part of it: every static notifier survives a sign-out because the
+    // isolate keeps running, so the next account inherits the unread
+    // badge, the basket, business mode and the playing track until its
+    // own fetches land. Awaited, so it is done before the login screen.
+    await SessionReset.onSignOut();
   }
 
   static const _bannedKey = 'account_banned';

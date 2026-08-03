@@ -978,6 +978,13 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
     BiblePrefsService.revision.addListener(_onPrefs);
     BibleTranslationService.active.addListener(_onPrefs);
     BiblePrefsService.noteReadToday();
+    // Arriving from a deep link — Home's verse of the day, or a search hit.
+    // Seed the selection so the verse is visibly HIGHLIGHTED on arrival
+    // rather than merely scrolled into view: on a full page of scripture,
+    // "it's somewhere around here" is not finding it. This also raises the
+    // selection bar, so highlighting or sharing it is one tap away.
+    final target = widget.scrollToVerse;
+    if (target != null) _selected.add(target);
     _load();
   }
 

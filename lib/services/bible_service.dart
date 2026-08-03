@@ -71,6 +71,65 @@ class BibleService {
     return _books = out;
   }
 
+  /// Resolve a human reference like `John 3:16`, `1 Cor 13:4` or
+  /// `Song of Solomon 2:1` into somewhere the reader can open.
+  ///
+  /// Returned chapter and verse are **1-based**, matching what a reader
+  /// screen expects; `null` when the reference cannot be understood, so the
+  /// caller can fall back to just opening the Bible rather than guessing.
+  ///
+  /// Matching is deliberately forgiving. The devotion feed writes book
+  /// names by hand, so it produces "1 Corinthians", "1 Cor", "I Cor" and
+  /// "1Cor" for the same book, and any of them landing on "no such book"
+  /// would silently drop the member on Genesis 1.
+  static Future<BibleReference?> resolveReference(String raw) async {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+
+    final match = RegExp(
+      // book name (may start with a numeral), then chapter[:verse]
+      r'^\s*([1-3]?\s*[A-Za-z][A-Za-z\s.]*?)\s*(\d+)\s*(?::\s*(\d+))?',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (match == null) return null;
+
+    final wanted = _normaliseBookName(match.group(1) ?? '');
+    if (wanted.isEmpty) return null;
+    final chapter = int.tryParse(match.group(2) ?? '');
+    if (chapter == null || chapter < 1) return null;
+    final verse = int.tryParse(match.group(3) ?? '');
+
+    final all = await books();
+    BibleBook? found;
+    for (final book in all) {
+      final name = _normaliseBookName(book.name);
+      final abbrev = _normaliseBookName(book.abbrev);
+      // Exact first, then prefix — so "Judg" finds Judges without "Jude"
+      // ever winning, and "John" is never swallowed by "1 John".
+      if (name == wanted || abbrev == wanted) {
+        found = book;
+        break;
+      }
+      if (found == null && (name.startsWith(wanted) || wanted == abbrev)) {
+        found = book;
+      }
+    }
+    if (found == null) return null;
+    if (chapter > found.chapterCount) return null;
+
+    return BibleReference(book: found, chapter: chapter, verse: verse);
+  }
+
+  /// Lower-cased, unspaced, undotted, with leading Roman numerals folded to
+  /// digits: `I Cor.` and `1 Corinthians` both reduce toward `1cor…`.
+  static String _normaliseBookName(String raw) {
+    var v = raw.toLowerCase().replaceAll('.', '').trim();
+    v = v.replaceFirst(RegExp(r'^iii\s*'), '3 ');
+    v = v.replaceFirst(RegExp(r'^ii\s*'), '2 ');
+    v = v.replaceFirst(RegExp(r'^i\s+'), '1 ');
+    return v.replaceAll(RegExp(r'\s+'), '');
+  }
+
   /// One verse hit from [search].
   static final List<BibleSearchHit> _empty = const [];
 
@@ -116,4 +175,19 @@ class BibleService {
     s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
     return s;
   }
+}
+
+/// A resolved place in the Bible. Chapter and verse are 1-based, which is
+/// what a reader screen expects — `BibleBook.chapters` is 0-based, so the
+/// two are deliberately not interchangeable.
+class BibleReference {
+  const BibleReference({
+    required this.book,
+    required this.chapter,
+    this.verse,
+  });
+
+  final BibleBook book;
+  final int chapter;
+  final int? verse;
 }

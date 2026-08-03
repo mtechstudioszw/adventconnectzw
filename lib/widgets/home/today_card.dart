@@ -6,6 +6,8 @@ import '../../models/devotion_model.dart';
 import '../../models/hymn_model.dart';
 import '../../models/library_item_model.dart';
 import '../../models/sabbath_school_model.dart';
+import '../../screens/library/bible_tab.dart' show BibleReaderScreen;
+import '../../services/bible_service.dart';
 import '../../services/hymn_service.dart';
 import '../../services/library_launch_intent.dart';
 import '../../services/library_service.dart';
@@ -200,10 +202,27 @@ class _TodayCardState extends State<TodayCard> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  // 186 → 224. The devotion page carries the most text of the
-                  // five (verse + reference + an Ellen White quote) and was
-                  // clipping mid-sentence at the old height.
-                  height: 224,
+                  // 186 → 224, then grown with the system text size.
+                  //
+                  // The devotion page carries the most text of the five
+                  // (verse + reference + an Ellen White quote), and raising
+                  // the fixed height was only ever half a fix: the verse
+                  // already had `maxLines: 4` and an ellipsis, but a `Text`
+                  // does not drop lines to fit a height — it lays out its
+                  // four lines and the parent's `Clip.antiAlias` cuts off
+                  // whatever does not fit. So it clipped mid-sentence
+                  // instead of ellipsizing, silently and with no overflow
+                  // stripe, and every step up in system text size made it
+                  // worse. Scaling the box is what actually keeps the
+                  // ellipsis reachable.
+                  //
+                  // Clamped at 1.6: past that the card would push the rest
+                  // of the feed off screen, and the "Read the full
+                  // devotion" hint below is the honest way out.
+                  height: 224 *
+                      MediaQuery.textScalerOf(context)
+                          .scale(1.0)
+                          .clamp(1.0, 1.6),
                   child: PageView.builder(
                     controller: _pc,
                     itemCount: slides.length,
@@ -338,7 +357,10 @@ class _DevotionPage extends StatelessWidget {
         reference: devotion.bibleRef,
         text: devotion.bibleText,
       ),
-      onTap: () => context.pushNamed('library', extra: 0),
+      // Opens the Bible AT the verse, scrolled to it and highlighted —
+      // rather than dropping the member at the top of the Library to find
+      // it themselves, which is what tapping "verse of the day" used to do.
+      onTap: () => _openVerse(context, devotion.bibleRef),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -384,6 +406,39 @@ class _DevotionPage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Open the Bible reader at [reference], scrolled to the verse.
+///
+/// The reference is free text written by whoever authored the devotion, so
+/// it can be anything from "John 3:16" to "1 Cor. 13:4". When it cannot be
+/// resolved we fall back to opening the Bible tab — the old behaviour —
+/// rather than guessing at a chapter and landing somewhere wrong.
+Future<void> _openVerse(BuildContext context, String reference) async {
+  final navigator = Navigator.of(context);
+  final router = GoRouter.of(context);
+  BibleReference? target;
+  try {
+    target = await BibleService.resolveReference(reference);
+  } catch (_) {
+    target = null;
+  }
+  if (target == null) {
+    router.pushNamed('library', extra: 0);
+    return;
+  }
+  await navigator.push(
+    MaterialPageRoute(
+      builder: (_) => BibleReaderScreen(
+        book: target!.book,
+        // BibleReaderScreen indexes chapters AND verses from 0;
+        // BibleReference is 1-based because that is how references are
+        // written. Convert both, or "John 3:16" lands on verse 17.
+        chapter: target.chapter - 1,
+        scrollToVerse: target.verse == null ? null : target.verse! - 1,
+      ),
+    ),
+  );
 }
 
 /// Share affordance on the devotion page's eyebrow row.

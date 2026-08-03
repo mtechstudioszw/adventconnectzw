@@ -7,6 +7,7 @@ import '../../services/feed_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../utils/date_format.dart';
 import '../cached_image.dart';
 import '../verified_tick.dart';
 
@@ -585,6 +586,18 @@ class _CommentRow extends StatelessWidget {
                         ),
                         if (comment.authorIsVerified)
                           const VerifiedTick(size: 13),
+                        // Comments carried no time at all, so a thread read
+                        // as though it had all happened at once — you could
+                        // not tell a reply from this morning from one left
+                        // last year.
+                        const SizedBox(width: 6),
+                        Text(
+                          formatTimeAgo(comment.createdAt),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: context.palette.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
                         if (isOwner) ...[
                           const SizedBox(width: 6),
                           Container(

@@ -655,22 +655,41 @@ class _SearchScreenState extends State<SearchScreen>
                   onSubmitted: _submit,
                   textInputAction: TextInputAction.search,
                   style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                  cursorColor: AppColors.primaryBlue,
+                  cursorRadius: const Radius.circular(2),
                   decoration: InputDecoration(
-                    hintText:
-                        'Search for friends, churches, events, products...',
+                    // Short on purpose. The old hint —
+                    // "Search for friends, churches, events, products..." —
+                    // is about 45 characters, and between the back button,
+                    // the search glyph and the clear button this field is
+                    // roughly 230dp wide on a 360dp phone. It never once
+                    // fitted: every member saw it truncated mid-word, which
+                    // is the single cheapest-looking thing on the screen.
+                    // The filter chips directly underneath already name
+                    // every scope, so the list was redundant as well as too
+                    // long.
+                    hintText: 'Search Advent Connect',
                     hintStyle: AppTextStyles.bodyMedium.copyWith(
                       color: context.palette.textMuted,
                       fontSize: 14,
                     ),
                     // The glyph picks up the accent with the ring, so the
                     // whole control reads as one focused object.
-                    prefixIcon: AnimatedContainer(
+                    //
+                    // Tween, not AnimatedContainer: the colour lives on the
+                    // Icon, which is the CHILD, so the container animated
+                    // nothing and the accent snapped on and off.
+                    prefixIcon: TweenAnimationBuilder<double>(
                       duration: AppMotion.maybe(context, AppMotion.quick),
-                      child: Icon(
+                      curve: AppMotion.ease,
+                      tween: Tween(begin: 0, end: _focused ? 1 : 0),
+                      builder: (context, t, _) => Icon(
                         Icons.search,
-                        color: _focused
-                            ? AppColors.primaryBlue
-                            : context.palette.textMuted,
+                        color: Color.lerp(
+                          context.palette.textMuted,
+                          AppColors.primaryBlue,
+                          t,
+                        ),
                         size: 20,
                       ),
                     ),
@@ -702,9 +721,12 @@ class _SearchScreenState extends State<SearchScreen>
                             ),
                     ),
                     isDense: true,
+                    // A little more air. At vertical 12 / horizontal 4 the
+                    // text sat tight against the glyph and the pill read as
+                    // cramped rather than generous.
                     contentPadding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 4,
+                      vertical: 14,
+                      horizontal: 6,
                     ),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,

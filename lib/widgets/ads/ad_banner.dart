@@ -120,14 +120,58 @@ class _AdBannerState extends State<AdBanner> {
   Widget build(BuildContext context) {
     if (PremiumService.isActive) return const SizedBox.shrink();
     if (!_loaded || _ad == null) return const SizedBox.shrink();
-    final banner = SizedBox(
+    return AdBannerFrame(
       width: _ad!.size.width.toDouble(),
       height: _ad!.size.height.toDouble(),
+      padding: widget.padding,
       child: AdWidget(ad: _ad!),
     );
-    final centered = Center(child: banner);
-    return widget.padding == null
-        ? centered
-        : Padding(padding: widget.padding!, child: centered);
+  }
+}
+
+/// The banner's footprint: full width, and **exactly** the ad's height.
+///
+/// Split out of [AdBanner] so the layout can be tested without the AdMob
+/// plugin or a real fill — the bug below is pure layout, and with the
+/// plugin in the way it was untestable and shipped twice.
+///
+/// `heightFactor: 1` is the whole fix. This used to be a bare
+/// `Center(child: banner)`, and a bare [Center] only shrink-wraps when its
+/// incoming height constraint is unbounded. Inside a `Column` it is — which
+/// is why Home and Marketplace were always fine. But `Scaffold` lays
+/// `bottomNavigationBar` out with a LOOSE constraint whose max is the whole
+/// scaffold height, and that counts as bounded, so `Center` took all of it:
+/// a 50dp ad in a full-screen bar, with the screen behind it unreachable.
+///
+/// Every screen that placed the banner directly in `bottomNavigationBar`
+/// had it — Events and Churches (pushed, so `MainScaffold.showNav` is
+/// false), Jobs, and Job details. The earlier fix added `HideOnScroll` to
+/// that branch, which made the full-height bar *collapsible* and so looked
+/// like progress, but it never touched why it was full height.
+class AdBannerFrame extends StatelessWidget {
+  const AdBannerFrame({
+    super.key,
+    required this.width,
+    required this.height,
+    required this.child,
+    this.padding,
+  });
+
+  final double width;
+  final double height;
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final banner = Center(
+      // Fill the width so the ad stays centred; hug the height so no
+      // parent's spare vertical space can ever be claimed.
+      heightFactor: 1,
+      child: SizedBox(width: width, height: height, child: child),
+    );
+    return padding == null
+        ? banner
+        : Padding(padding: padding!, child: banner);
   }
 }

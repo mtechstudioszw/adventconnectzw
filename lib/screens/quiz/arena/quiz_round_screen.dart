@@ -8,6 +8,7 @@ import '../../../services/ads/rewarded_ad_manager.dart';
 import '../../../services/quiz_cloud_service.dart';
 import '../../../services/quiz_progress_service.dart';
 import '../../../services/quiz_service.dart';
+import '../../../services/quiz_music.dart';
 import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
@@ -159,6 +160,9 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     _counting = widget.autoStart;
     if (widget.autoStart) {
       QuizSfx.init();
+      // The soundtrack runs for the whole round and loops. It stands down
+      // by itself if the member's own music is playing.
+      unawaited(QuizMusic.start());
       RewardedAdManager.loadAd();
       QuizProgressService.markSeen(_questions);
       _persist();
@@ -208,6 +212,10 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   void dispose() {
     _pendingAdvance?.cancel();
     _pendingAdvance = null;
+    // The round owns the soundtrack, so leaving the round stops it — by
+    // any route, including backing out mid-question. Fire-and-forget: a
+    // dispose must not await.
+    unawaited(QuizMusic.stop());
     _timer
       ..removeListener(_onTimerTick)
       ..removeStatusListener(_onTimerStatus)

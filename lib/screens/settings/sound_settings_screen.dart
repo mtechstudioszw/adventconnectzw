@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/quiz_music.dart';
 import '../../services/quiz_sfx.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -38,6 +39,18 @@ class _SoundSettingsScreenState extends State<SoundSettingsScreen> {
 
   Future<void> _setVolume(double v) async {
     await QuizSfx.setVolume(v);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _setMusic(bool on) async {
+    await QuizMusic.setEnabled(on);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _setMusicVolume(double v) async {
+    await QuizMusic.setVolume(v);
     if (!mounted) return;
     setState(() {});
   }
@@ -90,6 +103,28 @@ class _SoundSettingsScreenState extends State<SoundSettingsScreen> {
                         // Playing on release rather than on every drag
                         // frame — otherwise dragging machine-guns the clip.
                         onChangeEnd: () => QuizSfx.play(QuizSound.tap),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _Card(
+                    children: [
+                      _ToggleTile(
+                        icon: Icons.music_note_rounded,
+                        label: 'Quiz music',
+                        subtitle:
+                            'A soundtrack while you play. It steps aside on '
+                            'its own if you are already playing your own '
+                            'music.',
+                        value: QuizMusic.enabled,
+                        onChanged: _setMusic,
+                      ),
+                      const _Divider(),
+                      _VolumeTile(
+                        enabled: QuizMusic.enabled,
+                        value: QuizMusic.volume,
+                        min: QuizMusic.kMinVolume,
+                        onChanged: _setMusicVolume,
                       ),
                     ],
                   ),
@@ -228,13 +263,23 @@ class _VolumeTile extends StatelessWidget {
     required this.enabled,
     required this.value,
     required this.onChanged,
-    required this.onChangeEnd,
+    this.onChangeEnd,
+    this.min = QuizSfx.kMinVolume,
   });
 
   final bool enabled;
   final double value;
   final ValueChanged<double> onChanged;
-  final VoidCallback onChangeEnd;
+
+  /// Optional preview on release. The effects slider plays a tap so the
+  /// new level demonstrates itself; the music slider needs no preview
+  /// because the loop is already audible while you drag it.
+  final VoidCallback? onChangeEnd;
+
+  /// Each control has its own floor — see [QuizSfx.kMinVolume] and
+  /// [QuizMusic.kMinVolume]. Neither may reach silence: that is what the
+  /// toggle above it is for.
+  final double min;
 
   @override
   Widget build(BuildContext context) {
@@ -251,13 +296,15 @@ class _VolumeTile extends StatelessWidget {
                 // Floored above silence on purpose: turning sound OFF is
                 // the toggle above, which says so and can be turned back
                 // on. A slider that reaches zero just looks broken.
-                min: QuizSfx.kMinVolume,
+                min: min,
                 max: 1.0,
                 divisions: 9,
-                value: value.clamp(QuizSfx.kMinVolume, 1.0),
+                value: value.clamp(min, 1.0),
                 label: '${(value * 100).round()}%',
                 onChanged: enabled ? onChanged : null,
-                onChangeEnd: enabled ? (_) => onChangeEnd() : null,
+                onChangeEnd: (enabled && onChangeEnd != null)
+                    ? (_) => onChangeEnd!()
+                    : null,
               ),
             ),
             Icon(Icons.volume_up_rounded, size: 19, color: palette.textMuted),

@@ -1,4 +1,5 @@
 import 'package:advent_connect_zw/screens/settings/sound_settings_screen.dart';
+import 'package:advent_connect_zw/services/quiz_music.dart';
 import 'package:advent_connect_zw/services/quiz_sfx.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,32 +15,51 @@ import 'package:flutter_test/flutter_test.dart';
 Widget _screen() => const MaterialApp(home: SoundSettingsScreen());
 
 void main() {
-  testWidgets('offers effects, volume and vibration', (tester) async {
+  testWidgets('offers effects, music and vibration', (tester) async {
     await tester.pumpWidget(_screen());
     await tester.pumpAndSettle();
 
     expect(find.text('Sound effects'), findsOneWidget);
+    expect(find.text('Quiz music'), findsOneWidget);
     expect(find.text('Vibration'), findsOneWidget);
-    expect(find.byType(Slider), findsOneWidget);
-    // Two independent switches — muting sound must not also kill haptics.
-    expect(find.byType(Switch), findsNWidgets(2));
+    // Three independent switches. Muting the effects must not also kill
+    // the music or the haptics — that was the founder's whole ask.
+    expect(find.byType(Switch), findsNWidgets(3));
+    // One volume slider each for effects and music.
+    expect(find.byType(Slider), findsNWidgets(2));
   });
 
-  testWidgets('the volume slider cannot be dragged to silence', (
-    tester,
-  ) async {
+  testWidgets('no volume slider can be dragged to silence', (tester) async {
     await tester.pumpWidget(_screen());
     await tester.pumpAndSettle();
 
-    final slider = tester.widget<Slider>(find.byType(Slider));
+    final sliders = tester.widgetList<Slider>(find.byType(Slider)).toList();
+    expect(sliders, hasLength(2));
 
+    for (final slider in sliders) {
+      expect(
+        slider.min,
+        greaterThan(0.0),
+        reason: 'silence belongs to the toggle above it, which can be undone',
+      );
+      expect(slider.value, greaterThanOrEqualTo(slider.min));
+    }
+
+    // Each control keeps its own floor rather than sharing one.
+    expect(sliders.first.min, QuizSfx.kMinVolume);
+    expect(sliders.last.min, QuizMusic.kMinVolume);
+  });
+
+  testWidgets('the music sits under the effects by default', (tester) async {
+    await tester.pumpWidget(_screen());
+    await tester.pumpAndSettle();
+
+    final sliders = tester.widgetList<Slider>(find.byType(Slider)).toList();
     expect(
-      slider.min,
-      QuizSfx.kMinVolume,
-      reason: 'silence belongs to the mute toggle, which can be undone',
+      sliders.last.value,
+      lessThan(sliders.first.value),
+      reason: 'a soundtrack competing with the answer sounds reads as muddy',
     );
-    expect(slider.min, greaterThan(0.0));
-    expect(slider.value, greaterThanOrEqualTo(slider.min));
   });
 
   testWidgets('turning sound off leaves vibration alone', (tester) async {

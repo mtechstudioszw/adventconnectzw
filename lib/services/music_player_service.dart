@@ -162,6 +162,16 @@ class MusicPlayerService {
 
   bool get hasQueue => _queue.isNotEmpty;
 
+  /// True when the member's OWN music is actually playing right now.
+  ///
+  /// Deliberately reads `_player` directly instead of [player]: that getter
+  /// CONSTRUCTS the player on first touch, and a player binds to whichever
+  /// `JustAudioPlatform` was current when it was built. Creating one just
+  /// to ask a yes/no question is precisely how background playback has been
+  /// broken three times. Nobody is playing anything if the player does not
+  /// exist yet, so `false` is both cheap and correct.
+  bool get isPlayingNow => _player?.playing ?? false;
+
   /// Bumped on queue / track changes so widgets outside a StreamBuilder can
   /// rebuild (the mini bar lives above the navigator).
   final ValueNotifier<int> revision = ValueNotifier<int>(0);

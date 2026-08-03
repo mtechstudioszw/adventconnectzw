@@ -127,6 +127,10 @@ class QuizSfx {
     await CacheService.writePref(_kHaptics, value ? '0' : '1');
   }
 
+  /// The arena's audio contract, shared with [QuizMusic] so there is ONE
+  /// definition of "never steal focus" rather than two that can drift.
+  static AudioContext get sharedAudioContext => _context;
+
   static AudioContext get _context => AudioContext(
         android: const AudioContextAndroid(
           isSpeakerphoneOn: false,

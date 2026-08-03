@@ -35,7 +35,30 @@ class DonateScreen extends StatelessWidget {
   /// The ministry's EcoCash line. Mirrors the number Settings has used since
   /// the first release — change it in both places, or neither.
   static const String ecoCashNumber = '0778 092 494';
-  static const String ecoCashName = 'Advent Connect ZW';
+
+  /// **The name EcoCash itself will show.**
+  ///
+  /// This used to read "Advent Connect ZW", which is the name of the app and
+  /// NOT the name the line is registered to. EcoCash displays the registered
+  /// account holder at the confirmation step, so a member following these
+  /// instructions saw a personal name appear where the app had promised an
+  /// organisation — at the exact moment they were about to part with money.
+  ///
+  /// That is a trust problem before it is anything else: the natural reading
+  /// is "I have the wrong number", and the transfer gets abandoned. It is
+  /// also the one thing on this screen that could be called misleading, and
+  /// Play's Deceptive Behavior policy is about claims that do not match
+  /// reality — not about who happens to hold the account.
+  ///
+  /// So the app now says the true name up front and explains the
+  /// relationship. Honest is also higher-converting here: nobody hesitates
+  /// at a confirmation screen that says exactly what they were told it would.
+  static const String ecoCashName = 'Tanatswa Michael Mikuwa';
+
+  /// Why that name and not the app's.
+  static const String ecoCashNameNote =
+      'EcoCash will show this name when you confirm — it is the personal '
+      'line of the developer who builds and pays for Advent Connect ZW.';
 
   void _snack(BuildContext context, String message, {bool good = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -85,7 +108,8 @@ class DonateScreen extends StatelessWidget {
           const ScreenHero(
             title: 'Support this ministry',
             tagline: 'Give',
-            subtitle: 'A voluntary gift — never required, never rewarded.',
+            subtitle: 'Voluntary, never required, and it unlocks nothing — '
+                'it just keeps the app alive.',
             fallbackRoute: 'home',
           ),
           Expanded(
@@ -104,6 +128,7 @@ class DonateScreen extends StatelessWidget {
                   child: _NumberCard(
                     number: ecoCashNumber,
                     name: ecoCashName,
+                    nameNote: ecoCashNameNote,
                     onCopy: () => _copyNumber(context),
                   ),
                 ),
@@ -178,7 +203,7 @@ class _GiftHero extends StatelessWidget {
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: Text(
-                  'Blessed by the app?',
+                  'Help keep it running',
                   style: AppTextStyles.titleLarge.copyWith(
                     color: AppColors.white,
                     fontWeight: FontWeight.w800,
@@ -188,13 +213,28 @@ class _GiftHero extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpace.md),
+          // Concrete, not abstract. "Support us" asks for charity; naming
+          // the actual bills asks for a share of something real, and the
+          // things named here are the ones members can see for themselves.
           Text(
-            'Every feature of Advent Connect ZW is free to use. Gifts cover '
-            'the servers, the data that keeps the hymnal and Sabbath School '
-            'available offline, and the work of building what comes next.',
+            'Advent Connect ZW is built and paid for by one person, and every '
+            'feature stays free for everyone. There are real bills behind it: '
+            'the servers that carry your posts and messages, the storage that '
+            'keeps the Bible, the hymnal and Sabbath School working offline, '
+            'and the hours that go into what comes next.',
             style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.white.withValues(alpha: 0.78),
+              color: AppColors.white.withValues(alpha: 0.80),
               height: 1.55,
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          Text(
+            'If the app has been a blessing to you, a gift of any size helps '
+            'carry it for the next person. Nothing is too small.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.goldAccent,
+              height: 1.55,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -207,11 +247,13 @@ class _NumberCard extends StatelessWidget {
   const _NumberCard({
     required this.number,
     required this.name,
+    required this.nameNote,
     required this.onCopy,
   });
 
   final String number;
   final String name;
+  final String nameNote;
   final VoidCallback onCopy;
 
   @override
@@ -251,11 +293,24 @@ class _NumberCard extends StatelessWidget {
                       letterSpacing: 0.5,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
+                  // The registered account holder, given real weight rather
+                  // than muted footnote styling — this is the name the
+                  // member is about to see in EcoCash, and matching it is
+                  // what stops them abandoning the transfer.
                   Text(
                     name,
-                    style: AppTextStyles.bodySmall.copyWith(
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    nameNote,
+                    style: AppTextStyles.caption.copyWith(
                       color: palette.textMuted,
+                      height: 1.45,
                     ),
                   ),
                 ],
@@ -334,8 +389,13 @@ class _HowToSend extends StatelessWidget {
     'Choose "Send Money" → "To Mobile"',
     'Enter the number above',
     'Enter any amount you would like to give',
-    'Confirm with your PIN',
+    // Named explicitly at the step where it appears, so the confirmation
+    // screen holds no surprises. A member who was not told this hesitates
+    // here and cancels.
+    'Check the name shown is $_holder, then confirm with your PIN',
   ];
+
+  static const String _holder = DonateScreen.ecoCashName;
 
   @override
   Widget build(BuildContext context) {
@@ -422,9 +482,12 @@ class _TransparencyNote extends StatelessWidget {
             child: Text(
               'Giving is entirely voluntary. Every feature of Advent Connect '
               'ZW stays free and fully available whether or not you give — a '
-              'gift unlocks nothing, and it is separate from Premium, so it '
-              'does not remove ads. Money is sent directly through EcoCash, '
-              'outside the app.',
+              'gift unlocks nothing, earns no badge, and is separate from '
+              'Premium, so it does not remove ads. Money is sent directly '
+              'through EcoCash, outside the app, to the account named above. '
+              'Advent Connect ZW is not a registered charity, so a gift is '
+              'not a tax-deductible donation and is not tithe — give your '
+              'tithe to your local church.',
               style: AppTextStyles.caption.copyWith(
                 color: palette.textMuted,
                 height: 1.5,

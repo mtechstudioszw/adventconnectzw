@@ -1199,9 +1199,9 @@ class _DonationCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Send a voluntary gift via EcoCash. Every '
-                      'contribution helps keep the app running for the '
-                      'Adventist community.',
+                      'Every feature here is free, and the servers are not. '
+                      'A voluntary EcoCash gift of any size helps keep '
+                      'Advent Connect running for the whole community.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.white.withValues(alpha: 0.85),
                         fontSize: 12.5,

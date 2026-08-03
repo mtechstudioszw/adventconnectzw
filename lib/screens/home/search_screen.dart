@@ -603,7 +603,10 @@ class _SearchScreenState extends State<SearchScreen>
     return FlatStatusBar(
       child: Container(
         color: context.palette.scaffoldBg,
-        padding: const EdgeInsets.fromLTRB(8, 4, 12, 10),
+        // Sits straight under the status bar. The field is the subject of
+        // this screen, so it starts as high as the inset allows — 2dp of
+        // breathing room, not a band of empty canvas above it.
+        padding: const EdgeInsets.fromLTRB(8, 2, 12, 6),
         child: Row(
           children: [
             IconButton(
@@ -773,11 +776,13 @@ class _SearchScreenState extends State<SearchScreen>
         ? _recent
         : _recent.take(5).toList(growable: false);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+      // Was 8 here + 16 on the first section = 24dp of stacked dead space
+      // under the field before anything readable started.
+      padding: const EdgeInsets.fromLTRB(0, 2, 0, 24),
       children: [
         if (_recent.isEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

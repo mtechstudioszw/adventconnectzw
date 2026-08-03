@@ -4,183 +4,248 @@ Paste this whole file as the first message of the next session.
 
 ---
 
-## Where things stand (3 Aug 2026, session 3)
+## Where things stand (3 Aug 2026, session 4)
 
-**18 of the 22 done. 6 open: #2, #13, #14, #8, #9, and ban-evasion.**
+**The founder's 22-item batch is CLEAR.** #2, #8, #9, #13 and #14 all shipped
+this session. Nothing from the batch is outstanding.
 
-`flutter analyze` clean apart from the **same 4 pre-existing infos**.
+**Everything is committed AND pushed.** `main` == `origin/main`. Four commits
+this session:
 
-**Nothing is committed.** Every change from this session is in the working
-tree. First job: review `git -C adventconnectzw status`, then commit and
-push so CI can build an APK — the founder needs a device build to test the
-live multiplayer, the ad-banner fix and the quiz sound.
+| Commit | What |
+|---|---|
+| `d06d43b` | #8 / #9 — the players float |
+| `a03d1d9` | #13 / #14 — people rails + feed ordering |
+| `7f9db65` | #2 — composer sheet |
+| _(this file)_ | handoff |
 
-**Tests were written but NOT RUN.** `flutter test` takes >10 minutes on this
-machine and the founder interrupted a run. Three new test files need one CI
-run: `test/ad_banner_height_test.dart`,
-`test/sound_settings_persistence_test.dart`, `test/bible_reference_test.dart`.
-Verify with `flutter analyze` during a session, never `flutter test`.
+CI builds a debug APK on every push to `main` and publishes it to the
+**Latest debug build** release. `flutter analyze` clean apart from the **same
+4 pre-existing infos**.
 
-## Read first
+## Two things the founder decided at the end of session 4
 
-1. `CLAUDE.md` — headers are **FLAT on `palette.scaffoldBg`, never navy**.
-2. Memory: `quiz-live-multiplayer`, `ad-banner-center-trap`,
-   `settings-read-unloaded-statics`, `flutter-test-too-slow-here`,
-   `founder-bug-batch-aug3`, `founder-quality-bar`,
-   `motion-must-not-cost-time`, `audio-background-playback-fix`.
-3. `git -C adventconnectzw log --oneline -12`
+1. **Ban-evasion is DEFERRED entirely.** Not started. See the section below
+   for what the premise check found — it is bigger than the brief assumed.
+2. **The admin console is NOT started yet.** The founder wants to test the
+   new APK on a device first. Bugs found there jump the queue.
 
-## The rule that keeps paying — repeat it
-
-**Verify the premise before building.** It paid five times this session:
-
-- **#3 A2** — the soundtrack was not missing. It was on disk as
-  `arena_loop.mp3.**mpeg**`. A double extension, and a missing asset is a
-  supported silent state, so it never announced itself.
-- **#7** — the shipped `HideOnScroll` fix made a full-height bar
-  *collapsible*, which read as progress. The bar was full height because a
-  bare `Center` does not shrink-wrap under `bottomNavigationBar`'s
-  loose-but-bounded constraints.
-- **#10** — the main search field had already been redesigned. What was
-  actually cheap-looking was a 45-character hint truncating mid-word in a
-  ~230dp box.
-- **#1** — the devotion verse already had `maxLines` + ellipsis. The fixed
-  224px height was clipping it, and `Text` does not drop lines to fit.
-- **#19** — **not a bug.** Since patch_180, 3 of 3 signups have answered.
-  The founder cannot see it because their account is older than the
-  deliberate 14-day window. **Do not "fix" this.**
+**So the next session starts by asking what the device test found.**
 
 ---
 
-# DB patches applied this session
+# THE RULE THAT KEEPS PAYING — repeat it
 
-All applied to production and verified. **Do not re-apply.**
+**Verify the premise before building.** Session 3 turned five "build this"
+items into "already built" or "actually a different bug". Session 4 did it
+four more times:
 
-| Patch | What |
-|---|---|
-| **183** | `quiz_profiles`, `quiz_matches`, `quiz_match_keys`, `quiz_match_answers`, all live-match RPCs, resetting weekly leaderboard |
-| **184** | `messages.sent_at` + clamp trigger + `my_inbox_previews` rewrite |
-| **185** | `notify_church_admin_status` also notifies the nominating primary admin |
-| **186** | `account_deletion_surveys` + `admin_deletion_reasons` |
-| **187** | Maintenance mode: `maintenance_active()`, `admin_set_maintenance()`, 26 `maintenance_block` triggers |
+- **"Nothing is committed"** — it was all committed *and* pushed. `main` and
+  `origin/main` were both at `3de9a2c`, clean tree, no stash. The three
+  "never run" test files had already run in CI too: `build-apk.yml` does
+  analyze → test → build → release, so a red test never reaches the release
+  step.
+- **#8 "shuffle does not work"** — real, and broken **three** ways at once.
+  See below.
+- **#8 "download-for-offline does not work"** — the download code was fine.
+  **Sign-out was deleting the index.**
+- **#8 "hide the mini player when the full player opens"** — already built
+  and working, for both music and Watch. Left alone.
+
+---
+
+# What shipped in session 4
+
+## #8 / #9 — the players
+
+**Shuffle** was broken three separate ways simultaneously: the Music tab
+loaded the queue at index 0 so Shuffle always opened on the same track;
+`player.shuffle()` **pins the current item to the front** of the new order,
+so track 0 led the shuffled order too; and it only shuffled
+`if (!shuffleModeEnabled)`, so a second press reused the old order.
+`MusicPlayerService.shuffleAll` picks the start at random and re-deals
+unconditionally, which turns the pinning into an advantage.
+
+**Downloads** — `CacheService.clearUserData()` deletes every key that does
+not start with `pref:`, and it runs on every sign-out. The index was a bare
+`music_downloads_v1`. Files stayed on disk, orphaned and invisible; the
+Downloaded filter went to zero and playback reverted to streaming. Index is
+now `pref:`-prefixed, the old key is read once, and startup **re-adopts
+orphaned files**. Playback speed had the same bug. Likes / history /
+playlists / resume-queue stay unprefixed **on purpose** — personal, and a
+shared phone must not hand them to the next account.
+
+**Both players are draggable.** One `FloatingDock`
+(`lib/widgets/media/floating_dock.dart`) carries the physics: the music card
+parks top/middle/bottom, the Watch window parks in a corner and resizes.
+The music mini is a **card** now, not a full-width bar. The Watch mini is a
+real 16:9 floating window with the live embed inside.
+
+Follow button removed from the video screen, along with the subscription
+round-trip only it needed.
+
+## #13 / #14 — home / feed
+
+**#14 was one line.** `_buildDiscoveryCards()` sorts modules by onboarding
+interest and a per-viewer seed — and `_buildFeedChildren` then re-shuffled
+the result, throwing it away. The shuffle was seeded so it looked
+deliberate; what it meant was that onboarding interests did nothing.
+
+**The other half of #14 was pacing.** One card every five posts is right for
+a full feed. With this backlog it meant one module interleaved and the rest
+stacked below the last post where nobody scrolls. Spacing now derives from
+the actual post count, capped at the old five.
+
+**#13** — two people rails at different depths, drawing from disjoint slices
+of an 18-person pool. The second does not build unless it has 3+ people.
+Slots can declare a `_SlotDepth`, and depth outranks interest weighting.
+
+**Endless scroll — the answer given:** the feed already pages properly
+(keyset cursor, auto-loads 900px from the bottom) and stops with "You're all
+caught up". It does **not** recycle read posts and should not — at this size
+that is obvious within one scroll. The end-of-feed card now offers *Meet
+people* and *Events* instead of being a dead end.
+
+## #2 — composer
+
+The sheet never said **who** was posting — and the same sheet publishes AS A
+CHURCH when opened from a church page. Identity row (avatar, name, audience
+under the name; gold tick + "Church update · everyone" for churches),
+borderless larger field, tonal toolbar chips, and the autosaved draft now
+announces itself with a *Start fresh* escape.
+
+---
+
+# BAN-EVASION — DEFERRED, and the premise check that matters
+
+**Do not start this without re-reading this section.** The brief assumes
+more infrastructure than exists.
+
+- **A ban is a single boolean, `profiles.is_banned`.** There is no ban
+  ledger — no who, when, why, or by whom. `database/schema.sql:86`.
+- **The app collects NO device signals at all.** No `device_info_plus`, no
+  `package_info_plus`, no install id, nothing. Verified against `pubspec.yaml`
+  and all of `lib/`.
+- **Therefore detection is retroactive-blind.** A new signup can only be
+  matched against signals that were *already being recorded* before the ban.
+  Everyone banned to date has no fingerprint and will never be caught by
+  this. The feature's value starts on ship day.
+- **It is privacy-sensitive.** Collecting device identifiers changes the
+  Play Store data-safety declaration.
+
+Recommended staging when it is picked up: **signal collection + a real ban
+ledger first**, so the clock starts; scoring, the restricted-user screen with
+**Contact Support**, and the admin review queue on top of real data
+afterwards. Thresholds tuned against zero data are guesswork.
+
+Design constraints from the founder that still stand: risk **scoring**, never
+a single identifier; Low = allow, Medium = extra verification, High =
+restrict + review; admin dashboard needs confidence score, reasons,
+approve/reject and **mark as permanent false positive**; expect false
+positives and **design the appeal path first**.
+
+---
+
+# WEB ADMIN DASHBOARD — still not started
+
+Founder, end of session 4: **test the APK on a device first.** Ask what the
+device test found before proposing a start date.
+
+Settled, do not re-litigate: **web admin only**; **`admin-web/` is the app in
+real use** and is what is being replaced; **stack is Next.js in `admin/`**;
+**deploy to Vercel**; **do not delete `admin-web/`** until the replacement is
+signed off.
+
+Backend the console will need that already exists:
+`admin_set_maintenance(bool, text, timestamptz)` (owner-role toggle with a
+message + optional end time) and `admin_deletion_reasons(p_days)` for the #18
+exit-survey chart.
+
+---
+
+# DB patches — 183 to 187 are APPLIED. Do not re-apply.
+
+183 quiz live matches · 184 `messages.sent_at` · 185 notify nominating admin ·
+186 deletion exit survey · 187 maintenance mode.
 
 **Production maintenance mode is OFF** (`app_config.maintenance_mode = '0'`).
-Confirmed after testing.
+Leave it off.
+
+**No DB changes were made in session 4.** Production schema is untouched.
 
 ---
 
-# THE REMAINING BATCH — 6 items
+# Tests
 
-## #8 / #9 — PLAYERS (large, and the most fragile area here)
+**`flutter test` is only slow with NO ARGUMENTS.** Named files are fast —
+three files / 12 tests ran in **5 seconds** this session. Run the files you
+touched, by path, every time. Never run the bare suite; let CI do that.
 
-**Music (#8):** full player must hide the mini player and restore it on
-exit; mini player draggable to top/middle/bottom; closing it must **stop
-playback immediately**; **shuffle does not work**; **download-for-offline
-does not work**; its shape is wrong — a long horizontal bar where it should
-read like a small video card.
+New this session: `test/floating_dock_test.dart`,
+`test/music_downloads_survive_signout_test.dart`. Both pass, along with
+`test/composer_sheet_test.dart` (which caught two real breakages in the
+composer redesign — an unguarded `AuthService.currentUser` and a Row that
+would overflow at 2.5x text scale).
 
-**Watch (#9):** same hide/show rule; a real YouTube-style floating player,
-draggable and resizable with video playing inside; **remove the follow
-button**.
-
-Beware `audio-background-playback-fix`: `PlayerMode.mediaPlayer` (not
-lowLatency) and `AndroidAudioFocus.none` are deliberate. Never swap the
-platform instance — that has killed background playback three times.
-
-## #13 / #14 — HOME / FEED
-
-- **#13** Two rows of "People to meet", surfaced at different times. They
-  also asked whether the feed can scroll endlessly — at 171 users the
-  honest answer is recycle/blend, not fake infinite. **Say so.**
-- **#14** Make the feed algorithmic so modules reliably reappear. See
-  memory `feed-ranking-findings`.
-
-## #2 — COMPOSER SHEET
-
-Redesign Home → "share something": `lib/widgets/home/composer_sheet.dart`.
-
-## BAN-EVASION DETECTION (#21, the feature half)
-
-Risk **scoring**, never a single identifier: device install id, push token,
-IP patterns, device model/OS, signup timing, reused phone/email, repeat
-signups after a ban. Low = allow, Medium = extra verification, High =
-restrict + review. Flagged users get a clear message with a prominent
-**Contact Support** button. Admin dashboard needs confidence score, reasons,
-approve/reject, and **mark as permanent false positive**. Expect false
-positives and design the appeal path first.
-
----
-
-# WEB ADMIN DASHBOARD — still DEFERRED
-
-**Founder: "I will build UI soon after all bugs are finished."** Clear the
-six above first, then ask.
-
-New backend built this session that the console will need:
-`admin_set_maintenance(bool, text, timestamptz)` — needs an owner-role
-toggle with a message + optional end time — and
-`admin_deletion_reasons(p_days)` for the #18 exit-survey chart.
-
-Settled, do not re-litigate: **web admin only**; **`admin-web/` is the app
-in real use** and is what is being replaced; **stack is Next.js in
-`admin/`**; **deploy to Vercel**. **Do not delete `admin-web/`** until the
-replacement is signed off.
+Session 3's three files — `ad_banner_height_test`,
+`sound_settings_persistence_test`, `bible_reference_test` — went green in CI
+on the `3de9a2c` push.
 
 ---
 
 # Traps already paid for — don't rediscover them
 
-**New this session:**
-- **A bare `Center` only shrink-wraps when constraints are UNBOUNDED.**
-  `Scaffold` gives `bottomNavigationBar` a LOOSE constraint whose max is the
-  whole screen — loose is still bounded, so `Center` takes all of it. Use
-  `heightFactor: 1`. See `ad-banner-center-trap`.
-- **A settings screen that reads a static nothing has loaded shows
-  defaults, convincingly.** `QuizSfx` loaded prefs only inside `init()`.
-  Getters must load on read.
-- **`authenticated` arrives holding table-level GRANT ALL on new public
-  tables.** Only the absence of a policy stops writes. `REVOKE ALL` then
-  grant back explicitly.
-- **`CREATE OR REPLACE FUNCTION` refuses a changed `RETURNS TABLE`.** Drop
-  first (this bit `my_inbox_previews`).
-- **`log_admin_action` takes SIX arguments.** Pass them all.
-- **The Management API mangles `''` escaping** inside a shell-quoted JSON
-  payload. Write the query to a scratchpad file and use `-d @file`.
+**New in session 4:**
+- **`CacheService.writePref` does NOT add the `pref:` prefix for you.** The
+  key must literally start with `pref:` or sign-out deletes it. This has now
+  bitten the quiz sound settings AND the music downloads index.
+- **`player.shuffle()` pins the CURRENT track to the front** of the new
+  order. Loading at index 0 and then shuffling gives you index 0 first,
+  every time.
+- **`AuthService.currentUser` reaches through `Supabase.instance`**, which
+  **throws** when the client is not initialised. Guard it in any widget that
+  a test might pump.
+- **A `Row` whose labels scale with the system font throws** rather than
+  clipping. Use `Wrap` on toolbars.
+- **`Align`/`Center` shrink-wrap only under UNBOUNDED constraints.** Still
+  true, still the ad-banner trap; `FloatingDock` avoids it by placing its
+  child at an explicit size inside an explicit `Positioned`.
+- **A WebView reloads if re-parented** — the Watch window drags the box, not
+  the player.
 
-**Still true from before:**
-- **A column-level `REVOKE` is SILENTLY IGNORED when the grant is
-  table-level.**
-- **`suppress_sabbath_notifications()` DROPS** non-essential notifications
-  during a quiet window. `maintenance` was added to
-  `is_essential_notification` for exactly this reason.
-- **A lazy `late final` ticker/controller is CREATED during `dispose()`**
-  and aborts disposal part-way. Build them in `initState`.
-- **`mounted` is not a sufficient guard during teardown.** Use a cancellable
-  `Timer`.
-- **`CrossAxisAlignment.stretch` on a `Row` inside any scrollable** →
-  infinite height; in release it paints **nothing**.
-- **A supabase-dart `.upsert()` needs SELECT *and* UPDATE policies.**
-- **Publishing into a shared pool as you build it races with disposal** —
-  stage locally, publish once, guard with a generation counter.
-- **The Bash tool resets cwd between calls.** Use
-  `cd /c/Users/j/Desktop/advent_connect_zw/adventconnectzw && …`.
+**Still true from before:** column-level `REVOKE` is silently ignored against
+a table-level grant · `suppress_sabbath_notifications()` DROPS non-essential
+notifications in a quiet window · a lazy `late final` controller is CREATED
+during `dispose()` · `mounted` is not sufficient during teardown, use a
+cancellable `Timer` · `CrossAxisAlignment.stretch` on a `Row` in a scrollable
+paints nothing in release · `.upsert()` needs SELECT *and* UPDATE policies ·
+publishing into a shared pool as you build it races with disposal ·
+`CREATE OR REPLACE FUNCTION` refuses a changed `RETURNS TABLE` ·
+`log_admin_action` takes SIX arguments · the Management API mangles `''`
+escaping, use `-d @file`.
+
+---
 
 # Environment
 
 - Working dir is the **PARENT** of the repo — use `-C adventconnectzw`.
+- **The Bash tool is bash, not PowerShell.** `@'...'@` here-strings are a
+  syntax error there. For commit messages write the text to the scratchpad
+  and use `git commit -F <file>`.
 - **`python` is NOT installed; `node` v24 is.** **`/tmp` does not exist** —
   use the session scratchpad.
+- **`gh` CLI is NOT installed**, and the repo is private, so CI status cannot
+  be read from a session. Check the Actions tab / Releases page manually.
 - **CRLF line endings.**
-- The Management API `/database/query` returns only the **first** result
-  set. Put mutations in a `DO $$ … $$` block.
-- **To test against production safely:** work inside a `DO $$ … $$` block
-  that `RAISE`s at the end — everything rolls back and the result travels
-  out in the error message. Used five times this session.
-- **Full APK builds are blocked.** Device builds come from CI
+- The Management API `/database/query` returns only the **first** result set.
+  Put mutations in a `DO $$ … $$` block. To test against production safely,
+  work inside a `DO $$ … $$` that `RAISE`s at the end — everything rolls back
+  and the result travels out in the error message.
+- **Full APK builds are blocked locally.** Device builds come from CI
   (`.github/workflows/build-apk.yml`).
-- **The Supabase PAT is not stored anywhere. Ask for it, never write it to
-  a file.** Project ref `eqbyvasteolqyktbqbem`. It has now gone through chat
-  three times and should be rotated again.
+- **The Supabase PAT is not stored anywhere. Ask for it, never write it to a
+  file.** Project ref `eqbyvasteolqyktbqbem`. It has now gone through chat
+  **four** times and should be rotated.
 
 # Still outstanding from before (not in the founder's 22)
 
@@ -193,9 +258,7 @@ replacement is signed off.
 
 ## Order of work
 
-1. Commit + push this session's work so CI can build.
-2. **#8 / #9 players** — large, and audio is the most fragile area here.
-3. **#13 / #14** feed.
-4. **#2** composer sheet.
-5. **Ban-evasion.**
-6. **The admin console — only once the batch is clear.** Ask first.
+1. **Ask what the device test of the new APK found.** Fix anything it turned
+   up — that jumps the queue.
+2. Then ask again about the admin console.
+3. Ban-evasion, if the founder wants it, staged as above.

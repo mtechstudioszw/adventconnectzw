@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -349,10 +350,48 @@ class MusicPlayerService {
 
   Future<void> toggleShuffle() async {
     final on = !player.shuffleModeEnabled;
+    // Order matters for the ON case: `shuffle()` pins whatever is playing
+    // to the front of the new order, so doing it first keeps the current
+    // track playing and shuffles only what comes after it.
     if (on) await player.shuffle();
     await player.setShuffleModeEnabled(on);
     revision.value++;
   }
+
+  /// Starts [items] shuffled — the "Shuffle" button on the Music tab.
+  ///
+  /// ## Why this is not `setQueueAndPlay` + `toggleShuffle`
+  ///
+  /// That is what it used to be, and it is why shuffle read as broken:
+  ///
+  /// * it loaded the queue at index **0**, so "Shuffle" opened on the same
+  ///   track every single time;
+  /// * `player.shuffle()` shuffles with `initialIndex: currentIndex`, which
+  ///   **pins the current item first** — so track 0 led the shuffled order
+  ///   too, not just the queue;
+  /// * and it only shuffled `if (!shuffleModeEnabled)`, so the second press
+  ///   reused the previous order and changed nothing at all.
+  ///
+  /// Three ways to arrive at "I pressed Shuffle and got the same song".
+  ///
+  /// So: pick the starting track at random, load there, then shuffle — the
+  /// pinning now works FOR us, because the pinned track is already random.
+  /// Reshuffles unconditionally, so pressing it again really does re-deal.
+  Future<void> shuffleAll(List<LibraryItem> items) async {
+    if (items.isEmpty) return;
+    final start = items.length == 1 ? 0 : _random.nextInt(items.length);
+
+    // A same-signature reload takes the seek-only fast path in
+    // [setQueueAndPlay], which never rebuilds the source — fine here,
+    // because the reshuffle below is what actually reorders playback.
+    await setQueueAndPlay(items, start);
+
+    await player.shuffle();
+    await player.setShuffleModeEnabled(true);
+    revision.value++;
+  }
+
+  static final Random _random = Random();
 
   /// Cycles off → all → one → off.
   Future<LoopMode> cycleRepeat() async {
@@ -407,15 +446,41 @@ class MusicPlayerService {
   bool get hasSleepTimer => sleepAt.value != null;
 
   /// Stops playback and tears the queue down (used by "Close player").
+  ///
+  /// **Silence comes first.** The founder's requirement is that closing the
+  /// mini player stops the audio *immediately*, and the ordering here is the
+  /// whole of that: `pause()` is a synchronous-enough platform call that
+  /// takes effect on the next audio buffer, so it goes before the teardown
+  /// bookkeeping rather than after four awaits — cancelling a stream
+  /// subscription and clearing a queue are not things anyone should be able
+  /// to hear.
+  ///
+  /// Deliberately reads `_player` and not [player]: the getter CONSTRUCTS a
+  /// player on first touch, and a player binds to whichever
+  /// `JustAudioPlatform` existed when it was built. Building one in order to
+  /// stop it is exactly how background playback has been broken three times
+  /// (see `audio-background-playback-fix`). Nothing is playing if the player
+  /// was never created, so there is nothing to stop.
   Future<void> stop() async {
+    final p = _player;
+    // Kill the sound before anything else, and don't await the teardown
+    // before the user hears it.
+    final silenced = p == null ? Future<void>.value() : p.pause();
+
     _sleepTimer?.cancel();
     sleepAt.value = null;
-    await _indexSub?.cancel();
-    _indexSub = null;
-    await player.stop();
+    // Clear the visible state now so the bar leaves with the sound rather
+    // than after the platform round-trips.
     _queue = const [];
     _loadedSignature = '';
     revision.value++;
+
+    await silenced;
+    await _indexSub?.cancel();
+    _indexSub = null;
+    // `stop()` releases the decoder and drops the media notification. Safe
+    // only after the queue is already torn down above.
+    await p?.stop();
     unawaited(MusicPrefsService.clearQueue());
   }
 }

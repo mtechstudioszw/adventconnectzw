@@ -22,7 +22,28 @@ import 'cache_service.dart';
 class MusicDownloadService {
   MusicDownloadService._();
 
-  static const _kIndex = 'music_downloads_v1';
+  /// The `pref:` prefix is load-bearing, not decoration.
+  ///
+  /// [CacheService.clearUserData] deletes **every** key that does not start
+  /// with `pref:`, and it runs on every sign-out. This index used to be a
+  /// bare `music_downloads_v1`, so signing out wiped the app's entire memory
+  /// of what had been downloaded: the files stayed on disk, orphaned and
+  /// invisible, the "Downloaded" filter went to zero, every Save button
+  /// reverted to un-saved and playback silently went back to streaming. That
+  /// is the "download for offline doesn't work" report — it worked, then a
+  /// sign-out ate the receipts.
+  ///
+  /// Downloads are DEVICE-level: the bytes belong to the phone, not to the
+  /// account, so this key stays out of the user-scoped `pref:music_u:`
+  /// namespace that [SessionReset] clears by prefix.
+  ///
+  /// Same trap as the sound settings — see the `settings-read-unloaded-statics`
+  /// note and [QuizSfx].
+  static const _kIndex = 'pref:music_downloads_v1';
+
+  /// The pre-fix key, read once so nobody who already had downloads loses
+  /// them on the update that fixes this.
+  static const _kIndexLegacy = 'music_downloads_v1';
 
   /// Bumped whenever a download completes or is removed, so lists that show a
   /// downloaded badge can rebuild without polling.
@@ -50,13 +71,63 @@ class MusicDownloadService {
   // ---- Index --------------------------------------------------------------
 
   static Map<String, String> _index() {
-    final raw = CacheService.readPref(_kIndex);
+    final raw = CacheService.readPref(_kIndex) ??
+        // One-time fallback for anyone whose index is still under the old
+        // unprefixed key AND who has not signed out since. Rewritten under
+        // the new key by the first [_writeIndex].
+        CacheService.readPref(_kIndexLegacy);
     if (raw == null) return <String, String>{};
     try {
       return (jsonDecode(raw) as Map)
           .map((k, v) => MapEntry(k.toString(), v.toString()));
     } catch (_) {
       return <String, String>{};
+    }
+  }
+
+  /// Moves a legacy index under the `pref:` key so it stops being deleted on
+  /// sign-out. Cheap and idempotent; called from `main()` at startup.
+  ///
+  /// Also re-adopts orphans: files that are still sitting in the music
+  /// directory from before the key was fixed, whose index entry a sign-out
+  /// already deleted. Without this, everything the founder downloaded before
+  /// this build stays invisible and keeps occupying storage forever.
+  static Future<void> migrate() async {
+    final legacy = CacheService.readPref(_kIndexLegacy);
+    if (legacy != null) {
+      if (CacheService.readPref(_kIndex) == null) {
+        await CacheService.writePref(_kIndex, legacy);
+      }
+      await CacheService.deletePref(_kIndexLegacy);
+    }
+    await _adoptOrphans();
+  }
+
+  /// Rebuilds index entries for completed files the index has forgotten.
+  ///
+  /// A filename is `<trackId>.<ext>`, and `.part` files are ignored — an
+  /// interrupted transfer must never be adopted as a complete track.
+  static Future<void> _adoptOrphans() async {
+    try {
+      final dir = await _musicDir();
+      if (!await dir.exists()) return;
+      final map = _index();
+      var changed = false;
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final name = entity.path.split(Platform.pathSeparator).last;
+        if (name.endsWith('.part')) continue;
+        final dot = name.lastIndexOf('.');
+        if (dot <= 0) continue;
+        final trackId = name.substring(0, dot);
+        if (map.containsKey(trackId)) continue;
+        if (await entity.length() <= 0) continue;
+        map[trackId] = name;
+        changed = true;
+      }
+      if (changed) await _writeIndex(map);
+    } catch (_) {
+      // Best-effort housekeeping — never let it break startup.
     }
   }
 

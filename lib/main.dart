@@ -18,6 +18,7 @@ import 'services/ads/app_open_ad_manager.dart';
 import 'services/connectivity_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
+import 'services/music_download_service.dart';
 import 'services/music_player_service.dart';
 import 'services/premium_service.dart';
 import 'services/usage_analytics.dart';
@@ -65,7 +66,16 @@ void main() async {
   // (the "navy screen for ~13s" symptom). Move it OFF the critical path —
   // the splash awaits it (timeboxed) before routing home, and every cache
   // read already tolerates a not-yet-open box.
-  unawaited(CacheService.initialize());
+  unawaited(
+    CacheService.initialize().then(
+      // Must run AFTER the box is open, and it reads/writes prefs, so it
+      // rides on the same off-critical-path future rather than adding a
+      // second one that could beat it. Moves the offline-downloads index
+      // under `pref:` (sign-out was deleting it) and re-adopts any track
+      // files that were already orphaned by that bug.
+      (_) => MusicDownloadService.migrate(),
+    ),
+  );
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -530,13 +540,16 @@ class _AdventConnectAppState extends State<AdventConnectApp>
                             alignment: Alignment.topCenter,
                             child: VoiceMiniBar(),
                           ),
-                          // Docked video + music bars — whatever is still
-                          // playing stays reachable from anywhere, above the
-                          // navigation island.
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: GlobalMediaBars(),
-                          ),
+                          // Docked video + music windows — whatever is still
+                          // playing stays reachable from anywhere.
+                          //
+                          // Positioned.fill, NOT an Align: both windows are
+                          // draggable now and position themselves anywhere in
+                          // this rect. Bottom clearance for the navigation
+                          // island is applied per-window inside
+                          // GlobalMediaBars, because the Watch player and the
+                          // music card park independently.
+                          Positioned.fill(child: GlobalMediaBars()),
                         ],
                       ),
                     ),

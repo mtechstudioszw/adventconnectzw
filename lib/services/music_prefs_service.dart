@@ -14,11 +14,26 @@ import 'cache_service.dart';
 class MusicPrefsService {
   MusicPrefsService._();
 
+  // ## Which of these survive a sign-out, and why
+  //
+  // [CacheService.clearUserData] deletes every key that does NOT start with
+  // `pref:`, and it runs on sign-out. That is the RIGHT outcome for the four
+  // keys below: likes, history, playlists and the resume queue are personal,
+  // they live only on this device, and on a shared phone the next account
+  // must not inherit them. They are deliberately left unprefixed so sign-out
+  // clears them — this is a decision, not an oversight. Do not "tidy" them
+  // into the `pref:` namespace.
   static const _kLiked = 'music_liked_v1'; // List<String> trackIds
   static const _kRecent = 'music_recent_v1'; // List<String> trackIds, newest first
   static const _kPlaylists = 'music_playlists_v1'; // Map<name, List<trackId>>
-  static const _kSpeed = 'music_speed_v1'; // double
   static const _kLastQueue = 'music_last_queue_v1'; // JSON of last queue
+
+  // Playback speed is a DEVICE setting, like volume — it describes how this
+  // person listens, not who they are logged in as. Prefixed so sign-out
+  // leaves it alone. Same reasoning as the downloads index in
+  // [MusicDownloadService].
+  static const _kSpeed = 'pref:music_speed_v1'; // double
+  static const _kSpeedLegacy = 'music_speed_v1';
 
   /// How many recently-played entries to keep.
   static const _recentCap = 40;
@@ -128,7 +143,11 @@ class MusicPrefsService {
   // ---- Playback preferences ----------------------------------------------
 
   static double speed() =>
-      double.tryParse(CacheService.readPref(_kSpeed) ?? '') ?? 1.0;
+      double.tryParse(CacheService.readPref(_kSpeed) ?? '') ??
+      // Read the pre-prefix key once so an existing choice isn't reset by
+      // the update that stops sign-out eating it.
+      double.tryParse(CacheService.readPref(_kSpeedLegacy) ?? '') ??
+      1.0;
 
   static Future<void> setSpeed(double v) => CacheService.writePref(
         _kSpeed,

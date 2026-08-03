@@ -175,11 +175,26 @@ class _MusicTabState extends State<MusicTab>
     }
   }
 
+  /// The real deal is done by [MusicPlayerService.shuffleAll] — see the
+  /// three separate reasons the old inline version always played track 0.
   Future<void> _shuffleAll() async {
     final list = _visible;
     if (list.isEmpty) return;
-    await _play(list, 0);
-    if (!_service.player.shuffleModeEnabled) await _service.toggleShuffle();
+    try {
+      await _service.shuffleAll(list);
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not shuffle these tracks: $e',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    }
   }
 
   @override

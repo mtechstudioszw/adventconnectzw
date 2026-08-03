@@ -21,7 +21,6 @@ import '../../theme/app_tokens.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/youtube/live_chat_panel.dart';
-import '../../widgets/youtube/watch_cards.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../../widgets/motion/brand_spinner.dart';
 
@@ -152,20 +151,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
     _armLoadWatchdog();
 
-    final subs = YoutubeService.cachedSubscriptionIds();
-
     if (!mounted) return;
     setState(() {
       _controller = controller;
       _saved = saved.contains(widget.videoId);
-      _subscribed = subs.contains(_video?.channelId ?? '');
       _ready = true;
     });
-    // Correct the follow state from the server without blocking first paint.
-    YoutubeService.fetchSubscriptionIds().then((ids) {
-      if (!mounted) return;
-      setState(() => _subscribed = ids.contains(_video?.channelId ?? ''));
-    });
+    // No subscription fetch here any more. The Follow control was removed
+    // from this screen (#9), and this screen was the only reason to pull the
+    // viewer's subscription list before the video had even started — two
+    // round trips, one of them blocking nothing anyone could see. Following
+    // is read and written on the channel screen, which is where it is shown.
     _loadUpNext();
     _parseVerses();
   }
@@ -523,17 +519,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     if (v == null) return;
     setState(() => _saved = !_saved);
     await YoutubeService.setBookmarked(v.videoId, _saved);
-  }
-
-  /// Whether the viewer follows this video's channel (patch_164).
-  bool _subscribed = false;
-
-  Future<void> _toggleSubscribe() async {
-    final v = _video;
-    if (v == null || v.channelId.isEmpty) return;
-    final next = !_subscribed;
-    setState(() => _subscribed = next);
-    await YoutubeService.setSubscribed(v.channelId, next);
   }
 
   Future<void> _shareMoment() async {
@@ -1033,12 +1018,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               ),
             ),
           ),
-          const SizedBox(width: AppSpace.sm),
-          SubscribeButton(
-            subscribed: _subscribed,
-            compact: true,
-            onTap: _toggleSubscribe,
-          ),
+          // No Follow control here — founder's call (#9, 3 Aug 2026). The
+          // channel row's job is "who made this, and take me to more of it".
+          // Following still lives on the channel screen itself, which is one
+          // tap away through the row above, and that is the screen where the
+          // decision actually makes sense.
         ],
       ),
     );

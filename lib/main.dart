@@ -20,6 +20,7 @@ import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
 import 'services/music_player_service.dart';
 import 'services/premium_service.dart';
+import 'services/usage_analytics.dart';
 import 'services/presence_service.dart';
 import 'services/sabbath_service.dart';
 import 'services/push_service.dart';
@@ -99,6 +100,15 @@ Future<void> _initBackgroundServices() async {
   // Outbox flusher needs Hive from Phase 1 above. Fire and forget.
   unawaited(MessagingService.startOutboxFlusher());
 
+  // Feature-usage tracking. This is the data source behind the admin
+  // console's "which features are used and which are ignored" — before
+  // it existed, that question had no answer in Supabase at all, because
+  // AnalyticsService reports to Firebase.
+  if (Supabase.instance.client.auth.currentUser != null) {
+    UsageAnalytics.start();
+  }
+  attachUsageTracking();
+
   // Premium has to resolve BEFORE AdMob: a subscriber should never start
   // the ad SDK at all, not merely hide its output. init() is one
   // secure-storage read of the cached expiry, so it's cheap enough to
@@ -154,6 +164,10 @@ Future<void> _initBackgroundServices() async {
           // every sign-in — the cached expiry belongs to whoever was
           // signed in last and grants this user nothing until confirmed.
           unawaited(PremiumService.refresh());
+          // A fresh session per sign-in, so one phone shared by two
+          // people doesn't merge their usage into one user's numbers.
+          UsageAnalytics.start();
+          UsageAnalytics.resetSession();
           // Re-stamp the Sabbath quiet window (patch_169). The server
           // only compares now() against this timestamp — it never
           // computes sundown — so it has to be refreshed whenever the
@@ -164,6 +178,7 @@ Future<void> _initBackgroundServices() async {
       case AuthChangeEvent.signedOut:
         unawaited(PresenceService.stop());
         unawaited(PremiumService.clear());
+        unawaited(UsageAnalytics.stop());
         break;
       default:
         break;
@@ -358,6 +373,10 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       if (state == AppLifecycleState.paused) {
         unawaited(PresenceService.stop(clearRoster: false));
         _banPollTimer?.cancel();
+        // Get queued usage events out before the OS can freeze or kill
+        // us — otherwise the last (and most interesting) minutes of a
+        // session are the ones that never arrive.
+        unawaited(UsageAnalytics.flush());
       }
       return;
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/hymn_service.dart';
 import '../../services/music_player_service.dart';
+import '../../services/usage_analytics.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -41,12 +42,28 @@ class _LibraryScreenState extends State<LibraryScreen>
       vsync: this,
       initialIndex: widget.initialTab.clamp(0, _tabCount - 1),
     );
+    // The five library sections are TABS, not routes, so the router's
+    // usage tracking cannot see which one is open — without this, Bible,
+    // Sabbath School, Hymnal, EGW and Music would all read as "nobody
+    // uses this" on the admin dashboard. Reported here instead.
+    _trackTab();
+    _tabs.addListener(() {
+      // Fires twice per swipe (start + settle); only count the landing.
+      if (!_tabs.indexIsChanging) _trackTab();
+    });
     // Parse the bundled hymnal off the critical path so swiping to the Hymnal
     // tab is instant rather than showing a first-open spinner.
     HymnService.warmUp();
     // Bring back the previous session's queue so the mini player reappears
     // where the user left it. Loads paused — never auto-plays on open.
     MusicPlayerService.instance.restoreLastQueue();
+  }
+
+  void _trackTab() {
+    final feature = Feature.fromLibraryTab(_tabs.index);
+    if (feature != null) {
+      UsageAnalytics.open(feature, screen: '/library/$feature');
+    }
   }
 
   @override

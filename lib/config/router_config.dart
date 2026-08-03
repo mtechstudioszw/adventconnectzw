@@ -102,6 +102,7 @@ import '../screens/seller/marketplace_guidelines_screen.dart';
 import '../screens/seller/seller_dashboard_screen.dart';
 import '../screens/seller/seller_profile_screen.dart';
 import '../screens/seller/setup_store_screen.dart';
+import '../services/usage_analytics.dart';
 import '../screens/premium/premium_screen.dart';
 import '../screens/settings/about_screen.dart';
 import '../screens/settings/permissions_screen.dart';
@@ -146,6 +147,29 @@ CustomTransitionPage<void> _fadeScalePage(
 /// push a route goes through this key instead.
 final GlobalKey<NavigatorState> rootNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'root');
+
+/// Turns navigation into feature-usage data.
+///
+/// Attached in main() rather than as a NavigatorObserver, because a
+/// GoRouter page's `settings.name` is the ROUTE NAME ('home'), not the
+/// path ('/home') — an observer reading it would map nothing and the
+/// whole feature ranking would sit at zero without ever erroring.
+/// `currentConfiguration.uri.path` is the same source the App-Open ad
+/// gate already uses, and it is known-correct here.
+///
+/// One listener instead of a tracking call in ninety screens: a new
+/// screen under an existing section is counted automatically, and no
+/// screen can be added and silently go unmeasured. Feature.fromRoute
+/// deliberately returns null for auth, splash, settings and admin —
+/// those aren't features anyone chooses, and counting them would push
+/// the real ones down the ranking.
+void attachUsageTracking() {
+  appRouter.routerDelegate.addListener(() {
+    final path = appRouter.routerDelegate.currentConfiguration.uri.path;
+    final feature = Feature.fromRoute(path);
+    if (feature != null) UsageAnalytics.open(feature, screen: path);
+  });
+}
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,

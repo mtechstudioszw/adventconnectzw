@@ -817,19 +817,43 @@ class AuthService {
     return AuthResult.success(null);
   }
 
+  /// Sign out, structured so it FEELS instant (#17).
+  ///
+  /// It used to make three network round-trips — clearing the FCM token,
+  /// revoking the token server-side, and signing out of Google — and await
+  /// every one of them **before** touching anything local. On a slow
+  /// connection that is several seconds of a dead "Sign out" button, and if
+  /// the network was down it could hang until the request timed out.
+  ///
+  /// None of that work is what protects the next person to use the phone.
+  /// The local teardown is: the secure store, the cached account data and
+  /// the in-memory statics. So the local half is awaited and the remote
+  /// half is fired off and left to finish on its own.
+  ///
+  /// The trade, stated plainly: if the app is killed in the seconds after
+  /// signing out, the refresh token may not have been revoked server-side.
+  /// The local session is destroyed either way, so nobody on this device
+  /// can use it — and gotrue's own `signOut` removes the session before it
+  /// makes its network call, which is why firing it unawaited is safe.
   static Future<void> signOut() async {
-    try {
-      final user = _client.auth.currentUser;
-      if (user != null) {
-        await _client
+    final user = _client.auth.currentUser;
+    // Started BEFORE the sign-out below, because it needs the session that
+    // sign-out is about to destroy.
+    if (user != null) {
+      unawaited(
+        _client
             .from('profiles')
-            .update({'fcm_token': null}).eq('id', user.id);
-      }
-    } catch (_) {}
-    await _client.auth.signOut();
-    try {
-      await GoogleSignIn(serverClientId: _googleWebClientId).signOut();
-    } catch (_) {}
+            .update({'fcm_token': null})
+            .eq('id', user.id)
+            .catchError((_) {}),
+      );
+    }
+    unawaited(_client.auth.signOut().catchError((_) {}));
+    unawaited(
+      GoogleSignIn(serverClientId: _googleWebClientId)
+          .signOut()
+          .catchError((_) => null),
+    );
     await SecureStorageService.clearAll();
     // Wipe cached account data (inbox, chats, feed, profiles) so the next
     // account that logs in on this device never briefly sees the previous

@@ -17,6 +17,7 @@ import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/onboarding_flow_screen.dart';
 import '../screens/auth/reset_password_screen.dart';
 import '../screens/update/update_required_screen.dart';
+import '../screens/maintenance/maintenance_screen.dart';
 import '../screens/banned/account_banned_screen.dart';
 import '../screens/churches/church_announcements_screen.dart';
 import '../screens/churches/claim_church_screen.dart';
@@ -105,6 +106,7 @@ import '../screens/seller/setup_store_screen.dart';
 import '../services/usage_analytics.dart';
 import '../screens/premium/premium_screen.dart';
 import '../screens/settings/about_screen.dart';
+import '../screens/settings/delete_account_screen.dart';
 import '../screens/settings/permissions_screen.dart';
 import '../screens/settings/sound_settings_screen.dart';
 import '../screens/settings/settings_screen.dart';
@@ -246,6 +248,14 @@ final GoRouter appRouter = GoRouter(
       path: '/update-required',
       name: 'update_required',
       builder: (context, state) => const UpdateRequiredScreen(),
+    ),
+    // Maintenance mode (#22). A top-level route like /update-required and
+    // /account-banned, because it replaces the app rather than sitting
+    // inside it.
+    GoRoute(
+      path: '/maintenance',
+      name: 'maintenance',
+      builder: (context, state) => const MaintenanceScreen(),
     ),
     GoRoute(
       path: '/account-banned',
@@ -946,6 +956,14 @@ final GoRouter appRouter = GoRouter(
           path: 'about',
           name: 'about',
           builder: (context, state) => const AboutScreen(),
+        ),
+        // The exit survey. Deliberately a route rather than a sheet: it
+        // starts the deletion on open, so it must not be dismissible by a
+        // stray tap outside it.
+        GoRoute(
+          path: 'delete-account',
+          name: 'delete_account',
+          builder: (context, state) => const DeleteAccountScreen(),
         ),
       ],
     ),

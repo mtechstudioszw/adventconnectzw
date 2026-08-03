@@ -23,7 +23,13 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  // Two fields, matching signup, which has always collected a first name
+  // and a surname separately. This screen asked for one "Full name" box, so
+  // the two halves of the app disagreed about what a name is: signup
+  // validated each part, and editing accepted a single word that signup
+  // would have rejected.
   final _nameController = TextEditingController();
+  final _surnameController = TextEditingController();
   final _bioController = TextEditingController();
   final _usernameController = TextEditingController();
   DateTime? _dob; // current date of birth (for the age editor)
@@ -56,7 +62,18 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
 
     final meta = AuthService.currentUser?.userMetadata ?? const {};
-    _nameController.text = (meta['full_name'] as String?) ?? '';
+    // Stored as one string, so split it back the way signup joined it:
+    // everything before the last space is the first name (middle names stay
+    // with it), the last word is the surname.
+    final storedName = ((meta['full_name'] as String?) ?? '').trim();
+    final nameParts =
+        storedName.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (nameParts.length >= 2) {
+      _nameController.text = nameParts.sublist(0, nameParts.length - 1).join(' ');
+      _surnameController.text = nameParts.last;
+    } else {
+      _nameController.text = storedName;
+    }
     _bioController.text = (meta['bio'] as String?) ?? '';
     _usernameController.text = (meta['username'] as String?) ?? '';
     _selectedChurchId = (meta['church_id'] as String?);
@@ -89,6 +106,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   void dispose() {
     _entrance.dispose();
     _nameController.dispose();
+    _surnameController.dispose();
     _bioController.dispose();
     _usernameController.dispose();
     super.dispose();
@@ -107,7 +125,11 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     }
   }
 
-  String? _validateName(String? v) => NameValidator.fullName(v);
+  // Per-part validation now, the same calls signup makes — so a name this
+  // screen accepts is exactly a name signup would have accepted.
+  String? _validateName(String? v) => NameValidator.namePart(v, 'First name');
+
+  String? _validateSurname(String? v) => NameValidator.namePart(v, 'Surname');
 
   String? _validateBio(String? v) {
     if (v != null && v.length > 280) return 'Bio must be 280 characters or fewer';
@@ -168,7 +190,12 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     final previousChurchId =
         AuthService.currentUser?.userMetadata?['church_id'] as String?;
     final result = await AuthService.updateProfile(
-      fullName: _nameController.text.trim(),
+      // Rejoined exactly the way signup does it, so the stored shape is
+      // identical no matter which screen wrote it.
+      fullName: NameValidator.combine(
+        _nameController.text,
+        _surnameController.text,
+      ),
       bio: _bioController.text.trim(),
       username: _usernameController.text.trim().isEmpty
           ? null
@@ -524,7 +551,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       child: Column(
         children: [
           _LabeledField(
-            label: 'Full name',
+            label: 'First name',
             child: TextFormField(
               controller: _nameController,
               validator: _validateName,
@@ -532,7 +559,21 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: _filledDecoration(
                 icon: Icons.person_outline,
-                hint: 'Tendai Moyo',
+                hint: 'Tendai',
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _LabeledField(
+            label: 'Surname',
+            child: TextFormField(
+              controller: _surnameController,
+              validator: _validateSurname,
+              textInputAction: TextInputAction.next,
+              style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+              decoration: _filledDecoration(
+                icon: Icons.badge_outlined,
+                hint: 'Moyo',
               ),
             ),
           ),

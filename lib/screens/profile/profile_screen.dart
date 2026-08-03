@@ -222,7 +222,13 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
         _myChurches = myChurches;
         _friendCount = friends;
       });
-      unawaited(_writeCache(myPosts, myChurches));
+      unawaited(_writeCache(
+        myPosts,
+        myChurches,
+        churchesFollowed: followed.length,
+        eventsGoing: (results[1] as Set).length,
+        friendCount: friends,
+      ));
     } catch (_) {
       // ignore — UI just keeps showing whatever it has from cache.
     }
@@ -248,17 +254,40 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
       setState(() {
         if (_myPosts.isEmpty) _myPosts = posts;
         if (_myChurches.isEmpty) _myChurches = churches;
+        // Paint last-known counts immediately. `_bootstrap` overwrites them
+        // a moment later with the truth; showing yesterday's number beats
+        // showing a zero that is definitely wrong.
+        _churchesFollowed =
+            (decoded['churches_followed'] as num?)?.toInt() ?? _churchesFollowed;
+        _eventsGoing =
+            (decoded['events_going'] as num?)?.toInt() ?? _eventsGoing;
+        _friendCount =
+            (decoded['friend_count'] as num?)?.toInt() ?? _friendCount;
       });
     } catch (_) {
       // ignore — corrupt cache is just a missed paint.
     }
   }
 
-  Future<void> _writeCache(List<Post> posts, List<Church> churches) async {
+  Future<void> _writeCache(
+    List<Post> posts,
+    List<Church> churches, {
+    required int churchesFollowed,
+    required int eventsGoing,
+    required int friendCount,
+  }) async {
     try {
       final payload = jsonEncode({
         'posts': posts.take(50).map((p) => p.toJson()).toList(),
         'churches': churches.map((c) => c.toJson()).toList(),
+        // The three stat-row numbers. Posts and churches were already
+        // cached, but these were not — so every visit painted friends,
+        // churches and events as 0 and only corrected them once FIVE
+        // network calls had all come back. On a slow connection the first
+        // thing your own profile told you was that you had no friends.
+        'churches_followed': churchesFollowed,
+        'events_going': eventsGoing,
+        'friend_count': friendCount,
       });
       await CacheService.writeString(_cacheKey, payload);
     } catch (_) {}

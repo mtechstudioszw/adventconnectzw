@@ -181,30 +181,21 @@ class _SettingsScreenState extends State<SettingsScreen>
         },
       );
 
+  /// Confirm, then hand off to the exit-survey screen — which starts the
+  /// deletion the moment it opens (#17, #18).
+  ///
+  /// The deletion used to run right here, awaited behind a dialog, so the
+  /// whole Edge Function round-trip was dead time on a frozen button. Now
+  /// the wait happens behind a question worth asking.
   Future<void> _deleteAccount() => _confirmAndRun(
         title: 'Delete account?',
         body:
             'This permanently removes your profile, prayers, posts and messages. This cannot be undone.',
-        confirmLabel: 'Delete',
+        confirmLabel: 'Continue',
         confirmColor: AppColors.red,
         action: () async {
-          final result = await AuthService.deleteAccount();
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: result.isSuccess
-                  ? AppColors.successGreen
-                  : AppColors.darkNavy,
-              content: Text(
-                result.isSuccess
-                    ? 'Account deleted.'
-                    : (result.errorMessage ?? 'Deletion failed.'),
-                style:
-                    AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-              ),
-            ),
-          );
-          context.goNamed('login');
+          context.pushNamed('delete_account');
         },
       );
 

@@ -8,6 +8,7 @@ import '../../services/cache_service.dart';
 import '../../services/secure_supabase_storage.dart';
 import '../../services/biometric_service.dart';
 import '../../services/force_update_service.dart';
+import '../../services/maintenance_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -225,6 +226,14 @@ class _SplashScreenState extends State<SplashScreen>
         .then((_) => ForceUpdateService.check())
         .catchError((_) => UpdateCheck.none);
 
+    // Maintenance mode, overlapped the same way and for the same reason —
+    // it is one indexed app_config read, so running it beside the update
+    // check costs nothing rather than adding a second round-trip to the
+    // splash tail. Fails open (#22).
+    final maintenanceFuture = AppBootstrap.awaitSupabaseReady()
+        .then((_) => MaintenanceService.check())
+        .catchError((_) => MaintenanceState.off);
+
     // Open the biometric platform channel NOW, while we are waiting on
     // Supabase and the cache box anyway. Without this the first
     // authenticate() call also pays for channel setup + hardware
@@ -263,6 +272,20 @@ class _SplashScreenState extends State<SplashScreen>
     if (update.level == UpdateLevel.required) {
       if (!mounted) return;
       context.goNamed('update_required');
+      return;
+    }
+    if (!mounted) return;
+
+    // Maintenance gate. AFTER the update gate on purpose: if a member is on
+    // a build that must be replaced, telling them that is more useful than
+    // telling them to come back later.
+    final maintenance = await maintenanceFuture.timeout(
+      const Duration(milliseconds: 400),
+      onTimeout: () => MaintenanceState.off,
+    );
+    if (maintenance.active) {
+      if (!mounted) return;
+      context.goNamed('maintenance');
       return;
     }
     if (!mounted) return;

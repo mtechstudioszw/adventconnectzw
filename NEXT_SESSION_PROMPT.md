@@ -6,13 +6,16 @@ Paste this whole file as the first message of the next session.
 
 ## Where things stand (3 Aug 2026, session 2)
 
-All work is pushed. `main` head: **`8293223`**
-"Fix two account-security leaks, the quiz timeout crash, and three silent
-failures".
+All work is pushed. `main` head: **`02b0540`** "Quiz Arena soundtrack
+(#3 A2), and a music control now that one is real".
 
 `flutter analyze` clean apart from the **same 4 pre-existing infos**.
-**273/273 tests pass** (was 242 at the start of this session, 135 three
+**283/283 tests pass** (was 242 at the start of this session, 135 three
 sessions ago). No tests are skipped.
+
+**8 of the 22 done, 14 open.** Bug-count-wise better than that sounds:
+five of the fixes were for bugs nobody had reported, because every one of
+them failed silently.
 
 **NO database changes were made this session.** Everything shipped was
 client-side Dart. The production schema is exactly as it was, so there is
@@ -53,11 +56,19 @@ Also ask them to open **Settings → Sound & haptics** in a CI build from
 `8293223` or later. If the volume was sitting at 0% that WAS the bug — it
 is now floored and self-heals on next launch.
 
-**2. #3 A2 — the background music file does not exist.** `assets/sounds/`
-contains only the nine quiz SFX WAVs. Ask for a loop track (30–60s,
-seamless, mp3 or ogg). Until it arrives A2 cannot be built, and a music
-toggle in the settings screen would be a dead control — which is why one
-was deliberately NOT shipped.
+**2. #3 A2 — the soundtrack is BUILT but the audio file is still missing.**
+Everything is wired: `QuizMusic` loops for the whole round, stops on
+dispose, stands down for the member's own music, and has a toggle +
+volume in Settings → Sound & haptics. It just needs the file at
+
+    adventconnectzw/assets/sounds/quiz/arena_loop.mp3
+
+The founder said they downloaded one — **check whether it actually landed
+there.** That folder is already declared in `pubspec.yaml`, so no config
+change is needed. A missing file is a supported state (the arena runs
+silent and sets `QuizMusic.unavailable`), so its absence will not announce
+itself — you have to look. Prefer a seamless loop; a track with silence at
+the head or tail will gap audibly on every repeat.
 
 **3. The Supabase PAT has now gone through chat twice.** Ask whether it was
 rotated. Never write it to a file. Project ref: `eqbyvasteolqyktbqbem`.
@@ -82,6 +93,7 @@ delete something that works. **Confirm before removing anything.**
 | **#6** | The QR already had a logo — a WHITE wordmark on a TRANSPARENT background, painted on the code's WHITE plate. Now on a navy disc (`QrCentreMark`). |
 | **#3 A4** | The timeout crash fired on EVERY timeout. Fixed + the `autoStart` seam. |
 | **#3 A3** | Sound & haptics screen in main settings + settings-search entry. |
+| **#3 A2** | `QuizMusic` loop built and wired. Needs only the audio file. |
 
 **Four bugs nobody had reported**, all found while fixing the above:
 - The **offline outbox replayed across accounts** — queued rows carry a
@@ -100,7 +112,7 @@ delete something that works. **Confirm before removing anything.**
 
 ---
 
-# THE REMAINING BATCH — 17 items
+# THE REMAINING BATCH — 14 items
 
 ## A. QUIZ — what is left (#3)
 
@@ -115,10 +127,20 @@ device/platform and needs the vibrate answer plus a `flutter logs` line
 starting `QuizSfx.init failed:` — that call catches everything and only
 `debugPrint`s, so a boot failure is otherwise invisible.
 
-### A2. Background music — BLOCKED on the file
-Must duck or stop if the user's own music is playing. See
-[[audio-background-playback-fix]] — the platform-swap bug there killed
-music three times. Do NOT swap `JustAudioPlatform.instance`.
+### A2. Background music — BUILT, waiting only on the audio file
+`lib/services/quiz_music.dart`. Loops for the round, stopped in the round
+screen's `dispose()` so it ends by any exit route. Deliberately built on
+**audioplayers, not just_audio** — the Library player owns the app's
+just_audio instance and its media session, and staying in a different
+package means the loop cannot touch it. `MusicPlayerService.isPlayingNow`
+was added for the ducking check and reads `_player` DIRECTLY: the public
+`player` getter constructs the player, and creating one just to ask a
+yes/no question is how background playback broke three times.
+
+Left to do once the file lands: confirm it loops without an audible gap,
+and decide whether it should pause when the app is backgrounded (it
+currently keeps looping, which is right for a quick alt-tab and wrong for
+a long one).
 
 ### A5. Live head-to-head — DESIGN AGREED, NOT BUILT
 

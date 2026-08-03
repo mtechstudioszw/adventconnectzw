@@ -38,11 +38,14 @@ those notes save you the wrong turn, so read them before coding.
 
 ---
 
-# WEB ADMIN DASHBOARD — SETTLED, build it
+# WEB ADMIN DASHBOARD — DECIDED, but DEFERRED
 
-The founder said "settle the web admin dashboard thing" and, on the open
-questions, "if it wrong do the best thing". So these are **decided** —
-build on them, do not re-open unless the founder objects:
+**Founder's call (3 Aug 2026): "I will build UI soon after all bugs are
+finished."** So do **NOT** start the console this session. Clear the
+22-item bug batch below first; the console comes after.
+
+The decisions are already settled — **do not re-litigate them** when the
+time comes, just build:
 
 - **Web admin only.** The in-app Flutter admin is explicitly out of scope.
 - **`admin-web/` is the app in real use** — git proves it (touched
@@ -73,9 +76,25 @@ Sign in with the founder's app email/password; the page checks
 `profiles.is_super_admin` and signs out anyone else. Verified 3 Aug: the
 founder is the **sole super admin**, and all 35 RPCs the page calls exist.
 
-New backend ready for the rebuild but **not yet called by any UI**:
-`admin_feature_usage`, `admin_active_users_series`,
-`admin_platform_breakdown`, `admin_premium_stats`.
+**Backend already built for it, live and attack-tested, but NOT called by
+any UI yet** — so nothing new is visible in the console today:
+
+- **Analytics:** `admin_feature_usage`, `admin_active_users_series`,
+  `admin_platform_breakdown`, `admin_premium_stats`.
+- **Staff roles + audit log** (`20260803150000_staff_roles_and_audit.sql`).
+  There were previously **no roles, no permissions and no audit log** —
+  `assert_super_admin()` is one boolean and the founder was the only
+  holder, so hiring anyone meant handing them the power to ban users and
+  broadcast to everyone with no record of who did it. Now four roles:
+  `viewer` (read only), `moderator` (daily job, **contact details
+  masked**), `manager` (+ PII + audit log), `owner` (+ ban and mass
+  broadcast). Additive: all 35 existing RPCs still call
+  `assert_super_admin()`, which now also accepts a staff `owner`, and the
+  founder is seeded as owner. Use `assert_staff('moderator')` for new
+  work and call `log_admin_action(...)` from every mutating RPC.
+  **The console's People/Settings sections should manage staff via
+  `admin_list_staff()` / `admin_set_staff_role()` — nobody should be
+  setting `is_super_admin` by hand any more.**
 **What genuinely has no data source** (do not promise these): crash
 reporting (Crashlytics lives in Firebase), ad impressions/CTR/eCPM
 (AdMob-side), country/city, session duration, retention cohorts, and all
@@ -408,8 +427,18 @@ rather than inventing a second one.
 
 ---
 
-Suggested order: the two TURN ONE questions → the **#20 cross-account
-data leak** (it is a security bug and it is cheap) → **#4/#5 premium
-corrections** (small, and #4 is fixing a previous session's mistake) →
-the **quiz** (agree A5's design with the founder before writing any of
-it) → the **admin console** → everything else.
+## Order of work — bugs first, console last
+
+The founder's instruction: **finish the bugs, then build the UI.**
+
+1. The two TURN ONE questions (#7 build check, #6 QR logo).
+2. **#20 cross-account data leak** — a security bug and cheap to fix.
+3. **#21 biometric leak across accounts** — cause already found.
+4. **#4 / #5 premium corrections** — small, and #4 fixes my own mistake.
+5. **#3 quiz** — sound, the null-check crash, then agree the multiplayer
+   design (A5) with the founder *before* writing any of it.
+6. Everything else in the batch.
+7. **The admin console — only once the batch is clear.**
+
+Do not silently start the console early. If the batch finishes with time
+left, ask before switching.

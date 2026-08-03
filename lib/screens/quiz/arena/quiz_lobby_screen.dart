@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../models/quiz_match.dart';
 import '../../../models/quiz_question_model.dart';
 import '../../../models/quiz_round.dart';
 import '../../../services/quiz_challenge_service.dart';
 import '../../../services/quiz_cloud_service.dart';
+import '../../../services/quiz_match_service.dart';
 import '../../../services/quiz_progress_service.dart';
 import '../../../services/quiz_service.dart';
 import '../../../services/quiz_sfx.dart';
@@ -15,6 +17,7 @@ import '../../../widgets/motion/brand_spinner.dart';
 import 'arena_theme.dart';
 import 'quiz_challenge_screen.dart';
 import 'quiz_leaderboard_screen.dart';
+import 'quiz_matchmaking_screen.dart';
 import 'quiz_results_screen.dart';
 import 'quiz_round_screen.dart';
 import 'widgets/arena_scaffold.dart';
@@ -47,6 +50,11 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
   /// is only created once there's a real score to challenge with.
   QuizOpponent? _pendingChallengeTo;
   int _incomingChallenges = 0;
+
+  /// Live invites aimed at me right now. Separate from [_incomingChallenges]
+  /// because they expire in five minutes — showing the two in one count
+  /// would make a number that keeps dropping on its own.
+  int _liveInvites = 0;
 
   @override
   void initState() {
@@ -203,7 +211,21 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     if (mounted) _refreshChallenges();
   }
 
+  /// Open the live arena, then refresh — a match just played has moved the
+  /// weekly points and may have cleared an invite.
+  Future<void> _openLiveMatch() async {
+    await Navigator.of(context).push<QuizMatch>(
+      MaterialPageRoute(builder: (_) => const QuizMatchmakingScreen()),
+    );
+    if (!mounted) return;
+    setState(() {});
+    _refreshChallenges();
+  }
+
   void _refreshChallenges() {
+    QuizMatchService.invites().then((list) {
+      if (mounted) setState(() => _liveInvites = list.length);
+    });
     QuizChallengeService.incoming().then((list) {
       if (mounted) setState(() => _incomingChallenges = list.length);
     });
@@ -575,6 +597,13 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
         onChallenge: _startChallenge,
         onOpen: _openChallenges,
       ),
+      // Live head-to-head sits BESIDE the async challenge above, not in
+      // place of it: they are different games. A challenge is played
+      // whenever you like; this one needs both people present now.
+      _LiveMatchTile(
+        invites: _liveInvites,
+        onTap: _openLiveMatch,
+      ),
     ];
 
     return GridView.count(
@@ -885,6 +914,111 @@ class _ChallengeTile extends StatelessWidget {
                 style: AppTextStyles.labelSmall.copyWith(
                   color: waiting
                       ? ArenaTheme.gold
+                      : ArenaTheme.textFaintOnNavy,
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Live head-to-head. Reads as the loud one on the grid because it is the
+/// only mode where someone else is waiting on you.
+class _LiveMatchTile extends StatelessWidget {
+  const _LiveMatchTile({required this.invites, required this.onTap});
+
+  final int invites;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final waiting = invites > 0;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: ArenaTheme.tileRadius,
+        onTap: () {
+          QuizSfx.tap();
+          onTap();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: waiting
+                ? ArenaTheme.correctOnNavy.withValues(alpha: 0.16)
+                : ArenaTheme.glass,
+            borderRadius: ArenaTheme.tileRadius,
+            border: Border.all(
+              color: waiting
+                  ? ArenaTheme.correctOnNavy.withValues(alpha: 0.6)
+                  : ArenaTheme.glassBorder,
+            ),
+            boxShadow: waiting
+                ? ArenaTheme.glow(ArenaTheme.correctOnNavy, strength: 0.5)
+                : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: ArenaTheme.correctOnNavy.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.bolt_rounded,
+                        size: 19, color: ArenaTheme.correctOnNavy),
+                  ),
+                  const Spacer(),
+                  if (waiting)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: ArenaTheme.correctOnNavy,
+                        borderRadius:
+                            BorderRadius.circular(ArenaTheme.radiusPill),
+                      ),
+                      child: Text(
+                        '$invites',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: ArenaTheme.canvasTop,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                waiting ? 'Someone wants to play' : 'Live match',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleSmall.copyWith(
+                  color: ArenaTheme.textOnNavy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                waiting
+                    ? 'Join before it expires'
+                    : 'Head to head, same clock.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: waiting
+                      ? ArenaTheme.correctOnNavy
                       : ArenaTheme.textFaintOnNavy,
                   fontSize: 11,
                   height: 1.3,

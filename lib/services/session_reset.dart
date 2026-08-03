@@ -8,6 +8,7 @@ import 'messaging_service.dart';
 import 'music_player_service.dart';
 import 'premium_service.dart';
 import 'presence_service.dart';
+import 'quiz_match_service.dart';
 import 'usage_analytics.dart';
 import 'voice_player_service.dart';
 
@@ -82,6 +83,13 @@ class SessionReset {
     // a plain static and would otherwise carry over.
     await _step('biometric', () async {
       BiometricService.clearSessionOnSignOut();
+    });
+
+    // The cached quiz identity is a static, and it also holds the live
+    // match's Realtime channel open — the next account would arrive to the
+    // previous player's name and a subscription to their match.
+    await _step('quizMatch', () async {
+      QuizMatchService.resetForSignOut();
     });
 
     // User-scoped `pref:` keys. `clearUserData()` spares this namespace so

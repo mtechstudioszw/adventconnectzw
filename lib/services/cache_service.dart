@@ -21,6 +21,18 @@ class CacheService {
   static Box<String>? _box;
   static const Duration _maxAge = Duration(hours: 24);
 
+  /// Point the cache at a box the test opened itself.
+  ///
+  /// [initialize] calls `Hive.initFlutter()`, which needs a plugin the test
+  /// binding does not provide — so without this the box is simply never
+  /// open under test and every read returns null. That silently turned any
+  /// test about *stored* preferences into a test about defaults, which is
+  /// how the sound settings shipped reading values nothing had loaded.
+  @visibleForTesting
+  static Future<void> debugUseBox(Box<String>? box) async {
+    _box = box;
+  }
+
   /// Open the cache box. Called once from `main()` after
   /// `Hive.initFlutter()`. Subsequent calls no-op.
   static Future<void> initialize() async {

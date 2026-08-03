@@ -8,6 +8,7 @@ import '../../../widgets/motion/brand_spinner.dart';
 import 'arena_theme.dart';
 import 'quiz_challenge_screen.dart' show QuizAvatar;
 import 'widgets/arena_scaffold.dart';
+import 'widgets/quiz_profile_sheet.dart';
 
 /// Weekly (and all-time) standings.
 ///
@@ -41,9 +42,17 @@ class _QuizLeaderboardScreenState extends State<QuizLeaderboardScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final days = _periods[_periodIndex].$2;
+    // "This week" is the founder's resetting board and has its own RPCs.
+    // Month and all-time stay rolling — a fixed boundary would mean an
+    // "all time" that started on Sunday.
+    final weekly = _periodIndex == 0;
     final results = await Future.wait([
-      QuizCloudService.leaderboard(days: days),
-      QuizCloudService.myRank(days: days),
+      weekly
+          ? QuizCloudService.weeklyLeaderboard()
+          : QuizCloudService.leaderboard(days: days),
+      weekly
+          ? QuizCloudService.myWeeklyRank()
+          : QuizCloudService.myRank(days: days),
     ]);
     if (!mounted) return;
     setState(() {
@@ -51,6 +60,13 @@ class _QuizLeaderboardScreenState extends State<QuizLeaderboardScreen> {
       _me = results[1] as QuizRankSummary?;
       _loading = false;
     });
+  }
+
+  /// The board is opt-in, so someone without a quiz profile isn't ranked
+  /// last — they're simply not on it. Say that, and offer the way on.
+  Future<void> _createProfile() async {
+    final made = await QuizProfileSheet.show(context);
+    if (made == true && mounted) _load();
   }
 
   @override
@@ -63,7 +79,59 @@ class _QuizLeaderboardScreenState extends State<QuizLeaderboardScreen> {
           _buildPeriods(),
           const SizedBox(height: 12),
           Expanded(child: _buildBody()),
-          if (_me != null && !_loading) _buildMyRank(_me!),
+          if (!_loading && _me?.hasProfile == false)
+            _buildJoinPrompt()
+          else if (_me != null && !_loading)
+            _buildMyRank(_me!),
+        ],
+      ),
+    );
+  }
+
+  /// Shown instead of a rank row when the player has no quiz profile. They
+  /// are not ranked last — they are not on the board, which is a different
+  /// thing and needs saying so the empty row isn't read as a zero score.
+  Widget _buildJoinPrompt() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ArenaTheme.gold.withValues(alpha: 0.12),
+        borderRadius: ArenaTheme.cardRadius,
+        border: Border.all(color: ArenaTheme.gold.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'You’re not on the board yet',
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: ArenaTheme.textOnNavy,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Pick a player name to be ranked. Solo rounds still work '
+                  'without one.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: ArenaTheme.textMutedOnNavy,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          TextButton(
+            onPressed: _createProfile,
+            style: TextButton.styleFrom(foregroundColor: ArenaTheme.gold),
+            child: const Text('Join'),
+          ),
         ],
       ),
     );

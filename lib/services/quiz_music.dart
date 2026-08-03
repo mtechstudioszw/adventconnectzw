@@ -38,8 +38,15 @@ class QuizMusic {
 
   /// Stored INVERTED (`quiz_music_off`) so an absent pref means "on" — the
   /// music is part of how the arena is meant to feel, so it is opt-out.
-  static const _kOff = 'quiz_music_off';
-  static const _kVolume = 'quiz_music_volume';
+  ///
+  /// `pref:` prefixed for the same reason as [QuizSfx]: without it,
+  /// `CacheService.clearUserData()` deleted these on every sign-out.
+  static const _kOff = 'pref:quiz_music_off';
+  static const _kVolume = 'pref:quiz_music_volume';
+
+  /// Pre-`pref:` keys, read once so an existing install keeps its choice.
+  static const _legacyOff = 'quiz_music_off';
+  static const _legacyVolume = 'quiz_music_volume';
 
   /// Under the effects on purpose: a soundtrack that competes with the
   /// answer sounds makes the round feel muddy rather than exciting.
@@ -60,21 +67,46 @@ class QuizMusic {
   static bool _unavailable = false;
   static bool get unavailable => _unavailable;
 
-  static bool get enabled => !_off;
-  static double get volume => _volume;
+  // Both getters load first, for the reason spelled out on [loadPrefs]:
+  // a reader that forgets silently reports the default instead of what the
+  // member chose.
+  static bool get enabled {
+    loadPrefs();
+    return !_off;
+  }
+
+  static double get volume {
+    loadPrefs();
+    return _volume;
+  }
 
   /// Notifies the settings UI so the toggle and slider stay in sync.
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
-  static void _loadPrefs() {
+  /// Read the saved toggle + volume.
+  ///
+  /// Public, and it has to be: [enabled] and [volume] are plain statics, so
+  /// anything that only READS them — the Sound & haptics screen — showed
+  /// the compiled-in defaults until some setter happened to run. That is
+  /// what "the quiz settings buttons don't work" was; see
+  /// [QuizSfx.loadPrefs] for the full account.
+  ///
+  /// Idempotent and synchronous, so it is safe to call from `build`.
+  static void loadPrefs() {
     if (_loaded) return;
     _loaded = true;
-    _off = CacheService.readPref(_kOff) == '1';
-    _volume =
-        double.tryParse(CacheService.readPref(_kVolume) ?? '')
-            ?.clamp(kMinVolume, 1.0) ??
+    _off = (CacheService.readPref(_kOff) ??
+            CacheService.readPref(_legacyOff)) ==
+        '1';
+    _volume = double.tryParse(
+              CacheService.readPref(_kVolume) ??
+                  CacheService.readPref(_legacyVolume) ??
+                  '',
+            )?.clamp(kMinVolume, 1.0) ??
         defaultVolume;
   }
+
+  static void _loadPrefs() => loadPrefs();
 
   static Future<void> setEnabled(bool value) async {
     _loadPrefs();

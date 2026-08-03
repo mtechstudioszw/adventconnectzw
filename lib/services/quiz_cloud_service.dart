@@ -46,12 +46,22 @@ class QuizRankSummary {
     required this.rounds,
     required this.rank,
     required this.totalPlayers,
+    this.weekEnd,
+    this.hasProfile = true,
   });
 
   final int points;
   final int rounds;
   final int rank;
   final int totalPlayers;
+
+  /// When the current week's points are wiped. Null for the rolling
+  /// periods, which never reset.
+  final DateTime? weekEnd;
+
+  /// False when the player has no quiz profile — the board is opt-in, so
+  /// they are simply not on it yet rather than ranked last.
+  final bool hasProfile;
 }
 
 /// Mirrors local quiz progress to Supabase and serves the leaderboard.
@@ -152,7 +162,58 @@ class QuizCloudService {
     }
   }
 
-  /// Top players over the last [days].
+  /// The weekly board — points that RESET at the week boundary rather than
+  /// a rolling window.
+  ///
+  /// The founder's call, and the rolling version was quietly wrong for it:
+  /// with `now() - 7 days` a player's score decayed as their old rounds
+  /// aged out, so a total could fall while they were asleep and nobody
+  /// could tell why. This resets at Sunday 00:00 Harare instead — see
+  /// `quiz_week_start()`.
+  ///
+  /// Only players with a quiz profile appear. Being on a public board is
+  /// opt-in, which is the same call as "required for the leaderboard".
+  static Future<List<QuizLeaderboardEntry>> weeklyLeaderboard({
+    int limit = 50,
+  }) async {
+    try {
+      final rows = await _client.rpc(
+        'quiz_leaderboard_weekly',
+        params: {'p_limit': limit},
+      );
+      return (rows as List)
+          .map((r) => QuizLeaderboardEntry.fromJson(r as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('QuizCloudService.weeklyLeaderboard failed: $e');
+      return const [];
+    }
+  }
+
+  /// The caller's standing on the resetting weekly board.
+  static Future<QuizRankSummary?> myWeeklyRank() async {
+    if (_uid == null) return null;
+    try {
+      final rows = await _client.rpc('quiz_my_rank_weekly');
+      final list = rows as List;
+      if (list.isEmpty) return null;
+      final row = list.first as Map<String, dynamic>;
+      return QuizRankSummary(
+        points: (row['points'] as num?)?.toInt() ?? 0,
+        rounds: (row['rounds'] as num?)?.toInt() ?? 0,
+        rank: (row['rank'] as num?)?.toInt() ?? 0,
+        totalPlayers: (row['total_players'] as num?)?.toInt() ?? 0,
+        weekEnd: DateTime.tryParse(row['week_end']?.toString() ?? ''),
+        hasProfile: row['has_profile'] == true,
+      );
+    } catch (e) {
+      debugPrint('QuizCloudService.myWeeklyRank failed: $e');
+      return null;
+    }
+  }
+
+  /// Top players over the last [days]. Still rolling — used by the month
+  /// and all-time views, where a fixed boundary would make no sense.
   static Future<List<QuizLeaderboardEntry>> leaderboard({
     int days = 7,
     int limit = 50,

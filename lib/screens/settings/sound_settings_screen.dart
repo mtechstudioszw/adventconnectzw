@@ -28,6 +28,20 @@ class SoundSettingsScreen extends StatefulWidget {
 }
 
 class _SoundSettingsScreenState extends State<SoundSettingsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Without these two lines every control on this screen renders from a
+    // compiled-in default rather than from what the member actually saved.
+    // `QuizSfx` used to read its preferences only inside `init()`, which
+    // builds the audio pool and runs when the ARENA opens — so arriving
+    // here from Settings, without having played that session, showed every
+    // switch ON no matter what was stored. Someone who had muted the quiz
+    // saw "Sound effects: ON", changed nothing, and still got silence.
+    QuizSfx.loadPrefs();
+    QuizMusic.loadPrefs();
+  }
+
   Future<void> _setEffects(bool on) async {
     await QuizSfx.setMuted(!on);
     if (!mounted) return;

@@ -51,9 +51,21 @@ extension on QuizSound {
 class QuizSfx {
   QuizSfx._();
 
-  static const _kMuted = 'quiz_sfx_muted';
-  static const _kHaptics = 'quiz_haptics_off';
-  static const _kVolume = 'quiz_sfx_volume';
+  // `pref:` prefixed, and that prefix is load-bearing:
+  // `CacheService.clearUserData()` deletes every key that does NOT start
+  // with it. These are device settings, not user data, so without the
+  // prefix every sign-out silently reset the member's sound and vibration
+  // choices back to full volume.
+  static const _kMuted = 'pref:quiz_sfx_muted';
+  static const _kHaptics = 'pref:quiz_haptics_off';
+  static const _kVolume = 'pref:quiz_sfx_volume';
+
+  // The unprefixed keys these used to be written under. Read once, on the
+  // first load, so nobody's existing settings are thrown away by the
+  // rename — then written back under the new key.
+  static const _legacyMuted = 'quiz_sfx_muted';
+  static const _legacyHaptics = 'quiz_haptics_off';
+  static const _legacyVolume = 'quiz_sfx_volume';
 
   static final Map<QuizSound, AudioPlayer> _players = {};
   static bool _initialised = false;
@@ -78,7 +90,15 @@ class QuizSfx {
   /// Cached so the arena can render its mute button without a disk read.
   static bool _muted = false;
 
-  static bool get muted => _muted;
+  /// Every getter below loads the stored preferences first.
+  ///
+  /// Belt and braces on purpose: relying on each call site to remember is
+  /// precisely what failed. [loadPrefs] is idempotent and is three map
+  /// lookups once per session, so the safe thing is also the cheap thing.
+  static bool get muted {
+    loadPrefs();
+    return _muted;
+  }
 
   /// The quietest the SLIDER may go.
   ///
@@ -98,13 +118,17 @@ class QuizSfx {
   /// the house. Defaults to 0.85.
   static double _volume = 0.85;
 
-  static double get volume => _volume;
+  static double get volume {
+    loadPrefs();
+    return _volume;
+  }
 
   /// Notifies the arena UI so a slider and the mute button stay in sync
   /// wherever they're drawn.
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
   static Future<void> setVolume(double value) async {
+    loadPrefs();
     _volume = value.clamp(kMinVolume, 1.0);
     await CacheService.writePref(_kVolume, _volume.toStringAsFixed(2));
     for (final entry in _players.entries) {
@@ -120,9 +144,13 @@ class QuizSfx {
   /// absent pref means "on".
   static bool _hapticsOff = false;
 
-  static bool get hapticsEnabled => !_hapticsOff;
+  static bool get hapticsEnabled {
+    loadPrefs();
+    return !_hapticsOff;
+  }
 
   static Future<void> setHapticsEnabled(bool value) async {
+    loadPrefs();
     _hapticsOff = !value;
     await CacheService.writePref(_kHaptics, value ? '0' : '1');
   }
@@ -147,19 +175,53 @@ class QuizSfx {
         ),
       );
 
+  /// True once the stored preferences have been read into the statics.
+  static bool _prefsLoaded = false;
+
+  /// Read the saved mute / volume / haptics settings.
+  ///
+  /// Split out of [init] because the two jobs have completely different
+  /// costs and completely different callers. [init] builds nine audio
+  /// players and is only worth doing when the arena opens; this is three
+  /// synchronous map lookups, and **anything that merely READS these
+  /// settings has to call it first**.
+  ///
+  /// Not doing so was the bug behind "the quiz settings buttons don't
+  /// work". The settings screen renders straight off [muted], [volume] and
+  /// [hapticsEnabled], and those are plain statics that started at their
+  /// compiled-in defaults. Open Settings → Sound & haptics without having
+  /// entered the arena that session and every control read ON regardless of
+  /// what was saved — so a member who had muted the quiz saw "Sound
+  /// effects: ON", left it alone, and got silence.
+  ///
+  /// Idempotent, and safe to call from `build`.
+  static void loadPrefs() {
+    if (_prefsLoaded) return;
+    _prefsLoaded = true;
+    _muted = _readFlag(_kMuted, _legacyMuted);
+    _hapticsOff = _readFlag(_kHaptics, _legacyHaptics);
+    // Clamped to kMinVolume on the way IN as well, so a phone that already
+    // stored "0.00" before the slider had a floor heals itself on the next
+    // launch instead of staying silent forever.
+    _volume = double.tryParse(
+              CacheService.readPref(_kVolume) ??
+                  CacheService.readPref(_legacyVolume) ??
+                  '',
+            )?.clamp(kMinVolume, 1.0) ??
+        0.85;
+  }
+
+  /// Reads the current key, falling back to the pre-`pref:` one so an
+  /// existing install keeps the settings it already had.
+  static bool _readFlag(String key, String legacyKey) =>
+      (CacheService.readPref(key) ?? CacheService.readPref(legacyKey)) == '1';
+
   /// Warm the players up. Safe to call more than once; call it when the
   /// arena opens so the first tap isn't the one that pays for loading.
   static Future<void> init() async {
     if (_initialised || _initialising) return;
     _initialising = true;
-    _muted = CacheService.readPref(_kMuted) == '1';
-    _hapticsOff = CacheService.readPref(_kHaptics) == '1';
-    // Clamped to kMinVolume on the way IN as well, so a phone that already
-    // stored "0.00" before the slider had a floor heals itself on the next
-    // launch instead of staying silent forever.
-    _volume = double.tryParse(CacheService.readPref(_kVolume) ?? '')
-            ?.clamp(kMinVolume, 1.0) ??
-        0.85;
+    loadPrefs();
     final generation = _generation;
     // Built off to the side and published in one go at the end, so a
     // concurrent dispose() can never find a half-filled pool.
@@ -223,6 +285,7 @@ class QuizSfx {
   }
 
   static Future<void> setMuted(bool value) async {
+    loadPrefs();
     _muted = value;
     await CacheService.writePref(_kMuted, value ? '1' : '0');
     if (value) {
@@ -253,7 +316,7 @@ class QuizSfx {
   /// pool on the way out) this kicks off initialisation instead of
   /// silently dropping every effect for the whole round.
   static void play(QuizSound sound) {
-    if (_muted) return;
+    if (muted) return;
     if (!_initialised) {
       unawaited(init());
       return;
@@ -288,17 +351,17 @@ class QuizSfx {
   // platform-appropriate impact.
 
   static void hapticTap() {
-    if (_hapticsOff) return;
+    if (!hapticsEnabled) return;
     HapticFeedback.selectionClick();
   }
 
   static void hapticCorrect() {
-    if (_hapticsOff) return;
+    if (!hapticsEnabled) return;
     HapticFeedback.mediumImpact();
   }
 
   static void hapticWrong() {
-    if (_hapticsOff) return;
+    if (!hapticsEnabled) return;
     if (Platform.isAndroid) {
       HapticFeedback.vibrate();
     } else {
@@ -307,7 +370,7 @@ class QuizSfx {
   }
 
   static void hapticCombo() {
-    if (_hapticsOff) return;
+    if (!hapticsEnabled) return;
     HapticFeedback.heavyImpact();
   }
 
@@ -340,5 +403,17 @@ class QuizSfx {
   static void countBeat() {
     play(QuizSound.count);
     hapticCountBeat();
+  }
+
+  @visibleForTesting
+  static void resetForTest() {
+    _players.clear();
+    _initialised = false;
+    _initialising = false;
+    _prefsLoaded = false;
+    _muted = false;
+    _hapticsOff = false;
+    _volume = 0.85;
+    _generation++;
   }
 }

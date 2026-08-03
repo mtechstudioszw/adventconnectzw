@@ -538,7 +538,11 @@ class _HomeScreenState extends State<HomeScreen>
         EventService.fetchEvents(upcomingOnly: true),
         ChurchService.fetchChurches(),
         EventService.fetchUserRsvpedEventIds(),
-        DirectoryService.fetchSuggestedMembers(),
+        // 18, not 8: the feed shows TWO people rails now (#13) and they draw
+        // from disjoint slices of this pool. Eight would have left the
+        // second rail with two people in it, which is a worse signal than
+        // showing no second rail.
+        DirectoryService.fetchSuggestedMembers(limit: 18),
         FeedService.pendingRequestCount(),
         MessagingService.fetchConversations(),
         AdventNewsService.fetchTopNews(limit: 3),
@@ -1340,15 +1344,41 @@ class _HomeScreenState extends State<HomeScreen>
     return user?.email ?? 'Welcome';
   }
 
-  /// True when there's at least one suggested member the viewer is
-  /// NOT already friends with. Pending requests still count so the
-  /// rail shows even when there's only an Accept-button card to show.
-  bool get _hasNonFriendSuggestions {
-    return _suggestedMembers.any((m) {
+  /// Suggested members the viewer is NOT already friends with.
+  ///
+  /// Pending requests either way still count, so the rail shows even when
+  /// all it has is an Accept button. Cards dismissed this session drop out.
+  List<MemberDirectoryEntry> get _openSuggestions {
+    return _suggestedMembers.where((m) {
+      if (_dismissedSuggestionIds.contains(m.userId)) return false;
       final f = _friendshipsByUser[m.userId];
       if (f == null) return true;
       return f.status != FriendshipStatus.accepted;
-    });
+    }).toList();
+  }
+
+  /// How many people the first rail takes before the second one starts.
+  static const _firstRailSize = 6;
+
+  /// Splits [_openSuggestions] between the two "people to meet" rails (#13).
+  ///
+  /// `DirectoryService.fetchSuggestedMembers` already returns the pool
+  /// tiered by real overlap — same church, then same city, then same
+  /// province, then everyone else — so taking the head and the tail is
+  /// exactly the split we want: the first rail is the people the viewer
+  /// plausibly knows of, the second is the wider community.
+  ///
+  /// The second rail needs at least three people to be worth its heading. A
+  /// rail of one is a lonelier signal than no rail at all, especially on a
+  /// network this size, so below that everyone stays in the first rail.
+  List<MemberDirectoryEntry> _suggestionsForRail({required bool first}) {
+    final all = _openSuggestions;
+    if (all.length < _firstRailSize + 3) {
+      return first ? all : const [];
+    }
+    return first
+        ? all.take(_firstRailSize).toList()
+        : all.skip(_firstRailSize).toList();
   }
 
   String? _profilePhotoUrl() {
@@ -1743,6 +1773,29 @@ class _HomeScreenState extends State<HomeScreen>
               "You've seen everything new.",
               style: AppTextStyles.caption.copyWith(color: palette.textMuted),
             ),
+            const SizedBox(height: AppSpace.lg),
+            // The feed does NOT loop back and re-serve posts the viewer has
+            // already read. On a network this size that would be obvious
+            // within one scroll, and a feed caught recycling reads as a feed
+            // with nothing in it. What the end of the feed can honestly do
+            // is point somewhere there IS more.
+            Wrap(
+              spacing: AppSpace.sm,
+              runSpacing: AppSpace.sm,
+              alignment: WrapAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => context.pushNamed('member_directory'),
+                  icon: const Icon(Icons.people_outline_rounded, size: 18),
+                  label: const Text('Meet people'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => context.pushNamed('events'),
+                  icon: const Icon(Icons.event_outlined, size: 18),
+                  label: const Text('Events'),
+                ),
+              ],
+            ),
           ],
         ),
       );
@@ -1782,12 +1835,18 @@ class _HomeScreenState extends State<HomeScreen>
     final viewerId = AuthService.currentUser?.id;
     final cachedAt = CacheService.cachedAt('home_feed');
     final discoveryCards = _buildDiscoveryCards();
-    // Shuffle with a per-account seed so the discovery cards (incl. the
-    // marketplace pick) land in a stable-but-varied order per user instead
-    // of the marketplace pick always being last (tester: "mix it up").
-    if (discoveryCards.length > 1) {
-      discoveryCards.shuffle(Random((viewerId ?? 'x').hashCode));
-    }
+    // NOTE: no shuffle here.
+    //
+    // There used to be a `discoveryCards.shuffle(Random(viewerId.hashCode))`
+    // on this line, and it was the whole of #14. `_buildDiscoveryCards`
+    // ends by sorting the modules by requested depth, then by the viewer's
+    // onboarding interests, then by a per-viewer seed — and this line threw
+    // all three away and re-ordered them at random. The shuffle was seeded,
+    // so the result was stable per account and looked deliberate; what it
+    // actually meant was that asking for "more events" during onboarding
+    // changed nothing, and that no module could be relied on to appear
+    // anywhere in particular. The ordering is computed once, properly, and
+    // is now allowed to survive.
 
     // Facebook-style mixed feed: real posts intercalated with discovery
     // cards (suggested people / events / churches / prayer prompt /
@@ -1806,6 +1865,25 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       );
     }
+    // Discovery modules are paced to the content that actually EXISTS, not
+    // to a fixed "one card every five posts".
+    //
+    // That constant is the other half of #14. With a full feed it is right.
+    // With the post backlog this network actually has, it meant that after
+    // six posts exactly one module had been interleaved and the remaining
+    // seven were dumped in a block at the very bottom — past the end of the
+    // posts, where nobody scrolls. From the outside that is "the modules
+    // don't come back". They were coming back; they were being stacked
+    // somewhere no one looks.
+    //
+    // Spreading them evenly over however many posts there are means every
+    // module lands between two posts on any feed length, and a long feed
+    // still gets the original 5-post rhythm because of the cap.
+    final discoverySpacing = discoveryCards.isEmpty || _posts.isEmpty
+        ? _discoveryEveryNPosts
+        : (_posts.length ~/ (discoveryCards.length + 1))
+            .clamp(2, _discoveryEveryNPosts);
+
     var cardIdx = 0;
     var adsInserted = 0;
     var videoIdx = 0;
@@ -1846,8 +1924,7 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       );
-      if ((i + 1) % _discoveryEveryNPosts == 0 &&
-          cardIdx < discoveryCards.length) {
+      if ((i + 1) % discoverySpacing == 0 && cardIdx < discoveryCards.length) {
         children.add(discoveryCards[cardIdx++]);
       }
       // Individual YouTube video cards from Watch, interleaved into the
@@ -1946,13 +2023,44 @@ class _HomeScreenState extends State<HomeScreen>
     // Music is NO LONGER a discovery rail. Ten tracks crowded into one
     // horizontal strip scrolled past as a blur; each track now gets its own
     // card interleaved into the feed (see _musicEveryNPosts).
-    if (_hasNonFriendSuggestions) {
+    // #13 — two rows of people, surfaced at different depths.
+    //
+    // One rail was doing two jobs badly. The people worth meeting first are
+    // the ones the viewer overlaps with — same congregation, same city —
+    // and those are exactly the ones buried at the far end of a horizontal
+    // scroll nobody finishes. Splitting the pool means the near tier gets a
+    // rail of its own near the top, and the wider community gets a second
+    // one further down where "who else is on here" is the question the
+    // viewer is actually asking.
+    //
+    // The two rails draw from DISJOINT slices, so the second is never a
+    // repeat of the first. If there aren't enough people to fill both, the
+    // second simply doesn't build — better one honest rail than the same
+    // faces twice under two different headings.
+    final nearby = _suggestionsForRail(first: true);
+    final wider = _suggestionsForRail(first: false);
+    if (nearby.isNotEmpty) {
       discoverable.add(
         _DiscoverySlot(
           key: 'people',
+          depth: _SlotDepth.early,
           widget: _discoverySection(
             title: 'People you may meet',
-            child: _buildSuggestedMembersRow(),
+            child: _buildSuggestedMembersRow(nearby),
+          ),
+        ),
+      );
+    }
+    if (wider.isNotEmpty) {
+      discoverable.add(
+        _DiscoverySlot(
+          key: 'people_more',
+          depth: _SlotDepth.late,
+          widget: _discoverySection(
+            title: 'More of the community',
+            action: 'See all',
+            onAction: () => context.pushNamed('member_directory'),
+            child: _buildSuggestedMembersRow(wider),
           ),
         ),
       );
@@ -2060,6 +2168,10 @@ class _HomeScreenState extends State<HomeScreen>
         ..._interestToSlotKeys((i ?? '').toString()),
     };
     discoverable.sort((a, b) {
+      // Depth outranks everything: a module that asked to be early or late
+      // asked for a reason, and interest weighting must not drag the second
+      // people rail up next to the first one.
+      if (a.depth != b.depth) return a.depth.index.compareTo(b.depth.index);
       final aWanted = interestKeys.contains(a.key) ? 0 : 1;
       final bWanted = interestKeys.contains(b.key) ? 0 : 1;
       if (aWanted != bWanted) return aWanted.compareTo(bWanted);
@@ -2283,18 +2395,13 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Widget _buildSuggestedMembersRow() {
+  /// One "people to meet" rail. The caller decides WHICH people — there are
+  /// two rails now (#13) and they must show disjoint slices, so the
+  /// filtering lives in [_suggestionsForRail] rather than here.
+  Widget _buildSuggestedMembersRow(
+    List<MemberDirectoryEntry> visibleSuggestions,
+  ) {
     final viewerId = AuthService.currentUser?.id;
-    // Hide people the viewer is already friends with — they no longer
-    // belong in a "suggestions" rail. Pending requests (either
-    // direction) stay visible so the viewer can react to them. Dismissed
-    // cards drop out for this session.
-    final visibleSuggestions = _suggestedMembers.where((m) {
-      if (_dismissedSuggestionIds.contains(m.userId)) return false;
-      final f = _friendshipsByUser[m.userId];
-      if (f == null) return true;
-      return f.status != FriendshipStatus.accepted;
-    }).toList();
     // The text block below the photo takes its natural height and the
     // photo absorbs whatever is left (see _SuggestedMemberTile), so the
     // card cannot overflow when the system font is scaled up — it just
@@ -3565,10 +3672,35 @@ class _EmptyTile extends StatelessWidget {
 /// per-viewer shuffle is reproducible. Two users hash the same
 /// pool differently, but the same user sees the same order on
 /// every rebuild (no jumpy reshuffle).
+/// How deep into the feed a discovery module wants to sit.
+///
+/// Most modules don't care and take whatever the per-viewer ordering gives
+/// them. The two exceptions are the "people to meet" rails (#13): the feed
+/// shows two of them and they must not land next to each other, or they read
+/// as one long list that got wrapped rather than as two separate invitations
+/// to look.
+enum _SlotDepth {
+  /// Near the top, where a new member is still deciding whether this app
+  /// has anyone on it.
+  early,
+
+  /// No opinion — ordered by interest weighting and the per-viewer seed.
+  any,
+
+  /// Deliberately further down, for a second look at something the viewer
+  /// has already been offered once.
+  late,
+}
+
 class _DiscoverySlot {
-  const _DiscoverySlot({required this.key, required this.widget});
+  const _DiscoverySlot({
+    required this.key,
+    required this.widget,
+    this.depth = _SlotDepth.any,
+  });
   final String key;
   final Widget widget;
+  final _SlotDepth depth;
 }
 
 /// Magazine-style hero for the editorial Advent News feed. Renders

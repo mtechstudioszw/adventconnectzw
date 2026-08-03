@@ -19,6 +19,7 @@ import 'services/connectivity_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
 import 'services/music_player_service.dart';
+import 'services/premium_service.dart';
 import 'services/presence_service.dart';
 import 'services/sabbath_service.dart';
 import 'services/push_service.dart';
@@ -98,10 +99,34 @@ Future<void> _initBackgroundServices() async {
   // Outbox flusher needs Hive from Phase 1 above. Fire and forget.
   unawaited(MessagingService.startOutboxFlusher());
 
+  // Premium has to resolve BEFORE AdMob: a subscriber should never start
+  // the ad SDK at all, not merely hide its output. init() is one
+  // secure-storage read of the cached expiry, so it's cheap enough to
+  // await here; refresh() goes to the server and can land whenever.
+  await PremiumService.init();
+  unawaited(PremiumService.refresh());
+
   // AdMob: gather EU consent + initialise the SDK off the critical path
-  // so the first frame isn't blocked. Ad widgets check AdsService.isReady.
-  // Once ready, warm an App-Open ad for the next resume.
-  unawaited(AdsService.init().then((_) => AppOpenAdManager.loadAd()));
+  // so the first frame isn't blocked. Ad surfaces check
+  // AdsService.canRequestAds. Once ready, warm an App-Open ad for the
+  // next resume.
+  void startAds() {
+    unawaited(AdsService.init().then((_) => AppOpenAdManager.loadAd()));
+  }
+
+  if (!PremiumService.isActive) startAds();
+  PremiumService.isPremium.addListener(() {
+    if (PremiumService.isActive) {
+      // Purchased mid-session: bin anything already preloaded so it can't
+      // fire in the face of someone who just paid.
+      AdsService.discardCachedAds();
+    } else {
+      // Lapsed, refunded, or signed out. The SDK may never have been
+      // initialised this session — init() is idempotent, so this is safe
+      // either way.
+      startAds();
+    }
+  });
 
   // Inbound deep links (shared event / product / job / seller links from
   // the *-share Edge Functions). Routes via the same appRouter the push
@@ -125,6 +150,10 @@ Future<void> _initBackgroundServices() async {
       case AuthChangeEvent.tokenRefreshed:
         if (data.session?.user != null) {
           unawaited(PresenceService.start());
+          // Premium is per Advent account, so it has to be re-read on
+          // every sign-in — the cached expiry belongs to whoever was
+          // signed in last and grants this user nothing until confirmed.
+          unawaited(PremiumService.refresh());
           // Re-stamp the Sabbath quiet window (patch_169). The server
           // only compares now() against this timestamp — it never
           // computes sundown — so it has to be refreshed whenever the
@@ -134,6 +163,7 @@ Future<void> _initBackgroundServices() async {
         break;
       case AuthChangeEvent.signedOut:
         unawaited(PresenceService.stop());
+        unawaited(PremiumService.clear());
         break;
       default:
         break;
@@ -342,6 +372,11 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       unawaited(MessagingService.markAllIncomingDelivered());
       // Rejoin presence (online again + heartbeat resumes).
       if (AuthService.isSignedIn) unawaited(PresenceService.start());
+      // Re-read premium on every return. This is what makes a
+      // cancellation, refund or expiry that happened server-side while
+      // the app was backgrounded take effect without a relaunch — and it
+      // re-arms the expiry timer.
+      if (AuthService.isSignedIn) unawaited(PremiumService.refresh());
       // App-Open ad on return-to-foreground (capped once / 3h), but never
       // over a sensitive flow — Advent Chat, prayer, auth/onboarding,
       // splash/lock, banned/update, admin.

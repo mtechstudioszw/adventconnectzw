@@ -375,7 +375,17 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       imageUrl = (vid?.thumbnail_url as string | null) ?? null;
     } catch (_) {
-      // best-effort; falls back to a text-only banner.
+      // best-effort; the fallback below still applies.
+    }
+    // Belt and braces (3 Aug 2026). The row lookup can miss for reasons
+    // that have nothing to do with the push being wrong: a live
+    // broadcast notified in the same instant the row is written, or a
+    // video deleted afterwards (20 historical notifications are orphaned
+    // exactly that way). YouTube's thumbnail URL is deterministic from
+    // the video id, so there is never a good reason to send a live
+    // broadcast out as a bare text banner.
+    if (!imageUrl) {
+      imageUrl = `https://i.ytimg.com/vi/${referenceId}/hqdefault.jpg`;
     }
   }
 

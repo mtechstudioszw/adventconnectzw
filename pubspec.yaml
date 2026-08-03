@@ -141,6 +141,14 @@ dependencies:
   # or prayer screens. Pinned exact (min Dart 3.10; we're on 3.11).
   google_mobile_ads: 9.0.0
 
+  # Premium subscription — $3/month, removes every ad surface above.
+  # Google Play only for now; the app talks to lib/services/billing/
+  # through a store-agnostic interface, so StoreKit slots in behind the
+  # same seam when iOS ships. Purchases are ALWAYS verified server-side
+  # (supabase/functions/verify-purchase) — the client never grants
+  # itself premium. Pinned exact per project policy.
+  in_app_purchase: 3.2.0
+
   # Watch — official YouTube IFrame player for compliant in-app playback.
   # Video is embedded/streamed by YouTube only; we never download, proxy,
   # or re-host. Pinned exact per project policy. REQUIRES `flutter pub get`

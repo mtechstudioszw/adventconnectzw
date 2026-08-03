@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../secure_storage_service.dart';
 import 'ad_config.dart';
+import 'ad_impression_counter.dart';
 import 'ads_service.dart';
 
 /// Loads + shows the App-Open ad, hard-capped to once every
@@ -23,9 +26,16 @@ class AppOpenAdManager {
   static bool _isShowing = false;
   static bool _isLoading = false;
 
+  /// Drop any preloaded ad (a subscription just started).
+  static void discardCache() {
+    _ad?.dispose();
+    _ad = null;
+    _loadedAt = null;
+  }
+
   /// Preload an ad so it's ready the next time the user comes back.
   static void loadAd() {
-    if (!AdsService.isReady || _isLoading || _ad != null) return;
+    if (!AdsService.canRequestAds || _isLoading || _ad != null) return;
     _isLoading = true;
     AppOpenAd.load(
       adUnitId: AdConfig.appOpenUnitId,
@@ -52,7 +62,7 @@ class AppOpenAdManager {
   /// Show the ad if one is loaded, fresh, we're not already showing one,
   /// and the frequency cap allows it. Best-effort — always reloads after.
   static Future<void> showIfReady() async {
-    if (!AdsService.isReady || _isShowing) return;
+    if (!AdsService.canRequestAds || _isShowing) return;
     if (_ad == null || !_isCacheFresh) {
       loadAd();
       return;
@@ -62,7 +72,10 @@ class AppOpenAdManager {
     final ad = _ad!;
     _ad = null; // each AppOpenAd instance is single-use
     ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdShowedFullScreenContent: (_) => _isShowing = true,
+      onAdShowedFullScreenContent: (_) {
+        _isShowing = true;
+        unawaited(AdImpressionCounter.record());
+      },
       onAdDismissedFullScreenContent: (ad) {
         _isShowing = false;
         ad.dispose();

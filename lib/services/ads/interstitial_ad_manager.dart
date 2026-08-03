@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'ad_config.dart';
+import 'ad_impression_counter.dart';
 import 'ads_service.dart';
 
 /// Full-screen interstitial used BETWEEN stories (the founder asked for an
@@ -18,9 +21,15 @@ class InterstitialAdManager {
   static bool _isShowing = false;
   static DateTime? _lastShown;
 
+  /// Drop any preloaded ad (a subscription just started).
+  static void discardCache() {
+    _ad?.dispose();
+    _ad = null;
+  }
+
   /// Preload an interstitial so it's ready at the next story boundary.
   static void loadAd() {
-    if (!AdsService.isReady || _isLoading || _ad != null) return;
+    if (!AdsService.canRequestAds || _isLoading || _ad != null) return;
     _isLoading = true;
     InterstitialAd.load(
       adUnitId: AdConfig.interstitialUnitId,
@@ -46,7 +55,7 @@ class InterstitialAdManager {
   /// Show an interstitial if one is loaded and the cap allows. Returns
   /// true if an ad was shown (caller may want to pause story timers).
   static Future<bool> maybeShow() async {
-    if (!AdsService.isReady || _isShowing || !_capAllows) {
+    if (!AdsService.canRequestAds || _isShowing || !_capAllows) {
       loadAd();
       return false;
     }
@@ -59,6 +68,8 @@ class InterstitialAdManager {
     _isShowing = true;
     _lastShown = DateTime.now();
     ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdShowedFullScreenContent: (_) =>
+          unawaited(AdImpressionCounter.record()),
       onAdDismissedFullScreenContent: (ad) {
         _isShowing = false;
         ad.dispose();

@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/notification_preferences_service.dart';
+import '../../services/premium_service.dart';
 import '../../services/push_service.dart';
 import '../../services/sabbath_service.dart';
 import '../../services/seller_service.dart';
@@ -427,6 +428,13 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// its section name.
   List<_SettingsEntry> _searchIndex() {
     return [
+      // Subscription — keywords cover how people actually describe it
+      // ("remove ads", "stop ads") rather than only the product name.
+      _SettingsEntry('Go Premium', 'Subscription', Icons.star_rounded,
+          AppColors.goldAccent,
+          'premium subscription no ads remove ads stop ads adfree upgrade '
+          'support billing cancel restore',
+          () => context.pushNamed('premium')),
       // Account
       _SettingsEntry('Edit profile', 'Account', Icons.person_outline,
           AppColors.primaryBlue, 'name photo bio church avatar',
@@ -665,6 +673,29 @@ class _SettingsScreenState extends State<SettingsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Top of the list on purpose. Gold is the app's
+                    // one-accent-per-screen colour, so this reads as the
+                    // single different thing here without shouting.
+                    ValueListenableBuilder<bool>(
+                      valueListenable: PremiumService.isPremium,
+                      builder: (context, isPremium, _) => Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: _Section(
+                          title: 'Subscription',
+                          accent: AppColors.goldAccent,
+                          children: [
+                            _NavRow(
+                              icon: Icons.star_rounded,
+                              tint: AppColors.goldAccent,
+                              label:
+                                  isPremium ? 'Premium' : 'Go Premium — no ads',
+                              trailing: isPremium ? 'Active' : null,
+                              onTap: () => context.pushNamed('premium'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     _Section(
                       title: 'Account',
                       accent: AppColors.primaryBlue,

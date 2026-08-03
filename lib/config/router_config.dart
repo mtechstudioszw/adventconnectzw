@@ -102,6 +102,7 @@ import '../screens/seller/marketplace_guidelines_screen.dart';
 import '../screens/seller/seller_dashboard_screen.dart';
 import '../screens/seller/seller_profile_screen.dart';
 import '../screens/seller/setup_store_screen.dart';
+import '../screens/premium/premium_screen.dart';
 import '../screens/settings/about_screen.dart';
 import '../screens/settings/permissions_screen.dart';
 import '../screens/settings/settings_screen.dart';
@@ -889,6 +890,14 @@ final GoRouter appRouter = GoRouter(
           },
         ),
       ],
+    ),
+    // Top-level, not nested under /settings or /profile: the promo, the
+    // Profile menu and Settings all push it, and a shared subscription
+    // screen shouldn't belong to whichever one happened to add it first.
+    GoRoute(
+      path: '/premium',
+      name: 'premium',
+      builder: (context, state) => const PremiumScreen(),
     ),
     GoRoute(
       path: '/settings',

@@ -15,11 +15,22 @@ class RewardedAdManager {
   static bool _isLoading = false;
   static bool _isShowing = false;
 
-  static bool get isReady => _ad != null;
+  /// True only when there's an ad to show AND we're allowed to show it.
+  /// For a premium subscriber this is always false, and the quiz's
+  /// lifeline path already grants the lifeline free when no ad is
+  /// available — which is exactly the right premium behaviour: they get
+  /// the hint without the ad, rather than losing the hint.
+  static bool get isReady => _ad != null && AdsService.canRequestAds;
+
+  /// Drop any preloaded ad (a subscription just started).
+  static void discardCache() {
+    _ad?.dispose();
+    _ad = null;
+  }
 
   /// Preload a rewarded ad so it's ready when the user taps "watch".
   static void loadAd() {
-    if (!AdsService.isReady || _isLoading || _ad != null) return;
+    if (!AdsService.canRequestAds || _isLoading || _ad != null) return;
     _isLoading = true;
     RewardedAd.load(
       adUnitId: AdConfig.rewardedUnitId,

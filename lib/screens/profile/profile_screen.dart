@@ -11,6 +11,8 @@ import '../../widgets/ministry_chips.dart';
 import '../../models/post_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/auth_service.dart';
+import '../../services/premium_service.dart';
+import '../../widgets/premium/premium_badge.dart';
 import '../../widgets/verified_tick.dart';
 import '../../utils/date_format.dart';
 import '../../services/cache_service.dart';
@@ -1224,6 +1226,22 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                       onTap: () => showFriendQrSheet(context),
                     ),
                     const SizedBox(width: 8),
+                    // Subscription entry point. Shown to everyone —
+                    // paying is the only route to ad-free, so a church
+                    // admin sees this exactly like anyone else.
+                    ValueListenableBuilder<bool>(
+                      valueListenable: PremiumService.isPremium,
+                      builder: (context, isPremium, _) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: HeaderIconButton(
+                          icon: isPremium
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
+                          tooltip: isPremium ? 'Your Premium' : 'Go Premium',
+                          onTap: () => context.pushNamed('premium'),
+                        ),
+                      ),
+                    ),
                     HeaderIconButton(
                       icon: Icons.settings_outlined,
                       tooltip: 'Settings',
@@ -1372,6 +1390,18 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                 ),
               ),
               if (_isVerified) const VerifiedTick(size: 20, leftGap: 6),
+              // Premium sits AFTER the verified tick: verification says
+              // who you are, premium says you support the app, and the
+              // identity claim should come first.
+              ValueListenableBuilder<bool>(
+                valueListenable: PremiumService.isPremium,
+                builder: (context, isPremium, _) => isPremium
+                    ? const Padding(
+                        padding: EdgeInsets.only(left: 6),
+                        child: PremiumBadge(size: 20),
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ),
           const SizedBox(height: 4),

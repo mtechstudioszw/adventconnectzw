@@ -46,6 +46,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/ads/native_ad_card.dart';
+import '../../widgets/premium/premium_promo_sheet.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_entry.dart';
 import '../../widgets/home/composer_sheet.dart';
@@ -230,6 +231,13 @@ class _HomeScreenState extends State<HomeScreen>
     // Gated + best-effort; Google's native sheet handles "already rated".
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) RatingPromptService.maybeRequestReview();
+    });
+    // The premium promo, last in the queue and latest of all the
+    // delays: PremiumPromoService caps it at once per fortnight and
+    // refuses outright if any other sheet is still up, so being last
+    // costs nothing and guarantees it never talks over the others.
+    Future.delayed(const Duration(seconds: 6), () {
+      if (mounted) PremiumPromoSheet.maybeShow(context);
     });
     // "Finish your profile" nudge. The RPC re-checks completeness and
     // won't fire more than once a fortnight, so this is safe to call on

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../../services/ads/ad_config.dart';
+import '../../services/ads/ad_impression_counter.dart';
 import '../../services/ads/ads_service.dart';
+import '../../services/premium_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 
@@ -31,6 +33,12 @@ class _NativeAdCardState extends State<NativeAdCard> {
   int _retries = 0;
 
   @override
+  void initState() {
+    super.initState();
+    PremiumService.isPremium.addListener(_onPremiumChanged);
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_requested) {
@@ -39,13 +47,30 @@ class _NativeAdCardState extends State<NativeAdCard> {
     }
   }
 
+  /// Premium started: pull the card out of the feed immediately. Premium
+  /// lapsed: start asking again.
+  void _onPremiumChanged() {
+    if (!mounted) return;
+    if (PremiumService.isActive) {
+      _ad?.dispose();
+      _ad = null;
+      setState(() => _loaded = false);
+    } else if (_ad == null) {
+      _retries = 0;
+      _load();
+    }
+  }
+
   Future<void> _load() async {
-    if (!AdsService.isReady) {
+    // A subscriber never even asks for an ad.
+    if (PremiumService.isActive) return;
+    if (!AdsService.canRequestAds) {
       if (_retries++ > 5) return;
       await Future<void>.delayed(const Duration(seconds: 1));
       if (mounted) _load();
       return;
     }
+    if (!mounted) return;
     final p = context.palette;
     final ad = NativeAd(
       adUnitId: AdConfig.nativeUnitId,
@@ -80,6 +105,7 @@ class _NativeAdCardState extends State<NativeAdCard> {
       listener: NativeAdListener(
         onAdLoaded: (_) {
           if (!mounted) return;
+          unawaited(AdImpressionCounter.record());
           setState(() => _loaded = true);
         },
         onAdFailedToLoad: (ad, error) {
@@ -94,12 +120,14 @@ class _NativeAdCardState extends State<NativeAdCard> {
 
   @override
   void dispose() {
+    PremiumService.isPremium.removeListener(_onPremiumChanged);
     _ad?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (PremiumService.isActive) return const SizedBox.shrink();
     if (!_loaded || _ad == null) return const SizedBox.shrink();
     return Padding(
       padding: widget.margin,

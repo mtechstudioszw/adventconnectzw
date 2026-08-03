@@ -4,363 +4,334 @@ Paste this whole file as the first message of the next session.
 
 ---
 
-## Where things stand (3 Aug 2026)
+## Where things stand (3 Aug 2026, session 2)
 
-All work is pushed. `main` head: **`c3e06d6` "ads fix"**.
-`flutter analyze` clean apart from **4 pre-existing infos**;
-**242/242 tests pass** (was 135 two sessions ago).
+All work is pushed. `main` head: **`8293223`**
+"Fix two account-security leaks, the quiz timeout crash, and three silent
+failures".
 
-Shipped last session: the whole premium subscription, the feature-usage
-analytics backend, the Events/Churches pinned-ad fix, the live-stream
-thumbnail fallback, and a search-screen spacing fix.
+`flutter analyze` clean apart from the **same 4 pre-existing infos**.
+**273/273 tests pass** (was 242 at the start of this session, 135 three
+sessions ago). No tests are skipped.
 
-Applied to production — **do NOT re-apply**:
-`20260803120000_premium_subscriptions.sql`,
-`20260803130000_payment_receipt_essential.sql`,
-`20260803140000_usage_analytics.sql`.
-Deployed: `verify-purchase` v1, `play-rtdn` v1, `notify-fcm` v17.
+**NO database changes were made this session.** Everything shipped was
+client-side Dart. The production schema is exactly as it was, so there is
+nothing new to avoid re-applying.
 
 ## Read first
 
 1. `CLAUDE.md` — headers are **FLAT on `palette.scaffoldBg`, never navy**.
-2. Memory: `premium-subscription-task`, `admin-console-analytics-findings`,
-   `quiz-arena-decisions`, `founder-quality-bar`,
+2. Memory: `sign-out-must-clear-in-memory-state`, `quiz-arena-decisions`,
+   `founder-bug-batch-aug3`, `founder-quality-bar`,
    `motion-must-not-cost-time`, `audio-background-playback-fix`,
-   `repo-and-environment`, `brief03-open-bugs`.
+   `repo-and-environment`.
 3. `git -C adventconnectzw log --oneline -12`
 
 ## The rule that keeps paying — repeat it
 
-**Verify the premise before building.** Last session that turned one
-"build this" into "already fixed", and caught four bugs that each failed
-**silently**. Several items below already have their premise checked —
-those notes save you the wrong turn, so read them before coding.
+**Verify the premise before building.** It paid four times this session:
+"#6 QR logo" turned out to be an invisible logo rather than a missing one;
+the leaderboard the founder wanted was already 90% built; the quiz
+"settings button" bug was a control living on a screen that vanishes; and
+writing one test for a reported crash uncovered three more bugs that had
+never been reported because **all of them failed silently**.
 
 ---
 
-# WEB ADMIN DASHBOARD — DECIDED, but DEFERRED
+# TURN ONE — four things to ask before any code
 
-**Founder's call (3 Aug 2026): "I will build UI soon after all bugs are
-finished."** So do **NOT** start the console this session. Clear the
-22-item bug batch below first; the console comes after.
+**1. #3 A1 — does the quiz VIBRATE when you tap an answer?**
+This is the whole diagnosis in one question. Haptics are deliberately NOT
+gated on the mute toggle (`quiz_sfx.dart`, "Haptics are NOT gated on the
+mute toggle"), so:
+- **Vibrates but silent** → the call sites fire and `play()` runs. Look at
+  device volume, the new Sound & haptics screen, or platform audio.
+- **No vibration either** → the call sites are not firing at all, and the
+  problem is upstream of `QuizSfx` entirely.
 
-The decisions are already settled — **do not re-litigate them** when the
-time comes, just build:
+Also ask them to open **Settings → Sound & haptics** in a CI build from
+`8293223` or later. If the volume was sitting at 0% that WAS the bug — it
+is now floored and self-heals on next launch.
 
-- **Web admin only.** The in-app Flutter admin is explicitly out of scope.
-- **`admin-web/` is the app in real use** — git proves it (touched
-  7 Jul 2026; the Next.js `admin/` has been stale since 22 Jun). It is
-  the thing being replaced.
-- **STACK: Next.js**, built in `admin/` (it already has App Router, auth
-  middleware, server actions and Tailwind). *Rationale, since the
-  founder's brief said "Flutter Web / Material 3":* every product the
-  brief named as the bar — Supabase, Linear, Stripe, Vercel, Notion,
-  GitHub — is a web app, and Flutter Web has slow first paint, poor text
-  selection, weak accessibility and a heavy bundle. All four are
-  disqualifying for a console that non-technical staff will check on a
-  phone. Material 3's *look* can still be honoured in CSS.
-- **DEPLOY: Vercel** (canonical for Next.js, free tier is enough).
-  Fallback Netlify, which the founder already uses for `admin-web/`.
-  The Vercel connector is **not** authorised in the agent session, so the
-  founder connects the repo themselves; set the publish root to `admin/`.
-- **Migrate anything `admin-web/` has that `admin/` lacks** — it has 14
-  tabs (Overview, Users, Sellers, Reports, Feedback, Church claims,
-  Church admins, Churches, Events, Jobs, News, YouTube, Broadcast, Usage)
-  against the Next.js app's 7. **Do not delete `admin-web/` until the
-  replacement is deployed and the founder has signed off** — it is their
-  only working console today.
+**2. #3 A2 — the background music file does not exist.** `assets/sounds/`
+contains only the nine quiz SFX WAVs. Ask for a loop track (30–60s,
+seamless, mp3 or ogg). Until it arrives A2 cannot be built, and a music
+toggle in the settings screen would be a dead control — which is why one
+was deliberately NOT shipped.
 
-**Access to the current console, for reference:** open
-`admin-web/index.html` directly in a browser (single file, no build).
-Sign in with the founder's app email/password; the page checks
-`profiles.is_super_admin` and signs out anyone else. Verified 3 Aug: the
-founder is the **sole super admin**, and all 35 RPCs the page calls exist.
+**3. The Supabase PAT has now gone through chat twice.** Ask whether it was
+rotated. Never write it to a file. Project ref: `eqbyvasteolqyktbqbem`.
 
-**Backend already built for it, live and attack-tested, but NOT called by
-any UI yet** — so nothing new is visible in the console today:
-
-- **Analytics:** `admin_feature_usage`, `admin_active_users_series`,
-  `admin_platform_breakdown`, `admin_premium_stats`.
-- **Staff roles + audit log** (`20260803150000_staff_roles_and_audit.sql`).
-  There were previously **no roles, no permissions and no audit log** —
-  `assert_super_admin()` is one boolean and the founder was the only
-  holder, so hiring anyone meant handing them the power to ban users and
-  broadcast to everyone with no record of who did it. Now four roles:
-  `viewer` (read only), `moderator` (daily job, **contact details
-  masked**), `manager` (+ PII + audit log), `owner` (+ ban and mass
-  broadcast). Additive: all 35 existing RPCs still call
-  `assert_super_admin()`, which now also accepts a staff `owner`, and the
-  founder is seeded as owner. Use `assert_staff('moderator')` for new
-  work and call `log_admin_action(...)` from every mutating RPC.
-  **The console's People/Settings sections should manage staff via
-  `admin_list_staff()` / `admin_set_staff_role()` — nobody should be
-  setting `is_super_admin` by hand any more.**
-**What genuinely has no data source** (do not promise these): crash
-reporting (Crashlytics lives in Firebase), ad impressions/CTR/eCPM
-(AdMob-side), country/city, session duration, retention cohorts, and all
-infrastructure metrics. Say so rather than shipping empty charts.
+**4. #3 A5 — does the EXISTING async challenge system stay?**
+The founder chose "pure live head-to-head only" when asked how a match
+should work. But `quiz_challenges` already exists, works, and is
+async — you play your run, they play theirs, it resolves. The sensible
+reading is *add* the live layer and widen challenges beyond friends, NOT
+delete something that works. **Confirm before removing anything.**
 
 ---
 
-# TURN ONE — two things to ask before any code
+# DONE — do not redo these
 
-**1. #7 — is the ad fix even on the founder's phone?** They report the
-Events/Churches banner "taking the full screen" AFTER the fix was pushed.
-**Full APK builds are blocked on this machine**, so the fix only reaches
-a device via CI (`.github/workflows/build-apk.yml` / `build-aab.yml`).
-**Ask whether they installed a build made from `c3e06d6` or later.** If
-yes, this is a NEW symptom (full-screen, not merely pinned) and must be
-reproduced before touching anything — do not re-fix blind.
+| Item | What it actually was |
+|---|---|
+| **#20** | Statics outlive sign-out. `SessionReset.onSignOut()` is now the one place. |
+| **#21** | `biometric_enabled` was one flag per PHONE. Now `biometric_enabled:<userId>`. |
+| **#4** | Premium moved into the Profile ⋮ sheet; top-right star deleted. |
+| **#5** | Donate + settings copy corrected. A gift is NOT Premium and does not remove ads. |
+| **#6** | The QR already had a logo — a WHITE wordmark on a TRANSPARENT background, painted on the code's WHITE plate. Now on a navy disc (`QrCentreMark`). |
+| **#3 A4** | The timeout crash fired on EVERY timeout. Fixed + the `autoStart` seam. |
+| **#3 A3** | Sound & haptics screen in main settings + settings-search entry. |
 
-**2. #6 — the QR-code logo. The founder never sent the file or the
-location.** The message ends "its in this location:" with nothing after
-it. **Ask for the image and the exact screen.** Only the QR code gets
-this logo, nowhere else. (Best guess if they confirm: the friend-QR sheet,
-`showFriendQrSheet` / `lib/widgets/.../friend_qr*`, which already has a
-render test in `test/friend_qr_test.dart`.)
+**Four bugs nobody had reported**, all found while fixing the above:
+- The **offline outbox replayed across accounts** — queued rows carry a
+  baked-in `sender_id`, RLS rejects them under the new account, and the
+  flush loop `break`s on first failure, so one orphaned row **jammed the
+  queue permanently** for the next user.
+- **`deleteAccount()` never called `CacheService.clearUserData()`** — so
+  deleting an account left cached chats and feed on the device.
+- **Fix Your Mistakes has never worked.** `addMistake` mutated the
+  `const []` that `mistakes()` returns for an empty pool, so it threw on
+  the first mistake anyone ever made. Every caller is `unawaited`.
+- **`BurstLayer` leaked the whole round screen.** Its Ticker was a lazy
+  `late final`, so a round where no burst fired created it inside
+  `dispose()`, the TickerMode context lookup threw, and **disposal aborted
+  part-way** — leaving the round's timer and four controllers alive.
 
 ---
 
-# THE BATCH — 22 items
+# THE REMAINING BATCH — 17 items
 
-## A. QUIZ — the biggest piece (#3)
+## A. QUIZ — what is left (#3)
 
-The founder wants a **real quiz game**, and asked to discuss the design
-before it is built. Four parts:
+### A1. Sound — see TURN ONE question 1
+Assets are fine and were verified this session: all nine WAVs are valid
+PCM mono 16-bit / 22.05 kHz with clean `fmt `+`data` chunks, and
+`assets/sounds/quiz/` is declared in `pubspec.yaml`. The code path is
+correct end to end and `play()` self-heals when the pool is down. Two real
+faults were found and fixed (the 0% volume latch; controls only reachable
+during the ~900ms boot flash). If it is still silent after that, it is
+device/platform and needs the vibrate answer plus a `flutter logs` line
+starting `QuizSfx.init failed:` — that call catches everything and only
+`debugPrint`s, so a boot failure is otherwise invisible.
 
-### A1. Sound is still silent
-**Premise already checked — do NOT go hunting for missing files.** All
-nine WAVs exist in `assets/sounds/quiz/` (tap, tick, count, go, correct,
-wrong, combo, levelup, finish) and `assets/sounds/quiz/` IS declared in
-`pubspec.yaml:195`. `QuizSfx` (`lib/services/quiz_sfx.dart`) is fully
-written, with per-clip volumes and a deliberate "never steal audio focus"
-design (Android `AndroidAudioFocus.none`, iOS `ambient`) so the Library
-music player is not interrupted.
-So the bug is **playback/lifecycle**, not assets. Prime suspect is the
-race already documented in memory `quiz-arena-decisions`: *"publishing
-into a shared pool as you build it races with disposal — that is what
-silenced the quiz. Stage locally, publish once, guard with a generation
-counter."* Check whether that regressed, and whether `ambient`/`none`
-focus is silently muting on the founder's device.
+### A2. Background music — BLOCKED on the file
+Must duck or stop if the user's own music is playing. See
+[[audio-background-playback-fix]] — the platform-swap bug there killed
+music three times. Do NOT swap `JustAudioPlatform.instance`.
 
-### A2. Background music while playing
-A looping track for the duration of the arena, like a real game. Must
-**not** fight the Library music player — see
-[[audio-background-playback-fix]]; the platform-swap bug there killed
-music three times. Duck or stop the loop if the user's own music is
-playing.
+### A5. Live head-to-head — DESIGN AGREED, NOT BUILT
 
-### A3. A real sound/haptics settings screen
-In the **main app settings**, not buried: separate controls for **music**,
-**sound effects**, and **vibration/haptics**. Persist per user.
+**The founder's four decisions. Do not re-litigate:**
+1. **Pure live head-to-head only** (I recommended async-first; they chose
+   live. Settled — build it.) Mitigate *within* that decision: drive
+   matchmaking off `PresenceService`'s online roster so you challenge
+   people who are actually online, and show an honest "nobody available
+   right now" instead of an endless spinner.
+2. Quiz profile **optional for solo play, required for leaderboard and
+   challenges**.
+3. Leaderboard ranks **weekly points that RESET** — not Elo, not all-time.
+4. Challenge notifications **stay suppressed** during Sabbath quiet hours.
 
-### A4. Crash: `Null check operator used on a null value`
-Fires when the countdown reaches zero **before the user answers**.
-Existing rule (memory `quiz-arena-decisions`): **timeout = wrong answer**.
-The quiz round screen has **no test** for the timeout path and needs an
-`autoStart` seam — this has been outstanding for three sessions.
-**Reproduce it in a test first; let the test find the null.**
+**Production schema surveyed this session — what already exists:**
+- `quiz_challenges` — id, challenger_id, opponent_id, questions jsonb,
+  challenger_points/correct, opponent_points/correct, status, created_at,
+  completed_at, expires_at. **This is a working async challenge system**,
+  currently friends-only (`QuizOpponent` = "A friend you can challenge").
+- `quiz_progress` — xp, streaks, totals, lifetime_points, coins.
+- `quiz_questions` — the bank. `quiz_reports`. 
+- `quiz_scores` — user_id, mode, points, correct_count, total_count,
+  **played_at**.
+- **`quiz_leaderboard(p_days, p_limit)` already exists** and is already
+  weekly: it sums `quiz_scores` over a ROLLING `now() - p_days`. The only
+  gap vs the founder's choice is that it rolls (your score silently decays
+  as rounds age out) instead of resetting on a fixed weekly boundary.
+  `quiz_my_rank(p_days)` exists too.
+- **Does NOT exist:** `quiz_profiles`, and any live-match tables.
 
-### A5. Quiz profiles + real multiplayer — DESIGN BEFORE BUILDING
-The founder's ask:
-- A **quiz profile** (own display name + photo, editable inside the quiz).
-- Without one you may still play for fun, but **no leaderboard entry and
-  no challenges**. (Recommended over blocking play entirely — a hard gate
-  on first open loses users.)
-- Challenge **anyone on the app** with a profile, not just friends.
-- **Live head-to-head**: both players get the same question at the same
-  time and must answer before the timer hits zero, like a live game show.
+**Still to build:** `quiz_profiles` (display name + photo, gates
+leaderboard/challenges), `quiz_matches`, `quiz_match_answers`, the RPCs,
+and the leaderboard's rolling→resetting change plus using the quiz
+identity instead of `profiles.full_name`.
 
-**Design constraints that must be handled — the founder explicitly asked
-for the downsides to be designed for:**
-1. **Server-authoritative timing.** Never trust client clocks. The match
-   row carries `question_started_at` from the server; each client counts
-   down from that, not from when the packet arrived. Otherwise a 300ms
-   slower connection silently loses every race.
-2. **Never ship the correct answer to the client before the answer locks.**
-   The current single-player screen has `_question.correctIndex` on the
-   client — fine solo, fatal in a competitive match.
+**Constraints the founder explicitly asked to be designed for:**
+1. **Server-authoritative timing.** The match row carries
+   `question_started_at` from the server; each client counts down from
+   that, never from packet arrival, or a 300ms slower connection silently
+   loses every race.
+2. **Never ship `correct_index` to the client before the answer locks.**
+   It is on the client today (`_question.correctIndex`) — fine solo, fatal
+   competitively.
 3. **Score on the server.** Submit via an RPC that stamps arrival time and
-   returns only "locked"; reveal correctness once both have answered or
-   the timer expired.
-4. **Opponent disconnects / rage-quits.** Must never hang the other
-   player. Forfeit after the question timer + a grace window.
-5. **Reconnect mid-match.** App backgrounded → rejoin and catch up to the
-   current question index.
-6. **Matchmaking at 170 users (DAU 73) will usually find nobody.**
-   This is the single biggest practical risk. Strong recommendation:
-   **async-first, live-when-possible** — the match is a persistent record;
-   if both are online it plays live, otherwise each plays their run and
-   the result resolves when the second finishes. A pure live queue will
-   feel dead at this scale.
-7. **The Realtime channel has the same publish/dispose race** that already
-   silenced the quiz — guard with a generation counter.
-8. Challenge notifications are **not** essential, so they are correctly
-   suppressed during Sabbath quiet hours. Confirm that is wanted.
+   returns only "locked"; reveal once both have answered or time expired.
+4. **Disconnect / rage-quit must forfeit**, never hang the opponent.
+5. **Reconnect mid-match** — rejoin and catch up to the current index.
+6. **The Realtime channel carries the same publish/dispose race** that
+   silenced the quiz. Guard with a generation counter.
+7. Timeout = wrong answer, consistent with solo.
 
-Suggested shape: `quiz_profiles` (display name, photo, rating, W/L),
-`quiz_matches` (both players, question set fixed at creation, current
-index, `question_started_at`, status), `quiz_match_answers` (server-stamped).
+## B. ADS (#7) — NEW SYMPTOM, REPRODUCE FIRST
 
-## B. PREMIUM CORRECTIONS
+**Premise confirmed the hard way:** the founder DID install a build from
+`c3e06d6` or later and the Events/Churches banner **still takes the full
+screen**. So the shipped fix is not the fix. Do not re-fix blind —
+reproduce it. Full APK builds are blocked here; device builds come from CI
+(`.github/workflows/build-apk.yml`).
 
-- **#4 — the Premium entry is in the wrong place. My mistake.** Move it
-  into the existing **⋮ bottom sheet** on Profile: the `more_horiz`
-  button at `lib/screens/profile/profile_screen.dart:516` opens a sheet
-  at :527 containing 'Sabbath timer' (:562) and 'Sign out' (:567). Put
-  Premium there, and **remove the star `HeaderIconButton` I added at
-  ~:1231** — the founder says it looks bad top-right. (Settings entry and
-  settings-search entry stay.)
-- **#5 — copy now lies.** Several screens still say the app is free,
-  especially the **donate screen and its card**. Audit every "free"
-  claim and correct it now that a paid tier exists.
+Related: `lib/widgets/ads/scroll_aware_ad_footer.dart` is built and tested
+but **still not used anywhere**. It exists so the reverted detail-screen
+placements (commits `c18cd7f` → `13d55c0`) can come back safely.
 
-## C. ADS (#7)
+**Ad revenue expansion** (founder wants it — build only what they pick):
+restore product/event/church detail + seller storefront; then search
+results, Advent News, notification centre, member directory; Library browse
+needs a faith call (**recommend no ads in the Bible reader**); highest
+value is **more rewarded ads** (currently only quiz lifelines), e.g. "watch
+an ad to boost your listing 24h". **Never**: Chat, auth, Prayer, and never
+for premium users — those exclusions are verified correct.
 
-See TURN ONE item 2 first. Related: last session added
-`lib/widgets/ads/scroll_aware_ad_footer.dart`, a drop-in
-(`body: ScrollAwareAdFooter(child: …)`) that makes a bottom banner
-collapse on scroll. It is **built and tested but not yet used anywhere** —
-it exists so the previously-reverted detail-screen placements (product /
-event / church, commits `c18cd7f` → `13d55c0`) can come back safely.
+## C. PLAYERS / MINI-PLAYERS (#8, #9)
 
-**Ad revenue expansion** (audited, founder wants it — build only what
-they pick): restore product/event/church detail + seller storefront;
-then search results, Advent News, notification centre, member directory;
-Library browse lists need a faith-sensitivity call (**recommend no ads in
-the Bible reader**); and the highest-value idea — **more rewarded ads**
-(currently only quiz lifelines), e.g. "watch an ad to boost your listing
-24h". **Never**: Chat, auth/signup/login, Prayer, and never for premium
-users. Those exclusions are currently correct — verified.
+**Music (#8):** full player must hide the mini player and restore it on
+exit; mini player draggable to top/middle/bottom; closing it must **stop
+playback immediately**; **shuffle does not work**; **download-for-offline
+does not work**; its shape is wrong — a long horizontal bar where it should
+read like a small video card.
 
-## D. PLAYERS / MINI-PLAYERS (#8, #9)
+**Watch (#9):** same hide/show rule; make it a real YouTube-style floating
+player, draggable and resizable with video playing inside; **remove the
+follow button**.
 
-**Music (#8):**
-- Opening the full player leaves the mini player visible underneath —
-  it must hide while the full player is up and return on exit,
-  automatically.
-- Mini player should be **draggable** to top / middle / bottom.
-- Closing the mini player must **stop playback immediately**.
-- **Shuffle does not work.**
-- **Download-for-offline does not work** (or appears not to).
-- The mini player's shape is wrong — a long horizontal bar. It should
-  read like a small video card.
+Beware [[audio-background-playback-fix]].
 
-**Watch (#9):**
-- Same hide/show rule for its mini player.
-- Make it a **real YouTube-style floating player**: draggable and
-  resizable, with video actually playing inside it.
-- **Remove the follow button** from Watch.
+## D. HOME / FEED (#1, #13, #14)
 
-Beware [[audio-background-playback-fix]] — the platform-swap bug killed
-music three times. Do not swap `JustAudioPlatform.instance` casually.
+- **#1** Devotion card clips the verse — **ellipsize**. And **Verse of the
+  Day** should open the Bible **scrolled to and highlighting that verse**.
+- **#13** Two rows of "People to meet", surfaced at different times. They
+  also asked whether the feed can scroll endlessly — at 170 users the
+  honest answer is recycle/blend rather than fake infinite. Say so.
+- **#14** Make the feed algorithmic so modules reliably reappear. See
+  memory `feed-ranking-findings` for how ranking works today.
 
-## E. HOME / FEED (#1, #13, #14)
+## E. PROFILE / ACCOUNT
 
-- **#1** Devotion card on Home clips the verse — **ellipsize long verses**.
-  And **Verse of the Day** should, when tapped, open the Bible **scrolled
-  to and highlighting that exact verse**.
-- **#13** Show **two rows of "People to meet"**, surfaced at different
-  times. Also asked: can the feed scroll endlessly, or must we wait for
-  more posts? (At 170 users, honest answer: recycle/blend rather than
-  fake infinite — say so.)
-- **#14** Make the feed **algorithmic**: as traffic grows, certain
-  modules (People to meet, quick stats) should reliably reappear.
-  See memory `feed-ranking-findings` — it already documents how ranking
-  works today and why fresh content loses.
+- **#12** Cache the profile screen (friends list etc.), then audit other
+  screens that refetch on every visit.
+- **#15** Edit Profile says "Full name" but signup collects name + surname.
+- **#17** Delete account and sign out must feel **instant**. See
+  [[motion-must-not-cost-time]].
+- **#18** Exit-survey screen on account deletion; store the reason and
+  surface it in the web admin dashboard.
+- **#19** The "how did you hear about us" survey no longer appears on first
+  signup. `SignupSurveySheet` exists at
+  `lib/widgets/home/signup_survey_sheet.dart`, called from `home_screen`
+  after ~1200ms, gated by `SignupSurveyService.shouldPrompt()` — **check
+  that gate first.** patch_180 records that every non-admin submit used to
+  fail. Confirm the 6s premium promo isn't swallowing it (it should not —
+  the promo refuses when another sheet is up).
 
-## F. PROFILE / ACCOUNT
+## F. BAN-EVASION DETECTION (#21, the feature half)
 
-- **#12 Cache the profile screen** (friends list etc.) so it does not
-  refetch every visit — then **audit other screens that refetch** and fix
-  them too.
-- **#15** Edit Profile says "Full name" but signup collects **name +
-  surname**. Make them consistent.
-- **#17** **Delete account and sign out must feel instant.** See
-  [[motion-must-not-cost-time]] — celebrate after the fact, never block.
-- **#18** New **exit-survey screen on account deletion**: ask why they
-  are leaving, say we are sorry to see them go, store the reason, and
-  **surface it in the web admin dashboard**.
-- **#19** The **"how did you hear about us" survey no longer appears on
-  first signup.** Premise partly checked: `SignupSurveySheet` exists at
-  `lib/widgets/home/signup_survey_sheet.dart` and is called from
-  `home_screen` after ~1200ms; it is gated by
-  `SignupSurveyService.shouldPrompt()`. **Check that gate first** — and
-  note patch_180 records that every non-admin submit used to fail. Also
-  confirm the premium promo added last session (6s delay) is not
-  swallowing it; it should not, since the promo refuses when another
-  sheet is up.
-- **#20 Cross-account data leak (SECURITY — treat as high priority).**
-  A new account briefly showed the **previous account's data for ~1
-  second** before correcting. Some cache or in-memory service is not
-  cleared on sign-out. Audit every static/`ValueNotifier` service for a
-  sign-out reset. Note `PremiumService.clear()` and
-  `UsageAnalytics.stop()` were wired last session; others may not be.
+Risk **scoring**, never a single identifier: device install id, push token,
+IP patterns, device model/OS, signup timing, reused phone/email, repeat
+signups after a ban. Low = allow, Medium = extra verification, High =
+restrict + review. Flagged users get a clear message with a prominent
+**Contact Support** button. Admin dashboard needs confidence score,
+reasons, approve/reject, and **mark as permanent false positive**. Expect
+false positives and design the appeal path first.
 
-## G. BIOMETRICS + BAN EVASION (#21)
+## G. MAINTENANCE MODE (#22)
 
-**Bug — premise CONFIRMED, exact cause found.** Biometric unlock is
-device-level, not per account: `'biometric_enabled'` is listed in
-`SecureStorageService._preservedKeys` (`secure_storage_service.dart:49`),
-which is the deliberate "survives sign-out" set. So Account B inherits
-Account A's biometric setting on the same phone.
-**Fix:** key the preference per user id (or store it on the profile), and
-clear the active biometric session on sign-out. A new account must start
-with biometrics **off** until it opts in. Careful: that preserved-keys
-list exists for good reasons (the intro-onboarding flag) — only move the
-biometric key, do not empty the set.
+Toggled from the web admin dashboard. When on, **no user can use the app
+and it cannot be bypassed** — enforcement must be **server-side**. Users
+get a notification when it starts and another when it ends. There is
+already a `/update-required` hard gate and an `app_config` table used by
+`ForceUpdateService` — **reuse that pattern**, do not invent a second one.
 
-**Feature — ban-evasion detection.** Risk *scoring*, never a single
-identifier: device install id, push token, IP patterns, device model/OS,
-signup timing, reused phone/email, repeat signups after a ban.
-Low = allow, Medium = extra verification, High = restrict + review.
-Flagged users see a clear message with a prominent **Contact Support**
-button (copy supplied by the founder). Admin dashboard needs: confidence
-score, reasons, approve/reject, and **mark as permanent false positive**
-so a legitimate user is not flagged forever. Expect false positives and
-design the appeal path first.
+## H. SMALLER ITEMS
 
-## H. MAINTENANCE MODE (#22)
+- **#2** Redesign the composer sheet (Home → "share something") —
+  `lib/widgets/home/composer_sheet.dart`. Missed in the earlier pass.
+- **#10** The search input box does not look premium. Also **add timestamps
+  to post comments**.
+- **#11** Message time = the time it was **SENT**, not received. WhatsApp
+  behaviour: bubble and chat list show the sender's send time, and
+  messages order by send time. Only the push is tied to delivery.
+- **#16** In the church admin dashboard, when a super admin **rejects** a
+  nominee the **church admin is not notified**. (The nominee path may
+  notify; the nominating admin does not.)
 
-A **maintenance screen** toggled from the web admin dashboard. When on,
-**no user can use the app and it cannot be bypassed** — enforcement must
-be **server-side**, not a client flag. Users get a notification when it
-starts and another when it ends. The founder asked for help designing it.
-Note there is already a `/update-required` hard gate and an
-`app_config` table used by `ForceUpdateService` — reuse that pattern
-rather than inventing a second one.
+---
 
-## I. SMALLER ITEMS
+# WEB ADMIN DASHBOARD — DECIDED, still DEFERRED
 
-- **#2** Redesign the **composer sheet** (Home → "share something") —
-  it was missed in the earlier redesign pass.
-  `lib/widgets/home/composer_sheet.dart`.
-- **#10** The **search input box** does not look premium — fix it. And
-  **add timestamps to post comments**.
-- **#11** **Message time = the time it was SENT, not received.** The
-  founder wants the WhatsApp behaviour, which is: the bubble and the chat
-  list show the **sender's send time**, and messages order by send time —
-  so a message sent 10:00 and delivered 11:00 reads **10:00**. Only the
-  push notification is tied to delivery.
-- **#16** In the **church admin dashboard**, when a super admin
-  **rejects** a nominee, the **church admin is not notified**. (The
-  nominee path may notify; the nominating admin does not.)
+**Founder's call: "I will build UI soon after all bugs are finished."**
+Do NOT start it. Clear the batch first, then ask.
+
+Settled, do not re-litigate: **web admin only**; **`admin-web/` is the app
+in real use** (git proves it) and is the thing being replaced; **stack is
+Next.js in `admin/`** (App Router, auth middleware, server actions and
+Tailwind already there); **deploy to Vercel**, founder connects the repo
+themselves with publish root `admin/`. Migrate everything `admin-web/` has
+that `admin/` lacks — 14 tabs vs 7. **Do not delete `admin-web/`** until
+the replacement is deployed and signed off; it is their only console today.
+
+Backend already built, live, attack-tested, but **called by no UI yet**:
+`admin_feature_usage`, `admin_active_users_series`,
+`admin_platform_breakdown`, `admin_premium_stats`; and staff roles + audit
+log (`viewer` / `moderator` / `manager` / `owner`, with
+`assert_staff('moderator')` and `log_admin_action(...)` for new work).
+People/Settings should manage staff via `admin_list_staff()` /
+`admin_set_staff_role()` — nobody should set `is_super_admin` by hand.
+
+**No data source, do not promise:** crash reporting (Firebase), ad
+impressions/CTR/eCPM (AdMob), country/city, session duration, retention
+cohorts, infrastructure metrics.
 
 ---
 
 # Traps already paid for — don't rediscover them
 
+**New this session:**
+- **A lazy `late final` ticker/controller is CREATED during `dispose()`**
+  if nothing touched it first, and its context lookup then throws
+  *"Looking up a deactivated widget's ancestor"* — which **aborts disposal
+  part-way**, silently leaking everything after it. `AnimationController`
+  calls `createTicker` in its constructor, so `late final
+  AnimationController _c = ...` has the same hazard. Build them in
+  `initState`. ~12 such fields exist; the rest are safe only because
+  `build()` touches them first.
+- **`CacheService.clearUserData()` spares the whole `pref:` namespace** so
+  device settings survive sign-out. Any USER-scoped `pref:` key therefore
+  leaks to the next account. Namespace by user id — the good example
+  already in the tree is `pref:viewed_story_ids:<viewerId>`.
+- **Signing out does not restart the Dart isolate.** Every `static`
+  outlives it. Reset user-scoped state in `SessionReset.onSignOut()`, never
+  in a sign-out button — there are three of those and they each used to do
+  a different subset.
+- **`mounted` is not a sufficient guard during teardown.** While the tree
+  is being finalized an element is deactivated but `mounted` still reads
+  true. Use a cancellable `Timer` cancelled in `dispose()`, not
+  `await Future.delayed(...)` followed by a `mounted` check.
+- **Returning `const []` from a getter whose callers mutate it** throws
+  *"Cannot remove from an unmodifiable list"* — and only on the empty path,
+  which is the FIRST call. `List.of()` at the mutation site.
+- **`testWidgets(skip:)` takes a bool**, not a String reason.
+- **The Bash tool resets cwd between calls** — this bit twice. Use
+  `cd /c/Users/j/Desktop/advent_connect_zw/adventconnectzw && …`.
+
+**Still true from before:**
 - **A column-level `REVOKE` is SILENTLY IGNORED when the grant is
-  table-level.** It returns success and changes nothing. **UPDATE on
-  `profiles` is now per-column: a new profile column is NOT
-  client-writable until granted**, and the failure is a swallowed 42501.
-  Same for SELECT — a new column is invisible until granted.
-- **`suppress_sabbath_notifications()` DROPS** non-essential
-  notifications outright during a Sabbath quiet window. Anything that
-  must survive belongs in `is_essential_notification`.
-- **Scroll notifications from a list inside a `TabBarView` arrive at
-  depth 1**, not 0. `NavVisibilityMixin` now filters on **axis**; don't
-  put a depth check back.
+  table-level.** UPDATE on `profiles` is per-column: a new column is NOT
+  client-writable until granted, and the failure is a swallowed 42501.
+  Same for SELECT.
+- **`suppress_sabbath_notifications()` DROPS** non-essential notifications
+  during a quiet window. Anything that must survive belongs in
+  `is_essential_notification`.
+- **Scroll notifications from a list inside a `TabBarView` arrive at depth
+  1**, not 0. `NavVisibilityMixin` filters on **axis** — don't put a depth
+  check back.
 - **`CrossAxisAlignment.stretch` on a `Row` inside any scrollable** →
   infinite height; in release it paints **nothing**, no red box.
 - **`Container(alignment:)` gives LOOSE constraints; `CachedImage` gives
@@ -372,73 +343,68 @@ rather than inventing a second one.
 - **Curves ending in `…Back` overshoot past 1.0** — assert inside `Opacity`.
 - **`notifications` has no client INSERT policy, by design.**
 - **Publishing into a shared pool as you build it races with disposal** —
-  that is what silenced the quiz. Stage locally, publish once, guard with
-  a generation counter.
+  stage locally, publish once, guard with a generation counter.
 
 # Testing rules
 
 - Screens whose `initState` touches Supabase/Hive/the router need a
   constructor seam: `autoLoad` / `autoNavigate` / `autoPrompt` /
-  `autoStart`. Seven exist.
-- **A field initializer runs before the seam is consulted** — use a getter.
+  `autoStart`. **Eight exist now** — `QuizRoundScreen` gained one.
+- **A field initializer runs before the seam is consulted** — use a getter,
+  or assign in `initState`.
 - **Test at 1.0x / 1.6x / 2.5x system text on a 360dp phone.**
 - Screens using `StaggeredReveal` need `pumpAndSettle`, not `pump`.
 - Widget tests touching `AdBanner` should set
   `PremiumService.debugSet(premium: true)` or the 6s retry loop leaves
   pending timers at teardown.
-- **Reproduce before fixing, and let the test correct you.**
+- To drive a long animation, **pump in small steps**, not one big jump — a
+  jump trips `AnimationController`'s own `elapsedInSeconds >= 0.0` assert.
+- **Reproduce before fixing, and let the test correct you.** This session
+  that turned one reported crash into four fixed bugs.
 
 # Environment
 
 - Working dir is the **PARENT** of the repo — use `-C adventconnectzw`;
   **the Bash tool resets cwd between calls.**
 - **`python` is NOT installed; `node` v24 is.** **`/tmp` does not exist** —
-  use the session scratchpad.
+  use the session scratchpad. (node is genuinely useful: it decoded the PNG
+  that proved the QR logo was transparent, and parsed the WAV headers.)
 - **CRLF line endings.**
 - The Management API `/database/query` returns only the **first** result
   set. Put mutations in a `DO $$ … $$` block.
 - **To test against production safely:** work inside a `DO $$ … $$` block
   that `RAISE`s at the end — everything rolls back and the result travels
-  out in the error message. Used five times on 3 Aug.
+  out in the error message.
 - **Edge functions: deploy via**
   `POST /v1/projects/{ref}/functions/deploy?slug={slug}` as
-  **multipart/form-data**, a `metadata` JSON part plus one `file` part
-  per file, paths **relative to the repo root**
-  (`supabase/functions/<slug>/index.ts`) so `_shared/*.ts` ships too.
+  **multipart/form-data**, a `metadata` JSON part plus one `file` part per
+  file, paths **relative to the repo root** so `_shared/*.ts` ships too.
   Preserve `verify_jwt` — `notify-fcm` and `play-rtdn` are `false`.
-- **Full APK builds are blocked.** Only `flutter analyze`,
-  `flutter test`, `flutter build bundle` verify anything. Device builds
-  come from CI.
-- **The Supabase PAT is not stored anywhere. Ask for it, never write it
-  to a file.** The 3 Aug PAT went through chat — **it should be rotated;
-  ask whether it was.**
+- **Full APK builds are blocked.** Only `flutter analyze`, `flutter test`
+  and `flutter build bundle` verify anything. Device builds come from CI.
+- **The Supabase PAT is not stored anywhere. Ask for it, never write it to
+  a file.**
 
 # Still outstanding from before (not in the founder's 22)
 
 - **Finish premium:** create the Play product (ID assumed
-  `premium_monthly`, one line in `BillingConfig`), set
-  `GOOGLE_PLAY_SA_JSON`, set up Pub/Sub + `RTDN_SECRET`, and run a real
-  device purchase. **Money has never been tested.**
-- The new analytics RPCs (`admin_feature_usage`,
-  `admin_active_users_series`, `admin_platform_breakdown`,
-  `admin_premium_stats`) exist and are tested but **nothing calls them
-  yet** — they are for the console rebuild. They also only fill once
-  users run a build containing the tracking.
+  `premium_monthly`, one line in `BillingConfig`), set `GOOGLE_PLAY_SA_JSON`,
+  set up Pub/Sub + `RTDN_SECRET`, and run a real device purchase.
+  **Money has never been tested.**
+- The analytics RPCs exist and are tested but **nothing calls them yet** —
+  they are for the console rebuild, and they only fill once users run a
+  build containing the tracking.
 
 ---
 
-## Order of work — bugs first, console last
+## Order of work
 
-The founder's instruction: **finish the bugs, then build the UI.**
-
-1. The two TURN ONE questions (#7 build check, #6 QR logo).
-2. **#20 cross-account data leak** — a security bug and cheap to fix.
-3. **#21 biometric leak across accounts** — cause already found.
-4. **#4 / #5 premium corrections** — small, and #4 fixes my own mistake.
-5. **#3 quiz** — sound, the null-check crash, then agree the multiplayer
-   design (A5) with the founder *before* writing any of it.
-6. Everything else in the batch.
-7. **The admin console — only once the batch is clear.**
-
-Do not silently start the console early. If the batch finishes with time
-left, ask before switching.
+1. The four TURN ONE questions.
+2. **#3 A5 live multiplayer** — the big remaining piece, and the first
+   thing needing the PAT.
+3. **#7 ads** — reproduce the full-screen banner before touching it.
+4. **#11, #15, #16, #1, #10** — small and well-specified.
+5. **#8 / #9 players** — large, and audio is the most fragile area here.
+6. **#12, #13, #14, #17, #18, #19, #2, #22** and ban-evasion.
+7. **The admin console — only once the batch is clear.** Do not start it
+   early; if the batch finishes with time left, ask.

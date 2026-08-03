@@ -110,7 +110,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (!serverIds.contains(p.id)) merged.add(p);
     }
     merged.sort((a, b) {
-      final c = a.createdAt.compareTo(b.createdAt);
+      final c = a.sentAt.compareTo(b.sentAt);
       if (c != 0) return c;
       return a.id.compareTo(b.id);
     });
@@ -277,8 +277,8 @@ class _ChatScreenState extends State<ChatScreen>
     DateTime? newest;
     String? newestText;
     for (final m in hidden) {
-      if (newest == null || m.createdAt.isAfter(newest)) {
-        newest = m.createdAt;
+      if (newest == null || m.sentAt.isAfter(newest)) {
+        newest = m.sentAt;
         newestText = m.content;
       }
     }
@@ -345,7 +345,7 @@ class _ChatScreenState extends State<ChatScreen>
         _messages
             .where((m) => _selectedMsgIds.contains(m.id) && !m.isDeleted)
             .toList()
-          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
     if (selected.isEmpty) return;
     final textMsgs = selected.where((m) => m.messageType == 'text').toList();
     final mediaMsgs = selected.where((m) => m.messageType != 'text').toList();
@@ -392,7 +392,7 @@ class _ChatScreenState extends State<ChatScreen>
     final buf = StringBuffer();
     for (final m in msgs) {
       final who = m.senderId == me ? 'You' : m.senderName;
-      final t = m.createdAt.toLocal();
+      final t = m.sentAt.toLocal();
       final hh = t.hour.toString().padLeft(2, '0');
       final mm = t.minute.toString().padLeft(2, '0');
       buf.writeln('[$hh:$mm] $who: ${m.content}');
@@ -760,11 +760,11 @@ class _ChatScreenState extends State<ChatScreen>
     final now = DateTime.now().toUtc();
     DateTime? latest;
     for (final m in _serverMessages) {
-      final t = m.createdAt.toUtc();
+      final t = m.sentAt.toUtc();
       if (latest == null || t.isAfter(latest)) latest = t;
     }
     for (final m in _pending) {
-      final t = m.createdAt.toUtc();
+      final t = m.sentAt.toUtc();
       if (latest == null || t.isAfter(latest)) latest = t;
     }
     if (latest == null || now.isAfter(latest)) return now;
@@ -1731,6 +1731,9 @@ class _ChatScreenState extends State<ChatScreen>
       // sorts above older messages while the server roundtrip lands
       // ("voice note jumps from top to bottom" bug).
       createdAt: _optimisticTimestamp(),
+      // Same value: the list sorts by sentAt now, so an optimistic row
+      // needs it set or it sorts as if it had no send time at all.
+      sentAt: _optimisticTimestamp(),
     );
     setState(() {
       _pending.add(optimistic);
@@ -1935,6 +1938,9 @@ class _ChatScreenState extends State<ChatScreen>
       senderName: 'You',
       content: outgoing,
       createdAt: _optimisticTimestamp(),
+      // Same value: the list sorts by sentAt now, so an optimistic row
+      // needs it set or it sorts as if it had no send time at all.
+      sentAt: _optimisticTimestamp(),
       messageType: messageType,
       meta: productMeta,
       clientId: clientId,
@@ -3166,14 +3172,14 @@ class _ChatScreenState extends State<ChatScreen>
         if (m.messageType == 'system') {
           final prevSys = i > 0 ? _messages[i - 1] : null;
           final showSep =
-              prevSys == null || !_sameLocalDay(prevSys.createdAt, m.createdAt);
+              prevSys == null || !_sameLocalDay(prevSys.sentAt, m.sentAt);
           final sysText = _systemEventText(
             m,
             AuthService.currentUser?.id ?? '',
           );
           return Column(
             children: [
-              if (showSep) _DateSeparator(label: _dayLabel(m.createdAt)),
+              if (showSep) _DateSeparator(label: _dayLabel(m.sentAt)),
               _SystemMessage(text: sysText),
             ],
           );
@@ -3188,7 +3194,7 @@ class _ChatScreenState extends State<ChatScreen>
         // of each calendar day (Today / Yesterday / "Mon 8 Jun").
         final prev = i > 0 ? _messages[i - 1] : null;
         final showDateSeparator =
-            prev == null || !_sameLocalDay(prev.createdAt, m.createdAt);
+            prev == null || !_sameLocalDay(prev.sentAt, m.sentAt);
         // Fresh arrivals (sent or just received) rise+fade in;
         // history renders statically so opening a chat stays instant.
         final isFresh =
@@ -3209,7 +3215,7 @@ class _ChatScreenState extends State<ChatScreen>
                   : CrossAxisAlignment.start,
               children: [
                 if (showDateSeparator)
-                  _DateSeparator(label: _dayLabel(m.createdAt)),
+                  _DateSeparator(label: _dayLabel(m.sentAt)),
                 if (_isGroup && !isMine) _groupSenderLabel(m),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
@@ -3286,7 +3292,7 @@ class _ChatScreenState extends State<ChatScreen>
                           const SizedBox(width: 3),
                         ],
                         Text(
-                          _stamp(m.createdAt),
+                          _stamp(m.sentAt),
                           style: AppTextStyles.labelSmall.copyWith(
                             color: context.palette.textMuted,
                             fontSize: 10.5,
@@ -3648,6 +3654,9 @@ class _ChatScreenState extends State<ChatScreen>
       messageType: 'image',
       mediaUrl: localPath,
       createdAt: _optimisticTimestamp(),
+      // Same value: the list sorts by sentAt now, so an optimistic row
+      // needs it set or it sorts as if it had no send time at all.
+      sentAt: _optimisticTimestamp(),
     );
     setState(() {
       _pending.add(optimistic);

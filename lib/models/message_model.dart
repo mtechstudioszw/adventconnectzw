@@ -260,6 +260,7 @@ class Message {
     required this.senderName,
     required this.content,
     required this.createdAt,
+    DateTime? sentAt,
     this.read = false,
     this.readAt,
     this.deliveredAt,
@@ -273,14 +274,31 @@ class Message {
     this.meta,
     this.clientId,
     this.voicePlayedAt,
-  });
+  }) : _sentAt = sentAt;
 
   final String id;
   final String conversationId;
   final String senderId;
   final String senderName;
   final String content;
+
+  /// When the row reached the server. Kept because it is the true arrival
+  /// time and the push is tied to it — but it is NOT what the bubble shows.
   final DateTime createdAt;
+
+  final DateTime? _sentAt;
+
+  /// When the SENDER pressed send. This is the timestamp on the bubble, in
+  /// the chat list, and the one messages sort by.
+  ///
+  /// The two are milliseconds apart online, which is why the difference
+  /// went unnoticed. They are hours apart for anything composed offline:
+  /// the outbox holds the payload until connectivity returns, so a note
+  /// written at 21:00 and flushed at 07:40 was shown as 07:40 and sorted
+  /// to the bottom of the thread, below the replies it was answering.
+  ///
+  /// Falls back to [createdAt] for rows written before the column existed.
+  DateTime get sentAt => _sentAt ?? createdAt;
   final bool read;
   final DateTime? readAt;
   // WhatsApp-style three-state tick:
@@ -319,6 +337,7 @@ class Message {
       senderName: senderName,
       content: content ?? this.content,
       createdAt: createdAt,
+      sentAt: _sentAt,
       read: read,
       readAt: readAt,
       deliveredAt: deliveredAt,
@@ -344,6 +363,7 @@ class Message {
       content: (json['content'] ?? '') as String,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      sentAt: DateTime.tryParse(json['sent_at']?.toString() ?? ''),
       read: json['read'] == true,
       readAt: json['read_at'] == null
           ? null

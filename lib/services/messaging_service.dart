@@ -193,9 +193,13 @@ class MessagingService {
           await _client.from(_conversationsTable).update({
             'last_message': payload['content'],
             'last_sender_id': payload['sender_id'],
-            'last_message_at':
-                (inserted['created_at'] ?? DateTime.now().toUtc().toIso8601String())
-                    .toString(),
+            // The outbox is exactly where this matters: `created_at` is the
+            // moment the flush happened, which may be many hours after the
+            // member wrote the message.
+            'last_message_at': (inserted['sent_at'] ??
+                    inserted['created_at'] ??
+                    DateTime.now().toUtc().toIso8601String())
+                .toString(),
           }).eq('id', payload['conversation_id']);
           AnalyticsService.messageSent(source: 'text_outbox');
           await box.delete(key);
@@ -426,7 +430,8 @@ class MessagingService {
           final pv = previews[id];
           if (pv != null) {
             raw['last_message'] = pv['content'] ?? '';
-            raw['last_message_at'] = pv['created_at'] ?? raw['last_message_at'];
+            raw['last_message_at'] =
+                pv['sent_at'] ?? pv['created_at'] ?? raw['last_message_at'];
             raw['last_sender_id'] = pv['sender_id'];
           }
           return raw;
@@ -974,10 +979,14 @@ class MessagingService {
           .select()
           .eq('conversation_id', conversationId);
       if (clearedAt != null) {
+        // Deliberately still ARRIVAL time. "Cleared" means "hide what I had
+        // already received"; a message that reached the device after the
+        // clear is new to this member and must appear, even if the sender
+        // wrote it beforehand.
         query = query.gt('created_at', clearedAt.toIso8601String());
       }
       final newestFirst = await query
-          .order('created_at', ascending: false)
+          .order('sent_at', ascending: false)
           .limit(500) as List;
       response = newestFirst.reversed.toList();
     } catch (_) {
@@ -1012,6 +1021,15 @@ class MessagingService {
       'conversation_id': conversationId,
       'sender_id': user.id,
       'content': body,
+      // Stamped HERE, at compose time, not by the server on insert.
+      //
+      // That is the whole of #11. The offline path below stores this exact
+      // payload in the outbox and inserts it whenever connectivity comes
+      // back, so without a send time baked in, a message written at 21:00
+      // and flushed at 07:40 was timestamped 07:40 — and sorted there too,
+      // underneath replies to it. The server clamps this so it can never
+      // be later than arrival; see patch_184.
+      'sent_at': DateTime.now().toUtc().toIso8601String(),
       if (messageType != 'text') 'message_type': messageType,
       'meta': ?meta,
       'client_id': ?clientId,
@@ -1037,7 +1055,10 @@ class MessagingService {
       await _client.from(_conversationsTable).update({
         'last_message': message.content,
         'last_sender_id': user.id,
-        'last_message_at': message.createdAt.toIso8601String(),
+        // Send time here too, or a thread whose newest message was written
+        // offline sorts into the inbox at its flush time instead of where
+        // the member actually left the conversation.
+        'last_message_at': message.sentAt.toIso8601String(),
       }).eq('id', conversationId);
       AnalyticsService.messageSent(source: 'text');
       return message;
@@ -1057,7 +1078,10 @@ class MessagingService {
         .from(_messagesTable)
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
-        .order('created_at')
+        // Send time, not arrival: a message composed offline must sit where
+        // it was written in the conversation, not jump to the bottom when
+        // the outbox finally flushes it (#11).
+        .order('sent_at')
         .map((rows) {
           final messages =
               rows.map((row) => Message.fromJson(row)).toList();
@@ -1854,7 +1878,7 @@ class MessagingService {
     await _client.from(_conversationsTable).update({
       'last_message': '🎙️ Voice note',
       'last_sender_id': user.id,
-      'last_message_at': message.createdAt.toIso8601String(),
+      'last_message_at': message.sentAt.toIso8601String(),
     }).eq('id', conversationId);
     AnalyticsService.messageSent(source: 'voice');
     return message;
@@ -2008,7 +2032,7 @@ class MessagingService {
     await _client.from(_conversationsTable).update({
       'last_message': text.isEmpty ? '📷 Photo' : '📷 $text',
       'last_sender_id': user.id,
-      'last_message_at': message.createdAt.toIso8601String(),
+      'last_message_at': message.sentAt.toIso8601String(),
     }).eq('id', conversationId);
     AnalyticsService.messageSent(source: 'image');
     return message;
@@ -2055,7 +2079,7 @@ class MessagingService {
       await _client.from(_conversationsTable).update({
         'last_message': content,
         'last_sender_id': user.id,
-        'last_message_at': message.createdAt.toIso8601String(),
+        'last_message_at': message.sentAt.toIso8601String(),
       }).eq('id', targetConversationId);
       AnalyticsService.messageSent(source: 'forward_$type');
     } else {

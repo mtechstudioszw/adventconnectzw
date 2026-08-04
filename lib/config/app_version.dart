@@ -12,7 +12,32 @@
 /// `min_build_android`. So when you want to nudge older installs after a
 /// release, set `latest_build_android` to THIS value (10), NOT the Play Store
 /// versionCode.
-const int kAppBuildNumber = 10;
+const int kAppBuildNumber = 11;
+
+/// The version string shown to members, in ONE place.
+///
+/// Keep in lockstep with `pubspec.yaml`'s `version:` (currently
+/// `1.3.1+1033`). Bump both together, right here next to
+/// [kAppBuildNumber], which already has to move every release.
+///
+/// ## Why this constant exists
+///
+/// Settings and About each carried their own hardcoded `'v1.0.0'`. The app
+/// shipped 1.1, 1.2 and 1.3 without either of them changing, so for three
+/// releases the About screen confidently told every member they were
+/// running a version that had not existed for months — and the one place a
+/// person looks to answer "am I up to date?" was the one place guaranteed
+/// to be wrong.
+///
+/// Two copies of a number nobody remembers to update is how that happens.
+/// Now there is one, and it sits beside the other release-time constant so
+/// they get bumped in the same edit.
+///
+/// (Reading it from `package_info_plus` at runtime would remove the manual
+/// step entirely and is the better long-term answer — deliberately not done
+/// here, because adding a native plugin immediately before a release build
+/// is not a change to make unannounced.)
+const String kAppVersionName = '1.3.1';
 
 /// Play Store listing id (Android applicationId) — used to deep-link to
 /// the store from the "Update required" screen.

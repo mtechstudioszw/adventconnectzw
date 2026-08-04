@@ -2,6 +2,7 @@
 import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../config/app_version.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/notification_preferences_service.dart';
@@ -1033,7 +1034,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           // builds. Lets you confirm at a glance that the
                           // build you're running is the latest one (no more
                           // chasing already-fixed bugs in a stale build).
-                          value: 'v1.0.0'
+                          value: 'v$kAppVersionName',
                         ),
                         const _Divider(),
                         _NavRow(

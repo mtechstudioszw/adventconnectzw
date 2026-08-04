@@ -3,6 +3,7 @@ import '../../widgets/screen_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/app_version.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -16,7 +17,9 @@ class AboutScreen extends StatelessWidget {
 
   static const _appName = 'Advent Connect ZW';
   static const _appTagline = 'Christian community platform for Zimbabwe';
-  static const _appVersion = 'v1.0.0';
+  /// Reads the single source in `app_version.dart`, so this can never
+  /// again sit at v1.0.0 through three shipped releases.
+  static const _appVersion = 'v$kAppVersionName';
   static const _developerName = 'Tanatswa Michael Mikuwa';
   static const _studioName = 'MyTech Studios Zw';
   static const _contactEmail = 'adventconnectzw@gmail.com';

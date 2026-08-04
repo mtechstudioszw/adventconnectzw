@@ -92,6 +92,23 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
   }
 
   Future<void> _editMinistryTags() async {
+    // Ministry and spiritual gifts are written straight to the server —
+    // there is no outbox behind them. Offline, the picker opened normally,
+    // the member made their choices, and the save failed at the end with
+    // nothing explaining why. Say it BEFORE they do the work, not after.
+    if (!ConnectivityService.isOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.darkNavy,
+          content: Text(
+            "You're offline — ministry and spiritual gifts need a "
+            'connection to save. Try again once you\'re back online.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      return;
+    }
     final saved = await showMinistryPicker(
       context,
       selected: _myTags.map((t) => t.id).toSet(),

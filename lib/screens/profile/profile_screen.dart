@@ -425,11 +425,39 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
       ),
     );
     if (confirm != true) return;
-    await AuthService.signOut();
+
+    // Resolve the router BEFORE the await, and navigate WITHOUT a `mounted`
+    // check afterwards.
+    //
+    // This is why "sign out did nothing until you restarted the app".
+    // AuthService.signOut() tears down the session, which rebuilds the tree
+    // and disposes this screen — so by the time it returned, `mounted` was
+    // false, the guard on the next line returned early, and `goNamed` never
+    // ran. The sign-out itself had worked perfectly: state was cleared,
+    // which is exactly why relaunching showed you signed out. Only the
+    // navigation was skipped, so you were left sitting on a profile screen
+    // belonging to an account that no longer had a session.
+    //
+    // `mounted` is the wrong guard here. It protects setState and anything
+    // that reads `context` after an await — but GoRouter is an object we
+    // can hold, and it outlives this widget by design. Grabbing it first
+    // makes the navigation independent of whether the screen survived.
+    // This one IS a real post-await context use — the dialog above was
+    // awaited — so it keeps its guard. It is the guard AFTER signOut() that
+    // was wrong.
     if (!mounted) return;
-    // After sign-out land on the unified auth screen. The standalone
-    // age-verification screen is no longer in the first-run flow.
-    context.goNamed('login');
+    final router = GoRouter.of(context);
+    try {
+      await AuthService.signOut();
+    } finally {
+      // In `finally`: a failure partway through the reset still leaves the
+      // session unusable, so stranding the member on a dead profile screen
+      // is the worst possible outcome. Land on auth either way.
+      //
+      // After sign-out land on the unified auth screen. The standalone
+      // age-verification screen is no longer in the first-run flow.
+      router.goNamed('login');
+    }
   }
 
   @override

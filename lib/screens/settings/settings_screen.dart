@@ -175,9 +175,19 @@ class _SettingsScreenState extends State<SettingsScreen>
         confirmLabel: 'Sign out',
         confirmColor: AppColors.red,
         action: () async {
-          await AuthService.signOut();
-          if (!mounted) return;
-          context.goNamed('login');
+          // Same bug as the profile screen's sign out, same fix: signOut()
+          // disposes this screen, so a `mounted` check placed AFTER it
+          // returns early and the navigation never happens. The member is
+          // left on a settings screen belonging to an account with no
+          // session, and only discovers it worked by relaunching.
+          //
+          // Hold the router from before the await; it outlives the widget.
+          final router = GoRouter.of(context);
+          try {
+            await AuthService.signOut();
+          } finally {
+            router.goNamed('login');
+          }
         },
       );
 

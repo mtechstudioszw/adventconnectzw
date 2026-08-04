@@ -49,9 +49,27 @@ void main() {
 
   testWidgets('the screen shows what was actually saved', (tester) async {
     // A member who muted the arena and turned the soundtrack off.
-    await QuizSfx.setMuted(true);
-    await QuizSfx.setVolume(0.4);
-    await QuizMusic.setEnabled(false);
+    //
+    // runAsync() is load-bearing, and its absence is what hung CI for a
+    // whole day. `testWidgets` runs its body inside a FAKE-ASYNC zone: the
+    // clock is controlled by pump(), and a Future that depends on real I/O
+    // never completes because nothing is driving the real event loop. These
+    // three calls write to Hive — actual disk — so awaiting them directly
+    // wedges the test forever.
+    //
+    // The failure mode is nasty: the job does not error, it just stops
+    // making progress, and the two tests below get reported as "did not
+    // complete" as collateral. `flutter analyze` stays clean, so it sailed
+    // through review and only ever showed up as a build that never ended.
+    //
+    // The plain `test()` cases in this file are unaffected — no fake async
+    // there, which is exactly why they pass in isolation and hang in the
+    // suite once this one has wedged the runner.
+    await tester.runAsync(() async {
+      await QuizSfx.setMuted(true);
+      await QuizSfx.setVolume(0.4);
+      await QuizMusic.setEnabled(false);
+    });
 
     // Fresh launch: nothing has opened the arena, so nothing has called
     // QuizSfx.init(). This is the ordinary path to the settings screen.
@@ -59,7 +77,23 @@ void main() {
     QuizMusic.resetForTest();
 
     await tester.pumpWidget(const MaterialApp(home: SoundSettingsScreen()));
-    await tester.pumpAndSettle();
+    // pump(), NOT pumpAndSettle().
+    //
+    // This is what hung CI. `pumpAndSettle` waits for the widget tree to go
+    // quiet, and something on this screen animates continuously — so it
+    // never settles and instead sits out its DEFAULT TIMEOUT, which is TEN
+    // MINUTES. The whole suite then took just over ten minutes and the two
+    // tests below were reported as "did not complete" purely as collateral.
+    //
+    // From the outside that looked like a hung build rather than a failing
+    // test, which is why it survived a push: `flutter analyze` was clean and
+    // the job simply stopped making progress.
+    //
+    // Two frames is all this test needs. It asserts what the controls read
+    // on FIRST build from stored preferences — there is no animation to wait
+    // for and nothing async to settle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     final switches = tester.widgetList<Switch>(find.byType(Switch)).toList();
     expect(

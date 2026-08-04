@@ -6,8 +6,6 @@ import '../../models/devotion_model.dart';
 import '../../models/hymn_model.dart';
 import '../../models/library_item_model.dart';
 import '../../models/sabbath_school_model.dart';
-import '../../screens/library/bible_tab.dart' show BibleReaderScreen;
-import '../../services/bible_service.dart';
 import '../../services/hymn_service.dart';
 import '../../services/library_launch_intent.dart';
 import '../../services/library_service.dart';
@@ -357,10 +355,18 @@ class _DevotionPage extends StatelessWidget {
         reference: devotion.bibleRef,
         text: devotion.bibleText,
       ),
-      // Opens the Bible AT the verse, scrolled to it and highlighted —
-      // rather than dropping the member at the top of the Library to find
-      // it themselves, which is what tapping "verse of the day" used to do.
-      onTap: () => _openVerse(context, devotion.bibleRef),
+      // Founder's call (4 Aug 2026): the devotion card routes to the
+      // Library rather than deep-linking into the reader at the verse.
+      //
+      // The deep link is still here in `_openVerse` and still works — it is
+      // just not what this tap does any more. Share (the button above) is
+      // the action people actually take on a verse of the day; tapping the
+      // card is a move toward "read something", and the Library is where
+      // that starts.
+      //
+      // Tab 0 is the Bible tab, so the member still lands on scripture,
+      // one step out from the verse instead of inside it.
+      onTap: () => GoRouter.of(context).pushNamed('library', extra: 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -408,38 +414,22 @@ class _DevotionPage extends StatelessWidget {
   }
 }
 
-/// Open the Bible reader at [reference], scrolled to the verse.
-///
-/// The reference is free text written by whoever authored the devotion, so
-/// it can be anything from "John 3:16" to "1 Cor. 13:4". When it cannot be
-/// resolved we fall back to opening the Bible tab — the old behaviour —
-/// rather than guessing at a chapter and landing somewhere wrong.
-Future<void> _openVerse(BuildContext context, String reference) async {
-  final navigator = Navigator.of(context);
-  final router = GoRouter.of(context);
-  BibleReference? target;
-  try {
-    target = await BibleService.resolveReference(reference);
-  } catch (_) {
-    target = null;
-  }
-  if (target == null) {
-    router.pushNamed('library', extra: 0);
-    return;
-  }
-  await navigator.push(
-    MaterialPageRoute(
-      builder: (_) => BibleReaderScreen(
-        book: target!.book,
-        // BibleReaderScreen indexes chapters AND verses from 0;
-        // BibleReference is 1-based because that is how references are
-        // written. Convert both, or "John 3:16" lands on verse 17.
-        chapter: target.chapter - 1,
-        scrollToVerse: target.verse == null ? null : target.verse! - 1,
-      ),
-    ),
-  );
-}
+// `_openVerse` lived here: it resolved the devotion's free-text reference
+// ("John 3:16", "1 Cor. 13:4") through BibleService and pushed
+// BibleReaderScreen at that exact verse, scrolled and highlighted.
+//
+// Removed with the routing change above (founder, 4 Aug 2026) rather than
+// left in place, because an unreferenced private function is a WARNING and
+// CI runs `flutter analyze --no-fatal-infos` — infos are tolerated,
+// warnings still fail the build.
+//
+// The capability is not lost: `BibleService.resolveReference` and
+// `BibleReaderScreen`'s `scrollToVerse` are both still there, and the
+// verse-share button on this card still uses the same generator. If the
+// deep link comes back, it is a few lines against those two APIs — note
+// that BibleReaderScreen indexes chapters AND verses from 0 while a
+// BibleReference is 1-based, so both need converting or "John 3:16" lands
+// on verse 17.
 
 /// Share affordance on the devotion page's eyebrow row.
 ///

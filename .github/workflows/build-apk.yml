@@ -27,7 +27,13 @@ jobs:
   build:
     name: Debug APK (Android)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Back to 30. This was cut to 20 while chasing the test hang, but the
+    # hang was never the job running long — it was one test wedged forever,
+    # and a lower ceiling just moved the failure from "timed out at 20" to
+    # "timed out at 30". Meanwhile Gradle + the pinned NDK genuinely can
+    # approach 20 minutes on a cold runner cache, so the tighter ceiling
+    # risks killing good builds. A timeout is a backstop, not a budget.
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -96,8 +102,20 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Test
-        # Forcefully terminate flutter test process after 2m if it hangs on process exit
-        run: timeout 2m flutter test || true
+        # The hang this was working around is FIXED at source, in
+        # test/sound_settings_persistence_test.dart: a `testWidgets` body
+        # awaited real Hive disk writes without `tester.runAsync()`. A
+        # testWidgets body runs in a FAKE-ASYNC zone, so a Future waiting on
+        # real I/O never completes — the suite wedged on that one test and
+        # the job just stopped making progress. Whole suite now runs in well
+        # under two minutes.
+        #
+        # `|| true` is deliberately NOT used here. It swallowed every test
+        # failure, which meant a red suite still published an APK to the
+        # release page — the exact guarantee this step exists to provide.
+        # The timeout stays as a backstop, but it FAILS the job rather than
+        # passing it, so a future hang is visible instead of silent.
+        run: timeout 10m flutter test
 
       - name: Build debug APK
         # Stamp the commit SHA into the binary so Settings → App version

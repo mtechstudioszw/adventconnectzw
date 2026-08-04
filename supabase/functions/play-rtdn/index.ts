@@ -53,11 +53,55 @@ const EVENT_NAMES: Record<number, string> = {
   20: "pending_purchase_cancelled",
 };
 
+/// Constant-time string compare, so the shared secret can't be recovered
+/// a character at a time by timing the response.
+function secretMatches(supplied: string | null): boolean {
+  if (supplied === null) return false;
+  const a = new TextEncoder().encode(supplied);
+  const b = new TextEncoder().encode(RTDN_SECRET);
+  // Length is not secret-dependent enough to matter, but comparing
+  // different lengths byte-wise would read out of bounds.
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
 Deno.serve(async (req) => {
   // Pub/Sub retries anything that isn't a 2xx, forever-ish. So every
   // path below that isn't "we might succeed on a retry" returns 200.
   const url = new URL(req.url);
-  if (RTDN_SECRET && url.searchParams.get("secret") !== RTDN_SECRET) {
+
+  // ---- FAIL CLOSED --------------------------------------------------
+  //
+  // This check used to read `if (RTDN_SECRET && supplied !== RTDN_SECRET)`,
+  // which skipped authentication ENTIRELY whenever the secret was unset —
+  // and it is unset today, because Pub/Sub has not been configured yet.
+  // `verify_jwt` is deliberately OFF for this function (Pub/Sub posts
+  // anonymously), so the shared secret is the ONLY thing standing in
+  // front of it. Together that made this a fully unauthenticated endpoint
+  // holding the service-role key.
+  //
+  // The damaging path is the voided-purchase branch below: it does NOT
+  // re-read anything from Google, it trusts `refundType` straight out of
+  // the request body, flips the subscription to refunded/revoked and
+  // calls sync_premium_until. So anyone who obtained a purchase_token
+  // could strip premium from a paying subscriber, unauthenticated and at
+  // will. Everything else here is at least anchored to a Play API read.
+  //
+  // An unconfigured secret must therefore mean "accept nothing", never
+  // "accept everything". 503 (not 403) because this IS a state a retry
+  // could recover from once the secret is set, and Pub/Sub retrying is
+  // the behaviour we want then.
+  if (RTDN_SECRET.length === 0) {
+    console.error(
+      "RTDN_SECRET is not set — refusing every notification. Run " +
+        "`supabase secrets set RTDN_SECRET=<long random string>` and point " +
+        "the Pub/Sub push subscription at ?secret=<same value>.",
+    );
+    return new Response("not configured", { status: 503 });
+  }
+  if (!secretMatches(url.searchParams.get("secret"))) {
     // Wrong caller. 403 and no retry.
     return new Response("forbidden", { status: 403 });
   }

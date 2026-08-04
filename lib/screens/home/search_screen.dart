@@ -18,6 +18,7 @@ import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/youtube_service.dart';
 import '../../models/youtube_video.dart';
+import '../../widgets/app_search_field.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
@@ -621,118 +622,33 @@ class _SearchScreenState extends State<SearchScreen>
               splashRadius: 22,
             ),
             Expanded(
-              // The field is the subject of this screen, so it behaves like
-              // one: on focus the ring lights up in primary blue and a soft
-              // shadow lifts it off the canvas; unfocused it settles back to
-              // a hairline. It used to be an inert grey pill that gave no
-              // sign it had been tapped.
-              child: AnimatedContainer(
-                duration: AppMotion.maybe(context, AppMotion.quick),
-                curve: AppMotion.ease,
-                decoration: BoxDecoration(
-                  color: context.palette.inputFill,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: _focused
-                        ? AppColors.primaryBlue
-                        : context.palette.divider,
-                    width: _focused ? 1.6 : 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _focused
-                          ? AppColors.primaryBlue.withValues(alpha: 0.16)
-                          : Colors.black.withValues(alpha: 0.04),
-                      blurRadius: _focused ? 18 : 10,
-                      offset: Offset(0, _focused ? 6 : 3),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  onChanged: _onChanged,
-                  onSubmitted: _submit,
-                  textInputAction: TextInputAction.search,
-                  style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
-                  cursorColor: AppColors.primaryBlue,
-                  cursorRadius: const Radius.circular(2),
-                  decoration: InputDecoration(
-                    // Short on purpose. The old hint —
-                    // "Search for friends, churches, events, products..." —
-                    // is about 45 characters, and between the back button,
-                    // the search glyph and the clear button this field is
-                    // roughly 230dp wide on a 360dp phone. It never once
-                    // fitted: every member saw it truncated mid-word, which
-                    // is the single cheapest-looking thing on the screen.
-                    // The filter chips directly underneath already name
-                    // every scope, so the list was redundant as well as too
-                    // long.
-                    hintText: 'Search Advent Connect',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.textMuted,
-                      fontSize: 14,
-                    ),
-                    // The glyph picks up the accent with the ring, so the
-                    // whole control reads as one focused object.
-                    //
-                    // Tween, not AnimatedContainer: the colour lives on the
-                    // Icon, which is the CHILD, so the container animated
-                    // nothing and the accent snapped on and off.
-                    prefixIcon: TweenAnimationBuilder<double>(
-                      duration: AppMotion.maybe(context, AppMotion.quick),
-                      curve: AppMotion.ease,
-                      tween: Tween(begin: 0, end: _focused ? 1 : 0),
-                      builder: (context, t, _) => Icon(
-                        Icons.search,
-                        color: Color.lerp(
-                          context.palette.textMuted,
-                          AppColors.primaryBlue,
-                          t,
-                        ),
-                        size: 20,
-                      ),
-                    ),
-                    // Scale-in rather than a hard appear: the clear button
-                    // arrives on the first keystroke, and a control that
-                    // pops into existence mid-type is exactly the kind of
-                    // seam that reads as unfinished.
-                    suffixIcon: AnimatedSwitcher(
-                      duration: AppMotion.maybe(context, AppMotion.quick),
-                      transitionBuilder: (child, animation) => ScaleTransition(
-                        scale: animation,
-                        child: FadeTransition(opacity: animation, child: child),
-                      ),
-                      child: _controller.text.isEmpty
-                          ? const SizedBox.shrink(key: ValueKey('empty'))
-                          : IconButton(
-                              key: const ValueKey('clear'),
-                              tooltip: 'Clear search',
-                              icon: Icon(
-                                Icons.close,
-                                color: context.palette.textMuted,
-                                size: 18,
-                              ),
-                              onPressed: () {
-                                _controller.clear();
-                                _onChanged('');
-                                setState(() {});
-                              },
-                            ),
-                    ),
-                    isDense: true,
-                    // A little more air. At vertical 12 / horizontal 4 the
-                    // text sat tight against the glyph and the pill read as
-                    // cramped rather than generous.
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 14,
-                      horizontal: 6,
-                    ),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                  ),
-                ),
+              // One control, shared with the rest of the app.
+              //
+              // This used to be its own thing: a 22dp rounded rectangle
+              // that lit a primary-blue ring, lifted on a shadow and
+              // tweened its glyph to the accent on focus. It looked good in
+              // isolation and wrong in context — new chat and find friends
+              // use a flat pill, so the same act of typing to find
+              // something looked like two different features depending on
+              // which screen you were standing in. Founder's call, 4 Aug
+              // 2026: the chat pill is the house style, and chat itself is
+              // not to be touched.
+              //
+              // The hint stays short. "Search for friends, churches,
+              // events, products…" is ~45 characters and this field is
+              // roughly 230dp on a 360dp phone, so it always truncated
+              // mid-word. The filter chips underneath already name every
+              // scope.
+              child: AppSearchField(
+                controller: _controller,
+                focusNode: _focusNode,
+                hint: 'Search Advent Connect',
+                onChanged: _onChanged,
+                onSubmitted: _submit,
+                onClear: () {
+                  _controller.clear();
+                  _onChanged('');
+                },
               ),
             ),
           ],

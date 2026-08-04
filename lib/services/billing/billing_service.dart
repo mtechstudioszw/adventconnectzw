@@ -246,20 +246,60 @@ class BillingService {
           'order_id': purchase.orderId,
         },
       );
+      // Reaching here at all means the server answered 200. Every OTHER
+      // status — 400, 401, 403, 409, 503 — makes functions.invoke() THROW
+      // a FunctionException instead of returning it as data. So this
+      // branch and the `already_claimed` check below it were dead code:
+      // verify-purchase never returns ok:false with a 200, only ever a
+      // real error status. Left brief for defensiveness, but the actual
+      // error handling lives in the catch block now.
       final data = res.data;
       if (data is Map && data['ok'] == true) {
         return const VerificationResult.success();
       }
-      final message = data is Map ? data['error']?.toString() : null;
-      debugPrint('verify-purchase rejected: $message');
-      return VerificationResult.failure(
-        message == 'already_claimed'
-            ? 'That subscription is already linked to another Advent '
-                'Connect account.'
-            : null,
-      );
+      return const VerificationResult.failure(null);
+    } on FunctionException catch (e) {
+      // The server WAS reached — it answered with a specific status and a
+      // JSON body ({"ok": false, "error": "..."} — see verify-purchase's
+      // `json()` helper). That is a fundamentally different situation
+      // from a network failure, and conflating the two used to tell every
+      // paying member "we couldn't reach the server" for errors that were
+      // never about reachability at all. Found live 4 Aug 2026: a first
+      // real purchase failed because the Android Publisher API wasn't
+      // enabled in the Google Cloud project (a 503 from Play lookup
+      // failing) — the member saw a generic network-sounding message for
+      // what was actually "Google rejected our request to check your
+      // purchase," which is a very different thing to be told.
+      final body = e.details;
+      final code = body is Map ? body['error']?.toString() : null;
+      debugPrint('verify-purchase rejected: status=${e.status} error=$code');
+
+      final message = switch (code) {
+        'already_claimed' => 'That subscription is already linked to '
+            'another Advent Connect account.',
+        'invalid_purchase' => "That purchase doesn't look valid to Google "
+            'Play. If you were charged, tap Restore or contact support.',
+        'unauthenticated' =>
+          'Please sign in again, then try Restore from the Premium screen.',
+        // 503 verification_unavailable: OUR server reached Play (or tried
+        // to) and the attempt itself failed — an outage, a Play API
+        // hiccup, a misconfiguration on our side. Distinct from "no
+        // internet": the member's connection is fine, ours or Google's
+        // had the problem. Unacknowledged, so Play will redeliver it — see
+        // _entitle's comment on why NOT completing here is deliberate.
+        'verification_unavailable' =>
+          "Google Play didn't respond in time. If you were charged, this "
+              'will resolve itself automatically the next time you open '
+              'the app — no need to buy it again.',
+        _ => "We couldn't confirm that payment (error $code). If you were "
+            'charged, it will be retried automatically, or tap Restore.',
+      };
+      return VerificationResult.failure(message);
     } catch (e) {
-      debugPrint('verify-purchase call failed: $e');
+      // A genuine network-layer failure — DNS, timeout, no connection —
+      // is the ONLY case that reaches here now, so this message is
+      // finally describing what actually happened.
+      debugPrint('verify-purchase call failed (network): $e');
       return const VerificationResult.failure(
           "We couldn't reach the server to confirm that payment. It will "
           'be retried automatically.');

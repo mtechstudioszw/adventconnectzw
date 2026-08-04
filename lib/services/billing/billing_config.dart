@@ -5,19 +5,11 @@ class BillingConfig {
 
   /// The Play Console subscription product ID.
   ///
-  /// >>> NOT YET CONFIRMED (3 Aug 2026) <<<
-  /// The founder had not created the product when this shipped. A Play
-  /// product ID **can never be changed after creation**, so whatever is
-  /// created in Play Console must match this string exactly — or this
-  /// string must be changed to match it. Nothing else in the app
-  /// hardcodes it.
-  ///
-  /// Play Console → Monetise → Products → Subscriptions → Create:
-  ///   * Product ID: premium_monthly
-  ///   * Base plan: monthly, auto-renewing, USD $3.00
-  ///   * Add at least one regional price, then ACTIVATE the base plan
-  ///     (an inactive base plan makes the product invisible to the app,
-  ///     which looks exactly like a bug).
+  /// CONFIRMED LIVE (4 Aug 2026): created in Play Console as
+  /// `premium_monthly`, base plan `monthly` (monthly, auto-renewing),
+  /// priced across 174 countries/regions, base plan status Active.
+  /// Matches this string exactly, as it must — a Play product ID can
+  /// never be changed after creation.
   static const String monthlyProductId = 'premium_monthly';
 
   /// Every product the app may query. One today; adding an annual plan

@@ -555,7 +555,11 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'new-chat',
           name: 'new_chat',
-          builder: (context, state) => const NewChatScreen(),
+          // `extra: true` opens straight into "Find people" — used by
+          // Home's end-of-feed card, which is asking "who else is here?"
+          // rather than "who do I already know?".
+          builder: (context, state) =>
+              NewChatScreen(startInFindPeople: state.extra == true),
         ),
         GoRoute(
           path: 'new-group',

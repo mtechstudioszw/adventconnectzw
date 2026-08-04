@@ -34,7 +34,14 @@ enum _Bond { none, requested, incoming, friends }
 /// opening a profile, which is two screens away from the place you realise you
 /// want to.
 class NewChatScreen extends StatefulWidget {
-  const NewChatScreen({super.key});
+  const NewChatScreen({super.key, this.startInFindPeople = false});
+
+  /// Opens straight into "Find people" instead of "My friends".
+  ///
+  /// Home's end-of-feed card sends people here to MEET someone, and landing
+  /// them on their existing friends list would be answering a different
+  /// question from the one they asked.
+  final bool startInFindPeople;
 
   @override
   State<NewChatScreen> createState() => _NewChatScreenState();
@@ -59,7 +66,8 @@ class _NewChatScreenState extends State<NewChatScreen> {
   String? _error;
   bool _opening = false;
   // false = your friends only (default). true = explore everyone on Advent.
-  bool _explore = false;
+  // Seeded from the widget so a caller can open straight into Find people.
+  late bool _explore = widget.startInFindPeople;
 
   /// user id → where we stand with them. Drives the Add/Requested/Friends
   /// control on each row without a lookup per tile.
@@ -72,6 +80,14 @@ class _NewChatScreenState extends State<NewChatScreen> {
     super.initState();
     _loadFriends();
     _loadBonds();
+    // Opened straight into Find people: _setExplore is the normal entry
+    // point and it early-returns when the flag already matches, so kick the
+    // explore fetch off directly. Without this the screen would sit on an
+    // empty list with the toggle already pointing at Find people.
+    if (_explore) {
+      _loading = true;
+      _loadExploreSuggestions();
+    }
     FeedService.friendshipsChanged.addListener(_onFriendshipsChanged);
   }
 

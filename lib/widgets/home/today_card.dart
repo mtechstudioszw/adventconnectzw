@@ -371,10 +371,8 @@ class _DevotionPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Flexible(
-            child: Text(
+            child: _FittedLines(
               '"${devotion.bibleText}"',
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: AppColors.white,
                 height: 1.45,
@@ -394,10 +392,8 @@ class _DevotionPage extends StatelessWidget {
           ),
           const Spacer(),
           Flexible(
-            child: Text(
+            child: _FittedLines(
               '${devotion.egwQuote}  — Ellen G. White, ${devotion.egwSource}',
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.caption.copyWith(
                 color: AppColors.white.withValues(alpha: 0.72),
                 height: 1.4,
@@ -410,6 +406,61 @@ class _DevotionPage extends StatelessWidget {
           const _OpenHint(label: 'Read the full devotion'),
         ],
       ),
+    );
+  }
+}
+
+/// Text that ellipsizes at the last line which actually FITS, instead of at
+/// a hardcoded `maxLines` the parent then clips.
+///
+/// This is the real fix for the devotion verse being cut off mid-sentence,
+/// reported twice. `Text(maxLines: 4)` lays out four lines whatever height
+/// it is given — it does not drop lines to fit. So inside a fixed-height
+/// card with `Clip.antiAlias`, the fourth line was simply sliced in half:
+/// no ellipsis, no overflow stripe, nothing to indicate there was more.
+///
+/// The earlier attempt grew the fixed height and scaled it with the system
+/// font, which made the box big enough for MOST verses at MOST text sizes.
+/// That is a workaround with a moving target — a longer verse or one more
+/// notch of text scaling puts it straight back. Measuring the space and
+/// asking for that many lines removes the guess entirely.
+class _FittedLines extends StatelessWidget {
+  const _FittedLines(this.text, {required this.style});
+
+  final String text;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Unbounded height means nothing is going to clip us, so there is
+        // nothing to solve for — fall back to the old cap.
+        if (!constraints.maxHeight.isFinite) {
+          return Text(
+            text,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          );
+        }
+        // Must use the SCALED font size. The whole failure mode was
+        // accessibility text sizes, so computing against the unscaled one
+        // would reproduce the bug at exactly the settings that trigger it.
+        final scaled = MediaQuery.textScalerOf(context).scale(
+          style.fontSize ?? 14,
+        );
+        final lineHeight = scaled * (style.height ?? 1.2);
+        final fits = (constraints.maxHeight / lineHeight).floor();
+        return Text(
+          text,
+          // At least one line: a box too short for even one line should
+          // show a clipped-with-ellipsis line, not zero lines.
+          maxLines: fits < 1 ? 1 : fits,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        );
+      },
     );
   }
 }

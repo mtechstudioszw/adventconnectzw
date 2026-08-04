@@ -8,6 +8,7 @@ import '../../../models/quiz_round.dart';
 import '../../../services/quiz_challenge_service.dart';
 import '../../../services/quiz_cloud_service.dart';
 import '../../../services/quiz_match_service.dart';
+import '../../../services/quiz_music.dart';
 import '../../../services/quiz_progress_service.dart';
 import '../../../services/quiz_service.dart';
 import '../../../services/quiz_sfx.dart';
@@ -15,6 +16,7 @@ import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../widgets/motion/brand_spinner.dart';
 import 'arena_theme.dart';
+import 'quiz_boot_screen.dart' show showQuizSettings;
 import 'quiz_challenge_screen.dart';
 import 'quiz_leaderboard_screen.dart';
 import 'quiz_matchmaking_screen.dart';
@@ -67,6 +69,19 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     // generator builds (a ~4.5 MB parse we never want to pay for in front
     // of the player).
     unawaited(QuizSfx.init());
+    // The soundtrack starts in the LOBBY, not just once a round begins.
+    //
+    // It was only ever started by quiz_round_screen and quiz_match_screen,
+    // so every other surface in the arena — the lobby you sit on while
+    // choosing a mode, the leaderboard, the results screen — was silent.
+    // "The music is not playing in the quiz game" is the accurate report
+    // of that: the arena has a soundtrack that almost never plays.
+    //
+    // QuizMusic.start() is idempotent (it returns early when a player
+    // already exists), so the round screens calling it again is harmless,
+    // and it still stands down on its own when the member's own Library
+    // music is playing.
+    unawaited(QuizMusic.start());
     unawaited(QuizService.warm());
     unawaited(QuizCloudService.restoreIfEmpty().then((restored) {
       if (restored && mounted) setState(() {});
@@ -82,6 +97,10 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
   void dispose() {
     _intro.dispose();
     // The arena owns the sound players; free them when the player leaves.
+    // The soundtrack goes with them — it is arena ambience, and leaving it
+    // running under the rest of the app would be the "music kept playing
+    // after I left" bug in a new place.
+    unawaited(QuizMusic.stop());
     unawaited(QuizSfx.dispose());
     super.dispose();
   }
@@ -372,6 +391,26 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
                   ],
                 ),
               ),
+              // Arena settings — sound, music, haptics.
+              //
+              // This control existed ONLY on the boot screen, which is on
+              // screen for the second or two the arena takes to load. So
+              // the founder's report was exactly right: "it appears only
+              // when the quiz lobby is loading." You could see it, but not
+              // reliably reach it, and once the lobby painted there was no
+              // way back to it without leaving the arena entirely.
+              //
+              // The lobby is where somebody actually decides they want the
+              // music off, so the button belongs here.
+              ArenaIconButton(
+                icon: Icons.tune_rounded,
+                tooltip: 'Arena settings',
+                onTap: () {
+                  QuizSfx.tap();
+                  showQuizSettings(context);
+                },
+              ),
+              const SizedBox(width: 8),
               ArenaIconButton(
                 icon: Icons.leaderboard_rounded,
                 tooltip: 'Leaderboard',

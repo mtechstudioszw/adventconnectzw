@@ -212,10 +212,16 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   void dispose() {
     _pendingAdvance?.cancel();
     _pendingAdvance = null;
-    // The round owns the soundtrack, so leaving the round stops it — by
-    // any route, including backing out mid-question. Fire-and-forget: a
-    // dispose must not await.
-    unawaited(QuizMusic.stop());
+    // The ROUND no longer stops the soundtrack — the LOBBY owns it now.
+    //
+    // Founder's rule (4 Aug 2026): the music starts when you open the quiz,
+    // loops while you are in it, and stops when you leave. The round is
+    // somewhere you pass through on the way back to the lobby, so stopping
+    // here meant finishing a round killed the music and nothing ever
+    // restarted it — the lobby's initState had already run.
+    //
+    // QuizLobbyScreen.dispose() is the one place that stops it, which is
+    // also the only moment that actually means "left the quiz".
     _timer
       ..removeListener(_onTimerTick)
       ..removeStatusListener(_onTimerStatus)

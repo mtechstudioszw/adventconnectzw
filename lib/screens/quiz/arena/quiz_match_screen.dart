@@ -122,7 +122,9 @@ class _QuizMatchScreenState extends State<QuizMatchScreen>
     _uiTimer?.cancel();
     _heartbeat?.cancel();
     unawaited(QuizMatchService.leaveMatchChannel());
-    unawaited(QuizMusic.stop());
+    // Does NOT stop the soundtrack — the lobby owns it. Leaving a live
+    // match drops you back into the arena, not out of it. See the note in
+    // quiz_round_screen.dispose().
     _entrance.dispose();
     _flash.dispose();
     _clock.dispose();

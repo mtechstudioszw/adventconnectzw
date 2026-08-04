@@ -1785,7 +1785,13 @@ class _HomeScreenState extends State<HomeScreen>
               alignment: WrapAlignment.center,
               children: [
                 OutlinedButton.icon(
-                  onPressed: () => context.pushNamed('member_directory'),
+                  // NOT member_directory. That screen predates this card
+                  // and does not work; sending people to a dead end at the
+                  // exact moment they have run out of feed is the worst
+                  // possible place to do it. `extra: true` opens New chat
+                  // already switched to "Find people", which is the screen
+                  // that actually answers "who else is on here?".
+                  onPressed: () => context.pushNamed('new_chat', extra: true),
                   icon: const Icon(Icons.people_outline_rounded, size: 18),
                   label: const Text('Meet people'),
                 ),

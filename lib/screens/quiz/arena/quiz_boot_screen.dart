@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../services/ads/interstitial_ad_manager.dart';
 import '../../../services/quiz_generator_service.dart';
 import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_motion.dart';
@@ -51,6 +52,15 @@ class _QuizBootScreenState extends State<QuizBootScreen> {
   @override
   void initState() {
     super.initState();
+    // Start fetching the open-the-quiz interstitial NOW, in parallel with
+    // the warm-up below, so it has the whole boot to arrive. Requesting it
+    // at the moment we want to show it would almost always miss.
+    //
+    // No premium check needed here: loadAd() goes through
+    // AdsService.canRequestAds, and a subscriber never even issues the
+    // request — hiding a loaded ad would still have cost them the fetch and
+    // the battery, which is most of what they are paying to be rid of.
+    InterstitialAdManager.loadAd();
     unawaited(_boot());
   }
 
@@ -70,6 +80,23 @@ class _QuizBootScreenState extends State<QuizBootScreen> {
     if (elapsed < _minVisible) {
       await Future.delayed(_minVisible - elapsed);
     }
+
+    // The open-the-quiz ad (founder, 4 Aug 2026), shown at the END of boot
+    // and BEFORE the lobby is revealed.
+    //
+    // Order matters. Showing it after the lobby appears would drop a
+    // full-screen ad on top of a screen the member had already started
+    // reading, which is the most irritating placement available. Showing it
+    // here makes the ad the loading wait they were already having, and the
+    // lobby is what they get when it ends.
+    //
+    // Awaited, so the transition below happens once the ad is gone.
+    // maybeShow() is cheap and honest when it cannot deliver: no ad loaded,
+    // premium, or inside the two-minute cap all return false immediately,
+    // so re-entering the arena repeatedly does not mean an ad every time.
+    if (!mounted) return;
+    await InterstitialAdManager.maybeShow();
+
     if (mounted) setState(() => _ready = true);
   }
 

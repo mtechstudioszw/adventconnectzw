@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../models/youtube_video.dart';
+import 'music_player_service.dart';
 import 'youtube_service.dart';
 
 /// Keeps a video playing while the user browses the rest of the app.
@@ -61,6 +62,19 @@ class MiniPlayerService extends ChangeNotifier {
     // A live stream has no meaningful position and a docked 16:9 strip is
     // a poor way to watch one — let live playback end with the screen.
     if (video.isLive) return;
+
+    // Only one thing plays at a time.
+    //
+    // Both windows float over the whole app, so without this a docked
+    // sermon and a hymn would play OVER each other — two audio streams and
+    // two cards fighting for the same corner. Founder's call (4 Aug 2026):
+    // opening the video window removes the music one.
+    //
+    // stop(), not pause(): the music card is dismissed along with the
+    // sound, because a paused card that silently reappears later is worse
+    // than one that clearly went away. This is the same `stop()` the ✕
+    // button calls, so the behaviour is one the member already knows.
+    await MusicPlayerService.instance.stop();
 
     await _disposeController();
     _video = video;

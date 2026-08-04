@@ -7,6 +7,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 
 import '../models/library_item_model.dart';
+import 'mini_player_service.dart';
 import 'music_download_service.dart';
 import 'music_prefs_service.dart';
 
@@ -234,6 +235,17 @@ class MusicPlayerService {
     if (items.isEmpty) return;
     final index = startIndex.clamp(0, items.length - 1);
     final signature = items.map((e) => e.id).join(',');
+
+    // The other half of the one-thing-at-a-time rule. `MiniPlayerService`
+    // stops music when a video docks; this closes a docked video when the
+    // member starts music. The clash is symmetric, and fixing only the
+    // direction that was reported would leave the same two audio streams
+    // talking over each other by the other route.
+    //
+    // Only here, deliberately — NOT in restoreLastQueue(), which loads the
+    // previous queue PAUSED on cold start. That is not the member choosing
+    // to play something, and it must not tear down a video they docked.
+    await MiniPlayerService.instance.close();
 
     // Pressing play is the natural moment to give the media session another
     // go, so a slow cold start costs the member lock-screen controls for one

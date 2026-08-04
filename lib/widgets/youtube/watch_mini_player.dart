@@ -184,6 +184,29 @@ class _FloatingWindowState extends State<_FloatingWindow> {
                 child: _controls(playing),
               ),
             ),
+            // Close stays PUT.
+            //
+            // It used to live inside the fading control layer with play and
+            // expand, so three seconds after the window appeared the only
+            // way to get rid of it vanished — you had to tap the video to
+            // bring the controls back, and a tap that lands while they are
+            // already up expands to full screen instead. That is a window
+            // you cannot obviously dismiss, which is why it read as having
+            // no exit button at all.
+            //
+            // Getting out of something must never be the control that hides
+            // itself. It sits above the tap layer so it always wins the
+            // gesture.
+            Positioned(
+              top: 1,
+              right: 1,
+              child: _glyph(
+                icon: Icons.close_rounded,
+                size: 16,
+                tooltip: 'Close',
+                onTap: widget.service.close,
+              ),
+            ),
           ],
         ),
       ),
@@ -223,16 +246,8 @@ class _FloatingWindowState extends State<_FloatingWindow> {
               },
             ),
           ),
-          Positioned(
-            top: 1,
-            right: 1,
-            child: _glyph(
-              icon: Icons.close_rounded,
-              size: 16,
-              tooltip: 'Close',
-              onTap: widget.service.close,
-            ),
-          ),
+          // Close is NOT here — it is pinned outside this fading layer so
+          // it never disappears. See the note at the call site.
           Positioned(
             top: 1,
             left: 1,

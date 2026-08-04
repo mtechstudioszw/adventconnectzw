@@ -331,23 +331,47 @@ extension LifelineInfo on Lifeline {
 
 /// Coin economy.
 ///
-/// Tuned so a good round roughly pays for one lifeline: a strong
-/// 10-question round scores ~5,700 points → 57 coins, against a 30-coin
-/// 50/50. Generous enough to use them, tight enough that they're a choice.
+/// ## Retuned 4 Aug 2026 — coins were too easy to come by
+///
+/// The old rates paid a strong 10-question round ~5,700 points → **57
+/// coins**, against a 30-coin 50/50. One good round bought a lifeline
+/// outright and left change, so nobody ever had to choose, and the
+/// rewarded-ad offer (which only appears when you cannot afford a
+/// lifeline) was almost never reached.
+///
+/// Earning is now roughly halved: the same round pays **28 coins** — just
+/// under a 50/50. That is the whole design. A lifeline costs about two good
+/// rounds, so spending one is a decision rather than a reflex, and the
+/// player who wants one now is the player the ad is actually for.
+///
+/// **Existing balances are untouched.** Coins are a STORED value
+/// (`QuizProgressService.addCoins` increments a saved number; nothing
+/// recomputes a balance from past scores), so this changes what you earn
+/// from here on and never takes back what anyone already has. Retroactively
+/// deducting from the members who have been playing would be a bad way to
+/// thank them.
+///
+/// [startingBalance] deliberately stays at 100. A new player should still
+/// be able to try every lifeline once — that is how they learn the
+/// lifelines exist at all, and it is the cheapest onboarding in the game.
 class QuizCoins {
   QuizCoins._();
 
   /// New players start with enough to try every lifeline once.
   static const int startingBalance = 100;
 
-  /// Points-to-coins divisor for a finished round.
-  static const int pointsPerCoin = 100;
+  /// Points-to-coins divisor for a finished round. Was 100.
+  static const int pointsPerCoin = 200;
 
-  /// Bonus for completing the Daily Challenge.
-  static const int dailyBonus = 25;
+  /// Bonus for completing the Daily Challenge. Was 25.
+  ///
+  /// Cut by less than the round rate, on purpose: the daily is the habit
+  /// worth protecting, and it is capped at once a day anyway, so it cannot
+  /// be farmed the way replaying rounds can.
+  static const int dailyBonus = 15;
 
-  /// Bonus on each level up.
-  static const int levelUpBonus = 50;
+  /// Bonus on each level up. Was 50.
+  static const int levelUpBonus = 30;
 
   static int forRound(int points) => points ~/ pointsPerCoin;
 }

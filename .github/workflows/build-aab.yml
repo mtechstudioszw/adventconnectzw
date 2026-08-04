@@ -41,7 +41,17 @@ jobs:
   build:
     name: Release AAB (Android)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 60, not 30. A RELEASE AAB is a much heavier job than the debug APK
+    # this number was copied from: R8/ProGuard minification, every ABI, and
+    # on a cold runner Gradle downloads the pinned NDK (27.0.12077973, well
+    # over a gigabyte) before it can start. The first build after a cache
+    # miss ran past 30 minutes and was killed with nothing to show for it.
+    #
+    # A timeout is a backstop against a hung job, not a budget. This
+    # workflow is manual-dispatch only, so a generous ceiling costs nothing
+    # in Actions minutes — it just stops a slow-but-healthy build being
+    # thrown away at the finish line.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout

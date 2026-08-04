@@ -1,0 +1,48 @@
+-- =====================================================================
+--  PATCH 192 — Chat privacy screen could never load
+--
+--  Founder, 4 Aug 2026: "the chat privacy screen not loading."
+--
+--  `ChatPrivacyScreen._load()` selects four columns:
+--
+--      show_last_seen, show_online_status, show_read_receipts,
+--      who_can_message
+--
+--  `authenticated` has NO table-level SELECT on public.profiles — it reads
+--  the table entirely through per-column grants. Three of those four
+--  columns are granted. `who_can_message` is not. So the select is refused,
+--  the screen's catch block fires, and it renders "Could not load your
+--  privacy settings" — every time, for everyone, since the column was
+--  added.
+--
+--  ## The third instance of one process gap
+--
+--  This is the same shape as the two findings in patch_188 and patch_189:
+--  a column or trigger added later, while an earlier guard that had to
+--  know about it was never updated.
+--
+--    * patch_134 added is_verified_admin; patch_028's privilege trigger
+--      never learned about it -> anyone could self-grant the gold tick.
+--    * patch_187 added a BEFORE DELETE trigger; nobody accounted for NEW
+--      being NULL on DELETE -> every delete in the app silently no-oped.
+--    * whichever patch added who_can_message never granted SELECT on it
+--      -> the chat privacy screen has never once loaded.
+--
+--  Three different symptoms, one habit.
+--
+--  ## Why this is a one-line grant and not a wider one
+--
+--  Exactly two columns on profiles lack SELECT for `authenticated`:
+--  who_can_message and **fcm_token**. fcm_token is a device push token and
+--  must STAY unreadable — a client that can read other members' push
+--  tokens is a push-spoofing problem, and notify-fcm was quite enough of
+--  that for one day (see SECURITY_AUDIT.md).
+--
+--  So this grants the one column that is a bug, and deliberately leaves
+--  the one that is correct. Do not "fix" this by granting the table.
+-- =====================================================================
+
+GRANT SELECT (who_can_message) ON public.profiles TO authenticated;
+
+-- Belt and braces: `anon` reads nothing here (RLS requires an
+-- authenticated role for profiles), so it is deliberately not granted.

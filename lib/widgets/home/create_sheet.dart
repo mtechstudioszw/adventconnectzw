@@ -60,7 +60,26 @@ class _CreateScreen extends StatelessWidget {
 
   final Animation<double> animation;
 
-  static const _options = <_Option>[
+  /// ## Why this is two lists and not one grid
+  ///
+  /// It was eight identical glass rectangles, two across, each with the same
+  /// blue gradient icon chip. Every option looked exactly as important as
+  /// every other one, which is both untrue and the thing that made the
+  /// screen read as generated rather than designed: a uniform grid is what
+  /// you get when nobody decided what matters.
+  ///
+  /// Post and Story are what people open this screen to do. The other six
+  /// are real but occasional — most members will list a job or submit news
+  /// once, if ever. So the two get cards with room to breathe and the six
+  /// get quiet rows underneath.
+  ///
+  /// The hierarchy is carried by WEIGHT, not colour: a filled gradient chip
+  /// for primary, a flat outlined glyph for secondary. The palette allows
+  /// exactly one gold moment per screen (already spent on the CREATE
+  /// overline) and forbids anything outside the scheme, so giving each of
+  /// eight options its own accent colour was never available — and would
+  /// have been noise rather than hierarchy anyway.
+  static const _primary = <_Option>[
     _Option(CreateKind.post, Icons.edit_outlined, 'Post', 'Share an update'),
     _Option(
       CreateKind.story,
@@ -68,6 +87,9 @@ class _CreateScreen extends StatelessWidget {
       'Story',
       'Gone in 24 hours',
     ),
+  ];
+
+  static const _secondary = <_Option>[
     _Option(
       CreateKind.event,
       Icons.event_outlined,
@@ -209,19 +231,54 @@ class _CreateScreen extends StatelessWidget {
                           AppSpace.lg,
                           AppSpace.xl,
                         ),
-                        child: Wrap(
-                          spacing: AppSpace.md,
-                          runSpacing: AppSpace.md,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            for (var i = 0; i < _options.length; i++)
-                              _Tile(
-                                option: _options[i],
-                                // Two per row, minus the spacing between them.
-                                width: (MediaQuery.sizeOf(context).width -
-                                        AppSpace.lg * 2 -
-                                        AppSpace.md) /
-                                    2,
-                                t: animate ? _tileT(i) : 1.0,
+                            // The two everyone actually came for, given the
+                            // room to say so.
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (var i = 0; i < _primary.length; i++) ...[
+                                  if (i > 0) const SizedBox(width: AppSpace.md),
+                                  Expanded(
+                                    child: _PrimaryTile(
+                                      option: _primary[i],
+                                      t: animate ? _tileT(i) : 1.0,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: AppSpace.xl),
+                            Opacity(
+                              opacity: animate ? _tileT(2) : 1.0,
+                              child: Text(
+                                'MORE WAYS TO CONTRIBUTE',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.white.withValues(alpha: 0.5),
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.4,
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpace.md),
+                            // Rows, not a tighter grid. These labels are long
+                            // ("Reviewed before it goes live") and they scale
+                            // with the system font; a three-across grid would
+                            // either truncate them or overflow at a large text
+                            // size. A row gives the text the full width and
+                            // cannot run out of it.
+                            for (var i = 0; i < _secondary.length; i++)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpace.sm,
+                                ),
+                                child: _SecondaryRow(
+                                  option: _secondary[i],
+                                  t: animate ? _tileT(i + 2) : 1.0,
+                                ),
                               ),
                           ],
                         ),
@@ -238,99 +295,184 @@ class _CreateScreen extends StatelessWidget {
   }
 }
 
-class _Tile extends StatelessWidget {
-  const _Tile({
-    required this.option,
-    required this.width,
-    required this.t,
-  });
+/// Shared entrance: springs up and settles rather than simply fading.
+class _Enter extends StatelessWidget {
+  const _Enter({required this.t, required this.child});
+
+  final double t;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = t.clamp(0.0, 1.0);
+    final eased = Curves.easeOutBack.transform(clamped);
+    return Opacity(
+      opacity: clamped,
+      child: Transform.translate(
+        offset: Offset(0, 22 * (1 - clamped)),
+        child: Transform.scale(scale: 0.92 + 0.08 * eased, child: child),
+      ),
+    );
+  }
+}
+
+/// Post and Story — the two people came here for.
+class _PrimaryTile extends StatelessWidget {
+  const _PrimaryTile({required this.option, required this.t});
 
   final _Option option;
-  final double width;
   final double t;
 
   @override
   Widget build(BuildContext context) {
-    // Springs up and settles, rather than simply fading.
-    final eased = Curves.easeOutBack.transform(t.clamp(0.0, 1.0));
-    return Opacity(
-      opacity: t.clamp(0.0, 1.0),
-      child: Transform.translate(
-        offset: Offset(0, 28 * (1 - t)),
-        child: Transform.scale(
-          scale: 0.88 + 0.12 * eased,
-          child: SizedBox(
-            width: width,
-            child: Pressable(
-              haptics: true,
-              pressedScale: 0.94,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                Navigator.of(context).pop(option.kind);
-              },
-              child: Container(
-                padding: const EdgeInsets.all(AppSpace.lg),
+    return _Enter(
+      t: t,
+      child: Pressable(
+        haptics: true,
+        pressedScale: 0.94,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          Navigator.of(context).pop(option.kind);
+        },
+        child: Container(
+          padding: const EdgeInsets.all(AppSpace.lg),
+          decoration: BoxDecoration(
+            // Brighter glass than the rows below — the difference in fill is
+            // half of what makes these read as the primary pair.
+            color: AppColors.white.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(
+              color: AppColors.white.withValues(alpha: 0.20),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  // Glass on navy, exactly as the Bible switcher does it — the
-                  // tile belongs to the overlay instead of sitting on top of
-                  // it as a foreign white rectangle.
-                  color: AppColors.white.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(
-                    color: AppColors.white.withValues(alpha: 0.16),
-                  ),
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.32),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
+                alignment: Alignment.center,
+                child: Icon(option.icon, size: 23, color: AppColors.white),
+              ),
+              const SizedBox(height: AppSpace.lg),
+              Text(
+                option.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                option.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.white.withValues(alpha: 0.68),
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The occasional six — a quiet row each, full width for the label.
+class _SecondaryRow extends StatelessWidget {
+  const _SecondaryRow({required this.option, required this.t});
+
+  final _Option option;
+  final double t;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Enter(
+      t: t,
+      child: Pressable(
+        haptics: true,
+        pressedScale: 0.97,
+        onTap: () {
+          HapticFeedback.selectionClick();
+          Navigator.of(context).pop(option.kind);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.md,
+            vertical: AppSpace.md,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(
+              color: AppColors.white.withValues(alpha: 0.11),
+            ),
+          ),
+          child: Row(
+            children: [
+              // Flat and outlined, not a filled gradient chip. This is the
+              // other half of the hierarchy: same icon language, visibly
+              // less weight.
+              SizedBox(
+                width: 34,
+                height: 34,
+                child: Icon(
+                  option.icon,
+                  size: 21,
+                  color: AppColors.white.withValues(alpha: 0.85),
+                ),
+              ),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(AppRadius.button),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primaryBlue.withValues(
-                              alpha: 0.32,
-                            ),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        option.icon,
-                        size: 22,
-                        color: AppColors.white,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpace.md),
                     Text(
                       option.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleSmall.copyWith(
+                      style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.white,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
                       option.subtitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.caption.copyWith(
-                        color: AppColors.white.withValues(alpha: 0.68),
+                        color: AppColors.white.withValues(alpha: 0.60),
                         height: 1.3,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+              const SizedBox(width: AppSpace.sm),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppColors.white.withValues(alpha: 0.35),
+              ),
+            ],
           ),
         ),
       ),

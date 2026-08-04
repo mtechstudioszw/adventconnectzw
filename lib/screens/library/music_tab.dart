@@ -163,11 +163,18 @@ class _MusicTabState extends State<MusicTab>
       if (mounted) setState(() {});
     } catch (e) {
       if (!mounted) return;
+      // Being offline is not an error the member caused, so it does not get
+      // the red treatment or the word "Could not". It gets the reason and
+      // the way out. Everything else keeps the raw detail, which is what
+      // makes a genuine fault reportable.
+      final offline = e is OfflineTrackException;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: AppColors.red,
+          backgroundColor: offline ? AppColors.darkNavy : AppColors.red,
           content: Text(
-            'Could not play this track: $e',
+            offline
+                ? OfflineTrackException.message
+                : 'Could not play this track: $e',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

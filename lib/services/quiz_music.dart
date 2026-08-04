@@ -138,6 +138,49 @@ class QuizMusic {
       enabled && !userMusicOn;
 
   /// Start the loop for a round. Safe to call more than once.
+  /// The soundtrack's OWN audio context, not [QuizSfx.sharedAudioContext].
+  ///
+  /// ## Why this is separate
+  ///
+  /// The SFX context declares `contentType: sonification` and
+  /// `usageType: game`. That is right for what it describes — short UI
+  /// beeps and ticks. It is wrong for a three-megabyte looping music bed,
+  /// and wrong in a way that is silent rather than loud: Android uses
+  /// content type and usage to decide which STREAM the audio belongs to,
+  /// and sonification can land on a stream governed by the notification
+  /// volume instead of the media volume. A member with notifications turned
+  /// down then gets a quiz that plays nothing while every other part of the
+  /// app works and the haptics still fire — which is exactly the report.
+  ///
+  /// So the music declares itself as music: `contentType: music`,
+  /// `usageType: media`. That is the stream the volume rocker controls when
+  /// you are in an app playing audio, which is the one the member will
+  /// reach for.
+  ///
+  /// **`audioFocus: none` is kept, and is deliberate.** It is the rule from
+  /// `audio-background-playback-fix`: the arena must never duck or stop the
+  /// member's own Library music. `QuizMusic.shouldPlay` already stands the
+  /// soundtrack down when their music is playing, so nothing is lost by not
+  /// grabbing focus — and grabbing it would be the regression that keeps
+  /// killing background playback.
+  ///
+  /// iOS keeps `ambient` + `mixWithOthers` for the same reason. Note that
+  /// ambient obeys the hardware ringer switch, so a silenced iPhone plays no
+  /// arena music by design.
+  static AudioContext get _musicContext => AudioContext(
+        android: const AudioContextAndroid(
+          isSpeakerphoneOn: false,
+          stayAwake: false,
+          contentType: AndroidContentType.music,
+          usageType: AndroidUsageType.media,
+          audioFocus: AndroidAudioFocus.none,
+        ),
+        iOS: AudioContextIOS(
+          category: AVAudioSessionCategory.ambient,
+          options: const {AVAudioSessionOptions.mixWithOthers},
+        ),
+      );
+
   static Future<void> start() async {
     _loadPrefs();
     if (!shouldPlay(
@@ -152,7 +195,7 @@ class QuizMusic {
       // loop, not stop: this is a bed that runs for the whole round.
       await player.setReleaseMode(ReleaseMode.loop);
       await player.setPlayerMode(PlayerMode.mediaPlayer);
-      await player.setAudioContext(QuizSfx.sharedAudioContext);
+      await player.setAudioContext(_musicContext);
       await player.setSourceAsset(_asset);
       await player.setVolume(_volume);
       await player.resume();

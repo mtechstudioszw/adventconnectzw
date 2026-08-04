@@ -7,6 +7,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 
 import '../models/library_item_model.dart';
+import 'connectivity_service.dart';
 import 'mini_player_service.dart';
 import 'music_download_service.dart';
 import 'music_prefs_service.dart';
@@ -33,6 +34,23 @@ import 'music_prefs_service.dart';
 /// a platform without the plugin), [backgroundReady] stays false and the
 /// player degrades to plain in-app playback rather than refusing to play —
 /// the reliability property the previous author was protecting.
+/// Thrown when a track is asked for with no connection and no local copy.
+///
+/// A named type rather than a bare string so every caller can tell "the
+/// network is gone" apart from "this file is broken" and say the right
+/// thing — the two need opposite reactions from the member.
+class OfflineTrackException implements Exception {
+  const OfflineTrackException();
+
+  /// Written for the member, not the log. It names the cause AND the way
+  /// out, because "download it first" is not obvious unless you are told.
+  static const String message =
+      "You're offline. Download this track to listen without a connection.";
+
+  @override
+  String toString() => message;
+}
+
 class MusicPlayerService {
   MusicPlayerService._();
   static final MusicPlayerService instance = MusicPlayerService._();
@@ -261,6 +279,24 @@ class MusicPlayerService {
 
     // Resolve which of these are downloaded before building the sources.
     await MusicDownloadService.warmPaths(items);
+
+    // Offline + not downloaded = say so, before trying.
+    //
+    // Streaming a track with no connection used to fail deep inside
+    // just_audio and surface as "Could not play this track:
+    // PlatformException(-1009, ...)" — a raw platform error that tells the
+    // member nothing they can act on. Worse, it reads as the app being
+    // broken rather than the network being absent, and it gives no hint
+    // that downloading the track first is the fix.
+    //
+    // Checked HERE and not in the UI because every entry point — the Music
+    // tab, the Audio Bible, shuffle, a tap on a Home music card — routes
+    // through this method, and each of them would otherwise need its own
+    // copy of the check.
+    if (!ConnectivityService.isOnline &&
+        MusicDownloadService.cachedPathSync(items[index].id) == null) {
+      throw const OfflineTrackException();
+    }
 
     _queue = items;
     _loadedSignature = signature;

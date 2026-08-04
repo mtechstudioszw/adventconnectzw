@@ -85,10 +85,47 @@ repair pass changed **0 rows**.
 
 ---
 
+### 🟠 HIGH — `notify-fcm` had NO authentication: anyone could push to anyone
+
+**File:** `supabase/functions/notify-fcm/index.ts` — **fixed, deployed and
+verified**
+
+`verify_jwt = false` and no secret, no signature, no `Authorization` check of
+any kind. It reads `title`, `body` and `user_id` straight from the request
+body, then uses the **service-role key** to look up that member's device token
+and push to it.
+
+Anyone who knew the URL could send **any notification, with any wording, to
+any member** — through the app's own channel, with the app's own icon. *"Your
+account is suspended, tap to verify"* would have been indistinguishable from a
+real notification. Member IDs are visible to any signed-in user via posts and
+profiles, so targeting was trivial. This is a phishing vector aimed at the
+most trusted channel the app has.
+
+The code comment claimed *"the webhook authenticates this call"*. It did not.
+The webhook sent `Authorization: Bearer <ANON KEY>` — and the anon key is
+public by design; it ships inside the APK. Checking it would have been
+theatre.
+
+**Fix:** a real shared secret (`FCM_HOOK_SECRET`), **fail closed** — missing
+header, wrong header, or unset env var all return a bare `401`. Constant-time
+comparison.
+
+**Rolled out in an order that never dropped a notification:** secret set
+first → trigger rewritten to send `x-fcm-secret` (the old deployed code
+ignored the unknown header) → new code deployed.
+
+**Verified in production:** unauthenticated, anon-key-only and wrong-secret
+calls all return `401`; the real trigger fires end-to-end and the function
+answers `200 "No device token; skipped"` — it authenticated, looked the member
+up, and correctly sent nothing.
+
+---
+
 ### 🟠 HIGH — `play-rtdn` failed OPEN
 
-**File:** `supabase/functions/play-rtdn/index.ts` — **fixed in code, needs a
-function redeploy**
+**File:** `supabase/functions/play-rtdn/index.ts` — **fixed and deployed;
+now returns `503` until `RTDN_SECRET` is set, which is the correct state**
 
 ```ts
 if (RTDN_SECRET && url.searchParams.get("secret") !== RTDN_SECRET)
@@ -193,9 +230,24 @@ without accounting for `NEW` being NULL.
 or a trigger to a shared guard, re-read the guard it depends on. A checklist in
 `CLAUDE.md` would have caught both.
 
-## Remaining risk
+## Remaining risk — the fail-open idiom is systemic
 
-- `play-rtdn` is fixed in code but **not deployed**. Deploy before Pub/Sub is
-  configured, and set `RTDN_SECRET`.
+Three functions still authenticate **only if a secret happens to be
+configured**. Each was left alone because closing it breaks a working feature
+unless its caller is updated in the same change:
+
+| Function | State | What it needs |
+|---|---|---|
+| `youtube-websub` | `if (!WEBSUB_SECRET) return true; // not enforced` | HMAC verification + re-subscribe with YouTube. Caller is external. |
+| `fetch-advent-news` | `if (secret) { …check… }` | Set `CRON_SECRET` and update the pg_cron job together. |
+| `purge-storage` | no check at all | Same as above. Low impact: it can only delete what `purgeable_storage_names()` returns (orphans >24–48h), so abuse/cost, not arbitrary deletion. |
+
+Also open:
+
 - App Links migration for the auth callback (Medium, above).
+- `ACCESS_FINE_LOCATION` → `ACCESS_COARSE_LOCATION` (Medium, above).
 - Ban-evasion remains deferred — see the handoff.
+
+**The habit is the finding.** Five functions were written with the same
+"authenticate if configured" shape. Any new edge function should start from
+fail-closed.

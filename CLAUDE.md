@@ -126,6 +126,41 @@ Success Green:  #2E7D32  // Status badges ONLY
 
 \## CRITICAL TECHNICAL RULES
 
+\- \*\*Adding a column to `profiles`, or a trigger to a shared guard? RE-READ
+  THE GUARD IT DEPENDS ON.\*\* (4 Aug 2026.) Three separate production bugs
+  found in one day all came from this single habit:
+
+  \- patch\_134 added `is\_verified\_admin`; patch\_028's privilege trigger was
+    never told about it → \*\*any member could grant themselves the gold
+    verified tick\*\* (patch\_188).
+
+  \- patch\_187 added a `BEFORE ... DELETE` trigger returning `NEW`; on a
+    DELETE `NEW` is NULL, and returning NULL \*\*silently cancels the row\*\* →
+    \*\*every delete in the app did nothing\*\* across 26 tables, with no error
+    (patch\_189).
+
+  \- whoever added `who\_can\_message` never granted SELECT on it, and
+    `authenticated` has NO table-level SELECT on `profiles` — it reads
+    entirely through per-column grants → \*\*the chat privacy screen had
+    never loaded, for anyone\*\* (patch\_192).
+
+  The checklist, every time you touch `profiles` or a shared trigger:
+
+  1. Does `profiles\_block\_privilege\_self\_grant()` need to snap the new
+     column back?
+  2. Does the column need an explicit `GRANT SELECT` / `GRANT UPDATE`?
+     There is no table-level grant to inherit from. \*\*`fcm\_token` must
+     STAY unreadable\*\* — never "fix" a missing grant by granting the table.
+  3. A column-level `REVOKE` is \*\*silently ignored\*\* while a table-level
+     grant exists. Revoke the table first.
+  4. `BEFORE` triggers covering DELETE must `RETURN COALESCE(NEW, OLD)`.
+
+\- \*\*`CacheService.writePref` does NOT add the `pref:` prefix for you.\*\* The
+  key must literally start with `pref:`, or `clearUserData()` deletes it on
+  every sign-out. This has already broken the quiz sound settings and the
+  offline-downloads index. Decide per key: device-level → `pref:`;
+  user-scoped → leave unprefixed so sign-out clears it.
+
 \- \*\*Auth tokens:\*\* ALWAYS use flutter\_secure\_storage — NEVER SharedPreferences
 
 \- \*\*Supabase region:\*\* Africa (Cape Town) — already set, never change

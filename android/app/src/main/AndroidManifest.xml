@@ -1,13 +1,32 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Voice notes: chat audio recording (record package). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Required for playing voice notes streamed from Supabase storage. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Network state for connectivity_plus offline detection. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-    <!-- Geolocator: nearest churches sort + distance chips. -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Geolocator: nearest churches sort + distance chips.
+
+         COARSE ONLY, deliberately. LocationService asks for
+         `LocationAccuracy.medium` (roughly 100-500m) and nothing in the app
+         asks for better — the feature is "sort churches by how near they
+         are", which a city block of precision answers perfectly well.
+
+         ACCESS_FINE_LOCATION was declared anyway. It bought nothing, and it
+         cost: precise location is one of the permissions Play reviews
+         hardest, it carries a heavier Data Safety declaration, and Android
+         shows the member a Precise/Approximate choice they should not have
+         to think about for a church finder.
+
+         The tools:node="remove" is load-bearing. The geolocator plugin
+         merges ACCESS_FINE_LOCATION in from its own manifest, so simply
+         deleting our line would leave the permission in the built APK and
+         change nothing. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        tools:node="remove"/>
     <!-- local_auth: biometric quick unlock in Settings. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- Android 13+ runtime notification prompt — without this declared,

@@ -19,9 +19,38 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BUCKETS = ["story_photos", "chat_media", "voice_notes"];
 
+/// Constant-time compare, so the secret can't be walked out a byte at a
+/// time by timing the response.
+function cronSecretOk(supplied: string | null): boolean {
+  const expected = Deno.env.get("CRON_SECRET") ?? "";
+  if (expected.length === 0 || supplied === null) return false;
+  const a = new TextEncoder().encode(supplied);
+  const b = new TextEncoder().encode(expected);
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
+  }
+
+  // This function had NO authentication at all while running with the
+  // service-role key and calling storage.remove(). The old header comment
+  // called it "harmless cleanup", and the blast radius genuinely is small —
+  // purgeable_storage_names() only ever returns orphans older than 24-48h,
+  // so a caller cannot choose what gets deleted. But "an unauthenticated
+  // endpoint holding the service-role key" is not a sentence that should
+  // appear anywhere, and it could be hit in a loop to burn invocations and
+  // storage API quota.
+  //
+  // FAIL CLOSED, including when the env var is missing. The pg_cron job
+  // sends this header (see patch notes); nothing else legitimately calls
+  // this function.
+  if (!cronSecretOk(req.headers.get("x-cron-secret"))) {
+    return new Response("forbidden", { status: 403 });
   }
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

@@ -8,8 +8,34 @@
 //  Env vars (configure as Supabase Edge Function secrets):
 //    FCM_SERVICE_ACCOUNT_JSON  — paste of the Firebase service account
 //                                 JSON. Do not commit. Set via dashboard.
+//    FCM_HOOK_SECRET           — shared secret proving the caller is our
+//                                 own database webhook. See below.
 //    SUPABASE_URL              — auto-injected by Supabase.
 //    SUPABASE_SERVICE_ROLE_KEY — auto-injected by Supabase.
+//
+//  ## Why FCM_HOOK_SECRET exists (added 4 Aug 2026)
+//
+//  This function ran with `verify_jwt = false` and NO authentication of
+//  any kind. It reads `title`, `body` and `user_id` straight out of the
+//  request body, then uses the SERVICE-ROLE key to look up that user's
+//  device token and push to it.
+//
+//  So anyone who knew the URL could send any notification, with any
+//  wording, to any member — delivered through the app's own channel with
+//  the app's own icon. "Your account is suspended, tap to verify" is
+//  indistinguishable from a real notification. Member IDs are visible to
+//  any signed-in user via posts and profiles, so targeting was trivial.
+//
+//  The old comment claimed "the webhook authenticates this call". It did
+//  not. The webhook sent `Authorization: Bearer <ANON KEY>` — and the anon
+//  key is public by design; it ships inside the APK. Checking it would
+//  have been theatre, since every attacker already has it.
+//
+//  So the trigger now also sends `x-fcm-secret`, and this function
+//  requires it. FAIL CLOSED: a missing or wrong secret is rejected, and a
+//  missing ENV VAR is rejected too. "Authenticate only if someone
+//  remembered to configure a secret" is the idiom that left play-rtdn
+//  wide open; it is not repeated here.
 //
 //  Deploy:
 //    supabase functions deploy notify-fcm
@@ -237,9 +263,31 @@ function mapTypeToCategory(type: string): string | null {
 
 // ---------- handler --------------------------------------------------
 
+/// Constant-time compare so the secret can't be recovered a byte at a
+/// time by timing the response.
+function secretOk(supplied: string | null): boolean {
+  const expected = Deno.env.get("FCM_HOOK_SECRET") ?? "";
+  // No configured secret means we cannot authenticate anyone. Reject.
+  if (expected.length === 0 || supplied === null) return false;
+  const a = new TextEncoder().encode(supplied);
+  const b = new TextEncoder().encode(expected);
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
+  }
+
+  // Only our own database webhook may ask this function to push. 401 with
+  // no detail — an attacker probing it learns nothing about whether the
+  // secret is unset, wrong, or the right length.
+  if (!secretOk(req.headers.get("x-fcm-secret"))) {
+    console.error("notify-fcm: rejected a call with a missing/invalid secret");
+    return new Response("Unauthorized", { status: 401 });
   }
 
   let payload: WebhookPayload;

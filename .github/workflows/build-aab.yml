@@ -37,6 +37,14 @@ on:
 permissions:
   contents: write
 
+# A second dispatch supersedes the first. Without this, re-running because the
+# code moved leaves the stale build occupying a runner for its full hour and
+# racing the new one to publish the same release tag — the loser overwrites
+# the winner, and which is which depends on who finishes last.
+concurrency:
+  group: build-aab
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Release AAB (Android)
@@ -51,7 +59,13 @@ jobs:
     # workflow is manual-dispatch only, so a generous ceiling costs nothing
     # in Actions minutes — it just stops a slow-but-healthy build being
     # thrown away at the finish line.
-    timeout-minutes: 60
+    #
+    # 60 was not enough either: a run on 9 Aug 2026 reached the ceiling and
+    # was killed, for the second time. The cause was the missing Gradle cache
+    # below, not a hang — but the ceiling goes to 90 as well, because being
+    # killed at the finish line is the most expensive possible outcome and a
+    # higher backstop costs nothing when the job is healthy.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -86,6 +100,37 @@ jobs:
           flutter-version: "3.41.9"
           channel: stable
           cache: true
+
+      # THE reason this job kept hitting its ceiling.
+      #
+      # Flutter was cached; Gradle never was. So every single run re-downloaded
+      # the pinned NDK (27.0.12077973, over a gigabyte), every Gradle
+      # distribution and every Maven dependency before a line was compiled —
+      # on a runner with no memory of the last build. That is most of an hour
+      # spent fetching bytes that never change.
+      #
+      # Keyed on the Gradle files plus pubspec.lock, because those are what
+      # actually determine the dependency set; `restore-keys` means a changed
+      # pubspec still starts from the previous cache instead of from nothing.
+      - name: Cache Gradle and Android SDK downloads
+        uses: actions/cache@v4
+        with:
+          # NOTE: `path:` is a block scalar — a "#" line inside it is a PATH,
+          # not a comment. Explanations stay above the step.
+          #
+          # The NDK path is hard-coded rather than read from the SDK-root
+          # variable: that variable is exported into the job's shells but is
+          # not reliably resolvable inside an action's `with:` block, and an
+          # unresolved value would silently cache the useless path "/ndk".
+          # This is the documented SDK location on GitHub's ubuntu images.
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.android/build-cache
+            /usr/local/lib/android/sdk/ndk
+          key: gradle-aab-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties', 'pubspec.lock') }}
+          restore-keys: |
+            gradle-aab-${{ runner.os }}-
 
       - name: Show toolchain versions
         run: |

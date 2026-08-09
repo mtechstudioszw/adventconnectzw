@@ -22,6 +22,7 @@ import 'services/music_download_service.dart';
 import 'services/music_player_service.dart';
 import 'services/premium_service.dart';
 import 'services/usage_analytics.dart';
+import 'services/maintenance_service.dart';
 import 'services/presence_service.dart';
 import 'services/session_reset.dart';
 import 'services/sabbath_service.dart';
@@ -354,17 +355,38 @@ class _AdventConnectAppState extends State<AdventConnectApp>
   Timer? _banPollTimer;
   bool _banCheckInFlight = false;
 
+  // Reactive maintenance guard, for the same reason as the ban guard above.
+  // The splash check fires once, so an admin taking the app offline reached
+  // only the people who happened to relaunch — everyone already inside kept
+  // tapping until the server refused each write with a generic failure. The
+  // founder's requirement was that maintenance "cannot be bypassed", and
+  // staying in the app was a bypass of the explanation, if not of the block.
+  //
+  // Faster than the ban poll on purpose: a ban concerns one person who is
+  // being removed, maintenance concerns everyone at once and usually
+  // immediately precedes a deploy.
+  static const _maintenancePollInterval = Duration(seconds: 15);
+  Timer? _maintenancePollTimer;
+  bool _maintenanceCheckInFlight = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startBanGuard();
+    _startMaintenanceGuard();
+    // The service raises this when the answer FLIPS, including from the
+    // maintenance screen's own polling, so coming back online routes people
+    // out without waiting for the next tick.
+    MaintenanceService.revision.addListener(_onMaintenanceRevision);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    MaintenanceService.revision.removeListener(_onMaintenanceRevision);
     _banPollTimer?.cancel();
+    _maintenancePollTimer?.cancel();
     super.dispose();
   }
 
@@ -377,6 +399,60 @@ class _AdventConnectAppState extends State<AdventConnectApp>
     // First sweep shortly after launch, once the session has had a moment to
     // restore on a slow network.
     Future.delayed(const Duration(seconds: 4), () => unawaited(_checkBanNow()));
+  }
+
+  void _startMaintenanceGuard() {
+    _maintenancePollTimer?.cancel();
+    _maintenancePollTimer = Timer.periodic(
+      _maintenancePollInterval,
+      (_) => unawaited(_checkMaintenanceNow()),
+    );
+    Future.delayed(
+      const Duration(seconds: 3),
+      () => unawaited(_checkMaintenanceNow()),
+    );
+  }
+
+  void _onMaintenanceRevision() {
+    unawaited(_routeForMaintenance());
+  }
+
+  Future<void> _checkMaintenanceNow() async {
+    if (_maintenanceCheckInFlight) return;
+    // Deliberately NOT gated on being signed in. Maintenance applies to
+    // everyone, including someone sitting on the login screen — and the
+    // check itself is readable by `anon`.
+    final loc = appRouter.routerDelegate.currentConfiguration.uri.path;
+    // Splash runs its own gate, and the maintenance screen polls for itself.
+    if (loc == '/splash' || loc == '/maintenance') return;
+    _maintenanceCheckInFlight = true;
+    try {
+      // Fails open inside `check()`, so a flaky network never invents an
+      // outage.
+      await MaintenanceService.check();
+      await _routeForMaintenance();
+    } finally {
+      _maintenanceCheckInFlight = false;
+    }
+  }
+
+  Future<void> _routeForMaintenance() async {
+    final blocked = MaintenanceService.last.blocked;
+    final loc = appRouter.routerDelegate.currentConfiguration.uri.path;
+    if (blocked) {
+      // An update the member must install outranks "come back later" — same
+      // ordering the splash gate uses.
+      if (loc == '/maintenance' ||
+          loc == '/splash' ||
+          loc == '/update-required') {
+        return;
+      }
+      appRouter.goNamed('maintenance');
+    } else if (loc == '/maintenance') {
+      // Back on. Route through splash rather than guessing a destination —
+      // it already knows how to decide signed-in vs onboarding.
+      appRouter.goNamed('splash');
+    }
   }
 
   Future<void> _checkBanNow() async {
@@ -408,6 +484,7 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       if (state == AppLifecycleState.paused) {
         unawaited(PresenceService.stop(clearRoster: false));
         _banPollTimer?.cancel();
+        _maintenancePollTimer?.cancel();
         // Get queued usage events out before the OS can freeze or kill
         // us — otherwise the last (and most interesting) minutes of a
         // session are the ones that never arrive.
@@ -420,6 +497,9 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       // Re-arm the ban guard + check immediately — the admin may have banned
       // this account while the app was backgrounded.
       _startBanGuard();
+      // Same for maintenance: the app may have been taken offline (or brought
+      // back) while this phone was in a pocket.
+      _startMaintenanceGuard();
       // Returning to the app — flip any messages that arrived while we
       // were away to delivered, so senders' ticks update even if we don't
       // open Chats (patch_062).

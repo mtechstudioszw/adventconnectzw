@@ -306,28 +306,45 @@ class NowPlayingBar extends StatelessWidget {
     // throws. Push on the root navigator directly.
     final nav = rootNavigatorKey.currentState;
     if (nav == null) return;
-    nav.push(
-      PageRouteBuilder<void>(
-        transitionDuration: AppMotion.entrance,
-        reverseTransitionDuration: AppMotion.standard,
-        opaque: false,
-        pageBuilder: (_, _, _) => const FullPlayerScreen(),
-        transitionsBuilder: (context, animation, _, child) {
-          // Slide up from the bar — the gesture and the transition agree.
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: AppMotion.easeOut,
-            reverseCurve: AppMotion.easeIn,
-          );
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(curved),
-            child: child,
-          );
-        },
-      ),
-    );
+
+    // Stand the bar down HERE, at the push, rather than relying on
+    // FullPlayerScreen.initState to do it.
+    //
+    // The flag used to be raised only once the pushed route built its State.
+    // That is a frame or more after the push, it is skipped entirely if the
+    // route is built lazily or replaced, and `dispose()` — the only thing
+    // that lowered it — runs on a teardown we do not control the timing of.
+    // The result the founder saw was the bar still sitting on top of the
+    // full player. Owning the flag at the call site makes it exact: down
+    // before the route exists, up again when the route has actually gone.
+    MusicPlayerService.fullPlayerOpen.value = true;
+
+    nav
+        .push(
+          PageRouteBuilder<void>(
+            transitionDuration: AppMotion.entrance,
+            reverseTransitionDuration: AppMotion.standard,
+            opaque: false,
+            pageBuilder: (_, _, _) => const FullPlayerScreen(),
+            transitionsBuilder: (context, animation, _, child) {
+              // Slide up from the bar — gesture and transition agree.
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: AppMotion.easeOut,
+                reverseCurve: AppMotion.easeIn,
+              );
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(curved),
+                child: child,
+              );
+            },
+          ),
+        )
+        // Fires once the route is genuinely off the stack, however it left —
+        // chevron, back button, or the drag-down dismiss.
+        .whenComplete(() => MusicPlayerService.fullPlayerOpen.value = false);
   }
 }

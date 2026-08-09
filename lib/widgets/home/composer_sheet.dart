@@ -16,6 +16,7 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
+import '../blurred_sheet.dart';
 import '../cached_image.dart';
 import '../preview_sheet.dart';
 import '../user_avatar.dart';
@@ -25,10 +26,8 @@ import 'story_text_style.dart';
 /// Opens the "write a post" bottom sheet. Resolves to the freshly
 /// created Post or null if the user cancelled.
 Future<Post?> showPostComposer(BuildContext context, {String? churchId}) {
-  return showModalBottomSheet<Post>(
+  return showBlurredSheet<Post>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
     builder: (ctx) => _PostComposer(churchId: churchId),
   );
 }
@@ -58,7 +57,8 @@ class _PostComposer extends StatefulWidget {
   State<_PostComposer> createState() => _PostComposerState();
 }
 
-class _PostComposerState extends State<_PostComposer> {
+class _PostComposerState extends State<_PostComposer>
+    with SingleTickerProviderStateMixin {
   /// Matches the `posts_body_check` constraint in Supabase
   /// (`char_length(body) <= 2000`). Without this the insert simply failed
   /// with a generic "Could not publish", and because nothing was saved the
@@ -86,6 +86,22 @@ class _PostComposerState extends State<_PostComposer> {
   /// the sheet, then it goes away when they type.
   bool _draftRestored = false;
 
+  /// Drives the staggered reveal of the sheet's contents.
+  ///
+  /// The sheet itself already slides up; without this the whole form arrives
+  /// as one solid block at the end of that slide, which is the difference
+  /// between a surface that opens and a dialog that appears.
+  late final AnimationController _entrance = AnimationController(
+    vsync: this,
+    duration: AppMotion.entrance,
+  );
+
+  /// The header hairline only exists once there is something above it to
+  /// separate from — a permanent line under a header that nothing has
+  /// scrolled beneath is a border for its own sake.
+  final _scroll = ScrollController();
+  bool _scrolled = false;
+
   /// Church updates keep their own draft so a half-written church notice
   /// can't overwrite a half-written personal post.
   String get _draftKey =>
@@ -96,6 +112,8 @@ class _PostComposerState extends State<_PostComposer> {
     super.initState();
     _restoreDraft();
     _controller.addListener(_onBodyChanged);
+    _scroll.addListener(_onScroll);
+    _entrance.forward();
   }
 
   @override
@@ -103,7 +121,35 @@ class _PostComposerState extends State<_PostComposer> {
     _draftDebounce?.cancel();
     _controller.removeListener(_onBodyChanged);
     _controller.dispose();
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
+    _entrance.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    final next = _scroll.hasClients && _scroll.offset > 4;
+    if (next != _scrolled) setState(() => _scrolled = next);
+  }
+
+  /// One step of the entrance stagger.
+  Widget _step(int index, Widget child) {
+    final start = (index * 0.10).clamp(0.0, 0.6);
+    final curve = CurvedAnimation(
+      parent: _entrance,
+      curve: Interval(start, 1.0, curve: AppMotion.easeOut),
+    );
+    return AnimatedBuilder(
+      animation: curve,
+      builder: (context, inner) => Opacity(
+        opacity: curve.value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - curve.value) * 10),
+          child: inner,
+        ),
+      ),
+      child: child,
+    );
   }
 
   /// Autosave is the real safety net, not the discard prompt.
@@ -301,18 +347,62 @@ class _PostComposerState extends State<_PostComposer> {
     }
   }
 
-  void _toggleVisibility() {
-    setState(() {
-      _visibility = _visibility == PostVisibility.public
-          ? PostVisibility.friendsOnly
-          : PostVisibility.public;
-    });
+  /// Who will see this.
+  ///
+  /// It used to be a pill that swapped its own label on tap, which meant the
+  /// only way to learn there were two audiences was to change the one you had
+  /// already chosen. A menu shows both, says what each means, and marks the
+  /// current one — the choice is legible before you make it.
+  Future<void> _chooseVisibility() async {
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+
+    final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final chosen = await showMenu<PostVisibility>(
+      context: context,
+      color: context.palette.card,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      position: RelativeRect.fromLTRB(
+        origin.dx + 20,
+        origin.dy + 96,
+        origin.dx + box.size.width - 20,
+        origin.dy + box.size.height,
+      ),
+      items: [
+        for (final option in PostVisibility.values.take(2))
+          PopupMenuItem<PostVisibility>(
+            value: option,
+            child: _VisibilityOption(
+              option: option,
+              selected: option == _visibility,
+            ),
+          ),
+      ],
+    );
+    if (chosen != null && mounted) setState(() => _visibility = chosen);
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final media = MediaQuery.of(context);
+    final bottom = media.viewInsets.bottom;
     final hasContent = _hasContent;
+    final palette = context.palette;
+    final isChurch = widget.churchId != null;
+
+    // A deliberate height instead of one that grows with the text.
+    //
+    // The old sheet was `mainAxisSize.min` around a scroll view, so it stood
+    // up at the height of an empty field and then shoved itself taller on the
+    // line that wrapped. Committing to a tall surface up front says "this is
+    // a page to write on", and nothing under your thumb moves while you use
+    // it. It still shrinks on a short screen, and the body scrolls.
+    final maxHeight = media.size.height * 0.88 - bottom;
+
     return PopScope(
       // Intercept the back button so a half-written post asks first. Swipe-
       // to-dismiss is still allowed — the autosaved draft covers that path.
@@ -327,274 +417,269 @@ class _PostComposerState extends State<_PostComposer> {
       },
       child: Padding(
         padding: EdgeInsets.only(bottom: bottom),
-        child: Container(
-          decoration: BoxDecoration(
-            color: context.palette.sheet,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Container(
+            decoration: BoxDecoration(
+              color: palette.sheet,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.darkNavy.withValues(alpha: 0.16),
+                  blurRadius: 32,
+                  offset: const Offset(0, -6),
+                ),
+              ],
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: context.palette.divider,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Kept as a quiet overline rather than dropped. The identity
-                // row below says who is posting, but a sheet that slides up
-                // with no title at all leaves a beat where you have to work
-                // out what it is — and this one can also be a church update,
-                // which is worth naming.
-                Text(
-                  widget.churchId == null ? 'New post' : 'Church update',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: context.palette.textMuted,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                    letterSpacing: 0.6,
-                  ),
-                ),
                 const SizedBox(height: 10),
-                // Who is about to say this, and to whom.
-                //
-                // The sheet used to open with the word "New post" and a
-                // 11px pill, and nothing else. That is fine until you
-                // remember the same sheet publishes AS A CHURCH when it is
-                // opened from a church page — a post that carries the
-                // church's name and gold tick into everyone's feed, written
-                // on a screen that never mentioned the church once. An
-                // identity row is not decoration here; it is the difference
-                // between speaking for yourself and speaking for your
-                // congregation, shown before you type rather than after you
-                // publish.
-                _IdentityRow(
-                  churchId: widget.churchId,
-                  visibility: _visibility,
-                  onToggleVisibility: _toggleVisibility,
-                  trailing: _PostButton(
-                    enabled: hasContent,
-                    busy: _publishing,
-                    onTap: _publish,
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: palette.divider,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                if (_draftRestored) ...[
-                  const SizedBox(height: 10),
-                  _DraftRestoredNote(onDiscard: () {
-                    _clearDraft();
-                    setState(() {
-                      _controller.clear();
-                      _photos.clear();
-                      _draftRestored = false;
-                    });
-                  }),
-                ],
-                const SizedBox(height: 4),
-                // Borderless from here down. A boxed input inside a sheet
-                // reads as a form to be filled in; the composer should read
-                // as a page to write on, so the field IS the sheet and the
-                // only edge in the whole surface is the one under the
-                // toolbar.
-                DecoratedBox(
-                  decoration: const BoxDecoration(),
-                  child: TextField(
-                    controller: _controller,
-                    minLines: 4,
-                    maxLines: 8,
-                    // Enforced here so the member is stopped AT the limit,
-                    // instead of the database rejecting the insert afterwards
-                    // with an unexplained "Could not publish".
-                    maxLength: _maxBody,
-                    textCapitalization: TextCapitalization.sentences,
-                    autofocus: true,
-                    // Bigger than body text. What you are writing is the
-                    // most important thing on this sheet and should be the
-                    // largest thing on it.
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      fontSize: 17,
-                      height: 1.45,
-                      color: context.palette.text,
-                    ),
-                    // The counter lives on the toolbar now, so the field's
-                    // own one is suppressed. Two of them would disagree the
-                    // moment one of them was wrong.
-                    buildCounter:
-                        (
-                          context, {
-                          required currentLength,
-                          required isFocused,
-                          required maxLength,
-                        }) => null,
-                    decoration: InputDecoration(
-                      // Church updates and personal posts are different acts
-                      // of writing, and the prompt should not pretend
-                      // otherwise.
-                      hintText: widget.churchId == null
-                          ? "What's on your mind today?"
-                          : 'Share news with your church…',
-                      hintStyle: AppTextStyles.bodyMedium.copyWith(
-                        color: context.palette.textMuted,
-                        fontSize: 17,
-                        height: 1.45,
-                      ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    // The controller listener already rebuilds + autosaves.
-                  ),
-                ),
-                if (_photos.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  // Square thumbnails in a wrap: one photo reads as a single
-                  // preview, four tile into a 2x2 without any special-casing.
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final single = _photos.length == 1;
-                      final size = single
-                          ? constraints.maxWidth
-                          : (constraints.maxWidth - 8) / 2;
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (var i = 0; i < _photos.length; i++)
-                            SizedBox(
-                              width: size,
-                              height: size,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    CachedImage(_photos[i], fit: BoxFit.cover),
-                                    Positioned(
-                                      top: 6,
-                                      right: 6,
-                                      child: Material(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.55,
-                                        ),
-                                        shape: const CircleBorder(),
-                                        child: InkWell(
-                                          customBorder: const CircleBorder(),
-                                          onTap: () {
-                                            setState(() => _photos.removeAt(i));
-                                            _saveDraft();
-                                          },
-                                          child: const Padding(
-                                            padding: EdgeInsets.all(6),
-                                            child: Icon(
-                                              Icons.close,
-                                              size: 16,
-                                              color: AppColors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    // Order matters — the first photo is what
-                                    // lands in `image_url` and is all a v1.3.0
-                                    // client will ever see.
-                                    if (i == 0 && _photos.length > 1)
-                                      Positioned(
-                                        left: 6,
-                                        bottom: 6,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 3,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.55,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Cover',
-                                            style: AppTextStyles.labelSmall
-                                                .copyWith(
-                                                  color: AppColors.white,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
+                const SizedBox(height: 8),
+
+                // ---- Header ------------------------------------------
+                // Close, title, publish. The Post button used to sit inside
+                // the identity row, sharing a line with the author's name and
+                // the audience control — three unrelated jobs competing for
+                // the same 360 pixels. The action belongs in the chrome.
+                _step(
+                  0,
+                  _Header(
+                    title: isChurch ? 'Church update' : 'New post',
+                    onClose: () async {
+                      final navigator = Navigator.of(context);
+                      if (await _confirmDiscard()) navigator.pop();
                     },
+                    action: _PostButton(
+                      enabled: hasContent,
+                      busy: _publishing,
+                      onTap: _publish,
+                    ),
                   ),
-                ],
-                const SizedBox(height: AppSpace.md),
-                // One hairline, right here, and nowhere else on the sheet.
-                // It separates writing from doing, which is the only
-                // division this surface actually has.
-                Divider(height: 1, thickness: 1, color: context.palette.divider),
-                const SizedBox(height: AppSpace.sm),
-                // A Wrap, not a Row. These labels scale with the system font,
-                // and a Row that runs out of width throws rather than
-                // clipping quietly — the exact failure `composer_sheet_test`
-                // was written to catch. At 2.5x the chips take a second line
-                // instead of overflowing.
-                Wrap(
-                  spacing: AppSpace.sm,
-                  runSpacing: AppSpace.sm,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    // A photo is the thing people reach for most often after
-                    // the words, so it gets a filled tonal chip rather than
-                    // a text link that reads like a footnote.
-                    _ToolButton(
-                      icon: Icons.add_photo_alternate_outlined,
-                      label: _photos.isEmpty
-                          ? 'Photo'
-                          : '${_photos.length}/$_maxPhotos',
-                      busy: _uploadingImage,
-                      onTap: _uploadingImage || _photos.length >= _maxPhotos
-                          ? null
-                          : _pickImage,
-                    ),
-                    // Disabled on an empty post — there is nothing to preview.
-                    _ToolButton(
-                      icon: Icons.visibility_outlined,
-                      label: 'Preview',
-                      onTap: hasContent ? _openPreview : null,
-                    ),
-                    // The limit is a fact about the post, so it belongs on
-                    // the toolbar with the other facts — not floating under
-                    // the text where it pushed the layout around every time
-                    // it appeared.
-                    if (_controller.text.length >= _counterFrom)
-                      Text(
-                        '${_maxBody - _controller.text.length} left',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: _maxBody - _controller.text.length <= 50
-                              ? AppColors.red
-                              : context.palette.textMuted,
-                          fontWeight: FontWeight.w700,
+                ),
+
+                // Appears only once something has scrolled under it.
+                AnimatedOpacity(
+                  duration: AppMotion.maybe(context, AppMotion.quick),
+                  opacity: _scrolled ? 1 : 0,
+                  child: Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: palette.divider,
+                  ),
+                ),
+
+                // ---- Body --------------------------------------------
+                Flexible(
+                  child: SingleChildScrollView(
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Who is about to say this, and to whom.
+                        //
+                        // Not decoration: the same sheet publishes AS A
+                        // CHURCH when it is opened from a church page — a
+                        // post that carries the church's name and gold tick
+                        // into everyone's feed. Showing that before you write
+                        // rather than after you publish is the difference
+                        // between speaking for yourself and speaking for your
+                        // congregation.
+                        _step(
+                          1,
+                          _IdentityRow(
+                            churchId: widget.churchId,
+                            visibility: _visibility,
+                            onChooseVisibility: _chooseVisibility,
+                          ),
                         ),
-                      ),
-                  ],
+
+                        if (_draftRestored) ...[
+                          const SizedBox(height: 12),
+                          _DraftRestoredNote(onDiscard: () {
+                            _clearDraft();
+                            setState(() {
+                              _controller.clear();
+                              _photos.clear();
+                              _draftRestored = false;
+                            });
+                          }),
+                        ],
+
+                        const SizedBox(height: 6),
+
+                        // Borderless. A boxed input inside a sheet reads as a
+                        // form to be filled in; the composer should read as a
+                        // page to write on, so the field IS the sheet.
+                        _step(
+                          2,
+                          TextField(
+                            controller: _controller,
+                            minLines: 5,
+                            maxLines: null,
+                            // Enforced here so the member is stopped AT the
+                            // limit, instead of the database rejecting the
+                            // insert afterwards with an unexplained failure.
+                            maxLength: _maxBody,
+                            textCapitalization: TextCapitalization.sentences,
+                            keyboardType: TextInputType.multiline,
+                            autofocus: true,
+                            // What you are writing is the most important thing
+                            // on this sheet, so it is the largest thing on it.
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontSize: 18,
+                              height: 1.5,
+                              color: palette.text,
+                            ),
+                            // The counter lives on the toolbar. Two of them
+                            // would disagree the moment one was wrong.
+                            buildCounter:
+                                (
+                                  context, {
+                                  required currentLength,
+                                  required isFocused,
+                                  required maxLength,
+                                }) => null,
+                            decoration: InputDecoration(
+                              hintText: isChurch
+                                  ? 'Share news with your church…'
+                                  : "What's on your mind today?",
+                              hintStyle: AppTextStyles.bodyMedium.copyWith(
+                                color: palette.textMuted,
+                                fontSize: 18,
+                                height: 1.5,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+
+                        // Growing into place rather than snapping: adding a
+                        // photo is the one thing on this sheet that changes
+                        // the layout underneath your hands.
+                        AnimatedSize(
+                          duration: AppMotion.maybe(
+                            context,
+                            AppMotion.standard,
+                          ),
+                          curve: AppMotion.easeOut,
+                          alignment: Alignment.topCenter,
+                          child: _photos.isEmpty
+                              ? const SizedBox(width: double.infinity)
+                              : Padding(
+                                  padding: const EdgeInsets.only(top: 14),
+                                  child: _PhotoGrid(
+                                    photos: _photos,
+                                    onRemove: (i) {
+                                      setState(() => _photos.removeAt(i));
+                                      _saveDraft();
+                                    },
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ---- Toolbar -----------------------------------------
+                _step(
+                  3,
+                  _Toolbar(
+                    photoCount: _photos.length,
+                    maxPhotos: _maxPhotos,
+                    uploading: _uploadingImage,
+                    onPickPhoto: _uploadingImage || _photos.length >= _maxPhotos
+                        ? null
+                        : _pickImage,
+                    onPreview: hasContent ? _openPreview : null,
+                    used: _controller.text.length,
+                    max: _maxBody,
+                    showCounterFrom: _counterFrom,
+                  ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The sheet's chrome: leave, what this is, publish.
+///
+/// A `Wrap` is deliberately NOT used here — this row must stay one line, so
+/// each part is bounded instead: the close control is an icon (it does not
+/// scale), the title is the only flexible thing and ellipsises, and the
+/// action sizes to its own label. That is what keeps it safe at 2.5x text
+/// scale on a 360px screen, which is exactly what `composer_sheet_test`
+/// pumps.
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.title,
+    required this.onClose,
+    required this.action,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final Widget action;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 16, 12),
+      child: Row(
+        children: [
+          Material(
+            color: palette.cardMuted,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onClose,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 20,
+                  color: palette.textMuted,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleLarge.copyWith(
+                fontSize: 16.5,
+                fontWeight: FontWeight.w700,
+                color: palette.text,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpace.sm),
+          action,
+        ],
       ),
     );
   }
@@ -622,49 +707,58 @@ class _PostButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final live = enabled && !busy;
-    return AnimatedContainer(
+    return AnimatedScale(
+      // A small settle the instant the post becomes publishable. It costs
+      // nothing and it is the moment worth marking.
+      scale: live ? 1 : 0.96,
       duration: AppMotion.maybe(context, AppMotion.quick),
-      curve: AppMotion.ease,
-      decoration: BoxDecoration(
-        gradient: live ? AppColors.primaryGradient : null,
-        color: live ? null : context.palette.cardMuted,
-        borderRadius: BorderRadius.circular(AppRadius.button),
-        boxShadow: live
-            ? [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.30),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ]
-            : null,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: live ? onTap : null,
-          borderRadius: BorderRadius.circular(AppRadius.button),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: busy
-                // Sized to the label it replaces so the header doesn't
-                // reflow the instant you tap Post.
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: AppColors.primaryBlue,
-                    ),
-                  )
-                : Text(
-                    'Post',
-                    style: AppTextStyles.buttonText.copyWith(
-                      color: live ? AppColors.white : context.palette.textMuted,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
+      curve: AppMotion.spring,
+      child: AnimatedContainer(
+        duration: AppMotion.maybe(context, AppMotion.quick),
+        curve: AppMotion.ease,
+        decoration: BoxDecoration(
+          gradient: live ? AppColors.primaryGradient : null,
+          color: live ? null : context.palette.cardMuted,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          boxShadow: live
+              ? [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.32),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: live ? onTap : null,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: busy
+                  // Sized to the label it replaces so the header doesn't
+                  // reflow the instant you tap Post.
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: AppColors.primaryBlue,
+                      ),
+                    )
+                  : Text(
+                      'Post',
+                      style: AppTextStyles.buttonText.copyWith(
+                        color: live
+                            ? AppColors.white
+                            : context.palette.textMuted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+            ),
           ),
         ),
       ),
@@ -672,12 +766,124 @@ class _PostButton extends StatelessWidget {
   }
 }
 
-/// A composer toolbar action: tonal chip, icon + short label.
+/// The bar under the writing area: what else you can add, and how much room
+/// is left.
 ///
-/// These were `TextButton.icon`s — the same visual weight as body copy, on a
-/// row with nothing else on it, which made the two things you can do besides
-/// writing look like fine print. A tonal chip is still clearly secondary to
-/// the Post button but is unmistakably a control.
+/// A `Wrap`, not a `Row`. These labels scale with the system font, and a Row
+/// that runs out of width throws rather than clipping quietly — the exact
+/// failure `composer_sheet_test` was written to catch. At 2.5x the chips take
+/// a second line instead of overflowing.
+class _Toolbar extends StatelessWidget {
+  const _Toolbar({
+    required this.photoCount,
+    required this.maxPhotos,
+    required this.uploading,
+    required this.onPickPhoto,
+    required this.onPreview,
+    required this.used,
+    required this.max,
+    required this.showCounterFrom,
+  });
+
+  final int photoCount;
+  final int maxPhotos;
+  final bool uploading;
+  final VoidCallback? onPickPhoto;
+  final VoidCallback? onPreview;
+  final int used;
+  final int max;
+  final int showCounterFrom;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: BoxDecoration(
+        color: palette.cardMuted.withValues(alpha: 0.5),
+        border: Border(top: BorderSide(color: palette.divider)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Wrap(
+          spacing: AppSpace.sm,
+          runSpacing: AppSpace.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            // A photo is what people reach for most often after the words, so
+            // it gets a filled tonal chip rather than a text link that reads
+            // like a footnote.
+            _ToolButton(
+              icon: Icons.add_photo_alternate_rounded,
+              label: photoCount == 0 ? 'Photo' : '$photoCount/$maxPhotos',
+              busy: uploading,
+              onTap: onPickPhoto,
+            ),
+            // Disabled on an empty post — there is nothing to preview.
+            _ToolButton(
+              icon: Icons.visibility_rounded,
+              label: 'Preview',
+              onTap: onPreview,
+            ),
+            // The limit is a fact about the post, so it belongs here with the
+            // other facts — not floating under the text where it pushed the
+            // layout around every time it appeared.
+            if (used >= showCounterFrom) _CounterRing(used: used, max: max),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How much room is left, as a ring that fills.
+///
+/// A bare "203 left" is a number you have to compare against a limit you do
+/// not remember. A ring closing is the same information without the
+/// arithmetic, and it turns red only once it actually matters.
+class _CounterRing extends StatelessWidget {
+  const _CounterRing({required this.used, required this.max});
+
+  final int used;
+  final int max;
+
+  @override
+  Widget build(BuildContext context) {
+    final left = max - used;
+    final urgent = left <= 50;
+    final color = urgent ? AppColors.red : AppColors.primaryBlue;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: (used / max).clamp(0.0, 1.0)),
+            duration: AppMotion.maybe(context, AppMotion.quick),
+            curve: AppMotion.ease,
+            builder: (context, value, _) => CircularProgressIndicator(
+              value: value,
+              strokeWidth: 2.4,
+              backgroundColor: context.palette.divider,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+        ),
+        const SizedBox(width: 7),
+        Text(
+          '$left left',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: urgent ? AppColors.red : context.palette.textMuted,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A composer toolbar action: tonal chip, icon + short label.
 class _ToolButton extends StatelessWidget {
   const _ToolButton({
     required this.icon,
@@ -694,11 +900,10 @@ class _ToolButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onTap != null && !busy;
-    final color =
-        enabled ? AppColors.primaryBlue : context.palette.textMuted;
+    final color = enabled ? AppColors.primaryBlue : context.palette.textMuted;
     return Material(
       color: enabled
-          ? AppColors.primaryBlue.withValues(alpha: 0.09)
+          ? AppColors.primaryBlue.withValues(alpha: 0.10)
           : context.palette.cardMuted,
       borderRadius: BorderRadius.circular(AppRadius.pill),
       child: InkWell(
@@ -743,11 +948,151 @@ class _ToolButton extends StatelessWidget {
   }
 }
 
-/// Avatar, name, audience — the "who is speaking" line at the top of the
-/// composer.
+/// The attached photos, laid out the way the feed will show them.
+///
+/// One photo gets the whole width at a portrait-friendly 4:5 — the feed
+/// renders post media at its natural ratio (see `post_card.dart`), so
+/// squeezing a single photo into a square here would preview a crop that
+/// never happens. Two or more tile as squares, which is what the feed's grid
+/// actually does.
+class _PhotoGrid extends StatelessWidget {
+  const _PhotoGrid({required this.photos, required this.onRemove});
+
+  final List<String> photos;
+  final void Function(int index) onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    if (photos.length == 1) {
+      return _Tile(
+        url: photos.first,
+        onRemove: () => onRemove(0),
+        isCover: false,
+        aspectRatio: 4 / 5,
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = (constraints.maxWidth - 8) / 2;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var i = 0; i < photos.length; i++)
+              SizedBox(
+                width: size,
+                height: size,
+                child: _Tile(
+                  url: photos[i],
+                  onRemove: () => onRemove(i),
+                  // Order matters — the first photo is what lands in
+                  // `image_url` and is all a v1.3.0 client will ever see.
+                  isCover: i == 0,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _Tile extends StatelessWidget {
+  const _Tile({
+    required this.url,
+    required this.onRemove,
+    required this.isCover,
+    this.aspectRatio,
+  });
+
+  final String url;
+  final VoidCallback onRemove;
+  final bool isCover;
+  final double? aspectRatio;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CachedImage(url, fit: BoxFit.cover),
+          // A scrim behind the controls so a white photo does not swallow
+          // them. Only at the top, only where a control sits.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 52,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.darkNavy.withValues(alpha: 0.34),
+                    AppColors.darkNavy.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Material(
+              color: AppColors.darkNavy.withValues(alpha: 0.55),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onRemove,
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: AppColors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (isCover)
+            Positioned(
+              left: 6,
+              bottom: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.darkNavy.withValues(alpha: 0.60),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Text(
+                  'Cover',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    return aspectRatio == null
+        ? image
+        : AspectRatio(aspectRatio: aspectRatio!, child: image);
+  }
+}
+
+/// Avatar, name, audience — the "who is speaking" line.
 ///
 /// For a personal post that is the member's own photo and name, with the
-/// audience chip directly under it, so the privacy control reads as a
+/// audience control directly under it, so the privacy setting reads as a
 /// property of the author rather than a stray toggle in a header.
 ///
 /// For a church update it is the church's name with a gold tick and the
@@ -757,14 +1102,12 @@ class _IdentityRow extends StatefulWidget {
   const _IdentityRow({
     required this.churchId,
     required this.visibility,
-    required this.onToggleVisibility,
-    required this.trailing,
+    required this.onChooseVisibility,
   });
 
   final String? churchId;
   final PostVisibility visibility;
-  final VoidCallback onToggleVisibility;
-  final Widget trailing;
+  final VoidCallback onChooseVisibility;
 
   @override
   State<_IdentityRow> createState() => _IdentityRowState();
@@ -812,8 +1155,8 @@ class _IdentityRowState extends State<_IdentityRow> {
     final name = isChurch
         ? (_church?.name ?? 'Your church')
         : ((meta['full_name'] as String?)?.trim().isNotEmpty ?? false
-            ? (meta['full_name'] as String).trim()
-            : 'You');
+              ? (meta['full_name'] as String).trim()
+              : 'You');
     final photo = isChurch
         ? _church?.profilePhotoUrl
         : (meta['profile_photo_url'] as String?);
@@ -823,7 +1166,7 @@ class _IdentityRowState extends State<_IdentityRow> {
       children: [
         UserAvatar(
           photoUrl: photo,
-          size: 42,
+          size: 44,
           name: name,
           fallbackIcon: isChurch ? Icons.church_rounded : null,
         ),
@@ -842,6 +1185,7 @@ class _IdentityRowState extends State<_IdentityRow> {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w700,
+                        fontSize: 15,
                         color: context.palette.text,
                       ),
                     ),
@@ -856,7 +1200,7 @@ class _IdentityRowState extends State<_IdentityRow> {
                   ],
                 ],
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 4),
               // Church updates go to everyone by design — there is no
               // audience to choose, so this states the fact instead of
               // offering a control that does nothing.
@@ -871,13 +1215,11 @@ class _IdentityRowState extends State<_IdentityRow> {
               else
                 _VisibilityPill(
                   visibility: widget.visibility,
-                  onTap: widget.onToggleVisibility,
+                  onTap: widget.onChooseVisibility,
                 ),
             ],
           ),
         ),
-        const SizedBox(width: AppSpace.sm),
-        widget.trailing,
       ],
     );
   }
@@ -892,11 +1234,18 @@ class _DraftRestoredNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.sm, AppSpace.sm,
-          AppSpace.sm),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.md,
+        AppSpace.sm,
+        AppSpace.sm,
+        AppSpace.sm,
+      ),
       decoration: BoxDecoration(
         color: AppColors.primaryBlue.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppRadius.sm),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.16),
+        ),
       ),
       child: Row(
         children: [
@@ -937,6 +1286,7 @@ class _DraftRestoredNote extends StatelessWidget {
   }
 }
 
+/// The current audience, and the way to change it.
 class _VisibilityPill extends StatelessWidget {
   const _VisibilityPill({required this.visibility, required this.onTap});
 
@@ -950,29 +1300,29 @@ class _VisibilityPill extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
             color: AppColors.primaryBlue.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
             border: Border.all(
-              color: AppColors.primaryBlue.withValues(alpha: 0.30),
+              color: AppColors.primaryBlue.withValues(alpha: 0.28),
             ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                isPublic ? Icons.public : Icons.people_alt_outlined,
-                size: 12,
+                isPublic ? Icons.public_rounded : Icons.people_alt_rounded,
+                size: 13,
                 color: AppColors.primaryBlue,
               ),
               const SizedBox(width: 5),
-              // Flexible + ellipsis: this pill now sits inside the identity
-              // row's Expanded column, and its own Row is mainAxisSize.min —
-              // so at a large system font the label would push past the
-              // available width and throw instead of clipping.
+              // Flexible + ellipsis: this pill sits inside the identity row's
+              // Expanded column, and its own Row is mainAxisSize.min — so at
+              // a large system font the label would push past the available
+              // width and throw instead of clipping.
               Flexible(
                 child: Text(
                   isPublic ? 'Public' : 'Friends',
@@ -987,14 +1337,69 @@ class _VisibilityPill extends StatelessWidget {
               ),
               const SizedBox(width: 3),
               const Icon(
-                Icons.swap_horiz,
-                size: 12,
+                Icons.expand_more_rounded,
+                size: 14,
                 color: AppColors.primaryBlue,
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One line of the audience menu: what it is, and what it means.
+class _VisibilityOption extends StatelessWidget {
+  const _VisibilityOption({required this.option, required this.selected});
+
+  final PostVisibility option;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPublic = option == PostVisibility.public;
+    final palette = context.palette;
+    return Row(
+      children: [
+        Icon(
+          isPublic ? Icons.public_rounded : Icons.people_alt_rounded,
+          size: 20,
+          color: selected ? AppColors.primaryBlue : palette.textMuted,
+        ),
+        const SizedBox(width: AppSpace.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isPublic ? 'Public' : 'Friends',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: selected ? AppColors.primaryBlue : palette.text,
+                ),
+              ),
+              Text(
+                isPublic ? 'Anyone on Advent Connect' : 'Only your friends',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: palette.textMuted,
+                  fontSize: 11.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (selected)
+          const Icon(
+            Icons.check_rounded,
+            size: 18,
+            color: AppColors.primaryBlue,
+          ),
+      ],
     );
   }
 }

@@ -4,6 +4,7 @@ import '../config/router_config.dart';
 import '../screens/library/widgets/now_playing_bar.dart';
 import '../services/music_player_service.dart';
 import '../theme/app_tokens.dart';
+import 'media/floating_dock.dart';
 import 'youtube/watch_mini_player.dart';
 
 /// The app-wide layer of "something is still playing" windows.
@@ -15,18 +16,21 @@ import 'youtube/watch_mini_player.dart';
 /// and conclude the app has lost the track. The founder asked for it
 /// everywhere; this is that.
 ///
-/// ## The two windows behave differently on purpose
+/// ## Both windows float, and both can be moved
 ///
-/// The Watch window is a floating, draggable, resizable 16:9 picture — you
-/// are watching it, so it has to be movable out of the way of whatever you
-/// are reading underneath.
+/// The Watch window is a draggable, resizable 16:9 picture — you are watching
+/// it, so it has to be movable out of the way of whatever is underneath.
 ///
-/// The music bar is not. It is docked to the bottom edge, full width, above
-/// the navigation island, the way YouTube Music and Spotify dock theirs.
-/// Music has nothing to look at, so a window that can sit anywhere buys the
-/// member nothing and costs them a chore: a 172dp card parked mid-screen
-/// covers content on every screen until it is picked up and moved again.
-/// One edge, always the same edge, covering nothing.
+/// The music card is draggable too. It spent one release docked to the bottom
+/// edge on the argument that music has nothing to look at, so a window that
+/// can sit anywhere only creates a chore. The founder overruled that twice,
+/// and they are right about their own app: the bottom edge is exactly where
+/// this app puts its navigation island, its snackbars and its send buttons,
+/// so "always the same edge" means "always in the way of the same things".
+/// It parks at the nearest of nine slots and stays there across screens.
+///
+/// Neither window may sit on top of a full-screen player — see the early
+/// return in `build`.
 class GlobalMediaBars extends StatelessWidget {
   const GlobalMediaBars({super.key});
 
@@ -44,6 +48,35 @@ class GlobalMediaBars extends StatelessWidget {
     '/profile',
   };
 
+  /// Every slot the music card may park in.
+  ///
+  /// It was three (top / middle / bottom, always centred) when the card could
+  /// only move vertically. The founder asked for it to go anywhere on screen
+  /// (9 Aug 2026), so the corners and sides are in as well — a card parked
+  /// bottom-right leaves the middle of the page clear, which is the point of
+  /// being able to move it at all.
+  static final List<Alignment> _musicAnchors = [
+    for (final y in const [-1.0, 0.0, 1.0])
+      for (final x in const [-1.0, 0.0, 1.0]) Alignment(x, y),
+  ];
+
+  /// Parked slot, held statically rather than in State so it survives both
+  /// the route-change rebuild below and the card being unmounted while the
+  /// full player is open. Put it somewhere and it stays there.
+  static final ValueNotifier<Alignment> musicAnchor =
+      ValueNotifier<Alignment>(const Alignment(0, 1));
+
+  /// The card's size.
+  ///
+  /// A dragged window has to be a card, not a full-bleed bar: a bar spanning
+  /// the whole width has nowhere left to go horizontally, so "drag it out of
+  /// the way" can only ever mean up or down. Capped at 380 so it stays a
+  /// window on a tablet instead of a stripe.
+  static Size cardSize(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width - AppSpace.md * 2;
+    return Size(width.clamp(240.0, 380.0), NowPlayingBar.barHeight + 4);
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
@@ -59,19 +92,38 @@ class GlobalMediaBars extends StatelessWidget {
                 ? _islandInset
                 : _plainInset + MediaQuery.paddingOf(context).bottom;
 
+            // BOTH windows stand down while the full music player is up.
+            //
+            // The music bar always did. The Watch window did not, and this
+            // whole layer paints ABOVE the router's Navigator — so a docked
+            // video floated over the full-screen player, which is what the
+            // founder reported as "the mini player is still there in the full
+            // player" (9 Aug 2026). It was the video window, not the music
+            // bar. Nothing may sit on top of a deliberately full-screen
+            // player; it comes back when you leave.
+            if (fullPlayerOpen) return const SizedBox.shrink();
+
             return Stack(
               children: [
                 // The Watch window manages its own dock, including its size.
                 const WatchMiniPlayer(),
-                // The music bar stands down while the full player is up, so
-                // the two never render at once.
-                if (!fullPlayerOpen)
-                  Positioned(
-                    left: AppSpace.md,
-                    right: AppSpace.md,
-                    bottom: inset,
-                    child: const NowPlayingBar(),
+                // Draggable again. It parks at the nearest slot on release
+                // and keeps that slot across screens, so moving it off
+                // something is a decision you make once.
+                FloatingDock(
+                  size: cardSize(context),
+                  anchors: _musicAnchors,
+                  anchor: musicAnchor,
+                  margin: EdgeInsets.fromLTRB(
+                    AppSpace.md,
+                    // Clear of the status bar and any screen header, so the
+                    // top slots do not cover a title.
+                    MediaQuery.paddingOf(context).top + AppSpace.sm,
+                    AppSpace.md,
+                    inset,
                   ),
+                  child: const NowPlayingBar(),
+                ),
               ],
             );
           },

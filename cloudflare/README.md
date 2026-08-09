@@ -1,7 +1,25 @@
 # Advent Connect ZW — Share / Open Graph Worker
 
+> **Redeploy this worker before publishing 1.3.2.** The release adds `/u/<id>`
+> for friend QR codes. The currently deployed worker does not have that route,
+> so until `wrangler deploy` is run every scanned QR gets a 404 — which is
+> worse than the old behaviour, not better. Verify with:
+>
+> ```
+> curl -o /dev/null -w "%{http_code}\n" \
+>   "https://advent-share.adventconnectzw.workers.dev/u/test"
+> ```
+>
+> **Also: the workers.dev subdomain changed on 9 Aug 2026**
+> (`tanatswamichaelmikuwa` → `adventconnectzw`). Cloudflare leaves no redirect
+> behind — the old host stopped resolving, which broke every share link the
+> app had ever sent, including ones already sitting in people's WhatsApp
+> threads. `kShareBaseUrl` in `lib/config/share_config.dart` has been updated
+> to match. Nothing in the app fails loudly when that constant is wrong, so
+> curl the host after any change to it.
+
 Serves the share landing pages (`/product-share`, `/event-share`, `/job-share`,
-`/seller-share`) as real `text/html` so:
+`/seller-share`, `/u`) as real `text/html` so:
 
 1. **WhatsApp / Facebook render a thumbnail** (they read the `og:*` tags), and
 2. **tapping the link opens the installed app** to the exact item (the in-page

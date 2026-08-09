@@ -292,7 +292,10 @@ class _SplashScreenState extends State<SplashScreen>
     // a build that must be replaced, telling them that is more useful than
     // telling them to come back later.
     final maintenance = gates[1] as MaintenanceState;
-    if (maintenance.active) {
+    // `blocked`, not `active`: super admins are exempt server-side so they can
+    // fix whatever the maintenance is for, and gating them out of their own
+    // app would defeat that.
+    if (maintenance.blocked) {
       if (!mounted) return;
       context.goNamed('maintenance');
       return;

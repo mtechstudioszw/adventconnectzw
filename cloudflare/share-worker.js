@@ -15,6 +15,7 @@
 //   /event-share?id=<bigint>
 //   /job-share?id=<bigint>
 //   /seller-share?id=<auth_user_id>
+//   /user-share?id=<profile_id>     (friend QR codes)
 //
 // Required Worker secrets/vars (see wrangler.toml + README):
 //   SUPABASE_URL       e.g. https://eqbyvasteolqyktbqbem.supabase.co
@@ -114,6 +115,32 @@ const TYPES = {
       meta: [d.location, d.province].filter(Boolean).join(", "),
     }),
   },
+  // Friend QR codes. A phone camera that scans one WITHOUT the app installed
+  // used to get `io.supabase.adventconnect://user/<id>` — a scheme nothing on
+  // the device handles, so the scan did nothing at all. Pointing the QR at
+  // this route instead means the app opens if it is installed, and the Play
+  // Store opens if it is not, which is the whole point of handing someone
+  // your code.
+  //
+  // Deliberately NO profile lookup. Every other type here describes public
+  // content; a member's name and photo are not that, and this URL is
+  // fetchable by anyone who gets the link. A generic card leaks nothing and
+  // still redirects correctly.
+  //
+  // Registered under BOTH `/u` and `/user-share`: the short one is what the
+  // QR encodes (every byte costs symbol density at a fixed 210dp), the long
+  // one keeps the naming consistent with its siblings and gives anything
+  // that guessed the obvious URL somewhere to land.
+  u: {
+    host: "user",
+    kicker: "ADD ME",
+    tag: "COMMUNITY",
+    title: "Connect on Advent Connect ZW",
+    description:
+      "Someone shared their Advent Connect ZW code with you. Open the app to see their profile and send a friend request.",
+    fetch: async () => null,
+    map: () => ({ title: "", description: "", image: "", meta: "" }),
+  },
   "seller-share": {
     host: "seller",
     kicker: "STOREFRONT",
@@ -205,15 +232,24 @@ function renderHtml(cfg, id, fields) {
 </html>`;
 }
 
+// `/user-share?id=…` is the long-form alias of `/u/…`.
+TYPES["user-share"] = TYPES.u;
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const slug = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+    const path = url.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+    // `/u/<id>` carries the id as a path segment; everything else takes it
+    // as `?id=`. Splitting on the first slash covers both without a router.
+    const slash = path.indexOf("/");
+    const slug = slash === -1 ? path : path.slice(0, slash);
+    const pathId = slash === -1 ? "" : path.slice(slash + 1);
+
     const cfg = TYPES[slug];
     if (!cfg) {
       return new Response("Not found", { status: 404 });
     }
-    const id = url.searchParams.get("id") ?? "";
+    const id = pathId || url.searchParams.get("id") || "";
 
     let fields = { title: "", description: "", image: "", meta: "" };
     if (id) {

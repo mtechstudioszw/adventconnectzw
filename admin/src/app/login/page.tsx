@@ -1,125 +1,133 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { getBrowserSupabase } from "@/lib/supabase/browser";
+import { useRouter } from "next/navigation";
+import { supabase, configMissing } from "@/lib/supabase";
+import { useSession } from "@/lib/session";
+import { errorMessage } from "@/lib/rpc";
+import { ErrorBox } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
-  const params = useSearchParams();
+  const { session, role, loading, notStaff, signOut } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // If the callback bounced the user back here, show the reason.
+  // Already signed in and cleared — go straight through.
   useEffect(() => {
-    const fromCallback = params.get("error");
-    if (fromCallback) setErrorMessage(fromCallback);
-  }, [params]);
+    if (!loading && session && role) router.replace("/");
+  }, [loading, session, role, router]);
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setErrorMessage("");
-
-    const supabase = getBrowserSupabase();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setSubmitting(false);
-      setErrorMessage(error.message);
-      return;
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: authError } = await supabase().auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (authError) throw authError;
+      // The role check happens in SessionProvider and the redirect above.
+      // Nothing is decided here — the database is what says who is staff.
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
     }
-
-    // Re-check the email against the admin allowlist server-side
-    // before letting them into the dashboard. Banishes anyone whose
-    // address isn't in ADMIN_EMAILS even if Supabase issued a session.
-    const check = await fetch("/api/admin-check", { method: "POST" });
-    const checkBody = (await check.json()) as { allowed?: boolean };
-    if (!checkBody.allowed) {
-      await supabase.auth.signOut();
-      setSubmitting(false);
-      setErrorMessage("This email is not allowed in the admin panel.");
-      return;
-    }
-
-    router.replace("/");
   };
 
-  return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-md p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-primary text-white grid place-items-center font-bold">
-            AC
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-navy leading-tight">
-              Admin panel
-            </h1>
-            <p className="text-xs text-ink/60">Advent Connect ZW</p>
-          </div>
+  if (configMissing) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-mark">AC</div>
+          <h1>Not configured</h1>
+          <p className="sub">
+            This deploy is missing <code>NEXT_PUBLIC_SUPABASE_URL</code> or{" "}
+            <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>. Set both in the Vercel
+            project settings and redeploy.
+          </p>
         </div>
+      </div>
+    );
+  }
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-1">
-            <label
-              htmlFor="email"
-              className="text-xs font-semibold text-ink/70"
-            >
+  // Signed in with a real Supabase account that is not staff. Saying so
+  // plainly beats bouncing them back to a login form that just worked.
+  if (session && notStaff && !loading) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-mark">AC</div>
+          <h1>Not a staff account</h1>
+          <p className="sub">
+            You are signed in as <b>{session.user.email}</b>, but this account has
+            no role in the admin console. An owner can grant one under Staff &amp;
+            roles.
+          </p>
+          <button className="btn ghost block" onClick={() => void signOut()}>
+            Sign in as someone else
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-mark">AC</div>
+        <h1>Admin console</h1>
+        <p className="sub">Sign in with your Advent Connect account.</p>
+
+        <form className="login-form" onSubmit={submit}>
+          <div className="field">
+            <label className="label" htmlFor="email">
               Email
             </label>
             <input
               id="email"
+              className="input"
               type="email"
+              autoComplete="username"
               required
-              autoFocus
-              autoComplete="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-ink/10 bg-canvas focus:bg-white focus:border-primary focus:outline-none text-sm"
-              placeholder="you@example.com"
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <div className="space-y-1">
-            <label
-              htmlFor="password"
-              className="text-xs font-semibold text-ink/70"
-            >
+          <div className="field">
+            <label className="label" htmlFor="password">
               Password
             </label>
             <input
               id="password"
+              className="input"
               type="password"
-              required
               autoComplete="current-password"
+              required
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-ink/10 bg-canvas focus:bg-white focus:border-primary focus:outline-none text-sm"
-              placeholder="••••••••"
+              onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-primary text-white rounded-xl py-2.5 text-sm font-semibold hover:opacity-95 disabled:opacity-60"
-          >
-            {submitting ? "Signing in…" : "Sign in"}
+
+          {error ? <ErrorBox message={error} /> : null}
+
+          <button className="btn primary block" type="submit" disabled={busy}>
+            {busy ? <span className="spinner" /> : null}
+            {busy ? "Signing in…" : "Sign in"}
           </button>
-          {errorMessage && (
-            <p className="text-xs text-warn">{errorMessage}</p>
-          )}
-          <p className="text-[11px] text-ink/50 leading-relaxed">
-            Set a password in Supabase Dashboard → Authentication → Users
-            → click your user → &ldquo;Reset/send password&rdquo; or use
-            the user-edit dialog.
-          </p>
         </form>
+
+        <p className="login-note">
+          Your role decides what you can do here, and the database enforces it on
+          every action — not this page. Everything you change is recorded in the
+          audit log.
+        </p>
       </div>
-    </main>
+    </div>
   );
 }

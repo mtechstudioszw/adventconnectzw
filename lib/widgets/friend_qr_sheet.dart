@@ -9,16 +9,60 @@ import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../config/share_config.dart';
 import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
-/// Deep link a friend QR encodes. Uses the app's existing scheme and adds
-/// a `user` host (see DeepLinkService), so a scan opens the member's
-/// profile through the same path as any other shared link.
-String friendQrPayload(String userId) =>
+/// What a friend QR encodes.
+///
+/// An **https** landing page, not the raw `io.supabase.adventconnect://`
+/// scheme it used to carry. A phone camera only follows a custom scheme if
+/// some installed app claims it — so scanning one of these without Advent
+/// Connect installed did precisely nothing, silently, in the exact case a
+/// shared code is most useful: handing it to someone who has not joined yet.
+///
+/// The landing page tries the app first and falls through to the Play Store
+/// (see `cloudflare/share-worker.js`, route `/user-share`).
+///
+/// [friendQrLegacyPayload] is still accepted by the scanner — codes are
+/// screenshotted and forwarded, so the old form will be in circulation for a
+/// long time.
+String friendQrPayload(String userId) => friendShareUrl(userId);
+
+/// The pre-1.3.2 payload. Scanner-side only; never generated any more.
+String friendQrLegacyPayload(String userId) =>
     'io.supabase.adventconnect://user/$userId';
+
+/// Pulls the member id out of either QR form, or null if this is not one of
+/// ours. Shared by the in-app scanner.
+String? friendIdFromScan(String raw) {
+  final uri = Uri.tryParse(raw.trim());
+  if (uri == null) return null;
+
+  // Current form: https://<share host>/u/<uuid>
+  // Long-form alias: https://<share host>/user-share?id=<uuid>
+  if (uri.scheme == 'https' || uri.scheme == 'http') {
+    final segments = uri.pathSegments;
+    if (segments.length == 2 && segments.first == 'u') {
+      return segments[1].isEmpty ? null : segments[1];
+    }
+    if (segments.isNotEmpty && segments.last == 'user-share') {
+      final id = uri.queryParameters['id'] ?? '';
+      return id.isEmpty ? null : id;
+    }
+    return null;
+  }
+
+  // Legacy form: io.supabase.adventconnect://user/<uuid>
+  if (uri.scheme == 'io.supabase.adventconnect' && uri.host == 'user') {
+    final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
+    return id.isEmpty ? null : id;
+  }
+
+  return null;
+}
 
 /// Geometry of the code and the hole punched in the middle of it.
 ///
@@ -420,15 +464,14 @@ class _ScanFriendScreenState extends State<ScanFriendScreen> {
     for (final barcode in capture.barcodes) {
       final raw = barcode.rawValue;
       if (raw == null || raw.isEmpty) continue;
-      final uri = Uri.tryParse(raw);
-      if (uri == null ||
-          uri.scheme != 'io.supabase.adventconnect' ||
-          uri.host != 'user') {
+      // Accepts both the https landing page and the legacy custom scheme —
+      // old codes stay in circulation as screenshots long after the app that
+      // generated them has been updated.
+      final id = friendIdFromScan(raw);
+      if (id == null) {
         setState(() => _message = 'That isn\'t an Advent Connect friend code.');
         continue;
       }
-      final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '';
-      if (id.isEmpty) continue;
       _handled = true;
       // Replace rather than push: coming back from the profile should
       // return to where the user opened the scanner from, not to a live

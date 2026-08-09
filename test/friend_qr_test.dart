@@ -132,10 +132,31 @@ void main() {
   });
 
   group('friendQrPayload', () {
-    test('encodes a deep link the scanner already understands', () {
+    // The point of the https form: a camera app will follow it whether or
+    // not Advent Connect is installed. A custom scheme is a no-op on a phone
+    // that has never had the app — which is exactly who you hand a code to.
+    test('encodes an https link a phone camera can follow', () {
       final payload = friendQrPayload('abc-123');
 
-      expect(payload, 'io.supabase.adventconnect://user/abc-123');
+      expect(payload, startsWith('https://'));
+      expect(payload, endsWith('/u/abc-123'));
+    });
+
+    test('the scanner reads back what the generator writes', () {
+      expect(friendIdFromScan(friendQrPayload('abc-123')), 'abc-123');
+    });
+
+    test('codes already shared in the old format still scan', () {
+      expect(
+        friendIdFromScan(friendQrLegacyPayload('abc-123')),
+        'abc-123',
+      );
+    });
+
+    test('a QR from any other app is refused', () {
+      expect(friendIdFromScan('https://example.com/whatever'), isNull);
+      expect(friendIdFromScan('not a uri at all'), isNull);
+      expect(friendIdFromScan('io.supabase.adventconnect://product/7'), isNull);
     });
 
     test('is short enough to stay a dense-but-scannable symbol', () {
@@ -145,9 +166,23 @@ void main() {
 
       // Level H on a longer payload needs a higher QR version, more
       // modules, and smaller modules at a fixed 210dp — which is the other
-      // way this stops scanning. The scheme is fixed, so this only moves
-      // if someone appends to the payload.
-      expect(payload.length, lessThan(80));
+      // way this stops scanning.
+      //
+      // The budget moved from 80 to 100 when the payload became an https
+      // landing page (1.3.2), because a custom scheme is a no-op on a phone
+      // without the app and the whole point of a shared code is handing it
+      // to someone who has not joined. That is a real cost, paid knowingly:
+      //
+      //   ≤ 84 bytes → version 8,  49×49, 4.29dp per module
+      //   ≤ 98 bytes → version 9,  53×53, 3.96dp per module   ← we are here
+      //   ≤119 bytes → version 10, 57×57, 3.68dp per module
+      //
+      // ~4dp per module still scans comfortably at arm's length. 100 keeps
+      // us inside version 9; past that the symbol gets denser than anyone
+      // has tested. Most of the payload is the worker's hostname, so a short
+      // custom domain is the way to buy the room back — not a bigger number
+      // here.
+      expect(payload.length, lessThan(100));
     });
   });
 }

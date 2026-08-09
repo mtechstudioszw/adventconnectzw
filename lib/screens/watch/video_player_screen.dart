@@ -230,7 +230,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       _ended = false;
       _cancelAutoplayCountdown();
     }
-    _wasPlaying = s == PlayerState.playing || s == PlayerState.buffering;
     final fs = value.fullScreenOption.enabled;
     if (fs != _isFullscreen) _applyFullscreen(fs);
   }
@@ -309,21 +308,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _controller?.loadVideoById(videoId: v.videoId);
   }
 
-  /// Last position we managed to read, in seconds. [dispose] can't await
-  /// the controller, so the docked bar resumes from here.
-  int _lastPosition = 0;
-
-  /// Whether playback was running when we last heard from the player —
-  /// leaving a PAUSED video shouldn't start a bar playing behind you.
-  bool _wasPlaying = false;
-
   Future<void> _saveProgress({bool completed = false}) async {
     final c = _controller;
     final v = _video;
     if (c == null || v == null) return;
     try {
       final pos = await c.currentTime;
-      _lastPosition = pos.round();
       await YoutubeService.recordProgress(
         v.videoId,
         positionSeconds: pos.round(),
@@ -545,13 +535,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void dispose() {
     _saveProgress();
-    // Leaving mid-sermon docks it rather than stopping it. Only when it
-    // was actually playing — and the service itself refuses live streams,
-    // which have no position worth carrying.
-    final v = _video;
-    if (v != null && _wasPlaying && !_ended) {
-      MiniPlayerService.instance.dock(v, atSeconds: _lastPosition);
-    }
+    // Backing out of a video ENDS it. It used to dock into a floating window
+    // that then followed you across every screen in the app, which the
+    // founder asked for and then asked to remove (9 Aug 2026): pressing back
+    // is how you say "I am done with this", and answering it with a window
+    // you now have to close is the app arguing.
+    //
+    // Progress is still saved above, so resuming picks up where you left off.
+    // `MiniPlayerService` itself is left in place — it is what the Watch
+    // window uses when a video is deliberately minimised.
     _loadTimer?.cancel();
     _rotationUnlockTimer?.cancel();
     _autoplayTimer?.cancel();

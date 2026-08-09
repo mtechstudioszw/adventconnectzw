@@ -9,11 +9,29 @@
 //
 // Email clients are not browsers. Gmail strips <style> blocks in some
 // contexts, Outlook renders through Word's engine, and flexbox/grid do not
-// exist in either. So: nested tables, inline styles, no external CSS, no
-// web fonts, and no remote images — Gmail blocks images by default, and a
-// logo that has to be "downloaded" to see makes a verification email look
-// exactly like phishing. The mark is drawn with a styled table cell instead,
-// so it always renders.
+// exist in either. So: nested tables, inline styles, no external CSS and no
+// web fonts.
+//
+// ## The logo
+//
+// A real <img>, served from Supabase Storage. It has to be remote: `data:`
+// URIs are stripped by Gmail outright, and SMTP templates cannot carry a CID
+// attachment.
+//
+// The first version of these templates used a drawn "AC" tile instead, on the
+// reasoning that blocked images make a code email look like phishing. The
+// founder's answer was simply "there is no logo, it says AC" — and they are
+// right: Gmail has proxied and shown images BY DEFAULT since 2013, so the
+// blocked-image case is now the exception, not the rule.
+//
+// It is built to survive being blocked anyway. The <img> sits on a navy
+// header with the brand name in text beside it, so a client that refuses the
+// image still shows a branded, readable email rather than a broken icon in a
+// white void — and the alt text carries the name.
+//
+// 240×240 and 26 KB, resized from the 3264×3264 source: the original is 2 MB,
+// which is a rude thing to attach to every verification email on Zimbabwean
+// mobile data.
 //
 // ## Supabase template variables
 //   {{ .Token }}            the 6-digit code (what the app asks for)
@@ -35,6 +53,12 @@ const BORDER = "#E4E9F0";
 
 const FONT =
   "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+
+/// The app icon, resized to 240px and uploaded to the public `library`
+/// bucket. Re-upload with the same path to change it — the templates do not
+/// need rebuilding, because email clients fetch it fresh each time.
+const LOGO_URL =
+  "https://eqbyvasteolqyktbqbem.supabase.co/storage/v1/object/public/library/branding/logo-240.png";
 
 /**
  * @param {object} o
@@ -71,7 +95,10 @@ function layout(o) {
       <td style="background:${NAVY};padding:24px 28px;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0">
           <tr>
-            <td style="width:44px;height:44px;background:${BLUE};border-radius:12px;text-align:center;vertical-align:middle;font-family:${FONT};font-size:16px;font-weight:bold;color:#ffffff;letter-spacing:1px;">AC</td>
+            <td style="width:48px;vertical-align:middle;">
+              <img src="${LOGO_URL}" width="48" height="48" alt="Advent Connect ZW"
+                   style="display:block;width:48px;height:48px;border:0;outline:none;text-decoration:none;border-radius:12px;" />
+            </td>
             <td style="padding-left:14px;font-family:${FONT};">
               <div style="font-size:17px;font-weight:bold;color:#ffffff;line-height:1.3;">Advent Connect ZW</div>
               <div style="font-size:11px;color:${GOLD};letter-spacing:1.4px;text-transform:uppercase;padding-top:2px;">Faith &bull; Community &bull; Zimbabwe</div>

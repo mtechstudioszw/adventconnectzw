@@ -16,8 +16,9 @@ class NotificationPreferencesService {
         .select('*, churches(name)')
         .eq('user_id', user.id);
     return (response as List)
-        .map((row) =>
-            NotificationPreference.fromJson(row as Map<String, dynamic>))
+        .map(
+          (row) => NotificationPreference.fromJson(row as Map<String, dynamic>),
+        )
         .toList();
   }
 
@@ -97,6 +98,7 @@ class NotificationCategoryPrefs {
     this.news = true,
     this.social = true,
     this.watch = true,
+    this.quiz = true,
   });
 
   final bool events;
@@ -113,6 +115,16 @@ class NotificationCategoryPrefs {
   /// channels. notify-fcm reads the same JSON key server-side.
   final bool watch;
 
+  /// Quiz REMINDERS — the nightly "the arena is open" nudge and the "you
+  /// have been overtaken" one.
+  ///
+  /// NOT live-match invites from a real person: those stay on `type =
+  /// 'quiz_challenge'`, which maps to no category and always sends.
+  /// Somebody asking to play you right now is closer to a friend request
+  /// than to marketing, and a switch labelled "reminders" must not
+  /// silently swallow it.
+  final bool quiz;
+
   static const defaults = NotificationCategoryPrefs();
 
   factory NotificationCategoryPrefs.fromJson(Map<String, dynamic> json) {
@@ -126,6 +138,7 @@ class NotificationCategoryPrefs {
       }
       return fallback;
     }
+
     return NotificationCategoryPrefs(
       events: read('events', true),
       prayers: read('prayers', true),
@@ -135,19 +148,21 @@ class NotificationCategoryPrefs {
       news: read('news', true),
       social: read('social', true),
       watch: read('watch', true),
+      quiz: read('quiz', true),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'events': events,
-        'prayers': prayers,
-        'messages': messages,
-        'marketplace': marketplace,
-        'announcements': announcements,
-        'news': news,
-        'social': social,
-        'watch': watch,
-      };
+    'events': events,
+    'prayers': prayers,
+    'messages': messages,
+    'marketplace': marketplace,
+    'announcements': announcements,
+    'news': news,
+    'social': social,
+    'watch': watch,
+    'quiz': quiz,
+  };
 
   NotificationCategoryPrefs copyWith({
     bool? events,
@@ -158,6 +173,7 @@ class NotificationCategoryPrefs {
     bool? news,
     bool? social,
     bool? watch,
+    bool? quiz,
   }) {
     return NotificationCategoryPrefs(
       events: events ?? this.events,
@@ -168,6 +184,7 @@ class NotificationCategoryPrefs {
       news: news ?? this.news,
       social: social ?? this.social,
       watch: watch ?? this.watch,
+      quiz: quiz ?? this.quiz,
     );
   }
 }

@@ -191,6 +191,18 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case 'friend_request':
         context.pushNamed('messages', queryParameters: {'tab': 'requests'});
         return true;
+      case 'quiz_match':
+        // A live quiz invite, and it expires in five minutes — so this has
+        // to open the live area with the match named, not a reader sheet
+        // saying somebody wanted to play a while ago. Without this case the
+        // notification was unanswerable: nothing else in the app could
+        // accept an invite.
+        if (id.isEmpty) {
+          context.pushNamed('quiz_live');
+        } else {
+          context.pushNamed('quiz_live_match', pathParameters: {'matchId': id});
+        }
+        return true;
       case 'seller':
         context.pushNamed('seller_dashboard');
         return true;

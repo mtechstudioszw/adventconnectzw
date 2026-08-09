@@ -12,24 +12,26 @@ import '../../widgets/screen_shell.dart';
 
 /// The exit survey, and the account deletion behind it (#17, #18).
 ///
-/// Two problems, one screen. Deleting an account has to call an Edge
-/// Function, wipe the profile row, revoke a Google grant and clear local
-/// storage — that is not instant on a Harare connection, and the old flow
-/// spent it sitting on a frozen dialog. And the founder wants to know why
-/// people leave, which nothing was asking.
+/// ## Why the deletion no longer starts on open
 ///
-/// So the survey **fills** the wait instead of adding to it: the deletion
-/// starts the moment this screen opens, while the member is still reading
-/// the question. By the time they have picked a reason it has almost always
-/// finished, and the tap that submits is the tap that leaves.
+/// It used to. The reasoning was that the survey should FILL the wait
+/// rather than add to it, so `initState` kicked off `deleteAccount()` while
+/// the member was still reading the question — the motion rule applied
+/// literally.
 ///
-/// That is the founder's motion rule applied literally — the work happens
-/// behind something real rather than behind a spinner that says "waiting".
+/// Applied to the one screen where it must never be. A member tapped
+/// Delete account, read "What made you decide to leave?", changed their
+/// mind, and pressed back — and their posts, prayers, messages, friends and
+/// profile photo were already gone, because the work had begun on the first
+/// frame. There was no cancel path, and none was possible: the back arrow
+/// popped a screen whose future was already running to completion.
+///
+/// Nothing may be destroyed until the member has said so on THIS screen,
+/// with a final confirmation naming what goes. Deleting an account is not
+/// a wait to be hidden — it is a decision to be sure of, and the seconds
+/// it takes are the only honest part of it.
 class DeleteAccountScreen extends StatefulWidget {
-  const DeleteAccountScreen({super.key, this.autoStart = true});
-
-  /// False in tests: [initState] otherwise begins deleting the account.
-  final bool autoStart;
+  const DeleteAccountScreen({super.key});
 
   @override
   State<DeleteAccountScreen> createState() => _DeleteAccountScreenState();
@@ -49,16 +51,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
   String? _reason;
   final _detail = TextEditingController();
 
-  /// The deletion, started on open and awaited only at the very end.
-  Future<AuthResult>? _deletion;
   bool _submitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Starts NOW, not on submit. This is the whole point of the screen.
-    if (widget.autoStart) _deletion = AuthService.deleteAccount();
-  }
 
   @override
   void dispose() {
@@ -66,30 +59,83 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     super.dispose();
   }
 
+  /// The last gate. Names what goes, and makes the destructive word the
+  /// thing you have to tap — "Continue" was what the first dialog said,
+  /// which reads as a step in a wizard rather than the end of one.
+  Future<bool> _confirm() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete your account?'),
+        content: const Text(
+          'Your profile, photo, posts, prayers, messages and friends will '
+          'be permanently deleted. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep my account'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            child: const Text('Delete for ever'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _finish() async {
     if (_submitting) return;
+    if (!await _confirm()) return;
+    if (!mounted) return;
     setState(() => _submitting = true);
 
-    // The survey first, and never awaited for long: it has to be written
-    // while the caller still has a session, but a failure here must not
-    // stop someone leaving.
+    // The survey goes FIRST, while the session still exists.
+    //
+    // `account_deletion_survey_submit` is SECURITY DEFINER and stores
+    // `auth.uid()`, so it has to run before the deletion signs the member
+    // out — afterwards `auth.uid()` is null and the answer is lost. A
+    // failure here must still never trap someone in an account they asked
+    // to leave, hence the swallow.
     if (_reason != null) {
       try {
         await Supabase.instance.client
-            .rpc('account_deletion_survey_submit', params: {
-          'p_reason': _reason,
-          'p_detail': _detail.text.trim().isEmpty ? null : _detail.text.trim(),
-        }).timeout(const Duration(seconds: 4));
+            .rpc(
+              'account_deletion_survey_submit',
+              params: {
+                'p_reason': _reason,
+                'p_detail': _detail.text.trim().isEmpty
+                    ? null
+                    : _detail.text.trim(),
+              },
+            )
+            .timeout(const Duration(seconds: 4));
       } catch (_) {
-        // Losing a survey answer is not a reason to trap someone in an
-        // account they asked to delete.
+        // Losing a survey answer is not a reason to stop the deletion.
       }
     }
 
-    // The null branch is the test seam (autoStart: false) — nothing was
-    // ever started, so there is nothing to wait for.
-    final result = await (_deletion ?? Future.value(AuthResult.success(null)));
+    final result = await AuthService.deleteAccount();
     if (!mounted) return;
+
+    // A failed deletion leaves the account whole. Stay on this screen and
+    // say so, rather than routing to login as if it had worked.
+    if (!result.isSuccess) {
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.darkNavy,
+          content: Text(
+            result.errorMessage ?? 'Deletion failed. Contact support.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      return;
+    }
 
     // The message goes up on the login screen, after we have left — a
     // snackbar on a screen that is being torn down is a snackbar nobody
@@ -98,12 +144,9 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     context.goNamed('login');
     messenger.showSnackBar(
       SnackBar(
-        backgroundColor:
-            result.isSuccess ? AppColors.successGreen : AppColors.darkNavy,
+        backgroundColor: AppColors.successGreen,
         content: Text(
-          result.isSuccess
-              ? 'Your account has been deleted.'
-              : (result.errorMessage ?? 'Deletion failed. Contact support.'),
+          'Your account has been deleted.',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
         ),
       ),
@@ -121,7 +164,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
           children: [
             const ScreenHero(
               title: 'Before you go',
-              subtitle: 'One question, then your account is gone for good.',
+              subtitle: 'One question. Nothing is deleted until you confirm.',
               fallbackRoute: 'settings',
             ),
             Expanded(
@@ -157,11 +200,14 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                     controller: _detail,
                     maxLines: 3,
                     maxLength: 500,
-                    style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: palette.text,
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Anything else? (optional)',
-                      hintStyle: AppTextStyles.bodyMedium
-                          .copyWith(color: palette.textMuted),
+                      hintStyle: AppTextStyles.bodyMedium.copyWith(
+                        color: palette.textMuted,
+                      ),
                       filled: true,
                       fillColor: palette.inputFill,
                       border: OutlineInputBorder(
@@ -203,16 +249,23 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                               ),
                             )
                           : Text(
-                              _reason == null ? 'Delete without saying' : 'Delete my account',
-                              style: AppTextStyles.labelLarge
-                                  .copyWith(color: AppColors.white),
+                              _reason == null
+                                  ? 'Delete without saying'
+                                  : 'Delete my account',
+                              style: AppTextStyles.labelLarge.copyWith(
+                                color: AppColors.white,
+                              ),
                             ),
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    // Honest: by this point it is genuinely already running.
-                    'Your account is already being removed.',
+                    // True again. This used to read "Your account is
+                    // already being removed" — which was accurate, and was
+                    // the bug: it was already being removed because the
+                    // screen had started deleting it on open.
+                    'Nothing has been deleted yet. You can still go back.',
+                    textAlign: TextAlign.center,
                     style: AppTextStyles.caption.copyWith(
                       color: palette.textMuted,
                     ),
@@ -280,8 +333,11 @@ class _ReasonTile extends StatelessWidget {
                   ),
                 ),
                 if (selected)
-                  const Icon(Icons.check_circle_rounded,
-                      size: 20, color: AppColors.primaryBlue),
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    size: 20,
+                    color: AppColors.primaryBlue,
+                  ),
               ],
             ),
           ),

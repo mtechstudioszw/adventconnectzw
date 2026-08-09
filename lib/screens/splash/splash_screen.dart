@@ -259,30 +259,39 @@ class _SplashScreenState extends State<SplashScreen>
     // of resting at a partial fill while we finish routing.
     _progress.animateTo(1.0, duration: const Duration(milliseconds: 220));
 
+    // Both gates are waited for TOGETHER.
+    //
+    // They used to be awaited one after the other, 400ms each, so a device
+    // that could not reach Supabase paid 800ms of pure tail — twice, for
+    // two queries that were already running in parallel above. Waiting on
+    // them at once caps the whole thing at 400ms. They are still CHECKED in
+    // order below, because that order is a deliberate decision.
+    final gates = await Future.wait([
+      updateFuture.timeout(
+        const Duration(milliseconds: 400),
+        onTimeout: () => UpdateCheck.none,
+      ),
+      maintenanceFuture.timeout(
+        const Duration(milliseconds: 400),
+        onTimeout: () => MaintenanceState.off,
+      ),
+    ]);
+    if (!mounted) return;
+
     // Force-update gate (patch_091): below the hard floor — or past the
     // grace window for a newer build — block here before anything else.
     // A `recommended` result is stashed on ForceUpdateService.last so the
-    // home screen can surface a dismissible "update available" nudge. The
-    // check started above; cap the tail wait at 400ms so a dead network
-    // (Supabase never became ready) can't stall the splash — fail open.
-    final update = await updateFuture.timeout(
-      const Duration(milliseconds: 400),
-      onTimeout: () => UpdateCheck.none,
-    );
+    // home screen can surface a dismissible "update available" nudge.
+    final update = gates[0] as UpdateCheck;
     if (update.level == UpdateLevel.required) {
-      if (!mounted) return;
       context.goNamed('update_required');
       return;
     }
-    if (!mounted) return;
 
     // Maintenance gate. AFTER the update gate on purpose: if a member is on
     // a build that must be replaced, telling them that is more useful than
     // telling them to come back later.
-    final maintenance = await maintenanceFuture.timeout(
-      const Duration(milliseconds: 400),
-      onTimeout: () => MaintenanceState.off,
-    );
+    final maintenance = gates[1] as MaintenanceState;
     if (maintenance.active) {
       if (!mounted) return;
       context.goNamed('maintenance');
@@ -297,8 +306,17 @@ class _SplashScreenState extends State<SplashScreen>
     // though the user is logged in. Checking the persisted token (a local
     // secure-storage read) means a returning user is NEVER bounced to
     // login; the refresh finishes in the background.
+    //
+    // `AppBootstrap.isReady` guards the first half. The wait above has an
+    // `onTimeout` that swallows, so on a slow device we can arrive here
+    // with Supabase still initialising — and `AuthService.isSignedIn`
+    // resolves `Supabase.instance.client`, which THROWS in that state.
+    // `_navigate` is unawaited, so the throw vanished into an unhandled
+    // future and the splash never navigated at all. The persisted-token
+    // read below answers the question on its own.
     final signedIn =
-        AuthService.isSignedIn || await SecureLocalStorage().hasAccessToken();
+        (AppBootstrap.isReady && AuthService.isSignedIn) ||
+        await SecureLocalStorage().hasAccessToken();
     if (!mounted) return;
     // Banned accounts hit a full lockout screen (backend already blocks
     // their actions via user_is_active()). Check the PERSISTED flag first so
@@ -316,7 +334,7 @@ class _SplashScreenState extends State<SplashScreen>
     // ban guard re-checks the server within seconds of launch + navigates to
     // the lockout screen if it flips. (This was the main "biometric login is
     // slow" cause: a slow network stalled the splash here before the prompt.)
-    if (signedIn && AuthService.isSignedIn) {
+    if (signedIn && AppBootstrap.isReady && AuthService.isSignedIn) {
       unawaited(AuthService.isCurrentUserBanned());
     }
     if (signedIn) {
@@ -348,6 +366,7 @@ class _SplashScreenState extends State<SplashScreen>
       // read the metadata — a returning user with a persisted session has
       // already onboarded, so default to completed and go home.
       final completed =
+          !AppBootstrap.isReady ||
           !AuthService.isSignedIn ||
           await AuthService.hasCompletedProfileSetup();
       if (!mounted) return;
@@ -536,9 +555,18 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(14),
+                      // cacheWidth, and it matters more here than anywhere.
+                      //
+                      // logo.png is 3264×3264 — about 42MB once decoded to
+                      // RGBA — and it is drawn into 88 logical pixels. Every
+                      // launch decoded the full bitmap on the UI isolate
+                      // before the splash could show its own logo, and on a
+                      // low-RAM phone that allocation is a stall of its own.
+                      // 3× the largest drawn size is plenty for any density.
                       child: Image.asset(
                         'assets/icon/logo.png',
                         fit: BoxFit.contain,
+                        cacheWidth: 264,
                       ),
                     ),
                   ),

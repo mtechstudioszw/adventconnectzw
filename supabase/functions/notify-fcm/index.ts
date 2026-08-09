@@ -236,6 +236,12 @@ function mapTypeToCategory(type: string): string | null {
   ) {
     return "social";
   }
+  // Quiz REMINDERS only — the nightly "come and play" and the "you have
+  // been overtaken" nudges. Deliberately not `quiz_challenge`, which is a
+  // named person asking to play you right now: that is closer to a friend
+  // request than to marketing, and a toggle meant for reminders must not
+  // silently swallow it.
+  if (t === "quiz_nudge") return "quiz";
   if (t.includes("event")) return "events";
   if (t.includes("prayer")) return "prayers";
   if (t.includes("message") || t === "chat") return "messages";

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 
 import '../../models/library_item_model.dart';
+import '../../services/library_launch_intent.dart';
 import '../../services/music_download_service.dart';
 import '../../services/music_player_service.dart';
 import '../../theme/app_colors.dart';
@@ -51,9 +52,19 @@ class HomeMusicCard extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Pressable(
-        // Tapping the body opens the Music tab; the play button starts it
-        // here. Two intents, two targets.
-        onTap: () => context.pushNamed('library', extra: 4),
+        // Tapping the body opens the Music tab AT THIS TRACK; the play
+        // button starts it here without leaving the feed. Two intents, two
+        // targets — but both about the track under the finger.
+        //
+        // It used to push `library` with a bare tab index, which dropped
+        // the member into the whole catalogue to go and find the song they
+        // had just tapped. `LibraryLaunchIntent` was built for exactly this
+        // and every Today card already used it; the feed card was the one
+        // that did not.
+        onTap: () {
+          LibraryLaunchIntent.musicItemId = item.id;
+          context.pushNamed('library', extra: 4);
+        },
         pressedScale: 0.985,
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.md),

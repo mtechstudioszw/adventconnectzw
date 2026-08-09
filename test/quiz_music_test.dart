@@ -17,7 +17,7 @@ void main() {
   group('when the loop should run', () {
     test('plays when enabled and nothing else is', () {
       expect(
-        QuizMusic.shouldPlay(enabled: true, userMusicOn: false),
+        QuizMusic.shouldPlay(enabled: true, userMusicOn: false, muted: false),
         isTrue,
       );
     });
@@ -26,18 +26,28 @@ void main() {
       // A game soundtrack over the hymn somebody chose is worse than no
       // soundtrack at all.
       expect(
-        QuizMusic.shouldPlay(enabled: true, userMusicOn: true),
+        QuizMusic.shouldPlay(enabled: true, userMusicOn: true, muted: false),
         isFalse,
       );
     });
 
     test('stays off when switched off, whatever else is happening', () {
       expect(
-        QuizMusic.shouldPlay(enabled: false, userMusicOn: false),
+        QuizMusic.shouldPlay(enabled: false, userMusicOn: false, muted: false),
         isFalse,
       );
       expect(
-        QuizMusic.shouldPlay(enabled: false, userMusicOn: true),
+        QuizMusic.shouldPlay(enabled: false, userMusicOn: true, muted: false),
+        isFalse,
+      );
+    });
+
+    test('the arena mute button silences the soundtrack too', () {
+      // The reported bug: the speaker icon only ever called
+      // QuizSfx.setMuted, so muting killed the taps and ticks and left the
+      // music bed playing. One speaker icon means all the sound.
+      expect(
+        QuizMusic.shouldPlay(enabled: true, userMusicOn: false, muted: true),
         isFalse,
       );
     });

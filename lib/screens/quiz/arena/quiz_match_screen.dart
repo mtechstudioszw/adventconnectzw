@@ -175,7 +175,9 @@ class _QuizMatchScreenState extends State<QuizMatchScreen>
 
     if (_match.isActive && !_match.isRevealing && _chosen == null) {
       final secondsLeft = (fraction * _match.secondsPerQuestion).ceil();
-      if (secondsLeft <= 5 && secondsLeft > 0 && secondsLeft != _lastTickSecond) {
+      if (secondsLeft <= 5 &&
+          secondsLeft > 0 &&
+          secondsLeft != _lastTickSecond) {
         _lastTickSecond = secondsLeft;
         QuizSfx.play(QuizSound.tick);
       }
@@ -259,15 +261,17 @@ class _QuizMatchScreenState extends State<QuizMatchScreen>
         shape: RoundedRectangleBorder(borderRadius: ArenaTheme.cardRadius),
         title: Text(
           'Leave the match?',
-          style: AppTextStyles.titleMedium
-              .copyWith(color: ArenaTheme.textOnNavy),
+          style: AppTextStyles.titleMedium.copyWith(
+            color: ArenaTheme.textOnNavy,
+          ),
         ),
         content: Text(
           // Said plainly, because it is true and irreversible: the server
           // hands the win over the moment this screen goes away.
           'Your opponent wins straight away. There is no rejoining.',
-          style: AppTextStyles.bodyMedium
-              .copyWith(color: ArenaTheme.textMutedOnNavy),
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: ArenaTheme.textMutedOnNavy,
+          ),
         ),
         actions: [
           TextButton(
@@ -296,10 +300,17 @@ class _QuizMatchScreenState extends State<QuizMatchScreen>
   AnswerTileState _stateFor(int index) {
     final reveal = _revealIndex;
     if (reveal == null) {
-      return _chosen == index ? AnswerTileState.correct : AnswerTileState.idle;
+      // `selected`, NOT `correct`. In a live match the key lives on the
+      // server, so between the tap and the response nobody knows whether
+      // this was right — and painting it green with a tick claimed it was.
+      // A wrong answer then flipped from green to red, having already told
+      // the player they had scored.
+      return _chosen == index ? AnswerTileState.selected : AnswerTileState.idle;
     }
     if (index == reveal) {
-      return _chosen == index ? AnswerTileState.correct : AnswerTileState.revealed;
+      return _chosen == index
+          ? AnswerTileState.correct
+          : AnswerTileState.revealed;
     }
     if (_chosen == index) return AnswerTileState.wrong;
     return AnswerTileState.dimmed;
@@ -342,9 +353,7 @@ class _QuizMatchScreenState extends State<QuizMatchScreen>
                 if (question == null)
                   const Expanded(
                     child: Center(
-                      child: CircularProgressIndicator(
-                        color: ArenaTheme.gold,
-                      ),
+                      child: CircularProgressIndicator(color: ArenaTheme.gold),
                     ),
                   )
                 else
@@ -517,8 +526,9 @@ class _PlayerScore extends StatelessWidget {
     );
 
     final text = Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: alignEnd
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
@@ -535,8 +545,9 @@ class _PlayerScore extends StatelessWidget {
     );
 
     return Row(
-      mainAxisAlignment:
-          alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: alignEnd
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
       children: alignEnd
           ? [Flexible(child: text), const SizedBox(width: 8), avatar]
           : [avatar, const SizedBox(width: 8), Flexible(child: text)],

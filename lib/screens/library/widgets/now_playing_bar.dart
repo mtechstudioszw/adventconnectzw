@@ -11,22 +11,24 @@ import '../../../theme/app_tokens.dart';
 import 'full_player_screen.dart';
 import 'music_visuals.dart';
 
-/// The docked music card.
+/// The docked music bar.
 ///
-/// ## Why this is a card and not a bar
+/// ## Why this is a bar again
 ///
-/// It used to be a full-width strip: artwork at 44dp on the left, then title,
-/// then four icon buttons, spanning the whole screen. The founder's note was
-/// that "its shape is wrong — a long horizontal bar where it should read like
-/// a small video card", and they were right about the cause as well as the
-/// symptom. A full-width strip claims a whole edge of the screen, so it reads
-/// as chrome the app has imposed; a card reads as an object, which is what
-/// lets it be picked up and moved. The shape and the draggability are the
-/// same design decision.
+/// It has been both. It started as a full-width strip, became a draggable
+/// 190×172 card when the founder said "its shape is wrong — it should read
+/// like a small video card", and is a bar again now: *"don't make the mini
+/// player a card, make it like others e.g. YouTube Music"*.
 ///
-/// So: cover art at the top under a scrim, transport over the art, a two-line
-/// caption below, and a hairline of progress across the seam. [MusicDock]
-/// wraps it in the [FloatingDock] that gives it top / middle / bottom.
+/// The card lost because of what its shape forced. At 172dp tall and free to
+/// be anywhere on screen, it covered content wherever it was parked, and the
+/// only way to stop it doing that was to pick it up and move it — a chore the
+/// member has to repeat on every screen. A bar claims one edge, always the
+/// same edge, and covers nothing else. That is why every music app converges
+/// on it.
+///
+/// So: artwork, title, artist, play/pause, dismiss, and a hairline of
+/// progress along the top — one row, docked above the navigation island.
 ///
 /// **Scope:** mounted app-wide by `GlobalMediaBars`, and stood down while the
 /// full player is on screen (`MusicPlayerService.fullPlayerOpen`) so the two
@@ -35,19 +37,37 @@ import 'music_visuals.dart';
 class NowPlayingBar extends StatelessWidget {
   const NowPlayingBar({super.key});
 
-  /// The card's footprint. Fixed rather than measured: the dock needs a size
-  /// to position against before the child has laid out, and a card that
-  /// changed size as titles changed would drift away from its anchor.
-  static const Size cardSize = Size(190, 172);
-
-  static const double _artHeight = 107; // 190 × 9/16, so the art is 16:9
+  /// The bar's height, excluding the progress hairline. Fixed so callers can
+  /// reserve space for it before the child has laid out.
+  static const double barHeight = 62;
 
   @override
   Widget build(BuildContext context) {
+    // Nothing here may touch `service.player` until the media session has
+    // finished booting.
+    //
+    // `main()` no longer awaits `ensureInitialized()` — that 15-second
+    // foreground-service bind was most of the launch time — and this widget
+    // is mounted in the MaterialApp builder, so it renders on the very first
+    // frame, over the splash. Reading `player` there would construct an
+    // AudioPlayer in the middle of the platform swap, which is the
+    // `_audioHandler has not been initialized` crash that got background
+    // playback removed once before. Nothing can be playing this early
+    // anyway, so waiting costs nothing.
+    return ValueListenableBuilder<bool>(
+      valueListenable: MusicPlayerService.ready,
+      builder: (context, ready, _) {
+        if (!ready) return const SizedBox.shrink();
+        return _build(context);
+      },
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final service = MusicPlayerService.instance;
     // Rebuild on both track changes AND queue teardown — stop() clears the
     // queue without emitting a new index, so the index stream alone would
-    // leave the card on screen with nothing playing.
+    // leave the bar on screen with nothing playing.
     return ValueListenableBuilder<int>(
       valueListenable: service.revision,
       builder: (context, _, _) {
@@ -61,14 +81,15 @@ class NowPlayingBar extends StatelessWidget {
               switchOutCurve: AppMotion.easeIn,
               transitionBuilder: (child, animation) => FadeTransition(
                 opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.92, end: 1).animate(animation),
+                child: SizeTransition(
+                  sizeFactor: animation,
+                  axisAlignment: -1,
                   child: child,
                 ),
               ),
               child: item == null
                   ? const SizedBox.shrink()
-                  : _card(context, service, item),
+                  : _bar(context, service, item),
             );
           },
         );
@@ -76,7 +97,7 @@ class NowPlayingBar extends StatelessWidget {
     );
   }
 
-  Widget _card(
+  Widget _bar(
     BuildContext context,
     MusicPlayerService service,
     LibraryItem item,
@@ -85,10 +106,12 @@ class NowPlayingBar extends StatelessWidget {
       key: ValueKey(item.id),
       color: Colors.transparent,
       child: GestureDetector(
-        // Kept from the bar: a flick up still opens the full player, which is
-        // the gesture people try first.
+        // A flick up opens the full player, a flick down dismisses — the two
+        // gestures people try first, and they agree with the transitions.
         onVerticalDragEnd: (d) {
-          if (d.velocity.pixelsPerSecond.dy < -420) _open(context);
+          final v = d.velocity.pixelsPerSecond.dy;
+          if (v < -420) _open(context);
+          if (v > 420) service.stop();
         },
         child: Container(
           clipBehavior: Clip.antiAlias,
@@ -101,9 +124,47 @@ class NowPlayingBar extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _art(context, service, item),
               _progressLine(service),
-              _caption(service, item),
+              SizedBox(
+                height: barHeight,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _open(context),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 8),
+                            Hero(
+                              tag: 'now-playing-art',
+                              child: TrackArtwork(
+                                coverUrl: item.coverUrl,
+                                size: 46,
+                                radius: 8,
+                                icon: item.kind == 'audio_bible'
+                                    ? Icons.menu_book_rounded
+                                    : Icons.music_note_rounded,
+                              ),
+                            ),
+                            const SizedBox(width: 11),
+                            Expanded(child: _caption(item)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    _playButton(service),
+                    _iconButton(
+                      icon: Icons.close_rounded,
+                      size: 20,
+                      tooltip: 'Stop',
+                      // Stop, not pause: pausing would leave the bar sitting
+                      // there with nothing to dismiss it.
+                      onPressed: service.stop,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -111,69 +172,44 @@ class NowPlayingBar extends StatelessWidget {
     );
   }
 
-  // ---- Art + transport ----------------------------------------------------
-
-  Widget _art(
-    BuildContext context,
-    MusicPlayerService service,
-    LibraryItem item,
-  ) {
-    return SizedBox(
-      height: _artHeight,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Blurred fill behind the square cover, so 16:9 never letterboxes
-          // a square image against flat navy.
-          BlurredArtBackdrop(coverUrl: item.coverUrl),
-          Center(
-            // heightFactor is not needed here — StackFit.expand already gives
-            // this a tight constraint — but the art is a fixed square either
-            // way, so nothing can grow to fill.
-            child: Hero(
-              tag: 'now-playing-art',
-              child: TrackArtwork(
-                coverUrl: item.coverUrl,
-                size: 78,
-                radius: 10,
-                icon: item.kind == 'audio_bible'
-                    ? Icons.menu_book_rounded
-                    : Icons.music_note_rounded,
-              ),
-            ),
+  Widget _caption(LibraryItem item) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          item.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.labelMedium.copyWith(
+            color: AppColors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
           ),
-          // Tap the art to open the full player. Sits under the buttons.
-          Positioned.fill(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(onTap: () => _open(context)),
-            ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          (item.author?.isNotEmpty ?? false)
+              ? item.author!
+              : 'Advent Connect ZW',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.white.withValues(alpha: 0.62),
+            fontSize: 11,
           ),
-          Positioned(
-            top: 2,
-            right: 2,
-            child: _iconButton(
-              icon: Icons.close_rounded,
-              size: 17,
-              tooltip: 'Stop',
-              // Stop, not pause: pausing would leave the card sitting there
-              // with nothing to dismiss it.
-              onPressed: service.stop,
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 4,
-            child: _transport(service),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _transport(MusicPlayerService service) {
+  /// Play/pause only.
+  ///
+  /// Previous and next are deliberately not here — they are in the full
+  /// player, one tap away. A 62dp bar that has to hold artwork, two lines of
+  /// text and five controls gives each of them a target too small to hit,
+  /// and skip is not what anyone reaches for from another screen.
+  Widget _playButton(MusicPlayerService service) {
     return StreamBuilder<PlayerState>(
       stream: service.player.playerStateStream,
       builder: (context, snap) {
@@ -181,51 +217,32 @@ class NowPlayingBar extends StatelessWidget {
         final playing = state?.playing ?? false;
         final loading =
             state?.processingState == ProcessingState.loading ||
-                state?.processingState == ProcessingState.buffering;
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _iconButton(
-              icon: Icons.skip_previous_rounded,
-              size: 21,
-              tooltip: 'Previous',
-              onPressed: service.previous,
-            ),
-            SizedBox(
-              width: 38,
-              height: 38,
-              child: loading
-                  ? const Padding(
-                      padding: EdgeInsets.all(11),
-                      child: CircularProgressIndicator(
-                        color: AppColors.white,
-                        strokeWidth: 2.2,
-                      ),
-                    )
-                  : _iconButton(
-                      icon: playing
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
-                      size: 27,
-                      tooltip: playing ? 'Pause' : 'Play',
-                      animateSwap: true,
-                      onPressed: service.togglePlayPause,
-                    ),
-            ),
-            _iconButton(
-              icon: Icons.skip_next_rounded,
-              size: 21,
-              tooltip: 'Next',
-              onPressed: service.next,
-            ),
-          ],
+            state?.processingState == ProcessingState.buffering;
+        return SizedBox(
+          width: 44,
+          height: 44,
+          child: loading
+              ? const Padding(
+                  padding: EdgeInsets.all(13),
+                  child: CircularProgressIndicator(
+                    color: AppColors.white,
+                    strokeWidth: 2.2,
+                  ),
+                )
+              : _iconButton(
+                  icon: playing
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                  size: 27,
+                  tooltip: playing ? 'Pause' : 'Play',
+                  animateSwap: true,
+                  onPressed: service.togglePlayPause,
+                ),
         );
       },
     );
   }
 
-  /// Transport buttons sit on artwork, which can be any colour, so each one
-  /// carries its own dark scrim rather than relying on the image being dark.
   Widget _iconButton({
     required IconData icon,
     required double size,
@@ -239,13 +256,8 @@ class NowPlayingBar extends StatelessWidget {
       child: InkResponse(
         onTap: onPressed,
         radius: size,
-        child: Container(
-          margin: const EdgeInsets.all(3),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: AppColors.darkNavy.withValues(alpha: 0.55),
-            shape: BoxShape.circle,
-          ),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
           child: animateSwap
               ? AnimatedSwitcher(
                   duration: AppMotion.quick,
@@ -259,44 +271,8 @@ class NowPlayingBar extends StatelessWidget {
     );
   }
 
-  // ---- Caption ------------------------------------------------------------
-
-  Widget _caption(MusicPlayerService service, LibraryItem item) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 7, 10, 9),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            item.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 1),
-          Text(
-            (item.author?.isNotEmpty ?? false)
-                ? item.author!
-                : 'Advent Connect ZW',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.white.withValues(alpha: 0.62),
-              fontSize: 10.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Hairline progress on the seam between art and caption — the cheapest
-  /// possible "where am I in this track" signal.
+  /// Hairline progress along the top edge — the cheapest possible "where am
+  /// I in this track" signal.
   Widget _progressLine(MusicPlayerService service) {
     return StreamBuilder<Duration>(
       stream: service.player.positionStream,
@@ -305,16 +281,19 @@ class NowPlayingBar extends StatelessWidget {
         final position = snap.data ?? Duration.zero;
         final value = duration.inMilliseconds <= 0
             ? 0.0
-            : (position.inMilliseconds / duration.inMilliseconds)
-                .clamp(0.0, 1.0);
+            : (position.inMilliseconds / duration.inMilliseconds).clamp(
+                0.0,
+                1.0,
+              );
         return SizedBox(
           height: 2,
           child: LinearProgressIndicator(
             value: value,
             minHeight: 2,
             backgroundColor: AppColors.white.withValues(alpha: 0.14),
-            valueColor:
-                const AlwaysStoppedAnimation<Color>(AppColors.goldAccent),
+            valueColor: const AlwaysStoppedAnimation<Color>(
+              AppColors.goldAccent,
+            ),
           ),
         );
       },
@@ -322,7 +301,7 @@ class NowPlayingBar extends StatelessWidget {
   }
 
   void _open(BuildContext context) {
-    // NOT Navigator.of(context): this card is mounted in an overlay above the
+    // NOT Navigator.of(context): this bar is mounted in an overlay above the
     // router's Navigator, so there is no Navigator to find and the lookup
     // throws. Push on the root navigator directly.
     final nav = rootNavigatorKey.currentState;
@@ -334,7 +313,7 @@ class NowPlayingBar extends StatelessWidget {
         opaque: false,
         pageBuilder: (_, _, _) => const FullPlayerScreen(),
         transitionsBuilder: (context, animation, _, child) {
-          // Slide up from the card — the gesture and the transition agree.
+          // Slide up from the bar — the gesture and the transition agree.
           final curved = CurvedAnimation(
             parent: animation,
             curve: AppMotion.easeOut,

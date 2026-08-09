@@ -34,8 +34,9 @@ class WatchMiniPlayer extends StatelessWidget {
 
   /// Parked corner. Defaults to bottom-right, clear of the back gesture on
   /// the left edge and of most FABs.
-  static final ValueNotifier<Alignment> anchor =
-      ValueNotifier<Alignment>(Alignment.bottomRight);
+  static final ValueNotifier<Alignment> anchor = ValueNotifier<Alignment>(
+    Alignment.bottomRight,
+  );
 
   /// Window width; height follows at 16:9.
   static final ValueNotifier<double> width = ValueNotifier<double>(196);
@@ -131,8 +132,7 @@ class _FloatingWindowState extends State<_FloatingWindow> {
     if (video == null || controller == null) return const SizedBox.shrink();
 
     final height = widget.width * 9 / 16;
-    final playing =
-        controller.value.playerState == PlayerState.playing;
+    final playing = controller.value.playerState == PlayerState.playing;
 
     return FloatingDock(
       size: Size(widget.width, height),
@@ -163,10 +163,7 @@ class _FloatingWindowState extends State<_FloatingWindow> {
             // The live embed. IgnorePointer so YouTube's own overlay never
             // eats a drag — every gesture belongs to the window.
             IgnorePointer(
-              child: YoutubePlayer(
-                controller: controller,
-                aspectRatio: 16 / 9,
-              ),
+              child: YoutubePlayer(controller: controller, aspectRatio: 16 / 9),
             ),
             // Tap anywhere to bring the controls back.
             Positioned.fill(
@@ -184,19 +181,28 @@ class _FloatingWindowState extends State<_FloatingWindow> {
                 child: _controls(playing),
               ),
             ),
-            // Close stays PUT.
+            // The two ways OUT stay put. Everything else may fade.
             //
-            // It used to live inside the fading control layer with play and
-            // expand, so three seconds after the window appeared the only
-            // way to get rid of it vanished — you had to tap the video to
-            // bring the controls back, and a tap that lands while they are
-            // already up expands to full screen instead. That is a window
-            // you cannot obviously dismiss, which is why it read as having
-            // no exit button at all.
+            // They used to live inside the fading control layer along with
+            // play, so three seconds after the window appeared both the exit
+            // and the way back to full screen vanished. Recovering them
+            // meant tapping the video — and a tap that lands while the
+            // controls are already up expands instead, so the behaviour
+            // depended on invisible timer state. That is why the window read
+            // as having no exit button and no way back into the player.
             //
-            // Getting out of something must never be the control that hides
-            // itself. It sits above the tap layer so it always wins the
-            // gesture.
+            // YouTube pins both for the same reason: leaving a thing must
+            // never be the control that hides itself.
+            Positioned(
+              top: 1,
+              left: 1,
+              child: _glyph(
+                icon: Icons.open_in_full_rounded,
+                size: 15,
+                tooltip: 'Back to full screen',
+                onTap: _expand,
+              ),
+            ),
             Positioned(
               top: 1,
               right: 1,
@@ -246,18 +252,8 @@ class _FloatingWindowState extends State<_FloatingWindow> {
               },
             ),
           ),
-          // Close is NOT here — it is pinned outside this fading layer so
-          // it never disappears. See the note at the call site.
-          Positioned(
-            top: 1,
-            left: 1,
-            child: _glyph(
-              icon: Icons.open_in_full_rounded,
-              size: 14,
-              tooltip: 'Back to full screen',
-              onTap: _expand,
-            ),
-          ),
+          // Close and expand are NOT here — both are pinned outside this
+          // fading layer so neither can disappear. See the call site.
         ],
       ),
     );

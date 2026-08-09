@@ -83,13 +83,16 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     // music is playing.
     unawaited(QuizMusic.start());
     unawaited(QuizService.warm());
-    unawaited(QuizCloudService.restoreIfEmpty().then((restored) {
-      if (restored && mounted) setState(() {});
-      // After a restore the cloud balance wins; otherwise this grants the
-      // starting coins on a genuinely new player's first visit.
-      return QuizProgressService.ensureStartingCoins()
-          .then((_) => mounted ? setState(() {}) : null);
-    }));
+    unawaited(
+      QuizCloudService.restoreIfEmpty().then((restored) {
+        if (restored && mounted) setState(() {});
+        // After a restore the cloud balance wins; otherwise this grants the
+        // starting coins on a genuinely new player's first visit.
+        return QuizProgressService.ensureStartingCoins().then(
+          (_) => mounted ? setState(() {}) : null,
+        );
+      }),
+    );
     _refreshChallenges();
   }
 
@@ -107,7 +110,7 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
 
   // ---- Flow ---------------------------------------------------------------
 
-  Future<void> _play(QuizMode mode, {String? category}) async {
+  Future<void> _play(QuizMode mode, {String? category, String? title}) async {
     if (_busy) return;
     setState(() => _busy = true);
 
@@ -121,11 +124,16 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     setState(() => _busy = false);
 
     if (questions.isEmpty) {
+      // No round means no challenge either — drop the opponent rather than
+      // leaving them queued up to be challenged by whatever is played next.
+      _pendingChallengeTo = null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(mode == QuizMode.mistakes
-              ? 'No mistakes to fix yet — play a round first.'
-              : 'No questions available yet. Check your connection.'),
+          content: Text(
+            mode == QuizMode.mistakes
+                ? 'No mistakes to fix yet — play a round first.'
+                : 'No questions available yet. Check your connection.',
+          ),
         ),
       );
       return;
@@ -135,7 +143,7 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
       QuizRoundConfig(
         mode: mode,
         questions: questions,
-        title: category ?? mode.label,
+        title: title ?? category ?? mode.label,
         category: category,
       ),
     );
@@ -143,6 +151,18 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
 
   /// round → results → optional replay, then refresh the lobby.
   Future<void> _runRound(QuizRoundConfig config) async {
+    // Claim the pending opponent HERE, before anything can go wrong.
+    //
+    // It used to be read at the very end, after the results screen had been
+    // popped, and cleared only on the one path that reached that line. So
+    // every other exit left it set: quitting mid-round, or a round that
+    // never started because the questions failed to build. The member got
+    // no challenge — "challenge a friend doesn't work" — and worse, the
+    // next unrelated round they played silently fired the challenge at
+    // whoever they had picked minutes earlier.
+    final challengeTo = config.challengeId == null ? _pendingChallengeTo : null;
+    _pendingChallengeTo = null;
+
     final result = await Navigator.of(context).push<QuizRoundResult>(
       MaterialPageRoute(builder: (_) => QuizRoundScreen(config: config)),
     );
@@ -162,35 +182,36 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
       if (!mounted) return;
     }
 
-    final again = await Navigator.of(context).push<QuizMode>(
-      MaterialPageRoute(builder: (_) => QuizResultsScreen(result: result)),
-    );
-    if (!mounted) return;
-    setState(() {});
-
-    // A fresh round is offered as a challenge — you can only challenge
-    // someone with a score you've actually just set.
-    if (config.challengeId == null && _pendingChallengeTo != null) {
-      final opponent = _pendingChallengeTo!;
-      _pendingChallengeTo = null;
+    // Sending a challenge: also BEFORE the results screen, and for the same
+    // reason. This used to run after the member had closed their results,
+    // so anyone who backed straight out of the arena from that screen —
+    // which is the natural thing to do when you have finished — never sent
+    // the thing they had set the score for.
+    if (challengeTo != null) {
       // Captured before the await — the analyzer is right that `context`
       // shouldn't be reached for across an async gap.
       final messenger = ScaffoldMessenger.of(context);
       final sent = await QuizChallengeService.create(
-        opponentId: opponent.userId,
+        opponentId: challengeTo.userId,
         result: result,
       );
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(sent
-              ? 'Challenge sent to ${opponent.name}.'
-              : 'Could not send the challenge. Try again.'),
+          content: Text(
+            sent
+                ? 'Challenge sent to ${challengeTo.name}.'
+                : 'Could not send the challenge. Check your connection.',
+          ),
         ),
       );
-      setState(() {});
-      return;
     }
+
+    final again = await Navigator.of(context).push<QuizMode>(
+      MaterialPageRoute(builder: (_) => QuizResultsScreen(result: result)),
+    );
+    if (!mounted) return;
+    setState(() {});
 
     // Replay the same kind of round, topic included.
     if (again != null) {
@@ -199,13 +220,18 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
   }
 
   /// Pick a friend, then play a round that becomes the challenge.
+  ///
+  /// The round has to SAY so. It used to start an ordinary round titled
+  /// "Practice", with nothing on screen connecting it to the friend who had
+  /// just been chosen — so it read as though picking them had done nothing,
+  /// and the challenge appeared out of nowhere several screens later.
   Future<void> _startChallenge() async {
     final opponent = await Navigator.of(context).push<QuizOpponent>(
       MaterialPageRoute(builder: (_) => const QuizOpponentPickerScreen()),
     );
     if (!mounted || opponent == null) return;
     _pendingChallengeTo = opponent;
-    await _play(QuizMode.practice);
+    await _play(QuizMode.practice, title: 'Challenging ${opponent.name}');
   }
 
   /// Play a challenge someone sent you — the exact same questions they got.
@@ -274,13 +300,13 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
 
   /// A section's entrance, staggered behind the intro.
   Animation<double> _step(int index) => CurvedAnimation(
-        parent: _intro,
-        curve: Interval(
-          (0.30 + index * 0.075).clamp(0.0, 0.92),
-          1.0,
-          curve: AppMotion.easeOut,
-        ),
-      );
+    parent: _intro,
+    curve: Interval(
+      (0.30 + index * 0.075).clamp(0.0, 0.92),
+      1.0,
+      curve: AppMotion.easeOut,
+    ),
+  );
 
   Widget _reveal(int index, Widget child) {
     final animation = _step(index);
@@ -291,7 +317,10 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
         final t = animation.value;
         return Opacity(
           opacity: t.clamp(0.0, 1.0),
-          child: Transform.translate(offset: Offset(0, (1 - t) * 26), child: inner),
+          child: Transform.translate(
+            offset: Offset(0, (1 - t) * 26),
+            child: inner,
+          ),
         );
       },
       child: child,
@@ -349,8 +378,10 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
         builder: (context, child) {
           if (!AppMotion.enabled(context)) return child!;
           final t = Curves.easeOutCubic.transform(
-            CurvedAnimation(parent: _intro, curve: const Interval(0, 0.55))
-                .value,
+            CurvedAnimation(
+              parent: _intro,
+              curve: const Interval(0, 0.55),
+            ).value,
           );
           return Opacity(
             opacity: t,
@@ -478,8 +509,11 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
       borderColor: ArenaTheme.gold.withValues(alpha: 0.5),
       child: Row(
         children: [
-          const Icon(Icons.play_circle_fill_rounded,
-              color: ArenaTheme.gold, size: 30),
+          const Icon(
+            Icons.play_circle_fill_rounded,
+            color: ArenaTheme.gold,
+            size: 30,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -497,8 +531,9 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
                 const SizedBox(height: 2),
                 Text(
                   'Question ${index + 1} of $total',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: ArenaTheme.textMutedOnNavy),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: ArenaTheme.textMutedOnNavy,
+                  ),
                 ),
               ],
             ),
@@ -508,14 +543,19 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
               await QuizProgressService.clearSession();
               if (mounted) setState(() {});
             },
-            child: Text('Discard',
-                style: AppTextStyles.labelSmall
-                    .copyWith(color: ArenaTheme.textFaintOnNavy)),
+            child: Text(
+              'Discard',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: ArenaTheme.textFaintOnNavy,
+              ),
+            ),
           ),
           IconButton(
             onPressed: () => _resume(session),
-            icon: const Icon(Icons.arrow_forward_rounded,
-                color: ArenaTheme.gold),
+            icon: const Icon(
+              Icons.arrow_forward_rounded,
+              color: ArenaTheme.gold,
+            ),
           ),
         ],
       ),
@@ -542,8 +582,11 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
         children: [
           Row(
             children: [
-              const Icon(Icons.today_rounded,
-                  color: ArenaTheme.goldBright, size: 21),
+              const Icon(
+                Icons.today_rounded,
+                color: ArenaTheme.goldBright,
+                size: 21,
+              ),
               const SizedBox(width: 9),
               Text(
                 'Daily Challenge',
@@ -557,8 +600,11 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
               if (streak > 0)
                 Row(
                   children: [
-                    const Icon(Icons.local_fire_department_rounded,
-                        color: ArenaTheme.gold, size: 18),
+                    const Icon(
+                      Icons.local_fire_department_rounded,
+                      color: ArenaTheme.gold,
+                      size: 18,
+                    ),
                     const SizedBox(width: 3),
                     Text(
                       '$streak',
@@ -639,10 +685,7 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
       // Live head-to-head sits BESIDE the async challenge above, not in
       // place of it: they are different games. A challenge is played
       // whenever you like; this one needs both people present now.
-      _LiveMatchTile(
-        invites: _liveInvites,
-        onTap: _openLiveMatch,
-      ),
+      _LiveMatchTile(invites: _liveInvites, onTap: _openLiveMatch),
     ];
 
     return GridView.count(
@@ -670,8 +713,9 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
         if (categories.isEmpty) {
           return Text(
             'No topics yet.',
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: ArenaTheme.textMutedOnNavy),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: ArenaTheme.textMutedOnNavy,
+            ),
           );
         }
         return Wrap(
@@ -681,8 +725,7 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
             for (final category in categories)
               _TopicChip(
                 label: category,
-                onTap: () =>
-                    _play(QuizMode.category, category: category),
+                onTap: () => _play(QuizMode.category, category: category),
               ),
           ],
         );
@@ -702,9 +745,7 @@ class _MuteButtonState extends State<_MuteButton> {
   @override
   Widget build(BuildContext context) {
     return ArenaIconButton(
-      icon: QuizSfx.muted
-          ? Icons.volume_off_rounded
-          : Icons.volume_up_rounded,
+      icon: QuizSfx.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
       tooltip: QuizSfx.muted ? 'Unmute' : 'Mute',
       onTap: () async {
         await QuizSfx.toggleMute();
@@ -808,11 +849,14 @@ class _ModeTile extends StatelessWidget {
                     if (badge != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 2),
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: ArenaTheme.gold,
                           borderRadius: BorderRadius.circular(
-                              ArenaTheme.radiusPill),
+                            ArenaTheme.radiusPill,
+                          ),
                         ),
                         child: Text(
                           badge!,
@@ -893,8 +937,9 @@ class _ChallengeTile extends StatelessWidget {
                   ? ArenaTheme.gold.withValues(alpha: 0.55)
                   : ArenaTheme.glassBorder,
             ),
-            boxShadow:
-                waiting ? ArenaTheme.glow(ArenaTheme.gold, strength: 0.5) : null,
+            boxShadow: waiting
+                ? ArenaTheme.glow(ArenaTheme.gold, strength: 0.5)
+                : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -909,18 +954,24 @@ class _ChallengeTile extends StatelessWidget {
                       color: ArenaTheme.gold.withValues(alpha: 0.16),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.sports_kabaddi_rounded,
-                        size: 18, color: ArenaTheme.gold),
+                    child: const Icon(
+                      Icons.sports_kabaddi_rounded,
+                      size: 18,
+                      color: ArenaTheme.gold,
+                    ),
                   ),
                   const Spacer(),
                   if (waiting)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: ArenaTheme.gold,
-                        borderRadius:
-                            BorderRadius.circular(ArenaTheme.radiusPill),
+                        borderRadius: BorderRadius.circular(
+                          ArenaTheme.radiusPill,
+                        ),
                       ),
                       child: Text(
                         '$incoming',
@@ -951,9 +1002,7 @@ class _ChallengeTile extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: waiting
-                      ? ArenaTheme.gold
-                      : ArenaTheme.textFaintOnNavy,
+                  color: waiting ? ArenaTheme.gold : ArenaTheme.textFaintOnNavy,
                   fontSize: 11,
                   height: 1.3,
                 ),
@@ -1014,18 +1063,24 @@ class _LiveMatchTile extends StatelessWidget {
                       color: ArenaTheme.correctOnNavy.withValues(alpha: 0.18),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.bolt_rounded,
-                        size: 19, color: ArenaTheme.correctOnNavy),
+                    child: const Icon(
+                      Icons.bolt_rounded,
+                      size: 19,
+                      color: ArenaTheme.correctOnNavy,
+                    ),
                   ),
                   const Spacer(),
                   if (waiting)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: ArenaTheme.correctOnNavy,
-                        borderRadius:
-                            BorderRadius.circular(ArenaTheme.radiusPill),
+                        borderRadius: BorderRadius.circular(
+                          ArenaTheme.radiusPill,
+                        ),
                       ),
                       child: Text(
                         '$invites',

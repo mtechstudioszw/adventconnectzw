@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,12 +13,8 @@ import 'secure_storage_service.dart';
 import 'session_reset.dart';
 
 class AuthResult {
-  AuthResult.success(this.user)
-      : errorMessage = null,
-        isSuccess = true;
-  AuthResult.failure(this.errorMessage)
-      : user = null,
-        isSuccess = false;
+  AuthResult.success(this.user) : errorMessage = null, isSuccess = true;
+  AuthResult.failure(this.errorMessage) : user = null, isSuccess = false;
 
   final User? user;
   final String? errorMessage;
@@ -261,10 +258,7 @@ class AuthService {
       );
     }
     try {
-      await _client.auth.signInWithOtp(
-        email: trimmed,
-        shouldCreateUser: false,
-      );
+      await _client.auth.signInWithOtp(email: trimmed, shouldCreateUser: false);
       return AuthResult.success(null);
     } on AuthException catch (e) {
       final lower = e.message.toLowerCase();
@@ -706,13 +700,14 @@ class AuthService {
       final existing = (await SecureStorageService.read(key)) ?? '';
       final now = DateTime.now().millisecondsSinceEpoch;
       final cutoff = now - _resetLimitWindow.inMilliseconds;
-      final kept = existing
-          .split(',')
-          .map(int.tryParse)
-          .whereType<int>()
-          .where((t) => t >= cutoff)
-          .toList()
-        ..add(now);
+      final kept =
+          existing
+              .split(',')
+              .map(int.tryParse)
+              .whereType<int>()
+              .where((t) => t >= cutoff)
+              .toList()
+            ..add(now);
       await SecureStorageService.write(key, kept.join(','));
     } catch (_) {}
   }
@@ -759,9 +754,21 @@ class AuthService {
       return AuthResult.failure('Sign in to delete your account.');
     }
 
-    Object? edgeFunctionError;
-
-    // ── BUG 1 FIX: call Edge Function to delete auth.users row ───────
+    // The Edge Function is the whole deletion, and it either works or
+    // nothing happens.
+    //
+    // This used to be belt-and-braces: call the function, then delete the
+    // `profiles` row from the client "in case the Edge Function failed".
+    // That second step is the opposite of a safety net. `profiles.id`
+    // references `auth.users(id) ON DELETE CASCADE`, and 45 other tables
+    // cascade off `profiles` — so the client-side delete destroys posts,
+    // prayers, messages, photos and the avatar url, while being unable to
+    // touch `auth.users` at all. Run it after a FAILED function call and
+    // you get precisely the reported outcome: everything gone, the account
+    // still there, and the member able to sign back into an empty shell.
+    //
+    // So there is no fallback. If the server cannot delete the account,
+    // the member keeps everything and is told to try again.
     try {
       final response = await _client.functions.invoke(
         'delete-account',
@@ -769,21 +776,17 @@ class AuthService {
       );
       // functions.invoke throws on non-2xx, but guard anyway.
       if (response.status >= 300) {
-        edgeFunctionError =
-            'Edge Function returned status ${response.status}';
+        return AuthResult.failure(
+          'We could not delete your account just now. Nothing has been '
+          'removed — please try again, or contact support.',
+        );
       }
     } catch (e) {
-      edgeFunctionError = e;
-    }
-    // ── END BUG 1 FIX ─────────────────────────────────────────────────
-
-    // Belt-and-braces: delete the profiles row too in case the Edge
-    // Function failed after writing but before cascading, or the RLS
-    // lets us clean up what we can client-side.
-    try {
-      await _client.from('profiles').delete().eq('id', user.id);
-    } catch (_) {
-      // Ignore — RLS may reject if Edge Function already removed the row.
+      debugPrint('AuthService.deleteAccount: edge function failed: $e');
+      return AuthResult.failure(
+        'We could not reach the server to delete your account. Nothing '
+        'has been removed — please check your connection and try again.',
+      );
     }
 
     // Sign out of Supabase session.
@@ -803,16 +806,6 @@ class AuthService {
     await SecureStorageService.clearAll();
     await CacheService.clearUserData();
     await SessionReset.onSignOut();
-
-    if (edgeFunctionError != null) {
-      // Edge Function not deployed yet, or a transient error.
-      // Profile data is gone but the auth.users row may still exist.
-      return AuthResult.failure(
-        'Your profile data has been removed, but full account deletion '
-        'requires the delete-account Edge Function to be deployed. '
-        'Contact support if you can still sign back in.',
-      );
-    }
 
     return AuthResult.success(null);
   }
@@ -850,9 +843,9 @@ class AuthService {
     }
     unawaited(_client.auth.signOut().catchError((_) {}));
     unawaited(
-      GoogleSignIn(serverClientId: _googleWebClientId)
-          .signOut()
-          .catchError((_) => null),
+      GoogleSignIn(
+        serverClientId: _googleWebClientId,
+      ).signOut().catchError((_) => null),
     );
     await SecureStorageService.clearAll();
     // Wipe cached account data (inbox, chats, feed, profiles) so the next
@@ -925,9 +918,12 @@ class AuthService {
       // (which the later upsert's catch would otherwise swallow).
       if (churchId != null) {
         try {
-          await _client.from('profiles').update({
-            'church_id': churchId.isEmpty ? null : int.tryParse(churchId),
-          }).eq('id', user.id);
+          await _client
+              .from('profiles')
+              .update({
+                'church_id': churchId.isEmpty ? null : int.tryParse(churchId),
+              })
+              .eq('id', user.id);
         } on PostgrestException catch (e) {
           return AuthResult.failure(e.message);
         }
@@ -943,7 +939,8 @@ class AuthService {
         try {
           await _client
               .from('profiles')
-              .update({'date_of_birth': dobIso}).eq('id', user.id);
+              .update({'date_of_birth': dobIso})
+              .eq('id', user.id);
         } on PostgrestException catch (e) {
           return AuthResult.failure(e.message);
         }
@@ -951,8 +948,7 @@ class AuthService {
 
       final current = user.userMetadata ?? const {};
       final next = <String, dynamic>{...current};
-      String? sentinelOrNull(String? v) =>
-          (v != null && v.isEmpty) ? null : v;
+      String? sentinelOrNull(String? v) => (v != null && v.isEmpty) ? null : v;
       if (fullName != null) next['full_name'] = fullName.trim();
       if (bio != null) next['bio'] = bio.trim();
       if (churchId != null) next['church_id'] = churchId;
@@ -982,8 +978,9 @@ class AuthService {
         dbUpdates['username'] = username.trim();
       }
       if (churchId != null) {
-        dbUpdates['church_id'] =
-            churchId.isEmpty ? null : int.tryParse(churchId);
+        dbUpdates['church_id'] = churchId.isEmpty
+            ? null
+            : int.tryParse(churchId);
       }
       if (profilePhotoUrl != null) {
         dbUpdates['profile_photo_url'] = sentinelOrNull(profilePhotoUrl);
@@ -994,9 +991,10 @@ class AuthService {
       if (showAge != null) dbUpdates['show_age'] = showAge;
       if (dbUpdates.isNotEmpty) {
         try {
-          await _client
-              .from('profiles')
-              .upsert({'id': user.id, ...dbUpdates}, onConflict: 'id');
+          await _client.from('profiles').upsert({
+            'id': user.id,
+            ...dbUpdates,
+          }, onConflict: 'id');
         } catch (e) {
           // Duplicate username (case-insensitive unique index) — tell the user
           // plainly instead of a generic failure, and don't retry (the retry
@@ -1010,9 +1008,10 @@ class AuthService {
           final safe = Map<String, dynamic>.from(dbUpdates)
             ..remove('cover_photo_url');
           if (safe.isNotEmpty) {
-            await _client
-                .from('profiles')
-                .upsert({'id': user.id, ...safe}, onConflict: 'id');
+            await _client.from('profiles').upsert({
+              'id': user.id,
+              ...safe,
+            }, onConflict: 'id');
           }
         }
       }
@@ -1039,10 +1038,7 @@ class AuthService {
     try {
       final user = currentUser;
       if (user == null) return;
-      final next = <String, dynamic>{
-        ...?user.userMetadata,
-        ...patch,
-      };
+      final next = <String, dynamic>{...?user.userMetadata, ...patch};
       await _client.auth.updateUser(UserAttributes(data: next));
     } catch (_) {}
   }
@@ -1118,7 +1114,8 @@ class AuthService {
   static bool meetsMinimumAge(DateTime birthDate, {int minimumAge = 16}) {
     final now = DateTime.now();
     int age = now.year - birthDate.year;
-    final hasHadBirthday = now.month > birthDate.month ||
+    final hasHadBirthday =
+        now.month > birthDate.month ||
         (now.month == birthDate.month && now.day >= birthDate.day);
     if (!hasHadBirthday) age -= 1;
     return age >= minimumAge;

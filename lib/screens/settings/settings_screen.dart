@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -30,8 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late final Animation<double> _fade;
   late final Animation<double> _slide;
 
-  NotificationCategoryPrefs _categoryPrefs =
-      NotificationCategoryPrefs.defaults;
+  NotificationCategoryPrefs _categoryPrefs = NotificationCategoryPrefs.defaults;
   String _language = 'English';
   bool _sabbathEnabled = SabbathService.isEnabled();
   bool _sabbathMode = SabbathService.sabbathModeEnabled();
@@ -52,9 +51,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _loadCategoryPrefs();
     _loadSuperAdmin();
     _loadBiometric();
@@ -109,7 +109,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-
   /// Optimistic write — flip the local toggle immediately so the
   /// Switch animates, then fire-and-forget the persist call. The
   /// service swallows network errors silently; if the write fails
@@ -142,9 +141,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: ctx.palette.sheet,
         title: Text(title, style: AppTextStyles.headlineSmall),
         content: Text(body, style: AppTextStyles.bodyMedium),
@@ -153,9 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               'Cancel',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: AppColors.text,
-              ),
+              style: AppTextStyles.labelMedium.copyWith(color: AppColors.text),
             ),
           ),
           FilledButton(
@@ -171,44 +166,36 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _signOut() => _confirmAndRun(
-        title: 'Sign out?',
-        body: 'You\'ll need to sign in again to access the community.',
-        confirmLabel: 'Sign out',
-        confirmColor: AppColors.red,
-        action: () async {
-          // Same bug as the profile screen's sign out, same fix: signOut()
-          // disposes this screen, so a `mounted` check placed AFTER it
-          // returns early and the navigation never happens. The member is
-          // left on a settings screen belonging to an account with no
-          // session, and only discovers it worked by relaunching.
-          //
-          // Hold the router from before the await; it outlives the widget.
-          final router = GoRouter.of(context);
-          try {
-            await AuthService.signOut();
-          } finally {
-            router.goNamed('login');
-          }
-        },
-      );
+    title: 'Sign out?',
+    body: 'You\'ll need to sign in again to access the community.',
+    confirmLabel: 'Sign out',
+    confirmColor: AppColors.red,
+    action: () async {
+      // Same bug as the profile screen's sign out, same fix: signOut()
+      // disposes this screen, so a `mounted` check placed AFTER it
+      // returns early and the navigation never happens. The member is
+      // left on a settings screen belonging to an account with no
+      // session, and only discovers it worked by relaunching.
+      //
+      // Hold the router from before the await; it outlives the widget.
+      final router = GoRouter.of(context);
+      try {
+        await AuthService.signOut();
+      } finally {
+        router.goNamed('login');
+      }
+    },
+  );
 
-  /// Confirm, then hand off to the exit-survey screen — which starts the
-  /// deletion the moment it opens (#17, #18).
-  ///
-  /// The deletion used to run right here, awaited behind a dialog, so the
-  /// whole Edge Function round-trip was dead time on a frozen button. Now
-  /// the wait happens behind a question worth asking.
-  Future<void> _deleteAccount() => _confirmAndRun(
-        title: 'Delete account?',
-        body:
-            'This permanently removes your profile, prayers, posts and messages. This cannot be undone.',
-        confirmLabel: 'Continue',
-        confirmColor: AppColors.red,
-        action: () async {
-          if (!mounted) return;
-          context.pushNamed('delete_account');
-        },
-      );
+  /// Opens the exit survey. Deleting anything is that screen's own final
+  /// confirmation, so this one only has to be honest about being a step on
+  /// the way — it used to say "Continue" over a body claiming the deletion
+  /// was permanent and immediate, which is a promise the next screen then
+  /// kept before anybody had agreed to it.
+  Future<void> _deleteAccount() async {
+    if (!mounted) return;
+    context.pushNamed('delete_account');
+  }
 
   Future<void> _changePassword() async {
     final ok = await showDialog<bool>(
@@ -263,8 +250,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               const SizedBox(height: 18),
               Text(
                 'Contact us',
-                style: AppTextStyles.titleLarge
-                    .copyWith(fontWeight: FontWeight.w800),
+                style: AppTextStyles.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -286,8 +274,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     '?text=${Uri.encodeComponent("Hi Advent Connect ZW team — ")}',
                   );
                   Navigator.of(ctx).pop();
-                  await launchUrl(url,
-                      mode: LaunchMode.externalApplication);
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
                 },
               ),
               const SizedBox(height: 10),
@@ -300,13 +287,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                   final url = Uri(
                     scheme: 'mailto',
                     path: _supportEmail,
-                    queryParameters: {
-                      'subject': 'Advent Connect ZW — Support',
-                    },
+                    queryParameters: {'subject': 'Advent Connect ZW — Support'},
                   );
                   Navigator.of(ctx).pop();
-                  await launchUrl(url,
-                      mode: LaunchMode.externalApplication);
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
                 },
               ),
               const SizedBox(height: 10),
@@ -432,66 +416,148 @@ class _SettingsScreenState extends State<SettingsScreen>
     return [
       // Subscription — keywords cover how people actually describe it
       // ("remove ads", "stop ads") rather than only the product name.
-      _SettingsEntry('Go Premium', 'Subscription', Icons.star_rounded,
-          AppColors.goldAccent,
-          'premium subscription no ads remove ads stop ads adfree upgrade '
-          'support billing cancel restore',
-          () => context.pushNamed('premium')),
+      _SettingsEntry(
+        'Go Premium',
+        'Subscription',
+        Icons.star_rounded,
+        AppColors.goldAccent,
+        'premium subscription no ads remove ads stop ads adfree upgrade '
+            'support billing cancel restore',
+        () => context.pushNamed('premium'),
+      ),
       // Account
-      _SettingsEntry('Edit profile', 'Account', Icons.person_outline,
-          AppColors.primaryBlue, 'name photo bio church avatar',
-          () => context.pushNamed('edit_profile')),
-      _SettingsEntry('Change password', 'Account', Icons.lock_outline,
-          AppColors.primaryBlue, 'security passcode reset',
-          () => _changePassword()),
-      _SettingsEntry('Blocked contacts', 'Account', Icons.block,
-          AppColors.red, 'block unblock privacy people',
-          () => context.pushNamed('blocked_contacts')),
+      _SettingsEntry(
+        'Edit profile',
+        'Account',
+        Icons.person_outline,
+        AppColors.primaryBlue,
+        'name photo bio church avatar',
+        () => context.pushNamed('edit_profile'),
+      ),
+      _SettingsEntry(
+        'Change password',
+        'Account',
+        Icons.lock_outline,
+        AppColors.primaryBlue,
+        'security passcode reset',
+        () => _changePassword(),
+      ),
+      _SettingsEntry(
+        'Blocked contacts',
+        'Account',
+        Icons.block,
+        AppColors.red,
+        'block unblock privacy people',
+        () => context.pushNamed('blocked_contacts'),
+      ),
       // Preferences
-      _SettingsEntry('Notification permissions', 'Preferences',
-          Icons.notifications_active_outlined, AppColors.goldAccent,
-          'alerts push permission', () => context.pushNamed('notification_permissions')),
-      _SettingsEntry('Sound & haptics', 'Preferences',
-          Icons.volume_up_outlined, AppColors.primaryBlue,
-          'sound volume mute audio effects vibration haptics quiz silent',
-          () => context.pushNamed('sound_settings')),
-      _SettingsEntry('Appearance', 'Preferences', Icons.brightness_6_outlined,
-          AppColors.primaryBlue, 'theme dark light mode display',
-          () => _pickTheme()),
-      _SettingsEntry('Language', 'Preferences', Icons.translate,
-          AppColors.primaryBlue, 'shona english translate locale',
-          () => _pickLanguage()),
-      _SettingsEntry('Sabbath province', 'Preferences',
-          Icons.location_on_outlined, AppColors.goldAccent,
-          'sundown sunset harare bulawayo countdown timer',
-          () => _pickSabbathProvince()),
-      _SettingsEntry('Sabbath mode', 'Preferences',
-          Icons.do_not_disturb_on_outlined, AppColors.goldAccent,
-          'quiet mute silence notifications sabbath friday sundown',
-          () => _toggleSabbathModeFromSearch()),
+      _SettingsEntry(
+        'Notification permissions',
+        'Preferences',
+        Icons.notifications_active_outlined,
+        AppColors.goldAccent,
+        'alerts push permission',
+        () => context.pushNamed('notification_permissions'),
+      ),
+      _SettingsEntry(
+        'Sound & haptics',
+        'Preferences',
+        Icons.volume_up_outlined,
+        AppColors.primaryBlue,
+        'sound volume mute audio effects vibration haptics quiz silent',
+        () => context.pushNamed('sound_settings'),
+      ),
+      _SettingsEntry(
+        'Appearance',
+        'Preferences',
+        Icons.brightness_6_outlined,
+        AppColors.primaryBlue,
+        'theme dark light mode display',
+        () => _pickTheme(),
+      ),
+      _SettingsEntry(
+        'Language',
+        'Preferences',
+        Icons.translate,
+        AppColors.primaryBlue,
+        'shona english translate locale',
+        () => _pickLanguage(),
+      ),
+      _SettingsEntry(
+        'Sabbath province',
+        'Preferences',
+        Icons.location_on_outlined,
+        AppColors.goldAccent,
+        'sundown sunset harare bulawayo countdown timer',
+        () => _pickSabbathProvince(),
+      ),
+      _SettingsEntry(
+        'Sabbath mode',
+        'Preferences',
+        Icons.do_not_disturb_on_outlined,
+        AppColors.goldAccent,
+        'quiet mute silence notifications sabbath friday sundown',
+        () => _toggleSabbathModeFromSearch(),
+      ),
       // Legal
-      _SettingsEntry('Terms of service', 'Legal', Icons.description_outlined,
-          AppColors.textMuted, 'legal terms conditions',
-          () => context.pushNamed('terms')),
-      _SettingsEntry('Privacy policy', 'Legal', Icons.privacy_tip_outlined,
-          AppColors.textMuted, 'legal privacy data',
-          () => context.pushNamed('privacy')),
-      _SettingsEntry('Community guidelines', 'Legal', Icons.groups_outlined,
-          AppColors.textMuted, 'rules conduct moderation',
-          () => context.pushNamed('community_guidelines')),
+      _SettingsEntry(
+        'Terms of service',
+        'Legal',
+        Icons.description_outlined,
+        AppColors.textMuted,
+        'legal terms conditions',
+        () => context.pushNamed('terms'),
+      ),
+      _SettingsEntry(
+        'Privacy policy',
+        'Legal',
+        Icons.privacy_tip_outlined,
+        AppColors.textMuted,
+        'legal privacy data',
+        () => context.pushNamed('privacy'),
+      ),
+      _SettingsEntry(
+        'Community guidelines',
+        'Legal',
+        Icons.groups_outlined,
+        AppColors.textMuted,
+        'rules conduct moderation',
+        () => context.pushNamed('community_guidelines'),
+      ),
       // Support
-      _SettingsEntry('Send feedback', 'Support', Icons.feedback_outlined,
-          AppColors.successGreen, 'suggest idea complain',
-          () => context.pushNamed('feedback')),
-      _SettingsEntry('Help center', 'Support', Icons.help_outline,
-          AppColors.successGreen, 'faq support question',
-          () => context.pushNamed('help_center')),
-      _SettingsEntry('Report a problem', 'Support', Icons.bug_report_outlined,
-          AppColors.red, 'bug broken crash issue',
-          () => context.pushNamed('report_problem')),
+      _SettingsEntry(
+        'Send feedback',
+        'Support',
+        Icons.feedback_outlined,
+        AppColors.successGreen,
+        'suggest idea complain',
+        () => context.pushNamed('feedback'),
+      ),
+      _SettingsEntry(
+        'Help center',
+        'Support',
+        Icons.help_outline,
+        AppColors.successGreen,
+        'faq support question',
+        () => context.pushNamed('help_center'),
+      ),
+      _SettingsEntry(
+        'Report a problem',
+        'Support',
+        Icons.bug_report_outlined,
+        AppColors.red,
+        'bug broken crash issue',
+        () => context.pushNamed('report_problem'),
+      ),
       // App
-      _SettingsEntry('About', 'App', Icons.info_outline, AppColors.primaryBlue,
-          'version credits mtech', () => context.pushNamed('about')),
+      _SettingsEntry(
+        'About',
+        'App',
+        Icons.info_outline,
+        AppColors.primaryBlue,
+        'version credits mtech',
+        () => context.pushNamed('about'),
+      ),
     ];
   }
 
@@ -584,10 +650,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     // Match the label first, then the keyword bag, so typing "dark" finds
     // Appearance and "sundown" finds Sabbath province.
     final hits = _searchIndex()
-        .where((e) =>
-            e.label.toLowerCase().contains(q) ||
-            e.keywords.contains(q) ||
-            e.section.toLowerCase().contains(q))
+        .where(
+          (e) =>
+              e.label.toLowerCase().contains(q) ||
+              e.keywords.contains(q) ||
+              e.section.toLowerCase().contains(q),
+        )
         .toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -665,403 +733,414 @@ class _SettingsScreenState extends State<SettingsScreen>
             if (_settingsQuery.isNotEmpty)
               _buildSearchResults()
             else
-            AnimatedBuilder(
-              animation: _entrance,
-              builder: (context, child) => Opacity(
-                opacity: _fade.value,
-                child: Transform.translate(
-                  offset: Offset(0, _slide.value),
-                  child: child,
+              AnimatedBuilder(
+                animation: _entrance,
+                builder: (context, child) => Opacity(
+                  opacity: _fade.value,
+                  child: Transform.translate(
+                    offset: Offset(0, _slide.value),
+                    child: child,
+                  ),
                 ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Top of the list on purpose. Gold is the app's
-                    // one-accent-per-screen colour, so this reads as the
-                    // single different thing here without shouting.
-                    ValueListenableBuilder<bool>(
-                      valueListenable: PremiumService.isPremium,
-                      builder: (context, isPremium, _) => Padding(
-                        padding: const EdgeInsets.only(bottom: 18),
-                        child: _Section(
-                          title: 'Subscription',
-                          accent: AppColors.goldAccent,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Top of the list on purpose. Gold is the app's
+                      // one-accent-per-screen colour, so this reads as the
+                      // single different thing here without shouting.
+                      ValueListenableBuilder<bool>(
+                        valueListenable: PremiumService.isPremium,
+                        builder: (context, isPremium, _) => Padding(
+                          padding: const EdgeInsets.only(bottom: 18),
+                          child: _Section(
+                            title: 'Subscription',
+                            accent: AppColors.goldAccent,
+                            children: [
+                              _NavRow(
+                                icon: Icons.star_rounded,
+                                tint: AppColors.goldAccent,
+                                label: isPremium
+                                    ? 'Premium'
+                                    : 'Go Premium — no ads',
+                                trailing: isPremium ? 'Active' : null,
+                                onTap: () => context.pushNamed('premium'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      _Section(
+                        title: 'Account',
+                        accent: AppColors.primaryBlue,
+                        children: [
+                          _NavRow(
+                            icon: Icons.person_outline,
+                            label: 'Edit profile',
+                            onTap: () => context.pushNamed('edit_profile'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.lock_outline,
+                            label: 'Change password',
+                            onTap: _changePassword,
+                          ),
+                          if (_biometricAvailable) ...[
+                            const _Divider(),
+                            _ToggleRow(
+                              icon: Icons.fingerprint,
+                              label: 'Biometric unlock',
+                              value: _biometricEnabled,
+                              onChanged: _biometricBusy
+                                  ? null
+                                  : (v) => _toggleBiometric(v),
+                            ),
+                          ],
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.block,
+                            label: 'Blocked contacts',
+                            onTap: () => context.pushNamed('blocked_users'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.delete_outline,
+                            label: 'Delete account',
+                            destructive: true,
+                            onTap: _deleteAccount,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _Section(
+                        title: 'Preferences',
+                        accent: AppColors.goldAccent,
+                        children: [
+                          _ToggleRow(
+                            icon: Icons.event_outlined,
+                            label: 'Event reminders',
+                            value: _categoryPrefs.events,
+                            onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(events: v),
+                            ),
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.volunteer_activism_outlined,
+                            label: 'Prayer updates',
+                            value: _categoryPrefs.prayers,
+                            onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(prayers: v),
+                            ),
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.chat_bubble_outline,
+                            label: 'New messages',
+                            value: _categoryPrefs.messages,
+                            onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(messages: v),
+                            ),
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.favorite_border,
+                            label: 'Likes & comments',
+                            value: _categoryPrefs.social,
+                            onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(social: v),
+                            ),
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.storefront_outlined,
+                            label: 'Marketplace alerts',
+                            value: _categoryPrefs.marketplace,
+                            onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(marketplace: v),
+                            ),
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.campaign_outlined,
+                            label: 'Church announcements',
+                            value: _categoryPrefs.announcements,
+                            onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(announcements: v),
+                            ),
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.newspaper_outlined,
+                            label: 'Advent News updates',
+                            value: _categoryPrefs.news,
+                            onChanged: (v) =>
+                                _setCategory(_categoryPrefs.copyWith(news: v)),
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.play_circle_outline,
+                            label: 'Watch — new videos & live',
+                            value: _categoryPrefs.watch,
+                            onChanged: (v) {
+                              _setCategory(_categoryPrefs.copyWith(watch: v));
+                              PushService.setWatchPushesEnabled(v);
+                            },
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.emoji_events_outlined,
+                            // "Reminders", precisely. A live challenge from
+                            // a named person is not covered by this and
+                            // always arrives — see NotificationCategoryPrefs.quiz.
+                            label: 'Quiz reminders',
+                            value: _categoryPrefs.quiz,
+                            onChanged: (v) =>
+                                _setCategory(_categoryPrefs.copyWith(quiz: v)),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.shield_moon_outlined,
+                            label: 'Permissions',
+                            onTap: () => context.pushNamed('permissions'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.volume_up_outlined,
+                            label: 'Sound & haptics',
+                            onTap: () => context.pushNamed('sound_settings'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.brightness_6_outlined,
+                            label: 'Appearance',
+                            trailing: _themeLabel(_themeMode),
+                            onTap: _pickTheme,
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.language,
+                            label: 'Language',
+                            trailing: _language,
+                            onTap: _pickLanguage,
+                          ),
+                          const _Divider(),
+                          _ToggleRow(
+                            icon: Icons.brightness_3,
+                            label: 'Sabbath countdown',
+                            value: _sabbathEnabled,
+                            onChanged: (v) async {
+                              await SabbathService.setEnabled(v);
+                              if (mounted) {
+                                setState(() => _sabbathEnabled = v);
+                              }
+                            },
+                          ),
+                          const _Divider(),
+                          // Sabbath mode (patch_169) — the countdown above
+                          // SHOWS the Sabbath; this one acts on it.
+                          _ToggleRow(
+                            icon: Icons.do_not_disturb_on_outlined,
+                            label: 'Sabbath mode',
+                            subtitle: _sabbathModeSubtitle(),
+                            value: _sabbathMode,
+                            onChanged: (v) async {
+                              setState(() => _sabbathMode = v);
+                              await SabbathService.setSabbathMode(v);
+                            },
+                          ),
+                          if (_sabbathEnabled || _sabbathMode) ...[
+                            const _Divider(),
+                            _NavRow(
+                              icon: Icons.place_outlined,
+                              label: 'Sabbath province',
+                              trailing: _sabbathProvince,
+                              onTap: _pickSabbathProvince,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _Section(
+                        title: 'Watch',
+                        accent: AppColors.red,
+                        children: [
+                          _ToggleRow(
+                            icon: Icons.smart_display_outlined,
+                            label: 'Autoplay next video',
+                            value: _ytAutoplayNext,
+                            onChanged: (v) async {
+                              await YoutubePrefs.setAutoplayNext(v);
+                              if (mounted) setState(() => _ytAutoplayNext = v);
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _Section(
+                        title: 'Legal',
+                        accent: AppColors.textMuted,
+                        children: [
+                          _NavRow(
+                            icon: Icons.description_outlined,
+                            label: 'Terms of service',
+                            onTap: () => _openLegal(
+                              'https://mtechstudioszw.github.io/adventconnect-legal/terms.html',
+                            ),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.privacy_tip_outlined,
+                            label: 'Privacy policy',
+                            onTap: () => _openLegal(
+                              'https://mtechstudioszw.github.io/adventconnect-legal/privacy.html',
+                            ),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.shield_outlined,
+                            label: 'Community guidelines',
+                            onTap: () => _openLegal(
+                              'https://mtechstudioszw.github.io/adventconnect-legal/guidelines.html',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _DonationCard(onTap: _openDonation),
+                      const SizedBox(height: 18),
+                      _Section(
+                        title: 'Support',
+                        accent: AppColors.successGreen,
+                        children: [
+                          _NavRow(
+                            icon: Icons.feedback_outlined,
+                            label: 'Send feedback',
+                            onTap: () => context.pushNamed('feedback'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.help_outline,
+                            label: 'Help center',
+                            onTap: () => context.pushNamed('feedback'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.flag_outlined,
+                            label: 'Report a problem',
+                            onTap: () => context.pushNamed('feedback'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.mail_outline,
+                            label: 'Contact us',
+                            onTap: _openSupportSheet,
+                          ),
+                        ],
+                      ),
+                      if (_isSuperAdmin) ...[
+                        const SizedBox(height: 18),
+                        _Section(
+                          title: 'Super admin',
+                          accent: AppColors.darkNavy,
                           children: [
                             _NavRow(
-                              icon: Icons.star_rounded,
-                              tint: AppColors.goldAccent,
-                              label:
-                                  isPremium ? 'Premium' : 'Go Premium — no ads',
-                              trailing: isPremium ? 'Active' : null,
-                              onTap: () => context.pushNamed('premium'),
+                              icon: Icons.verified_user_outlined,
+                              label: 'Seller approvals',
+                              onTap: () =>
+                                  context.pushNamed('admin_seller_approvals'),
+                            ),
+                            const _Divider(),
+                            _NavRow(
+                              icon: Icons.church_outlined,
+                              label: 'Church admin requests',
+                              onTap: () =>
+                                  context.pushNamed('admin_church_approvals'),
+                            ),
+                            const _Divider(),
+                            _NavRow(
+                              icon: Icons.newspaper_outlined,
+                              label: 'News approvals',
+                              onTap: () =>
+                                  context.pushNamed('admin_news_approvals'),
+                            ),
+                            const _Divider(),
+                            _NavRow(
+                              icon: Icons.event_outlined,
+                              label: 'Event approvals',
+                              onTap: () =>
+                                  context.pushNamed('admin_event_approvals'),
+                            ),
+                            const _Divider(),
+                            _NavRow(
+                              icon: Icons.library_books_outlined,
+                              label: 'Manage Library',
+                              onTap: () => context.pushNamed('admin_library'),
+                            ),
+                            const _Divider(),
+                            _NavRow(
+                              icon: Icons.insights_outlined,
+                              label: 'User insights',
+                              onTap: () =>
+                                  context.pushNamed('admin_user_insights'),
+                            ),
+                            const _Divider(),
+                            _NavRow(
+                              icon: Icons.quiz_outlined,
+                              label: 'Manage Quiz',
+                              onTap: () => context.pushNamed('admin_quiz'),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                    _Section(
-                      title: 'Account',
-                      accent: AppColors.primaryBlue,
-                      children: [
-                        _NavRow(
-                          icon: Icons.person_outline,
-                          label: 'Edit profile',
-                          onTap: () => context.pushNamed('edit_profile'),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.lock_outline,
-                          label: 'Change password',
-                          onTap: _changePassword,
-                        ),
-                        if (_biometricAvailable) ...[
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.fingerprint,
-                            label: 'Biometric unlock',
-                            value: _biometricEnabled,
-                            onChanged: _biometricBusy
-                                ? null
-                                : (v) => _toggleBiometric(v),
-                          ),
-                        ],
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.block,
-                          label: 'Blocked contacts',
-                          onTap: () => context.pushNamed('blocked_users'),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.delete_outline,
-                          label: 'Delete account',
-                          destructive: true,
-                          onTap: _deleteAccount,
-                        ),
                       ],
-                    ),
-                    const SizedBox(height: 18),
-                    _Section(
-                      title: 'Preferences',
-                      accent: AppColors.goldAccent,
-                      children: [
-                        _ToggleRow(
-                          icon: Icons.event_outlined,
-                          label: 'Event reminders',
-                          value: _categoryPrefs.events,
-                          onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(events: v)),
-                        ),
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.volunteer_activism_outlined,
-                          label: 'Prayer updates',
-                          value: _categoryPrefs.prayers,
-                          onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(prayers: v)),
-                        ),
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.chat_bubble_outline,
-                          label: 'New messages',
-                          value: _categoryPrefs.messages,
-                          onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(messages: v)),
-                        ),
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.favorite_border,
-                          label: 'Likes & comments',
-                          value: _categoryPrefs.social,
-                          onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(social: v)),
-                        ),
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.storefront_outlined,
-                          label: 'Marketplace alerts',
-                          value: _categoryPrefs.marketplace,
-                          onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(marketplace: v)),
-                        ),
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.campaign_outlined,
-                          label: 'Church announcements',
-                          value: _categoryPrefs.announcements,
-                          onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(announcements: v)),
-                        ),
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.newspaper_outlined,
-                          label: 'Advent News updates',
-                          value: _categoryPrefs.news,
-                          onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(news: v)),
-                        ),
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.play_circle_outline,
-                          label: 'Watch — new videos & live',
-                          value: _categoryPrefs.watch,
-                          onChanged: (v) {
-                            _setCategory(_categoryPrefs.copyWith(watch: v));
-                            PushService.setWatchPushesEnabled(v);
-                          },
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.shield_moon_outlined,
-                          label: 'Permissions',
-                          onTap: () => context.pushNamed('permissions'),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.volume_up_outlined,
-                          label: 'Sound & haptics',
-                          onTap: () => context.pushNamed('sound_settings'),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.brightness_6_outlined,
-                          label: 'Appearance',
-                          trailing: _themeLabel(_themeMode),
-                          onTap: _pickTheme,
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.language,
-                          label: 'Language',
-                          trailing: _language,
-                          onTap: _pickLanguage,
-                        ),
-                        const _Divider(),
-                        _ToggleRow(
-                          icon: Icons.brightness_3,
-                          label: 'Sabbath countdown',
-                          value: _sabbathEnabled,
-                          onChanged: (v) async {
-                            await SabbathService.setEnabled(v);
-                            if (mounted) {
-                              setState(() => _sabbathEnabled = v);
-                            }
-                          },
-                        ),
-                        const _Divider(),
-                        // Sabbath mode (patch_169) — the countdown above
-                        // SHOWS the Sabbath; this one acts on it.
-                        _ToggleRow(
-                          icon: Icons.do_not_disturb_on_outlined,
-                          label: 'Sabbath mode',
-                          subtitle: _sabbathModeSubtitle(),
-                          value: _sabbathMode,
-                          onChanged: (v) async {
-                            setState(() => _sabbathMode = v);
-                            await SabbathService.setSabbathMode(v);
-                          },
-                        ),
-                        if (_sabbathEnabled || _sabbathMode) ...[
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.place_outlined,
-                            label: 'Sabbath province',
-                            trailing: _sabbathProvince,
-                            onTap: _pickSabbathProvince,
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    _Section(
-                      title: 'Watch',
-                      accent: AppColors.red,
-                      children: [
-                        _ToggleRow(
-                          icon: Icons.smart_display_outlined,
-                          label: 'Autoplay next video',
-                          value: _ytAutoplayNext,
-                          onChanged: (v) async {
-                            await YoutubePrefs.setAutoplayNext(v);
-                            if (mounted) setState(() => _ytAutoplayNext = v);
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    _Section(
-                      title: 'Legal',
-                      accent: AppColors.textMuted,
-                      children: [
-                        _NavRow(
-                          icon: Icons.description_outlined,
-                          label: 'Terms of service',
-                          onTap: () => _openLegal(
-                            'https://mtechstudioszw.github.io/adventconnect-legal/terms.html',
-                          ),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.privacy_tip_outlined,
-                          label: 'Privacy policy',
-                          onTap: () => _openLegal(
-                            'https://mtechstudioszw.github.io/adventconnect-legal/privacy.html',
-                          ),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.shield_outlined,
-                          label: 'Community guidelines',
-                          onTap: () => _openLegal('https://mtechstudioszw.github.io/adventconnect-legal/guidelines.html'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    _DonationCard(onTap: _openDonation),
-                    const SizedBox(height: 18),
-                    _Section(
-                      title: 'Support',
-                      accent: AppColors.successGreen,
-                      children: [
-                        _NavRow(
-                          icon: Icons.feedback_outlined,
-                          label: 'Send feedback',
-                          onTap: () => context.pushNamed('feedback'),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.help_outline,
-                          label: 'Help center',
-                          onTap: () => context.pushNamed('feedback'),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.flag_outlined,
-                          label: 'Report a problem',
-                          onTap: () => context.pushNamed('feedback'),
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.mail_outline,
-                          label: 'Contact us',
-                          onTap: _openSupportSheet,
-                        ),
-                      ],
-                    ),
-                    if (_isSuperAdmin) ...[
                       const SizedBox(height: 18),
                       _Section(
-                        title: 'Super admin',
-                        accent: AppColors.darkNavy,
+                        title: 'App',
+                        accent: AppColors.primaryBlue,
                         children: [
                           _NavRow(
-                            icon: Icons.verified_user_outlined,
-                            label: 'Seller approvals',
-                            onTap: () => context.pushNamed(
-                              'admin_seller_approvals',
-                            ),
+                            icon: Icons.info_outline,
+                            label: 'About',
+                            onTap: () => context.pushNamed('about'),
+                          ),
+                          const _Divider(),
+                          _InfoRow(
+                            icon: Icons.tag,
+                            label: 'App version',
+                            // The CI build stamps the commit SHA via
+                            // --dart-define=GIT_SHA. Shows "local" for local
+                            // builds. Lets you confirm at a glance that the
+                            // build you're running is the latest one (no more
+                            // chasing already-fixed bugs in a stale build).
+                            value: 'v$kAppVersionName',
                           ),
                           const _Divider(),
                           _NavRow(
-                            icon: Icons.church_outlined,
-                            label: 'Church admin requests',
-                            onTap: () => context.pushNamed(
-                              'admin_church_approvals',
-                            ),
-                          ),
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.newspaper_outlined,
-                            label: 'News approvals',
-                            onTap: () => context.pushNamed(
-                              'admin_news_approvals',
-                            ),
-                          ),
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.event_outlined,
-                            label: 'Event approvals',
-                            onTap: () => context.pushNamed(
-                              'admin_event_approvals',
-                            ),
-                          ),
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.library_books_outlined,
-                            label: 'Manage Library',
-                            onTap: () => context.pushNamed(
-                              'admin_library',
-                            ),
-                          ),
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.insights_outlined,
-                            label: 'User insights',
-                            onTap: () => context.pushNamed(
-                              'admin_user_insights',
-                            ),
-                          ),
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.quiz_outlined,
-                            label: 'Manage Quiz',
-                            onTap: () => context.pushNamed(
-                              'admin_quiz',
-                            ),
+                            icon: Icons.logout,
+                            label: 'Sign out',
+                            destructive: true,
+                            onTap: _signOut,
                           ),
                         ],
                       ),
-                    ],
-                    const SizedBox(height: 18),
-                    _Section(
-                      title: 'App',
-                      accent: AppColors.primaryBlue,
-                      children: [
-                        _NavRow(
-                          icon: Icons.info_outline,
-                          label: 'About',
-                          onTap: () => context.pushNamed('about'),
-                        ),
-                        const _Divider(),
-                        _InfoRow(
-                          icon: Icons.tag,
-                          label: 'App version',
-                          // The CI build stamps the commit SHA via
-                          // --dart-define=GIT_SHA. Shows "local" for local
-                          // builds. Lets you confirm at a glance that the
-                          // build you're running is the latest one (no more
-                          // chasing already-fixed bugs in a stale build).
-                          value: 'v$kAppVersionName',
-                        ),
-                        const _Divider(),
-                        _NavRow(
-                          icon: Icons.logout,
-                          label: 'Sign out',
-                          destructive: true,
-                          onTap: _signOut,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    const InviteFriendsCard(horizontalMargin: 0),
-                    const SizedBox(height: 24),
-                    Center(
-                      child: Text(
-                        'Made with care • MyTech Studios Zw',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.textMuted,
-                          fontSize: 11,
-                          letterSpacing: 1.2,
+                      const SizedBox(height: 18),
+                      const InviteFriendsCard(horizontalMargin: 0),
+                      const SizedBox(height: 24),
+                      Center(
+                        child: Text(
+                          'Made with care • MyTech Studios Zw',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.textMuted,
+                            fontSize: 11,
+                            letterSpacing: 1.2,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -1104,9 +1183,7 @@ class _SupportChannel extends StatelessWidget {
           decoration: BoxDecoration(
             color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.divider,
-            ),
+            border: Border.all(color: AppColors.divider),
           ),
           child: Row(
             children: [
@@ -1141,10 +1218,7 @@ class _SupportChannel extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right,
-                color: AppColors.primaryBlue,
-              ),
+              const Icon(Icons.chevron_right, color: AppColors.primaryBlue),
             ],
           ),
         ),
@@ -1223,11 +1297,7 @@ class _DonationCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(
-                Icons.chevron_right,
-                color: AppColors.white,
-                size: 20,
-              ),
+              const Icon(Icons.chevron_right, color: AppColors.white, size: 20),
             ],
           ),
         ),
@@ -1288,13 +1358,11 @@ class _SectionAccent extends InheritedWidget {
 
   final Color color;
 
-  static Color? of(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<_SectionAccent>()
-      ?.color;
+  static Color? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_SectionAccent>()?.color;
 
   @override
-  bool updateShouldNotify(_SectionAccent oldWidget) =>
-      oldWidget.color != color;
+  bool updateShouldNotify(_SectionAccent oldWidget) => oldWidget.color != color;
 }
 
 class _Section extends StatelessWidget {
@@ -1410,10 +1478,7 @@ class _NavRow extends StatelessWidget {
                     ),
                   ),
                 ),
-              Icon(
-                Icons.chevron_right,
-                color: color.withValues(alpha: 0.4),
-              ),
+              Icon(Icons.chevron_right, color: color.withValues(alpha: 0.4)),
             ],
           ),
         ),
@@ -1538,10 +1603,7 @@ class _Divider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
-      child: Divider(
-        height: 1,
-        color: AppColors.divider,
-      ),
+      child: Divider(height: 1, color: AppColors.divider),
     );
   }
 }
@@ -1746,11 +1808,7 @@ class _ThemeSheet extends StatelessWidget {
                             size: 22,
                           ),
                           const SizedBox(width: 14),
-                          Icon(
-                            icon,
-                            color: AppColors.text,
-                            size: 20,
-                          ),
+                          Icon(icon, color: AppColors.text, size: 20),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
@@ -1767,7 +1825,11 @@ class _ThemeSheet extends StatelessWidget {
                                   description,
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color: const Color.fromRGBO(
-                                        26, 26, 46, 0.6),
+                                      26,
+                                      26,
+                                      46,
+                                      0.6,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1834,7 +1896,9 @@ class _LanguageSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 14),
+                        horizontal: 12,
+                        vertical: 14,
+                      ),
                       child: Row(
                         children: [
                           Icon(
@@ -1906,9 +1970,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       // new one. The session-token is already proof of identity but
       // for "change password" the user expects this extra check (and
       // it stops a stolen-but-locked phone from rotating the password).
-      final verify = await AuthService.verifyCurrentPassword(
-        _currentCtrl.text,
-      );
+      final verify = await AuthService.verifyCurrentPassword(_currentCtrl.text);
       if (!verify.isSuccess) {
         if (!mounted) return;
         setState(() {
@@ -2020,8 +2082,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
               const SizedBox(height: 10),
               Text(
                 _error!,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.red),
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.red),
               ),
             ],
           ],
@@ -2032,8 +2093,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
           onPressed: _busy ? null : () => Navigator.of(context).pop(false),
           child: Text(
             'Cancel',
-            style: AppTextStyles.labelMedium
-                .copyWith(color: AppColors.text),
+            style: AppTextStyles.labelMedium.copyWith(color: AppColors.text),
           ),
         ),
         FilledButton(

@@ -33,9 +33,21 @@ class QuizService {
   /// (Baptism and Sanctuary each shipped with exactly one.)
   static const int minCategorySize = 5;
 
-  /// Share of a mixed round that comes from the generator. Curated stays
-  /// the majority so rounds keep their doctrinal centre of gravity.
-  static const double generatedShare = 0.4;
+  /// Share of a mixed round that comes from the generator.
+  ///
+  /// Raised from 0.4. There are **423** curated questions in total, and a
+  /// practice round is ten — so a regular player exhausted the entire
+  /// curated pool in well under an hour of play and then saw nothing but
+  /// repeats, which is exactly the report. The generator writes from the
+  /// bundled KJV and its pool is effectively unlimited, so weight the mix
+  /// towards the half that cannot run out.
+  ///
+  /// Not 1.0, deliberately. Curated rows are where doctrine, Adventist
+  /// history and the Spirit of Prophecy live, and the generator cannot
+  /// write those — a round with none of them stops being this app's quiz
+  /// and becomes a generic Bible trivia game. A third keeps that centre of
+  /// gravity while making repeats rare.
+  static const double generatedShare = 0.65;
 
   /// All published questions, cached (memory → Hive → network).
   static Future<List<QuizQuestion>> all() async {
@@ -126,6 +138,14 @@ class QuizService {
         ? const <QuizQuestion>[]
         : await QuizGenerator.generate(
             count: shortfall,
+            // The seen-list, which nothing was passing.
+            //
+            // `exclude` has always been on this method for exactly this,
+            // and leaving it empty meant a generated question could be
+            // served again in the very next round — while the curated half
+            // beside it rotated properly through pickFresh. Half the round
+            // remembering and half not is what made repeats feel constant.
+            exclude: QuizProgressService.recentlySeenIds(),
             // Asking for a topic the generator can't write (say 'Sabbath')
             // would spin through its attempt budget and return nothing,
             // leaving a short round. Fall back to any topic instead — this
@@ -153,8 +173,9 @@ class QuizService {
     // by numeric id first is what actually makes "everyone gets the same
     // daily set" true rather than merely intended.
     final curated = List.of(pool)
-      ..sort((a, b) =>
-          (int.tryParse(a.id) ?? 0).compareTo(int.tryParse(b.id) ?? 0));
+      ..sort(
+        (a, b) => (int.tryParse(a.id) ?? 0).compareTo(int.tryParse(b.id) ?? 0),
+      );
     curated.shuffle(Random(seed));
     final picked = curated.take(wantCurated).toList();
 
@@ -175,10 +196,7 @@ class QuizService {
 
   /// Warm both sources so the lobby's Start button is instant.
   static Future<void> warm() async {
-    await Future.wait([
-      all().then((_) {}),
-      QuizGenerator.warm(),
-    ]);
+    await Future.wait([all().then((_) {}), QuizGenerator.warm()]);
   }
 
   // ---- Admin (super admin only via RLS) ------------------------------------

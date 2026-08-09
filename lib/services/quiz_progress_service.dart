@@ -242,6 +242,23 @@ class QuizProgressService {
     await CacheService.writePref(_kSeen, jsonEncode(seen));
   }
 
+  /// Ids served inside [seenCooldown], for callers that generate their own
+  /// questions instead of picking from a pool.
+  ///
+  /// [pickFresh] handles the curated rows, but the KJV generator draws its
+  /// own and takes an `exclude` set — which nothing was passing, so a
+  /// generated question could come back in the very next round while the
+  /// curated half was carefully rotating. That is most of "the questions
+  /// repeat": the generator's pool is effectively unlimited, and it was
+  /// being asked to draw from it blind.
+  static Set<String> recentlySeenIds() {
+    final cutoff = DateTime.now().subtract(seenCooldown).millisecondsSinceEpoch;
+    return {
+      for (final entry in _seen().entries)
+        if (entry.value >= cutoff) entry.key,
+    };
+  }
+
   /// Remember that these questions were just served.
   static Future<void> markSeen(Iterable<QuizQuestion> questions) async {
     final seen = _seen();
@@ -263,9 +280,7 @@ class QuizProgressService {
   }) {
     if (pool.isEmpty || count <= 0) return const [];
     final seen = _seen();
-    final cutoff = DateTime.now()
-        .subtract(seenCooldown)
-        .millisecondsSinceEpoch;
+    final cutoff = DateTime.now().subtract(seenCooldown).millisecondsSinceEpoch;
 
     final fresh = <QuizQuestion>[];
     final stale = <QuizQuestion>[];

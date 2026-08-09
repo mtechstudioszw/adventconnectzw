@@ -16,6 +16,17 @@ class AppBootstrap {
 
   static Future<void>? _supabaseReady;
 
+  /// True once [startSupabaseInit] has actually completed.
+  ///
+  /// Callers that time out waiting for [awaitSupabaseReady] MUST check
+  /// this before touching `Supabase.instance.client`. That getter throws
+  /// when init has not finished, and the splash's wait has an
+  /// `onTimeout` that swallows — so on a device with a slow keystore the
+  /// next line threw into an unawaited future and the splash simply never
+  /// navigated. An infinite splash, not a slow one.
+  static bool _isReady = false;
+  static bool get isReady => _isReady;
+
   /// Starts Supabase.initialize. Idempotent — repeat calls return
   /// the same in-flight future. Call once from main() before runApp.
   static Future<void> startSupabaseInit() {
@@ -26,7 +37,7 @@ class AppBootstrap {
         localStorage: SecureLocalStorage(),
         autoRefreshToken: true,
       ),
-    );
+    ).then((_) => _isReady = true);
   }
 
   /// Resolves once Supabase is fully initialized. Splash awaits this

@@ -10,6 +10,18 @@ enum AnswerTileState {
   /// Not answered yet — tappable.
   idle,
 
+  /// Locked in, but not marked yet.
+  ///
+  /// Live matches only: the server holds the answer key, so between the tap
+  /// and the response there is a real moment where the app genuinely does
+  /// not know whether the choice was right. The match screen used to paint
+  /// that moment with [correct] — green fill, green glow, a tick — so every
+  /// answer looked right for a beat and a wrong one then flipped to red.
+  /// It told the player they had scored when nobody knew yet.
+  ///
+  /// Neutral and definite: clearly the one you chose, no verdict implied.
+  selected,
+
   /// The player picked this and it was right.
   correct,
 
@@ -74,7 +86,8 @@ class _AnswerTileState extends State<AnswerTile>
   @override
   void didUpdateWidget(covariant AnswerTile old) {
     super.didUpdateWidget(old);
-    final becameResolved = old.state == AnswerTileState.idle &&
+    final becameResolved =
+        old.state == AnswerTileState.idle &&
         widget.state != AnswerTileState.idle;
     if (becameResolved && AppMotion.enabled(context)) {
       _resolve.forward(from: 0);
@@ -107,23 +120,28 @@ class _AnswerTileState extends State<AnswerTile>
   // ---- Per-state styling --------------------------------------------------
 
   Color get _borderColor => switch (widget.state) {
-        AnswerTileState.correct => ArenaTheme.correctOnNavy,
-        AnswerTileState.revealed =>
-          ArenaTheme.correctOnNavy.withValues(alpha: 0.75),
-        AnswerTileState.wrong => ArenaTheme.wrongOnNavy,
-        AnswerTileState.dimmed => ArenaTheme.glassBorder,
-        AnswerTileState.idle =>
-          _pressed ? ArenaTheme.glassBorderActive : ArenaTheme.glassBorder,
-      };
+    AnswerTileState.correct => ArenaTheme.correctOnNavy,
+    AnswerTileState.revealed => ArenaTheme.correctOnNavy.withValues(
+      alpha: 0.75,
+    ),
+    AnswerTileState.wrong => ArenaTheme.wrongOnNavy,
+    AnswerTileState.dimmed => ArenaTheme.glassBorder,
+    // Gold, the arena's "this is yours" colour — not the green that
+    // would claim it was right.
+    AnswerTileState.selected => ArenaTheme.gold,
+    AnswerTileState.idle =>
+      _pressed ? ArenaTheme.glassBorderActive : ArenaTheme.glassBorder,
+  };
 
   Color get _fillColor => switch (widget.state) {
-        AnswerTileState.correct =>
-          ArenaTheme.correctOnNavy.withValues(alpha: 0.16),
-        AnswerTileState.revealed =>
-          ArenaTheme.correctOnNavy.withValues(alpha: 0.10),
-        AnswerTileState.wrong => ArenaTheme.wrongOnNavy.withValues(alpha: 0.14),
-        _ => ArenaTheme.glass,
-      };
+    AnswerTileState.correct => ArenaTheme.correctOnNavy.withValues(alpha: 0.16),
+    AnswerTileState.revealed => ArenaTheme.correctOnNavy.withValues(
+      alpha: 0.10,
+    ),
+    AnswerTileState.wrong => ArenaTheme.wrongOnNavy.withValues(alpha: 0.14),
+    AnswerTileState.selected => ArenaTheme.gold.withValues(alpha: 0.12),
+    _ => ArenaTheme.glass,
+  };
 
   double get _opacity => widget.state == AnswerTileState.dimmed ? 0.45 : 1.0;
 
@@ -176,9 +194,9 @@ class _AnswerTileState extends State<AnswerTile>
     final resolved = widget.state != AnswerTileState.idle;
     final accent = switch (widget.state) {
       AnswerTileState.correct ||
-      AnswerTileState.revealed =>
-        ArenaTheme.correctOnNavy,
+      AnswerTileState.revealed => ArenaTheme.correctOnNavy,
       AnswerTileState.wrong => ArenaTheme.wrongOnNavy,
+      AnswerTileState.selected => ArenaTheme.gold,
       _ => ArenaTheme.textOnNavy,
     };
 
@@ -202,10 +220,13 @@ class _AnswerTileState extends State<AnswerTile>
               borderRadius: ArenaTheme.tileRadius,
               border: Border.all(color: _borderColor, width: 1.5),
               boxShadow: switch (widget.state) {
-                AnswerTileState.correct =>
-                  ArenaTheme.glow(ArenaTheme.correctOnNavy),
-                AnswerTileState.wrong =>
-                  ArenaTheme.glow(ArenaTheme.wrongOnNavy, strength: 0.7),
+                AnswerTileState.correct => ArenaTheme.glow(
+                  ArenaTheme.correctOnNavy,
+                ),
+                AnswerTileState.wrong => ArenaTheme.glow(
+                  ArenaTheme.wrongOnNavy,
+                  strength: 0.7,
+                ),
                 _ => null,
               },
             ),
@@ -236,8 +257,9 @@ class _AnswerTileState extends State<AnswerTile>
                       builder: (context, _) => CustomPaint(
                         painter: _CheckPainter(
                           progress: AppMotion.enabled(context)
-                              ? Curves.easeOutCubic
-                                  .transform(_resolve.value.clamp(0.0, 1.0))
+                              ? Curves.easeOutCubic.transform(
+                                  _resolve.value.clamp(0.0, 1.0),
+                                )
                               : 1.0,
                           color: accent,
                         ),
@@ -268,11 +290,14 @@ class _LetterBadge extends StatelessWidget {
     final active =
         state == AnswerTileState.correct || state == AnswerTileState.revealed;
     final wrong = state == AnswerTileState.wrong;
+    final selected = state == AnswerTileState.selected;
     final color = active
         ? ArenaTheme.correctOnNavy
         : wrong
-            ? ArenaTheme.wrongOnNavy
-            : ArenaTheme.textMutedOnNavy;
+        ? ArenaTheme.wrongOnNavy
+        : selected
+        ? ArenaTheme.gold
+        : ArenaTheme.textMutedOnNavy;
 
     return AnimatedContainer(
       duration: AppMotion.maybe(context, AppMotion.quick),
@@ -280,7 +305,7 @@ class _LetterBadge extends StatelessWidget {
       height: 30,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: (active || wrong)
+        color: (active || wrong || selected)
             ? color.withValues(alpha: 0.18)
             : ArenaTheme.glassStrong,
         shape: BoxShape.circle,

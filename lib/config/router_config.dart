@@ -38,6 +38,7 @@ import '../models/youtube_channel.dart';
 import '../models/youtube_playlist.dart';
 import '../models/youtube_video.dart';
 import '../screens/quiz/arena/quiz_boot_screen.dart';
+import '../screens/quiz/arena/quiz_matchmaking_screen.dart';
 import '../screens/quiz/arena/widgets/arena_page_route.dart';
 import '../screens/profile/blocked_users_screen.dart';
 import '../screens/profile/friends_screen.dart';
@@ -117,10 +118,7 @@ import '../widgets/friend_qr_sheet.dart';
 /// A calm fade-through + gentle scale-up page transition. Used for the auth
 /// screen so finishing the onboarding tour glides into sign-up instead of a
 /// hard cut.
-CustomTransitionPage<void> _fadeScalePage(
-  GoRouterState state,
-  Widget child,
-) {
+CustomTransitionPage<void> _fadeScalePage(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
     key: state.pageKey,
     transitionDuration: const Duration(milliseconds: 520),
@@ -148,8 +146,9 @@ CustomTransitionPage<void> _fadeScalePage(
 /// `MaterialApp.builder`, which sits ABOVE this navigator — so they cannot
 /// use `Navigator.of(context)` at all. Anything on that layer that needs to
 /// push a route goes through this key instead.
-final GlobalKey<NavigatorState> rootNavigatorKey =
-    GlobalKey<NavigatorState>(debugLabel: 'root');
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
+  debugLabel: 'root',
+);
 
 /// Turns navigation into feature-usage data.
 ///
@@ -203,8 +202,9 @@ final GoRouter appRouter = GoRouter(
       path: '/signup',
       name: 'signup',
       pageBuilder: (context, state) {
-        final birthDate =
-            state.extra is DateTime ? state.extra as DateTime : null;
+        final birthDate = state.extra is DateTime
+            ? state.extra as DateTime
+            : null;
         return _fadeScalePage(state, AuthScreen(birthDate: birthDate));
       },
     ),
@@ -212,8 +212,9 @@ final GoRouter appRouter = GoRouter(
       path: '/login',
       name: 'login',
       pageBuilder: (context, state) {
-        final birthDate =
-            state.extra is DateTime ? state.extra as DateTime : null;
+        final birthDate = state.extra is DateTime
+            ? state.extra as DateTime
+            : null;
         return _fadeScalePage(state, AuthScreen(birthDate: birthDate));
       },
     ),
@@ -299,11 +300,10 @@ final GoRouter appRouter = GoRouter(
           name: 'church_details',
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
-            final initial = state.extra is Church ? state.extra as Church : null;
-            return ChurchDetailsScreen(
-              churchId: id,
-              initialChurch: initial,
-            );
+            final initial = state.extra is Church
+                ? state.extra as Church
+                : null;
+            return ChurchDetailsScreen(churchId: id, initialChurch: initial);
           },
           routes: [
             GoRoute(
@@ -347,7 +347,9 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) {
             // A church admin posting from their dashboard passes their
             // church id (String) as extra, tagging the event to the church.
-            final churchId = state.extra is String ? state.extra as String : null;
+            final churchId = state.extra is String
+                ? state.extra as String
+                : null;
             return PostEventScreen(churchId: churchId);
           },
         ),
@@ -355,8 +357,7 @@ final GoRouter appRouter = GoRouter(
           path: 'edit',
           name: 'edit_event',
           builder: (context, state) {
-            final existing =
-                state.extra is Event ? state.extra as Event : null;
+            final existing = state.extra is Event ? state.extra as Event : null;
             return PostEventScreen(existing: existing);
           },
         ),
@@ -366,10 +367,7 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
             final initial = state.extra is Event ? state.extra as Event : null;
-            return EventDetailsScreen(
-              eventId: id,
-              initialEvent: initial,
-            );
+            return EventDetailsScreen(eventId: id, initialEvent: initial);
           },
         ),
       ],
@@ -383,8 +381,9 @@ final GoRouter appRouter = GoRouter(
           path: 'post',
           name: 'post_news',
           builder: (context, state) {
-            final existing =
-                state.extra is AdventNews ? state.extra as AdventNews : null;
+            final existing = state.extra is AdventNews
+                ? state.extra as AdventNews
+                : null;
             return PostAdventNewsScreen(existing: existing);
           },
         ),
@@ -393,12 +392,10 @@ final GoRouter appRouter = GoRouter(
           name: 'news_details',
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
-            final initial =
-                state.extra is AdventNews ? state.extra as AdventNews : null;
-            return AdventNewsDetailsScreen(
-              newsId: id,
-              initialItem: initial,
-            );
+            final initial = state.extra is AdventNews
+                ? state.extra as AdventNews
+                : null;
+            return AdventNewsDetailsScreen(newsId: id, initialItem: initial);
           },
         ),
       ],
@@ -417,8 +414,9 @@ final GoRouter appRouter = GoRouter(
           path: 'edit',
           name: 'edit_prayer',
           builder: (context, state) {
-            final existing =
-                state.extra is Prayer ? state.extra as Prayer : null;
+            final existing = state.extra is Prayer
+                ? state.extra as Prayer
+                : null;
             return PostPrayerScreen(existing: existing);
           },
         ),
@@ -427,12 +425,10 @@ final GoRouter appRouter = GoRouter(
           name: 'prayer_details',
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
-            final initial =
-                state.extra is Prayer ? state.extra as Prayer : null;
-            return PrayerDetailsScreen(
-              prayerId: id,
-              initialPrayer: initial,
-            );
+            final initial = state.extra is Prayer
+                ? state.extra as Prayer
+                : null;
+            return PrayerDetailsScreen(prayerId: id, initialPrayer: initial);
           },
         ),
       ],
@@ -455,9 +451,8 @@ final GoRouter appRouter = GoRouter(
             GoRoute(
               path: ':id',
               name: 'category',
-              builder: (context, state) => CategoryScreen(
-                categoryId: state.pathParameters['id'],
-              ),
+              builder: (context, state) =>
+                  CategoryScreen(categoryId: state.pathParameters['id']),
             ),
           ],
         ),
@@ -493,12 +488,10 @@ final GoRouter appRouter = GoRouter(
           name: 'product_details',
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
-            final initial =
-                state.extra is Product ? state.extra as Product : null;
-            return ProductDetailsScreen(
-              productId: id,
-              initialProduct: initial,
-            );
+            final initial = state.extra is Product
+                ? state.extra as Product
+                : null;
+            return ProductDetailsScreen(productId: id, initialProduct: initial);
           },
         ),
       ],
@@ -527,10 +520,7 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
             final initial = state.extra is Job ? state.extra as Job : null;
-            return JobDetailsScreen(
-              jobId: id,
-              initialJob: initial,
-            );
+            return JobDetailsScreen(jobId: id, initialJob: initial);
           },
         ),
       ],
@@ -543,9 +533,8 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/messages',
       name: 'messages',
-      builder: (context, state) => ConversationsScreen(
-        initialTab: state.uri.queryParameters['tab'],
-      ),
+      builder: (context, state) =>
+          ConversationsScreen(initialTab: state.uri.queryParameters['tab']),
       routes: [
         GoRoute(
           path: 'privacy',
@@ -640,8 +629,7 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'notifications',
           name: 'notification_preferences',
-          builder: (context, state) =>
-              const NotificationPreferencesScreen(),
+          builder: (context, state) => const NotificationPreferencesScreen(),
         ),
         GoRoute(
           path: 'blocked',
@@ -666,9 +654,8 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/users/:userId',
       name: 'user_profile',
-      builder: (context, state) => UserProfileScreen(
-        userId: state.pathParameters['userId'] ?? '',
-      ),
+      builder: (context, state) =>
+          UserProfileScreen(userId: state.pathParameters['userId'] ?? ''),
     ),
     GoRoute(
       path: '/library',
@@ -690,10 +677,38 @@ final GoRouter appRouter = GoRouter(
       // QuizBootScreen is a GATE, not an extra route: it warms the question
       // index + sound effects, then crossfades into the lobby in place, so
       // the back stack is unchanged.
-      pageBuilder: (context, state) => arenaPage<void>(
-        key: state.pageKey,
-        child: const QuizBootScreen(),
-      ),
+      pageBuilder: (context, state) =>
+          arenaPage<void>(key: state.pageKey, child: const QuizBootScreen()),
+      routes: [
+        // The live area, reachable directly.
+        //
+        // It exists so a "wants to play you right now" notification has
+        // somewhere to land. Without it that notification could only ever
+        // open the reader sheet, and the invite it was announcing sat
+        // unanswerable until it expired five minutes later.
+        //
+        // `matchId` is optional: with one, the named invite is floated to
+        // the top of the list so the tap lands on Accept; without one, this
+        // is just the live arena.
+        GoRoute(
+          path: 'live/:matchId',
+          name: 'quiz_live_match',
+          pageBuilder: (context, state) => arenaPage<void>(
+            key: state.pageKey,
+            child: QuizMatchmakingScreen(
+              matchId: state.pathParameters['matchId'],
+            ),
+          ),
+        ),
+        GoRoute(
+          path: 'live',
+          name: 'quiz_live',
+          pageBuilder: (context, state) => arenaPage<void>(
+            key: state.pageKey,
+            child: const QuizMatchmakingScreen(),
+          ),
+        ),
+      ],
     ),
     GoRoute(
       path: '/watch',
@@ -754,8 +769,9 @@ final GoRouter appRouter = GoRouter(
           name: 'watch_video',
           builder: (context, state) {
             final id = state.pathParameters['id'] ?? '';
-            final initial =
-                state.extra is YoutubeVideo ? state.extra as YoutubeVideo : null;
+            final initial = state.extra is YoutubeVideo
+                ? state.extra as YoutubeVideo
+                : null;
             return VideoPlayerScreen(videoId: id, initialVideo: initial);
           },
         ),
@@ -839,7 +855,7 @@ final GoRouter appRouter = GoRouter(
           path: 'event-approvals',
           name: 'admin_event_approvals',
           builder: (context, state) => const EventApprovalsScreen(),
-        ),  
+        ),
         GoRoute(
           // Super-admin Library content manager (patch_133): curate hymns +
           // upload music / EGW PDFs.
@@ -872,10 +888,7 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final userId = state.pathParameters['userId'] ?? '';
         final initial = state.extra is Seller ? state.extra as Seller : null;
-        return SellerProfileScreen(
-          authUserId: userId,
-          initialSeller: initial,
-        );
+        return SellerProfileScreen(authUserId: userId, initialSeller: initial);
       },
     ),
     GoRoute(
@@ -900,8 +913,9 @@ final GoRouter appRouter = GoRouter(
             // path that lands here without the gate (e.g. a deep
             // link) still inserts a valid sellers row — but the
             // intended path is always guidelines → setup.
-            final version =
-                state.extra is String ? state.extra as String : 'v1-2026-05';
+            final version = state.extra is String
+                ? state.extra as String
+                : 'v1-2026-05';
             return SetupStoreScreen(termsVersion: version);
           },
         ),
@@ -909,8 +923,7 @@ final GoRouter appRouter = GoRouter(
           path: 'edit',
           name: 'edit_store',
           builder: (context, state) {
-            final seller =
-                state.extra is Seller ? state.extra as Seller : null;
+            final seller = state.extra is Seller ? state.extra as Seller : null;
             return EditStoreScreen(initialSeller: seller);
           },
         ),
@@ -923,8 +936,9 @@ final GoRouter appRouter = GoRouter(
           path: 'products/edit',
           name: 'edit_product',
           builder: (context, state) {
-            final product =
-                state.extra is Product ? state.extra as Product : null;
+            final product = state.extra is Product
+                ? state.extra as Product
+                : null;
             return AddProductScreen(initialProduct: product);
           },
         ),
@@ -988,10 +1002,6 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
   errorBuilder: (context, state) => Scaffold(
-    body: SafeArea(
-      child: Center(
-        child: Text('Route not found: ${state.uri}'),
-      ),
-    ),
+    body: SafeArea(child: Center(child: Text('Route not found: ${state.uri}'))),
   ),
 );

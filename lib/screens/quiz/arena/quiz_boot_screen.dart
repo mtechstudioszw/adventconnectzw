@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/ads/interstitial_ad_manager.dart';
 import '../../../services/quiz_generator_service.dart';
+import '../../../services/quiz_music.dart';
 import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
@@ -275,6 +276,10 @@ Future<void> showQuizSettings(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
+    // The sheet now carries five controls rather than three. Without this
+    // the default half-screen cap clips the last one, and at a large system
+    // font size it overflows instead of scrolling.
+    isScrollControlled: true,
     builder: (_) => const _QuizSettingsSheet(),
   );
 }
@@ -299,133 +304,219 @@ class _QuizSettingsSheetState extends State<_QuizSettingsSheet> {
           borderRadius: BorderRadius.circular(AppRadius.sheet),
           border: Border.all(color: ArenaTheme.glassBorder),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.xl,
-                AppSpace.md,
-                AppSpace.xl,
-                AppSpace.sm,
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    'Arena settings',
-                    style: AppTextStyles.titleLarge.copyWith(
-                      color: ArenaTheme.textOnNavy,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SwitchListTile.adaptive(
-              value: !QuizSfx.muted,
-              onChanged: (on) async {
-                await QuizSfx.setMuted(!on);
-                if (!mounted) return;
-                setState(() {});
-                // Confirm the change audibly — the fastest way to know sound
-                // is back is to hear it.
-                if (on) QuizSfx.play(QuizSound.tap);
-              },
-              title: Text(
-                'Sound effects',
-                style: AppTextStyles.titleSmall.copyWith(
-                  color: ArenaTheme.textOnNavy,
-                ),
-              ),
-              subtitle: Text(
-                'Taps, ticks, and the finish fanfare',
-                style: AppTextStyles.caption.copyWith(
-                  color: ArenaTheme.textMutedOnNavy,
-                ),
-              ),
-              secondary: Icon(
-                QuizSfx.muted
-                    ? Icons.volume_off_rounded
-                    : Icons.volume_up_rounded,
-                color: ArenaTheme.gold,
-              ),
-              activeThumbColor: ArenaTheme.gold,
-            ),
-            // A real level, not just on/off. Plays a tap on release so the
-            // chosen loudness is something you hear, not guess at.
-            AnimatedOpacity(
-              opacity: QuizSfx.muted ? 0.4 : 1,
-              duration: const Duration(milliseconds: 180),
-              child: Padding(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpace.xl,
-                  0,
+                  AppSpace.md,
                   AppSpace.xl,
                   AppSpace.sm,
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.volume_down_rounded,
-                      size: 18,
-                      color: ArenaTheme.textMutedOnNavy,
-                    ),
-                    Expanded(
-                      child: Slider(
-                        value: QuizSfx.volume,
-                        activeColor: ArenaTheme.gold,
-                        label: '${(QuizSfx.volume * 100).round()}%',
-                        // Silence belongs to the mute button, which can be
-                        // seen and undone. A slider that reaches 0 just
-                        // looks like the quiz has no sound.
-                        min: QuizSfx.kMinVolume,
-                        divisions: 9,
-                        onChanged: QuizSfx.muted
-                            ? null
-                            : (v) {
-                                QuizSfx.setVolume(v);
-                                setState(() {});
-                              },
-                        onChangeEnd: (_) => QuizSfx.play(QuizSound.tap),
+                    Text(
+                      'Arena settings',
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: ArenaTheme.textOnNavy,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ),
-                    Icon(
-                      Icons.volume_up_rounded,
-                      size: 18,
-                      color: ArenaTheme.textMutedOnNavy,
                     ),
                   ],
                 ),
               ),
-            ),
-            SwitchListTile.adaptive(
-              value: QuizSfx.hapticsEnabled,
-              onChanged: (on) async {
-                await QuizSfx.setHapticsEnabled(on);
-                if (!mounted) return;
-                setState(() {});
-                if (on) QuizSfx.hapticTap();
-              },
-              title: Text(
-                'Vibration',
-                style: AppTextStyles.titleSmall.copyWith(
-                  color: ArenaTheme.textOnNavy,
+              SwitchListTile.adaptive(
+                value: !QuizSfx.muted,
+                onChanged: (on) async {
+                  await QuizSfx.setMuted(!on);
+                  if (!mounted) return;
+                  setState(() {});
+                  // Confirm the change audibly — the fastest way to know sound
+                  // is back is to hear it.
+                  if (on) QuizSfx.play(QuizSound.tap);
+                },
+                title: Text(
+                  'Sound effects',
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: ArenaTheme.textOnNavy,
+                  ),
+                ),
+                subtitle: Text(
+                  'Taps, ticks, and the finish fanfare',
+                  style: AppTextStyles.caption.copyWith(
+                    color: ArenaTheme.textMutedOnNavy,
+                  ),
+                ),
+                secondary: Icon(
+                  QuizSfx.muted
+                      ? Icons.volume_off_rounded
+                      : Icons.volume_up_rounded,
+                  color: ArenaTheme.gold,
+                ),
+                activeThumbColor: ArenaTheme.gold,
+              ),
+              // A real level, not just on/off. Plays a tap on release so the
+              // chosen loudness is something you hear, not guess at.
+              AnimatedOpacity(
+                opacity: QuizSfx.muted ? 0.4 : 1,
+                duration: const Duration(milliseconds: 180),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.xl,
+                    0,
+                    AppSpace.xl,
+                    AppSpace.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.volume_down_rounded,
+                        size: 18,
+                        color: ArenaTheme.textMutedOnNavy,
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: QuizSfx.volume,
+                          activeColor: ArenaTheme.gold,
+                          label: '${(QuizSfx.volume * 100).round()}%',
+                          // Silence belongs to the mute button, which can be
+                          // seen and undone. A slider that reaches 0 just
+                          // looks like the quiz has no sound.
+                          min: QuizSfx.kMinVolume,
+                          divisions: 9,
+                          onChanged: QuizSfx.muted
+                              ? null
+                              : (v) {
+                                  QuizSfx.setVolume(v);
+                                  setState(() {});
+                                },
+                          onChangeEnd: (_) => QuizSfx.play(QuizSound.tap),
+                        ),
+                      ),
+                      Icon(
+                        Icons.volume_up_rounded,
+                        size: 18,
+                        color: ArenaTheme.textMutedOnNavy,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              subtitle: Text(
-                'Feedback on taps and answers',
-                style: AppTextStyles.caption.copyWith(
-                  color: ArenaTheme.textMutedOnNavy,
+              // The soundtrack, with its own level.
+              //
+              // Its absence here is what "the volume is not working — it just
+              // keeps playing" was. This sheet is the only sound control
+              // reachable from inside the arena, and every knob on it drove
+              // QuizSfx: the effects toggle, and an effects-only slider. The
+              // one thing you can actually hear for the whole round had no
+              // control at all, so dragging the slider changed nothing
+              // audible and the bed played on.
+              SwitchListTile.adaptive(
+                value: QuizMusic.enabled,
+                onChanged: (on) async {
+                  await QuizMusic.setEnabled(on);
+                  if (!mounted) return;
+                  setState(() {});
+                  if (on) await QuizMusic.start();
+                },
+                title: Text(
+                  'Music',
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: ArenaTheme.textOnNavy,
+                  ),
+                ),
+                subtitle: Text(
+                  QuizMusic.unavailable
+                      ? 'The soundtrack could not be loaded on this device'
+                      : 'The arena soundtrack. It steps aside for your own '
+                            'music on its own.',
+                  style: AppTextStyles.caption.copyWith(
+                    color: ArenaTheme.textMutedOnNavy,
+                  ),
+                ),
+                secondary: Icon(
+                  QuizMusic.enabled
+                      ? Icons.music_note_rounded
+                      : Icons.music_off_rounded,
+                  color: ArenaTheme.gold,
+                ),
+                activeThumbColor: ArenaTheme.gold,
+              ),
+              AnimatedOpacity(
+                opacity: QuizMusic.enabled ? 1 : 0.4,
+                duration: const Duration(milliseconds: 180),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpace.xl,
+                    0,
+                    AppSpace.xl,
+                    AppSpace.sm,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.volume_down_rounded,
+                        size: 18,
+                        color: ArenaTheme.textMutedOnNavy,
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: QuizMusic.volume,
+                          activeColor: ArenaTheme.gold,
+                          label: '${(QuizMusic.volume * 100).round()}%',
+                          min: QuizMusic.kMinVolume,
+                          divisions: 9,
+                          // No preview clip on release: the loop is already
+                          // playing underneath, so the new level is audible
+                          // while you are still dragging.
+                          onChanged: QuizMusic.enabled
+                              ? (v) {
+                                  QuizMusic.setVolume(v);
+                                  setState(() {});
+                                }
+                              : null,
+                        ),
+                      ),
+                      Icon(
+                        Icons.volume_up_rounded,
+                        size: 18,
+                        color: ArenaTheme.textMutedOnNavy,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              secondary: const Icon(
-                Icons.vibration_rounded,
-                color: ArenaTheme.gold,
+              SwitchListTile.adaptive(
+                value: QuizSfx.hapticsEnabled,
+                onChanged: (on) async {
+                  await QuizSfx.setHapticsEnabled(on);
+                  if (!mounted) return;
+                  setState(() {});
+                  if (on) QuizSfx.hapticTap();
+                },
+                title: Text(
+                  'Vibration',
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: ArenaTheme.textOnNavy,
+                  ),
+                ),
+                subtitle: Text(
+                  'Feedback on taps and answers',
+                  style: AppTextStyles.caption.copyWith(
+                    color: ArenaTheme.textMutedOnNavy,
+                  ),
+                ),
+                secondary: const Icon(
+                  Icons.vibration_rounded,
+                  color: ArenaTheme.gold,
+                ),
+                activeThumbColor: ArenaTheme.gold,
               ),
-              activeThumbColor: ArenaTheme.gold,
-            ),
-            const SizedBox(height: AppSpace.sm),
-          ],
+              const SizedBox(height: AppSpace.sm),
+            ],
+          ),
         ),
       ),
     );

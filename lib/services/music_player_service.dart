@@ -56,14 +56,33 @@ class MusicPlayerService {
   static final MusicPlayerService instance = MusicPlayerService._();
 
   static bool _backgroundReady = false;
-  static bool _initStarted = false;
 
   /// True when the media session came up, so lock-screen / notification
   /// controls are live.
   static bool get backgroundReady => _backgroundReady;
 
-  /// Boots the media session. Call (and await) ONCE from `main()` before
-  /// `runApp` and before anything touches [player]. Never throws.
+  /// Boots the media session. Started ONCE from `main()`, and never
+  /// throws.
+  ///
+  /// ## Why this is no longer awaited before `runApp`
+  ///
+  /// It was, and it was the single slowest thing about launching the app.
+  /// `JustAudioBackground.init` starts and binds an Android
+  /// `mediaPlayback` foreground service — one of the most expensive things
+  /// a cold start can do — behind a 15-second timeout, with nothing on
+  /// screen but the launcher's flat navy window. On a mid-range phone that
+  /// is most of "the splash takes far too long", and on a bad one it was
+  /// fifteen seconds of a blank rectangle.
+  ///
+  /// Nothing on the launch path needs it. The player is built lazily by
+  /// [player] and the only widget that touches it on the first frame is the
+  /// app-wide mini bar, which now waits on [ready]. What must NOT happen is
+  /// an [AudioPlayer] being constructed *while* this is in flight — the
+  /// platform is already swapped and `_audioHandler` is not yet assigned,
+  /// which is the `LateInitializationError` that got the plugin ripped out
+  /// once before. Before it starts is harmless (a player bound to the plain
+  /// platform, which [_recoverMediaSession] rebuilds), and after it
+  /// finishes is the normal case.
   ///
   /// ## The fallback has to undo the platform swap
   ///
@@ -85,13 +104,28 @@ class MusicPlayerService {
   /// is at the platform layer, below anything this class checks. So we capture
   /// the real platform first and put it back on failure, which is what finally
   /// makes "degrade to plain in-app playback" true rather than aspirational.
-  static Future<void> ensureInitialized() async {
-    if (_initStarted) return;
-    _initStarted = true;
+  static Future<void> ensureInitialized() => _bootFuture ??= _boot();
+
+  /// True once [ensureInitialized] has finished, whether the session came
+  /// up or fell back to plain playback. Either way it is safe to construct
+  /// an [AudioPlayer] from this point on.
+  ///
+  /// A [ValueNotifier] rather than a bare flag because the app-wide mini
+  /// bar has to wait for it before it may touch [player].
+  static final ValueNotifier<bool> ready = ValueNotifier<bool>(false);
+
+  /// The one boot, held so later callers await the SAME attempt rather than
+  /// starting a second one. A plain "have we started?" flag is not enough
+  /// now that `main()` does not await: it flips true immediately, and a
+  /// concurrent caller would sail straight past it while the session was
+  /// still coming up.
+  static Future<void>? _bootFuture;
+
+  static Future<void> _boot() async {
     // Web and desktop have no audio_service implementation; calling init
     // there throws a MissingPluginException we can't usefully recover from.
-    if (kIsWeb) return;
-    await _bootMediaSession();
+    if (!kIsWeb) await _bootMediaSession();
+    ready.value = true;
   }
 
   /// Re-attempts the media session if it failed at startup.
@@ -105,7 +139,10 @@ class MusicPlayerService {
   /// Cheap no-op once the session is up. Returns true if background playback
   /// is available afterwards.
   static Future<bool> _retryMediaSessionIfNeeded() async {
-    if (_backgroundReady || kIsWeb || !_initStarted) return _backgroundReady;
+    // The first boot may still be in flight — `main()` starts it without
+    // waiting. Join it rather than racing a second init against it.
+    await ensureInitialized();
+    if (_backgroundReady || kIsWeb) return _backgroundReady;
     await _bootMediaSession();
     return _backgroundReady;
   }
@@ -138,8 +175,10 @@ class MusicPlayerService {
       // Put the real platform back, or nothing will ever play again this
       // session. Without this line the "fallback" is a crash.
       JustAudioPlatform.instance = plainPlatform;
-      debugPrint('JustAudioBackground.init failed, reverted to plain '
-          'playback: $e\n$s');
+      debugPrint(
+        'JustAudioBackground.init failed, reverted to plain '
+        'playback: $e\n$s',
+      );
       _backgroundReady = false;
     }
   }
@@ -202,8 +241,7 @@ class MusicPlayerService {
   /// — including the full player it expands into. Same pattern as
   /// `VoicePlayerService.openChatId`: the screen that would be duplicated
   /// announces itself, and the global bar stands down.
-  static final ValueNotifier<bool> fullPlayerOpen =
-      ValueNotifier<bool>(false);
+  static final ValueNotifier<bool> fullPlayerOpen = ValueNotifier<bool>(false);
 
   /// The currently-playing item, derived from the player's current index.
   LibraryItem? get current {
@@ -251,6 +289,11 @@ class MusicPlayerService {
   /// disk.
   Future<void> setQueueAndPlay(List<LibraryItem> items, int startIndex) async {
     if (items.isEmpty) return;
+    // The media session boot is no longer awaited in main(), so this is
+    // where the ordering rule is kept: never construct a player while
+    // JustAudioBackground.init is mid-swap. On a warm app this has long
+    // since resolved and costs nothing.
+    await ensureInitialized();
     final index = startIndex.clamp(0, items.length - 1);
     final signature = items.map((e) => e.id).join(',');
 
@@ -330,9 +373,7 @@ class MusicPlayerService {
   void _afterTrackChange(LibraryItem item) {
     revision.value++;
     unawaited(MusicPrefsService.notePlayed(item.id));
-    unawaited(
-      MusicPrefsService.saveQueue(_queue, player.currentIndex ?? 0),
-    );
+    unawaited(MusicPrefsService.saveQueue(_queue, player.currentIndex ?? 0));
   }
 
   /// Restores the queue persisted by a previous session so the mini bar can
@@ -343,6 +384,10 @@ class MusicPlayerService {
     if (saved == null) return;
     final (items, index) = saved;
     try {
+      // Same ordering rule as setQueueAndPlay: this is the other place that
+      // builds the player, and it runs on cold start — exactly when the
+      // session boot is most likely to still be in flight.
+      await ensureInitialized();
       await MusicDownloadService.warmPaths(items);
       _queue = items;
       _loadedSignature = items.map((e) => e.id).join(',');

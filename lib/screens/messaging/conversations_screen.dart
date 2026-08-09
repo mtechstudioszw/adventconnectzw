@@ -64,8 +64,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   Map<String, ConversationState> _convStates = const {};
   Map<String, InboxReactionPreview> _reactionPreviews = const {};
   List<Story> _stories = const [];
+
   /// user id → display name, for the "who spoke last" prefix on group rows.
   Map<String, String> _senderNames = const {};
+
   /// conversation id → member count, for user-created group rows.
   Map<String, int> _groupCounts = const {};
   Set<String> _viewedStoryIds = const {};
@@ -580,7 +582,29 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     }
   }
 
+  /// Message requests from people who are NOT also in the friend-request
+  /// list — one person, one row, wherever requests are counted or drawn.
+  ///
+  /// The Requests view already filtered this way; the banner above the
+  /// inbox did not, so somebody who sent a friend request AND a first
+  /// message was counted twice and had their face in the stack twice
+  /// ("Tino and 1 other · 2 requests", both of them Tino). One getter now,
+  /// so the two cannot disagree again.
+  List<Conversation> get _messageRequestsDeduped {
+    final friendIds = _friendRequests.map((r) => r.requesterId).toSet();
+    return _requests.where((c) => !friendIds.contains(c.otherUserId)).toList();
+  }
+
+  /// Friendship ids with an accept in flight, so a second tap on the same
+  /// tile is ignored.
+  ///
+  /// The tile was only removed AFTER the round-trip, so during it the
+  /// button stayed live and firing it again sent a second
+  /// `acceptRequest` — which re-runs the conversation seed too.
+  final Set<String> _acceptingFriendIds = <String>{};
+
   Future<void> _acceptFriendRequest(PendingFriendRequest req) async {
+    if (!_acceptingFriendIds.add(req.friendshipId)) return;
     try {
       await FeedService.acceptRequest(req.friendshipId);
       if (!mounted) return;
@@ -588,11 +612,33 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         _friendRequests = _friendRequests
             .where((r) => r.friendshipId != req.friendshipId)
             .toList();
+        // Promote their message request in the same breath. The server now
+        // does this when the friendship is accepted (patch_194), but this
+        // list is already in memory — without it, the row that had been
+        // hidden only because a friend request existed pops straight back
+        // with another Accept button on it, which is what "you accept it
+        // twice" was. Same edit `_accept` makes, so the thread simply
+        // moves into the inbox.
+        _conversations = _conversations
+            .map(
+              (x) =>
+                  !x.isGroup &&
+                      x.otherUserId == req.requesterId &&
+                      x.isIncomingRequestFor(_currentUserId)
+                  ? x.copyWith(requestStatus: 'accepted')
+                  : x,
+            )
+            .toList();
+        if (_requests.isEmpty && _friendRequests.isEmpty) {
+          _showRequests = false;
+        }
       });
       _toast('You\'re now friends with ${req.requesterName.split(' ').first}.');
     } catch (_) {
       if (!mounted) return;
       _toast('Could not accept the request. Try again.');
+    } finally {
+      _acceptingFriendIds.remove(req.friendshipId);
     }
   }
 
@@ -949,7 +995,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
               // Explore scopes (people who aren't friends yet, status,
               // archived) still live in the full-screen scoped search — the
               // inline field below covers the common case.
-              _CircleIconButton(icon: Icons.person_search, onTap: _openChatSearch),
+              _CircleIconButton(
+                icon: Icons.person_search,
+                onTap: _openChatSearch,
+              ),
               const SizedBox(width: 6),
               PopupMenuButton<String>(
                 icon: Icon(Icons.more_vert, color: context.palette.text),
@@ -1089,11 +1138,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           const SizedBox(height: 70),
-          Icon(
-            Icons.search_off,
-            size: 46,
-            color: context.palette.textMuted,
-          ),
+          Icon(Icons.search_off, size: 46, color: context.palette.textMuted),
           const SizedBox(height: 12),
           Center(
             child: Padding(
@@ -1247,7 +1292,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   // ----- Chats tab: requests banner + 1:1 conversation list -----------
   Widget _buildChatsTab() {
     final all = _inbox;
-    final requestCount = _requests.length + _friendRequests.length;
+    // Deduped, so one person who sent both a friend request and a first
+    // message counts once. This used to be `_requests.length +
+    // _friendRequests.length`, which counted them twice while the Requests
+    // view below showed them once.
+    final messageRequests = _messageRequestsDeduped;
+    final requestCount = messageRequests.length + _friendRequests.length;
     if (all.isEmpty && requestCount == 0 && _archived.isEmpty) {
       return _buildEmptyState(
         title: 'No conversations yet',
@@ -1263,7 +1313,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       if (requestCount > 0)
         _RequestsBanner(
           requests: _friendRequests,
-          messageRequests: _requests,
+          messageRequests: messageRequests,
           onTap: () => setState(() => _showRequests = true),
           onAccept: _acceptFriendRequest,
         ),
@@ -1328,15 +1378,16 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       _ChatFilter.groups =>
         all.where((c) => c.isGroup && !c.isChurchGroup).toList(),
       _ChatFilter.churches => all.where((c) => c.isChurchGroup).toList(),
-      _ChatFilter.friends => all
-          .where(
-            (c) =>
-                !c.isGroup &&
-                !c.isChurchGroup &&
-                !c.isSelfChat &&
-                _friendIds.contains(c.otherUserId),
-          )
-          .toList(),
+      _ChatFilter.friends =>
+        all
+            .where(
+              (c) =>
+                  !c.isGroup &&
+                  !c.isChurchGroup &&
+                  !c.isSelfChat &&
+                  _friendIds.contains(c.otherUserId),
+            )
+            .toList(),
     };
   }
 
@@ -1534,12 +1585,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
 
   // ----- Requests view (opened from the Chats banner) -----------------
   Widget _buildRequestsView() {
-    // Don't show the same person twice: if they already appear under
-    // Friend requests, drop their message request from this view.
-    final friendIds = _friendRequests.map((r) => r.requesterId).toSet();
-    final list = _requests
-        .where((c) => !friendIds.contains(c.otherUserId))
-        .toList();
+    final list = _messageRequestsDeduped;
     final hasFriendRequests = _friendRequests.isNotEmpty;
     final hasMessageRequests = list.isNotEmpty;
     return ListView(
@@ -2244,7 +2290,9 @@ class _Highlighted extends StatelessWidget {
     // Keep a little context before the match so the snippet reads as a
     // sentence rather than starting mid-word.
     final start = at > 24 ? at - 20 : 0;
-    final head = start > 0 ? '…${text.substring(start, at)}' : text.substring(0, at);
+    final head = start > 0
+        ? '…${text.substring(start, at)}'
+        : text.substring(0, at);
     return RichText(
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
@@ -2524,11 +2572,7 @@ class _ComposeFab extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(
-          Icons.edit_square,
-          color: AppColors.white,
-          size: 24,
-        ),
+        child: const Icon(Icons.edit_square, color: AppColors.white, size: 24),
       ),
     );
   }
@@ -2858,13 +2902,10 @@ class _ConversationTile extends StatelessWidget {
                           ],
                           // Type glyph — 📢 for a church announcement, a mic
                           // for a voice note, a bookmark for your own notes.
-                          if (glyph != null && draft == null && !previewCleared)
-                            ...[
-                            Icon(
-                              glyph.icon,
-                              size: 13,
-                              color: glyph.color,
-                            ),
+                          if (glyph != null &&
+                              draft == null &&
+                              !previewCleared) ...[
+                            Icon(glyph.icon, size: 13, color: glyph.color),
                             const SizedBox(width: 4),
                           ],
                           Expanded(

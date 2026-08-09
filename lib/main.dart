@@ -50,16 +50,20 @@ void main() async {
     ConnectivityService.initialize(),
     AccountModeService.init(),
     ThemeService.init(),
-    // Media session for the Library music player + Audio Bible. MUST finish
-    // before the first AudioPlayer is constructed, otherwise just_audio
-    // throws "_audioHandler has not been initialized" and music won't play —
-    // the exact failure that got background playback removed last time.
-    // MusicPlayerService builds its player lazily so nothing can touch it
-    // before this resolves, and ensureInitialized is timeboxed + never
-    // throws, so a failure here degrades to plain in-app playback instead of
-    // blocking startup.
-    MusicPlayerService.ensureInitialized(),
   ]);
+
+  // Media session for the Library music player + Audio Bible.
+  //
+  // Started here, NOT awaited. It binds an Android mediaPlayback foreground
+  // service behind a 15-second timeout, and awaiting it meant the launcher's
+  // blank navy window sat there for the whole of it before Flutter drew a
+  // single frame. That was most of "the app takes far too long to launch".
+  //
+  // The ordering rule it was protecting still holds, it is just enforced
+  // where it belongs: no AudioPlayer may be constructed WHILE this is in
+  // flight, so the app-wide mini bar waits on MusicPlayerService.ready, and
+  // setQueueAndPlay awaits this future before it loads anything.
+  unawaited(MusicPlayerService.ensureInitialized());
 
   // CacheService opens a Hive box (reads the WHOLE box into memory). If it
   // ever grew large that openBox blocked the first frame for many seconds
@@ -88,10 +92,12 @@ void main() async {
   // Don't block the first frame on the orientation lock — it has no
   // effect on the splash render either way and just adds a hop to
   // the platform channel.
-  unawaited(SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]));
+  unawaited(
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]),
+  );
 
   runApp(const AdventConnectApp());
 
@@ -281,6 +287,20 @@ Future<void> _initBackgroundServices() async {
               queryParameters: {'tab': 'requests'},
             );
             break;
+          case 'quiz_match':
+            // Live quiz invite. Mirrors the in-app notification centre —
+            // keep the two switches in step. The invite dies after five
+            // minutes, so this must land on the Accept button rather than
+            // anywhere merely nearby.
+            if (id.isNotEmpty) {
+              appRouter.pushNamed(
+                'quiz_live_match',
+                pathParameters: {'matchId': id},
+              );
+            } else {
+              appRouter.pushNamed('quiz_live');
+            }
+            break;
           case 'seller':
             appRouter.pushNamed('seller_dashboard');
             break;
@@ -350,8 +370,10 @@ class _AdventConnectAppState extends State<AdventConnectApp>
 
   void _startBanGuard() {
     _banPollTimer?.cancel();
-    _banPollTimer =
-        Timer.periodic(_banPollInterval, (_) => unawaited(_checkBanNow()));
+    _banPollTimer = Timer.periodic(
+      _banPollInterval,
+      (_) => unawaited(_checkBanNow()),
+    );
     // First sweep shortly after launch, once the session has had a moment to
     // restore on a slow network.
     Future.delayed(const Duration(seconds: 4), () => unawaited(_checkBanNow()));
@@ -446,8 +468,9 @@ class _AdventConnectAppState extends State<AdventConnectApp>
   void _maybeShowAppOpenAd() {
     if (!AuthService.isSignedIn) return;
     final loc = appRouter.routerDelegate.currentConfiguration.uri.path;
-    final blocked =
-        _appOpenBlockedPrefixes.any((prefix) => loc.startsWith(prefix));
+    final blocked = _appOpenBlockedPrefixes.any(
+      (prefix) => loc.startsWith(prefix),
+    );
     if (blocked) {
       // Still keep one warm for when they land somewhere it's allowed.
       AppOpenAdManager.loadAd();
@@ -502,8 +525,8 @@ class _AdventConnectAppState extends State<AdventConnectApp>
         final brightness = mode == ThemeMode.dark
             ? Brightness.dark
             : mode == ThemeMode.light
-                ? Brightness.light
-                : PlatformDispatcher.instance.platformBrightness;
+            ? Brightness.light
+            : PlatformDispatcher.instance.platformBrightness;
         AppTextStyles.applyBrightness(brightness);
         return MaterialApp.router(
           title: 'Advent Connect ZW',

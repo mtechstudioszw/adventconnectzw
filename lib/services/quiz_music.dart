@@ -61,6 +61,7 @@ class QuizMusic {
   static bool _off = false;
   static double _volume = defaultVolume;
   static bool _loaded = false;
+  static bool _listeningToSfx = false;
 
   /// True when the asset failed to load. Lets the settings screen tell the
   /// truth instead of offering a control that cannot do anything.
@@ -95,18 +96,33 @@ class QuizMusic {
   static void loadPrefs() {
     if (_loaded) return;
     _loaded = true;
-    _off = (CacheService.readPref(_kOff) ??
-            CacheService.readPref(_legacyOff)) ==
+    // The master mute lives on QuizSfx, so the loop has to hear about it.
+    // Without this the speaker button stopped the effects and left the
+    // music running until the arena was closed. reconcile() is idempotent
+    // and cheap, so reacting to every revision bump (volume included) is
+    // simpler and safer than trying to react only to mute changes.
+    //
+    // Its own flag, not [_loaded]: resetForTest clears _loaded, and a
+    // second loadPrefs would then register the listener twice.
+    if (!_listeningToSfx) {
+      _listeningToSfx = true;
+      QuizSfx.revision.addListener(_onSfxChanged);
+    }
+    _off =
+        (CacheService.readPref(_kOff) ?? CacheService.readPref(_legacyOff)) ==
         '1';
-    _volume = double.tryParse(
-              CacheService.readPref(_kVolume) ??
-                  CacheService.readPref(_legacyVolume) ??
-                  '',
-            )?.clamp(kMinVolume, 1.0) ??
+    _volume =
+        double.tryParse(
+          CacheService.readPref(_kVolume) ??
+              CacheService.readPref(_legacyVolume) ??
+              '',
+        )?.clamp(kMinVolume, 1.0) ??
         defaultVolume;
   }
 
   static void _loadPrefs() => loadPrefs();
+
+  static void _onSfxChanged() => unawaited(reconcile());
 
   static Future<void> setEnabled(bool value) async {
     _loadPrefs();
@@ -133,9 +149,20 @@ class QuizMusic {
   /// Pure and synchronous so the decision can be tested without any audio
   /// platform behind it — the decision is the part that matters, the
   /// playback is just plumbing.
+  ///
+  /// [muted] is the arena's MASTER mute, i.e. [QuizSfx.muted]. The speaker
+  /// button in the arena's top bar only ever called [QuizSfx.setMuted], so
+  /// muting silenced the taps and ticks and left a three-megabyte music bed
+  /// playing underneath — "I click mute and the music doesn't stop". One
+  /// speaker icon has to mean all the sound, so the soundtrack honours it
+  /// too. Turning the music off on its own is still what the separate
+  /// toggle in Sound & haptics is for.
   @visibleForTesting
-  static bool shouldPlay({required bool enabled, required bool userMusicOn}) =>
-      enabled && !userMusicOn;
+  static bool shouldPlay({
+    required bool enabled,
+    required bool userMusicOn,
+    required bool muted,
+  }) => enabled && !userMusicOn && !muted;
 
   /// Start the loop for a round. Safe to call more than once.
   /// The soundtrack's OWN audio context, not [QuizSfx.sharedAudioContext].
@@ -168,24 +195,25 @@ class QuizMusic {
   /// ambient obeys the hardware ringer switch, so a silenced iPhone plays no
   /// arena music by design.
   static AudioContext get _musicContext => AudioContext(
-        android: const AudioContextAndroid(
-          isSpeakerphoneOn: false,
-          stayAwake: false,
-          contentType: AndroidContentType.music,
-          usageType: AndroidUsageType.media,
-          audioFocus: AndroidAudioFocus.none,
-        ),
-        iOS: AudioContextIOS(
-          category: AVAudioSessionCategory.ambient,
-          options: const {AVAudioSessionOptions.mixWithOthers},
-        ),
-      );
+    android: const AudioContextAndroid(
+      isSpeakerphoneOn: false,
+      stayAwake: false,
+      contentType: AndroidContentType.music,
+      usageType: AndroidUsageType.media,
+      audioFocus: AndroidAudioFocus.none,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.ambient,
+      options: const {AVAudioSessionOptions.mixWithOthers},
+    ),
+  );
 
   static Future<void> start() async {
     _loadPrefs();
     if (!shouldPlay(
       enabled: enabled,
       userMusicOn: MusicPlayerService.instance.isPlayingNow,
+      muted: QuizSfx.muted,
     )) {
       return;
     }
@@ -235,6 +263,7 @@ class QuizMusic {
     final should = shouldPlay(
       enabled: enabled,
       userMusicOn: MusicPlayerService.instance.isPlayingNow,
+      muted: QuizSfx.muted,
     );
     if (should && _player == null) {
       await start();

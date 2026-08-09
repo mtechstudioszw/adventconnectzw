@@ -30,7 +30,26 @@ android {
     // max page size by default, which is required for Android 15's 16 KB memory
     // pages (Google Play "16 KB page sizes" requirement). Flutter's default NDK
     // can be older, so set it explicitly.
-    ndkVersion = "27.0.12077973"
+    // 28.2.13676358, raised from 27.0.12077973 on 9 Aug 2026.
+    //
+    // The `jni` package (pulled in transitively by the PDF renderer) requires
+    // 28.2.13676358, and Gradle said so on every build:
+    //
+    //   Your project is configured with Android NDK 27.0.12077973, but the
+    //   following plugin(s) depend on a different Android NDK version:
+    //   - jni requires Android NDK 28.2.13676358
+    //   Fix this issue by using the highest Android NDK version (they are
+    //   backward compatible).
+    //
+    // It is printed as a warning, which is why it survived several releases,
+    // but it was costing real time: the release job installed NDK 27 *and*
+    // CMake 3.22.1 from scratch inside the `bundleRelease` task, over a
+    // gigabyte of download before compilation, on a runner with no Gradle
+    // cache. Two NDKs is twice that.
+    //
+    // NDKs are backward compatible, so taking the highest is the documented
+    // fix rather than a workaround.
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

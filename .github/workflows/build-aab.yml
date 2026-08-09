@@ -128,6 +128,7 @@ jobs:
             ~/.gradle/wrapper
             ~/.android/build-cache
             /usr/local/lib/android/sdk/ndk
+            /usr/local/lib/android/sdk/cmake
           key: gradle-aab-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties', 'pubspec.lock') }}
           restore-keys: |
             gradle-aab-${{ runner.os }}-

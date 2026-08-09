@@ -147,7 +147,7 @@ dependencies:
   # same seam when iOS ships. Purchases are ALWAYS verified server-side
   # (supabase/functions/verify-purchase) — the client never grants
   # itself premium. Pinned exact per project policy.
-  in_app_purchase: 3.2.0
+  in_app_purchase: 3.3.0
 
   # Watch — official YouTube IFrame player for compliant in-app playback.
   # Video is embedded/streamed by YouTube only; we never download, proxy,

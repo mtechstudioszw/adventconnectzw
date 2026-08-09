@@ -11,24 +11,29 @@ import '../../../theme/app_tokens.dart';
 import 'full_player_screen.dart';
 import 'music_visuals.dart';
 
-/// The docked music bar.
+/// The music mini player: a bar you can move.
 ///
-/// ## Why this is a bar again
+/// ## The shape and the movement are separate questions
 ///
-/// It has been both. It started as a full-width strip, became a draggable
-/// 190×172 card when the founder said "its shape is wrong — it should read
-/// like a small video card", and is a bar again now: *"don't make the mini
-/// player a card, make it like others e.g. YouTube Music"*.
+/// It has been a full-width strip, then a draggable 190×172 card ("its shape
+/// is wrong — it should read like a small video card"), then a docked bar
+/// again ("don't make the mini player a card, make it like others e.g.
+/// YouTube Music"), and it is now a **bar that drags** (9 Aug 2026).
 ///
-/// The card lost because of what its shape forced. At 172dp tall and free to
-/// be anywhere on screen, it covered content wherever it was parked, and the
-/// only way to stop it doing that was to pick it up and move it — a chore the
-/// member has to repeat on every screen. A bar claims one edge, always the
-/// same edge, and covers nothing else. That is why every music app converges
-/// on it.
+/// That is not indecision, it is two separate calls that got conflated. The
+/// card lost on SHAPE: 172dp tall, it covered content wherever it sat. Being
+/// docked was never the ask — and pinning it to the bottom edge put it on the
+/// one edge this app already crowds with a navigation island, snackbars and
+/// send buttons, so the fixed position created the very problem the fixed
+/// position was meant to avoid.
 ///
-/// So: artwork, title, artist, play/pause, dismiss, and a hairline of
-/// progress along the top — one row, docked above the navigation island.
+/// So: bar proportions, one row — artwork, title, artist, play/pause, dismiss
+/// and a hairline of progress — and `GlobalMediaBars` wraps it in a
+/// `FloatingDock` that parks it at any of nine slots.
+///
+/// **This widget must not claim drag gestures.** A vertical-drag recogniser
+/// here beats the dock's pan recogniser and silently kills the dragging; see
+/// the note in [_bar].
 ///
 /// **Scope:** mounted app-wide by `GlobalMediaBars`, and stood down while the
 /// full player is on screen (`MusicPlayerService.fullPlayerOpen`) so the two
@@ -105,68 +110,73 @@ class NowPlayingBar extends StatelessWidget {
     return Material(
       key: ValueKey(item.id),
       color: Colors.transparent,
-      child: GestureDetector(
-        // A flick up opens the full player, a flick down dismisses — the two
-        // gestures people try first, and they agree with the transitions.
-        onVerticalDragEnd: (d) {
-          final v = d.velocity.pixelsPerSecond.dy;
-          if (v < -420) _open(context);
-          if (v > 420) service.stop();
-        },
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: AppColors.darkNavy,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: AppColors.white.withValues(alpha: 0.12)),
-            boxShadow: AppShadows.floating(context),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _progressLine(service),
-              SizedBox(
-                height: barHeight,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () => _open(context),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 8),
-                            Hero(
-                              tag: 'now-playing-art',
-                              child: TrackArtwork(
-                                coverUrl: item.coverUrl,
-                                size: 46,
-                                radius: 8,
-                                icon: item.kind == 'audio_bible'
-                                    ? Icons.menu_book_rounded
-                                    : Icons.music_note_rounded,
-                              ),
+      // NO vertical-drag handler here.
+      //
+      // There used to be one — flick up to open, flick down to dismiss. It
+      // has to go now that the card is draggable, because a
+      // VerticalDragGestureRecognizer on the child BEATS the
+      // PanGestureRecognizer that `FloatingDock` puts on the ancestor: the
+      // vertical recogniser claims the gesture as soon as the finger moves
+      // on the Y axis, so the dock never saw the drag and the card could
+      // only be moved sideways. That is the "mini player can't be dragged"
+      // the founder reported on 9 Aug 2026.
+      //
+      // Nothing is lost. Tapping the card already opens the full player, and
+      // the X button already dismisses it — the two flicks were shortcuts to
+      // controls that are both still right there.
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: AppColors.darkNavy,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: AppColors.white.withValues(alpha: 0.12)),
+          boxShadow: AppShadows.floating(context),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _progressLine(service),
+            SizedBox(
+              height: barHeight,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _open(context),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 8),
+                          Hero(
+                            tag: 'now-playing-art',
+                            child: TrackArtwork(
+                              coverUrl: item.coverUrl,
+                              size: 46,
+                              radius: 8,
+                              icon: item.kind == 'audio_bible'
+                                  ? Icons.menu_book_rounded
+                                  : Icons.music_note_rounded,
                             ),
-                            const SizedBox(width: 11),
-                            Expanded(child: _caption(item)),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(child: _caption(item)),
+                        ],
                       ),
                     ),
-                    _playButton(service),
-                    _iconButton(
-                      icon: Icons.close_rounded,
-                      size: 20,
-                      tooltip: 'Stop',
-                      // Stop, not pause: pausing would leave the bar sitting
-                      // there with nothing to dismiss it.
-                      onPressed: service.stop,
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                ),
+                  ),
+                  _playButton(service),
+                  _iconButton(
+                    icon: Icons.close_rounded,
+                    size: 20,
+                    tooltip: 'Stop',
+                    // Stop, not pause: pausing would leave the bar sitting
+                    // there with nothing to dismiss it.
+                    onPressed: service.stop,
+                  ),
+                  const SizedBox(width: 6),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

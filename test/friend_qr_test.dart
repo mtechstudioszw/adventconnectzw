@@ -26,6 +26,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:advent_connect_zw/config/share_config.dart';
 import 'package:advent_connect_zw/theme/app_colors.dart';
 import 'package:advent_connect_zw/widgets/friend_qr_sheet.dart';
 
@@ -132,14 +133,26 @@ void main() {
   });
 
   group('friendQrPayload', () {
-    // The point of the https form: a camera app will follow it whether or
-    // not Advent Connect is installed. A custom scheme is a no-op on a phone
-    // that has never had the app — which is exactly who you hand a code to.
-    test('encodes an https link a phone camera can follow', () {
+    // Whichever form is switched on, the QR must encode something the
+    // scanner can read back. Asserting on the flag rather than on one shape
+    // means flipping it does not silently leave this test passing against
+    // the form nobody ships.
+    test('encodes the form the flag selects', () {
       final payload = friendQrPayload('abc-123');
 
-      expect(payload, startsWith('https://'));
-      expect(payload, endsWith('/u/abc-123'));
+      if (kFriendQrUsesLandingPage) {
+        expect(payload, startsWith('https://'));
+        expect(payload, endsWith('/u/abc-123'));
+      } else {
+        expect(payload, 'io.supabase.adventconnect://user/abc-123');
+      }
+    });
+
+    // The https form is written and tested even while it is switched off, so
+    // turning it on after the worker is deployed is a one-line change and
+    // not a re-implementation.
+    test('the https landing form round-trips, ready for the switch', () {
+      expect(friendIdFromScan(friendShareUrl('abc-123')), 'abc-123');
     });
 
     test('the scanner reads back what the generator writes', () {

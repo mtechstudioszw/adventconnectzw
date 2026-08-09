@@ -15,23 +15,40 @@ import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
-/// What a friend QR encodes.
+/// Whether friend QRs encode the https landing page instead of the app's
+/// custom scheme.
 ///
-/// An **https** landing page, not the raw `io.supabase.adventconnect://`
-/// scheme it used to carry. A phone camera only follows a custom scheme if
-/// some installed app claims it — so scanning one of these without Advent
-/// Connect installed did precisely nothing, silently, in the exact case a
-/// shared code is most useful: handing it to someone who has not joined yet.
+/// **ON.** A phone camera only follows a custom scheme if some installed app
+/// claims it, so a scanned code did precisely nothing — silently — on a
+/// phone without Advent Connect, which is the exact case a shared code is
+/// most useful for. The https page tries the app first and falls through to
+/// the Play Store, so handing someone your code now works whether or not
+/// they have joined.
 ///
-/// The landing page tries the app first and falls through to the Play Store
-/// (see `cloudflare/share-worker.js`, route `/user-share`).
+/// **This has a deployment dependency.** The `/u/<id>` route lives in
+/// `cloudflare/share-worker.js`, and the worker must be redeployed for it to
+/// exist — the copy running on 9 Aug 2026 returned 404 for it. If a release
+/// ships while the worker is stale, every scan lands on an error page,
+/// including for members who DO have the app.
 ///
-/// [friendQrLegacyPayload] is still accepted by the scanner — codes are
-/// screenshotted and forwarded, so the old form will be in circulation for a
-/// long time.
-String friendQrPayload(String userId) => friendShareUrl(userId);
+/// **Before publishing a build with this on:**
+/// ```
+/// cd cloudflare && npx wrangler deploy
+/// curl -o /dev/null -w "%{http_code}\n" \
+///   https://advent-share.adventconnectzw.workers.dev/u/test    # want 200
+/// ```
+/// The flag exists so this can be switched off in one line if the worker
+/// ever has to be rolled back; the scanner reads both forms either way.
+const bool kFriendQrUsesLandingPage = true;
 
-/// The pre-1.3.2 payload. Scanner-side only; never generated any more.
+/// What a friend QR encodes. See [kFriendQrUsesLandingPage].
+String friendQrPayload(String userId) => kFriendQrUsesLandingPage
+    ? friendShareUrl(userId)
+    : friendQrLegacyPayload(userId);
+
+/// The custom-scheme payload. Opens the app when it is installed and does
+/// nothing at all when it is not — which is why [kFriendQrUsesLandingPage]
+/// exists to replace it.
 String friendQrLegacyPayload(String userId) =>
     'io.supabase.adventconnect://user/$userId';
 

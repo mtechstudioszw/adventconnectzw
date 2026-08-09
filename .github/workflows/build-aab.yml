@@ -175,6 +175,23 @@ jobs:
           fi
           echo "Keystore restored (size: $(wc -c < android/app/upload.jks) bytes)"
 
+      # A hosted runner on a private repo is 2 cores / 7G. Gradle otherwise
+      # sizes its worker pool from the core count and runs forks in parallel,
+      # each with its own JVM, on a machine that has no headroom — the same
+      # squeeze that made runs #43 and #45 die to the OOM killer. One worker
+      # is slower per step and finishes, which is the trade worth making.
+      - name: Constrain Gradle to the runner's actual size
+        run: |
+          {
+            echo "org.gradle.workers.max=1"
+            echo "org.gradle.parallel=false"
+            echo "org.gradle.daemon=false"
+          } >> android/gradle.properties
+          echo "--- effective memory settings ---"
+          grep -E "jvmargs|workers.max|parallel|daemon" android/gradle.properties
+          echo "--- runner memory ---"
+          free -h
+
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 

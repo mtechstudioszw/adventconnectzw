@@ -61,3 +61,6 @@ ios/Flutter/AdMob.xcconfig
 Screenshot*.png
 Screenshot*.jpg
 Screenshot*.jpeg
+
+# npm install --no-save for scripts/broadcast-email.js leaves this behind
+node_modules/

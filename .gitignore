@@ -64,3 +64,6 @@ Screenshot*.jpeg
 
 # npm install --no-save for scripts/broadcast-email.js leaves this behind
 node_modules/
+
+# Broadcast send log — who has already received the current campaign.
+scripts/.broadcast-sent.log

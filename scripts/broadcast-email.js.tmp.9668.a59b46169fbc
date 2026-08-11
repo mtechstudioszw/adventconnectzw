@@ -37,25 +37,27 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * Every address successfully sent to, one per line.
+ * Every address that has been successfully sent to, one per line.
  *
- * A run on 10 Aug 2026 lost the network partway through 191 recipients. The
- * script reported a total at the end and then exited, so the only record of
- * who had actually received the mail was a progress counter that had already
- * scrolled away — leaving no way to finish the job without mailing everyone
- * a second time.
+ * Written after EACH message, not at the end. The first real run of this
+ * script lost its network partway through 191 recipients and there was no
+ * way afterwards to tell who had received it and who had not — the only
+ * options left were to mail everyone a second time or to leave some people
+ * out. Neither is acceptable, and both were avoidable with one append.
  *
- * Recording each success as it happens makes a re-run resume instead of
- * restart, which is the difference between an interruption being an
- * inconvenience and an interruption being unrecoverable. Delete this file to
- * start a genuinely new campaign.
+ * A re-run skips anyone already in here, so it resumes rather than repeats.
+ * Delete the file to deliberately send again.
  */
 const SENT_LOG = path.join(__dirname, ".broadcast-sent.log");
 
 function alreadySent() {
   try {
     return new Set(
-      fs.readFileSync(SENT_LOG, "utf8").split("\n").map((s) => s.trim()).filter(Boolean),
+      fs
+        .readFileSync(SENT_LOG, "utf8")
+        .split("\n")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
     );
   } catch {
     return new Set();
@@ -63,9 +65,7 @@ function alreadySent() {
 }
 
 function recordSent(email) {
-  // Appended per message, not batched at the end — a batch written on exit is
-  // exactly what a crash takes with it.
-  fs.appendFileSync(SENT_LOG, email + "\n");
+  fs.appendFileSync(SENT_LOG, email.toLowerCase() + "\n");
 }
 
 const SENDER = "adventconnectzw@gmail.com";
@@ -338,15 +338,9 @@ async function main() {
   console.log("SMTP connection OK.\n");
 
   let sent = 0;
-  let skipped = 0;
   const failed = [];
-  const done = testTo ? new Set() : alreadySent();
 
   for (const r of recipients) {
-    if (done.has(r.email)) {
-      skipped++;
-      continue;
-    }
     try {
       await transporter.sendMail({
         from: `"${SENDER_NAME}" <${SENDER}>`,
@@ -356,23 +350,16 @@ async function main() {
         html: render(r.firstName),
       });
       sent++;
-      if (!testTo) recordSent(r.email);
-      process.stdout.write(`\rSent ${sent}  skipped ${skipped}  failed ${failed.length}`);
+      process.stdout.write(`\rSent ${sent}/${recipients.length}`);
     } catch (e) {
       failed.push({ email: r.email, error: e.message });
-      process.stdout.write(`\rSent ${sent}  skipped ${skipped}  failed ${failed.length}`);
     }
     // Gmail throttles bursts. One message per 1.2s keeps it happy.
     if (recipients.length > 1) await sleep(1200);
   }
 
   transporter.close();
-  console.log(
-    `\n\nDone. Sent ${sent}, already had it ${skipped}, failed ${failed.length}.`,
-  );
-  if (failed.length) {
-    console.log("Re-run the same command to retry only the ones that failed.");
-  }
+  console.log(`\n\nDone. Sent ${sent}, failed ${failed.length}.`);
   for (const f of failed.slice(0, 20)) console.log(`  FAILED ${f.email}: ${f.error}`);
 }
 

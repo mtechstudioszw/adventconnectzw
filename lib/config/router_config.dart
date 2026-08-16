@@ -69,6 +69,7 @@ import '../screens/jobs/job_details_screen.dart';
 import '../screens/jobs/jobs_screen.dart';
 import '../screens/jobs/post_job_screen.dart';
 import '../screens/legal/guidelines_screen.dart';
+import '../screens/legal/help_center_screen.dart';
 import '../screens/legal/privacy_screen.dart';
 import '../screens/legal/terms_screen.dart';
 import '../screens/marketplace/add_product_screen.dart';
@@ -999,6 +1000,14 @@ final GoRouter appRouter = GoRouter(
       path: '/guidelines',
       name: 'guidelines',
       builder: (context, state) => const GuidelinesScreen(),
+    ),
+    // Settings → Help center has been pushing this name since it was
+    // written, with no route to receive it — `pushNamed` on an unknown
+    // name throws, so the entry was dead rather than merely empty.
+    GoRoute(
+      path: '/help',
+      name: 'help_center',
+      builder: (context, state) => const HelpCenterScreen(),
     ),
   ],
   errorBuilder: (context, state) => Scaffold(

@@ -66,9 +66,31 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
     if (!mounted) return;
     _ClaimBlock? block;
     if (state == null) {
-      // Couldn't read state — fail open and let the form + server guard
-      // handle it rather than blocking a legitimate claim.
-      block = null;
+      // COULDN'T VERIFY — do not pretend the claim is available.
+      //
+      // This used to fail open into the form, on the reasoning that the
+      // server guard would catch anything wrong. The guard does hold —
+      // church_admins_enforce_single_claim rejects the INSERT, so no bad
+      // row can ever be written. But offline, the RPC that reads claim
+      // state is the FIRST thing to fail, so an admin who already manages
+      // another church was shown a clean claim form for a second one
+      // (founder: "an admin when offline can bypass claiming another
+      // church"). It only failed at the end, after they had filled the
+      // whole form — and with no signal, it failed as a generic network
+      // error rather than "you already manage a church".
+      //
+      // Unknown is its own answer, and saying so is honest. It is NOT
+      // treated as "you are blocked": nothing here says they cannot claim,
+      // only that we could not check yet. Re-opening this screen re-runs
+      // the check, so a legitimate first-time claimer is never stuck.
+      block = const _ClaimBlock(
+        icon: Icons.wifi_off_rounded,
+        title: 'We can\'t check this right now',
+        message:
+            'You need a connection to apply to manage a church, so we can '
+            'confirm it isn\'t already claimed. Check your connection and '
+            'open this page again.',
+      );
     } else if (state.myClaimApproved) {
       block = const _ClaimBlock(
         icon: Icons.verified_rounded,

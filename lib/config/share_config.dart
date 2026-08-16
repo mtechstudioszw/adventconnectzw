@@ -30,6 +30,18 @@ String get appDownloadUrl =>
 const String kShareBaseUrl =
     'https://advent-share.adventconnectzw.workers.dev';
 
+/// Open Graph share link for a feed post.
+///
+/// The worker serves this route for PUBLIC posts only — a friends-only or
+/// private post resolves to "not found" rather than unfurling its text into
+/// a preview card that anyone holding the link could read. Sharing one still
+/// produces a link; it just will not leak the contents.
+///
+/// NOTE: `/post-share` is new. It returned 404 in production until the
+/// worker in `cloudflare/share-worker.js` is redeployed (`wrangler deploy`),
+/// so ship the two together or the link will 404 for everybody.
+String postShareUrl(Object id) => '$kShareBaseUrl/post-share?id=$id';
+
 /// Open Graph share link for a marketplace product.
 String productShareUrl(Object id) => '$kShareBaseUrl/product-share?id=$id';
 

@@ -10,7 +10,7 @@ class TermsScreen extends StatelessWidget {
       kicker: 'LEGAL',
       title: 'Terms of Service',
       subtitle: 'The agreement that keeps our community safe and respectful.',
-      lastUpdated: '20 June 2026',
+      lastUpdated: '16 August 2026',
       intro:
           'Welcome to Advent Connect ZW. By creating an account or using our app you agree to these terms. Please take a moment to read them — they explain your rights, our responsibilities and the rules that keep this community a safe place for everyone.',
       sections: const [
@@ -52,8 +52,12 @@ class TermsScreen extends StatelessWidget {
         ),
         LegalSection(
           title: 'Messaging',
+          // Second sentence added Aug 2026. The published Terms already said
+          // this in their own "6. Messaging" section; the in-app copy covered
+          // only CONDUCT and never mentioned how messages are stored. Wording
+          // follows the published version so the two agree.
           body:
-              'Direct messages must remain respectful. Unsolicited sales pitches, romantic harassment, threats and spam will result in account action. Block and report any member behaving inappropriately.',
+              'Direct messages must remain respectful. Unsolicited sales pitches, romantic harassment, threats and spam will result in account action. Block and report any member behaving inappropriately. Messages are not end-to-end encrypted: they are stored on our servers and may be accessed by administrators for moderation, security or legal reasons, as described in the Privacy Policy. Please do not send anything you would not want stored on a server.',
         ),
         LegalSection(
           title: 'Prohibited Activities',

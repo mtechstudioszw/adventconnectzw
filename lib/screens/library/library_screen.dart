@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../services/hymn_service.dart';
 import '../../services/music_player_service.dart';
@@ -87,6 +88,20 @@ class _LibraryScreenState extends State<LibraryScreen>
           'Library',
           style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 19),
         ),
+        // Quiz lives here as an ACTION, not a sixth tab (founder, Aug: "when
+        // enter library put option to access the quiz game"). A tab would
+        // shift every index after it, and `Feature.fromLibraryTab(_tabs.index)`
+        // maps those indexes to analytics features — adding one silently
+        // re-labels every Library tab's usage data. It is also not a reading
+        // surface like the other five; it opens a game.
+        actions: [
+          IconButton(
+            tooltip: 'Bible quiz',
+            icon: const Icon(Icons.extension_rounded),
+            color: AppColors.primaryBlue,
+            onPressed: () => context.pushNamed('quiz'),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           dividerColor: Colors.transparent,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -39,6 +41,11 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
   // refreshes (fixes "deleted post lingers / delete twice").
   bool _changed = false;
 
+  /// What to read next. Loaded separately from the article and never
+  /// awaited alongside it — the story must paint the moment it can, and a
+  /// section below the fold has no business delaying that.
+  List<AdventNews> _related = const [];
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +53,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
     if (_item == null) {
       _load();
     } else {
+      unawaited(_loadRelated());
       // Fire a quiet background refresh so opened-from-cache stories
       // get the latest body / source link if the article has been
       // edited since the list paint.
@@ -61,6 +69,21 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
       _item = fresh;
       _loading = false;
     });
+    unawaited(_loadRelated());
+  }
+
+  /// Best-effort: an empty rail simply doesn't render, so a failure here
+  /// costs the reader nothing and must never surface an error over an
+  /// article they are in the middle of.
+  Future<void> _loadRelated() async {
+    final item = _item;
+    if (item == null) return;
+    final more = await AdventNewsService.fetchRelated(
+      item.id,
+      category: item.category,
+    );
+    if (!mounted) return;
+    setState(() => _related = more);
   }
 
   Future<void> _refreshQuietly() async {
@@ -392,12 +415,65 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                       ),
                     ],
                   ),
+                  if (_related.isNotEmpty) _buildKeepReading(context),
                 ],
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// "Keep reading" — the whole of the suggested-news work.
+  ///
+  /// Before this, finishing an article left the reader on a page whose only
+  /// exits were Back and the source link, so an Advent News session was
+  /// exactly one story long no matter how much had been published.
+  ///
+  /// A vertical list, not a horizontal rail: these are headlines, and a
+  /// headline clipped to a 200px card is a headline nobody can judge. Three
+  /// readable titles beat six unreadable ones.
+  Widget _buildKeepReading(BuildContext context) {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 28),
+        Divider(color: palette.divider, height: 1),
+        const SizedBox(height: 20),
+        Text(
+          'KEEP READING',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.primaryBlue,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.4,
+            fontSize: 10.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (final n in _related.take(4)) ...[
+          _RelatedNewsRow(
+            item: n,
+            onTap: () {
+              // pushReplacement, not push: tapping through five articles
+              // should not build a five-deep stack the reader has to unwind
+              // one Back press at a time to get out of Advent News.
+              // 'news_details', NOT 'advent_news_details' — the route is
+              // nested under /news as ':id'. GoRouter throws on an unknown
+              // name, which is precisely how Settings → Help center shipped
+              // broken (see help_center_screen.dart). Pinned by a test.
+              context.pushReplacementNamed(
+                'news_details',
+                pathParameters: {'id': n.id},
+                extra: n,
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+        ],
+        const SizedBox(height: 8),
+      ],
     );
   }
 
@@ -468,6 +544,89 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One "keep reading" suggestion: thumbnail, headline, category + age.
+///
+/// The headline gets two lines and the full remaining width, because a
+/// headline is the only thing a reader uses to decide. The thumbnail is
+/// square and small on purpose — this is a list of stories, not a second
+/// magazine spread competing with the article above it.
+class _RelatedNewsRow extends StatelessWidget {
+  const _RelatedNewsRow({required this.item, required this.onTap});
+
+  final AdventNews item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final cover = item.coverPhotoUrl ?? '';
+    return Material(
+      color: palette.card,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(
+                  width: 68,
+                  height: 68,
+                  child: cover.isEmpty
+                      ? Container(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.08),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.newspaper_outlined,
+                            size: 22,
+                            color:
+                                AppColors.primaryBlue.withValues(alpha: 0.55),
+                          ),
+                        )
+                      : CachedImage(cover, fit: BoxFit.cover),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${item.category.label} · ${_relative(item.publishedAt)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.textMuted,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -90,13 +90,29 @@ class _MarketplaceGuidelinesScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildBanWarning(),
-                    const SizedBox(height: 16),
-                    for (final r in _rules) ...[
-                      _RuleCard(rule: r),
+                    // Order matters here, and it used to be backwards.
+                    //
+                    // The screen opened on a red "Violations = permanent ban"
+                    // panel — the first thing a member saw when they offered
+                    // to open a shop was a threat, before a single word about
+                    // what we actually ask of them. It also meant the page
+                    // led at its loudest and got quieter, so nothing after it
+                    // registered.
+                    //
+                    // Now it reads the way an agreement reads: what this is,
+                    // the five commitments, what happens if you break them,
+                    // then the commitment itself. The consequence is no
+                    // softer — it just comes after the terms it applies to,
+                    // and directly above the box you tick.
+                    _buildIntro(context),
+                    const SizedBox(height: 18),
+                    for (var i = 0; i < _rules.length; i++) ...[
+                      _RuleCard(rule: _rules[i], index: i + 1),
                       const SizedBox(height: 12),
                     ],
                     const SizedBox(height: 8),
+                    _buildBanWarning(),
+                    const SizedBox(height: 18),
                     _AcceptanceTile(
                       accepted: _accepted,
                       onChanged: (v) => setState(() => _accepted = v),
@@ -118,6 +134,65 @@ class _MarketplaceGuidelinesScreenState
       tagline: 'Marketplace',
       subtitle: 'Read this carefully. Selling here means agreeing to it.',
       fallbackRoute: 'marketplace',
+    );
+  }
+
+  /// Says what the document is before it starts making demands, and names
+  /// the number of commitments so the page has a knowable length. A wall of
+  /// five unnumbered cards gives no sense of how far in you are.
+  Widget _buildIntro(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.16),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.storefront_outlined,
+                size: 17,
+                color: AppColors.primaryBlue,
+              ),
+              const SizedBox(width: 8),
+              // Flexible, not bare. This is a letter-spaced label at a fixed
+              // 10.5px that still scales with the system font — at 2.5x it
+              // overflowed the row by 14px, which is a red-and-yellow stripe
+              // across the top of the agreement rather than a quiet clip.
+              Flexible(
+                child: Text(
+                  'FIVE COMMITMENTS',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.3,
+                    fontSize: 10.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Advent Marketplace runs on trust between members — there is no '
+            'middleman holding your money or checking your parcels. These are '
+            'what make that work.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.text,
+              height: 1.55,
+              fontSize: 12.8,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -216,37 +291,53 @@ class _MarketplaceGuidelinesScreenState
           const SizedBox(width: 10),
           Expanded(
             flex: 2,
-            child: Opacity(
-              opacity: _accepted ? 1.0 : 0.55,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
+            // The disabled state used to be `Opacity(0.55)` over the live
+            // gradient: a faded blue button that still looked like a button
+            // and gave no reason for not working. Tapping it did nothing and
+            // said nothing.
+            //
+            // Now the two states are genuinely different surfaces — a flat
+            // tonal fill with no shadow when it is inert, the gradient and
+            // its glow only once the box is ticked — and the label itself
+            // carries the instruction. The member is never left guessing
+            // which of the things on this page they still have to do.
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                gradient: _accepted ? AppColors.primaryGradient : null,
+                color: _accepted
+                    ? null
+                    : context.palette.divider.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: _accepted
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.28),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _accepted ? () => _continue(context) : null,
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: _accepted
-                      ? [
-                          BoxShadow(
-                            color:
-                                AppColors.primaryBlue.withValues(alpha: 0.28),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _accepted ? () => _continue(context) : null,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      child: Center(
-                        child: Text(
-                          'Continue to setup',
-                          style: AppTextStyles.buttonText.copyWith(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w800,
-                          ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    child: Center(
+                      child: Text(
+                        _accepted ? 'Continue to setup' : 'Tick to agree',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.buttonText.copyWith(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          color: _accepted
+                              ? AppColors.white
+                              : context.palette.textMuted,
                         ),
                       ),
                     ),
@@ -282,14 +373,31 @@ class _Rule {
   final String body;
 }
 
+/// One commitment.
+///
+/// Numbered, because five identical cards read as a list of suggestions
+/// rather than the terms of an agreement — and because a member scrolling
+/// a page of consequences deserves to know where they are in it.
+///
+/// The prohibition card is the one exception to the shared treatment. It is
+/// the only rule that is a list of things you may NOT do, it is three times
+/// the length of any other, and giving it the same blue chip as "Christian
+/// honesty" flattened the one item most likely to get someone banned into
+/// the middle of the stack. It keeps the same shape and the same number —
+/// it is still commitment four, not a warning panel — but its glyph and rule
+/// carry the palette's red so the eye stops there.
 class _RuleCard extends StatelessWidget {
-  const _RuleCard({required this.rule});
+  const _RuleCard({required this.rule, required this.index});
   final _Rule rule;
+  final int index;
 
   @override
   Widget build(BuildContext context) {
+    final isProhibition = rule.icon == Icons.block;
+    final accent = isProhibition ? AppColors.red : AppColors.primaryBlue;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
       decoration: BoxDecoration(
         color: context.palette.card,
         borderRadius: BorderRadius.circular(18),
@@ -301,43 +409,72 @@ class _RuleCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(rule.icon, color: AppColors.primaryBlue, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  rule.title,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14.5,
-                  ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // A hairline rule down the card's leading edge, tinted to the
+            // accent. Cheaper than a coloured card and it survives dark mode.
+            Container(
+              width: 3,
+              margin: const EdgeInsets.only(right: 13),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: isProhibition ? 0.55 : 0.30),
+                borderRadius: const BorderRadius.horizontal(
+                  right: Radius.circular(3),
                 ),
-                const SizedBox(height: 4),
+              ),
+            ),
+            Column(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(rule.icon, color: accent, size: 18),
+                ),
+                const SizedBox(height: 6),
                 Text(
-                  rule.body,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.palette.text,
-                    height: 1.55,
-                    fontSize: 12.8,
+                  index.toString().padLeft(2, '0'),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.palette.textMuted,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rule.title,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    rule.body,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.text,
+                      height: 1.55,
+                      fontSize: 12.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

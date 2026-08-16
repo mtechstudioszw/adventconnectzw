@@ -37,7 +37,7 @@ class SabbathStatus {
 
   /// Resolves the current phase.
   ///
-  /// The celebration ("Sabata yakanaka") always shows — being inside the
+  /// The celebration ("Sabata rakanaka") always shows — being inside the
   /// Sabbath is the app acknowledging the day, not a widget. The COUNTDOWN
   /// stays gated on the user's Settings opt-in, because that genuinely is
   /// the countdown feature they may have switched off.
@@ -580,8 +580,8 @@ class _StatusLine extends StatelessWidget {
       SabbathPhase.inSabbath => (
           Icons.auto_awesome_rounded,
           sabbath.sundown == null
-              ? 'Sabata yakanaka'
-              : 'Sabata yakanaka · ends ${_clock(sabbath.sundown!)}',
+              ? 'Sabata rakanaka'
+              : 'Sabata rakanaka · ends ${_clock(sabbath.sundown!)}',
         ),
       SabbathPhase.approaching => (
           Icons.brightness_3_rounded,

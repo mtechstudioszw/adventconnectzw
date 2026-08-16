@@ -132,6 +132,17 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
     }
     if (mounted) setState(() => _loading = _feed.isEmpty);
 
+    // The feed is the tab's primary content, so it goes out NOW, next to
+    // the shelves rather than behind them. It used to be awaited AFTER
+    // this Future.wait, which meant it could not even be requested until
+    // the slowest of nine shelf calls had come back — and one of those,
+    // fetchContinueSeries, is itself three sequential round trips
+    // (history -> playlist_items -> playlists). On a slow mobile
+    // connection that stacked four round trips ahead of the first video
+    // appearing. Every query behind these is indexed and runs in 3-5ms;
+    // the wait was never the database, it was the queueing.
+    final feedFuture = _loadMore(reset: true);
+
     final results = await Future.wait<Object?>([
       YoutubeService.fetchLiveNow(),
       YoutubeService.fetchContinueWatching(),
@@ -170,16 +181,20 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
     await WatchReminderService.prune(_upcoming);
     _reminders = WatchReminderService.all();
 
-    _feed.clear();
-    _offset = 0;
-    _hasMore = true;
-    await _loadMore(reset: true);
+    await feedFuture;
     if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _loadMore({bool reset = false}) async {
     if (_loadingMore || (!_hasMore && !reset)) return;
     _loadingMore = true;
+    if (reset) {
+      // Paging state resets now, but `_feed` is deliberately NOT cleared
+      // here — see the setState below. Clearing before the request goes
+      // out would blank the cached page for the whole round trip.
+      _offset = 0;
+      _hasMore = true;
+    }
     final filter = _filter;
 
     List<YoutubeVideo> rows;
@@ -217,8 +232,11 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
       return;
     }
     setState(() {
+      // Swap the cached page out only once the fresh rows are in hand,
+      // so a refresh never flashes an empty feed.
+      if (reset) _feed.clear();
       _feed.addAll(rows);
-      _offset += rows.length;
+      _offset = _feed.length;
       _hasMore = rows.length == _page;
       _loadingMore = false;
     });

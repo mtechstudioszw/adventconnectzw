@@ -28,6 +28,23 @@ class SplashScreen extends StatefulWidget {
   /// [BiometricLockScreen.autoPrompt].
   final bool autoNavigate;
 
+  /// The brand entrance / gold-ring duration. Exposed so a test can pin the
+  /// rule that the boot wait never outlasts the animation the user is
+  /// watching — that regression is invisible at runtime and only surfaces as
+  /// "launch feels slow" weeks later.
+  @visibleForTesting
+  static Duration get brandDuration => _SplashScreenState._brandDuration;
+
+  /// The longest the splash can hold the screen once the engine is up: the
+  /// brand window, plus the update/maintenance gate cap, plus the exit fade.
+  /// Excludes native launch and Flutter engine init, which this screen does
+  /// not control.
+  @visibleForTesting
+  static Duration get worstCaseHoldMs =>
+      _SplashScreenState._brandDuration +
+      const Duration(milliseconds: 400) +
+      _SplashScreenState._exitDuration;
+
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
@@ -44,6 +61,23 @@ class _SplashScreenState extends State<SplashScreen>
   // register (was 700ms) — on fast starts this is pure saved time, on
   // slow starts the Supabase/cache waits dominate anyway.
   static const Duration _minLoaderDuration = Duration(milliseconds: 450);
+
+  /// How long the brand entrance runs — and, deliberately, the splash's
+  /// whole boot budget.
+  ///
+  /// The gold ring sweeps on `_entrance` over the interval 0.30→1.0, so it
+  /// closes around the emblem exactly at the end of this. Founder rule
+  /// (16 Aug 2026): **when the ring finishes circling the logo, the splash
+  /// goes into the app.** The ring is the visible promise about how long
+  /// this screen lasts, so nothing behind it may outlast it.
+  ///
+  /// It is a CEILING, not a floor. A warm start still leaves at
+  /// [_minLoaderDuration] — see the note there, and the standing rule that
+  /// motion must never cost the user time. Cutting the ring short on a fast
+  /// launch is the correct trade; making someone watch it finish is not.
+  static const Duration _brandDuration = Duration(milliseconds: 1800);
+
+  static const Duration _exitDuration = Duration(milliseconds: 320);
 
   late final AnimationController _entrance;
   late final AnimationController _progress;
@@ -85,7 +119,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _entrance = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: _brandDuration,
     )..forward();
 
     // Not started here — didChangeDependencies owns that, because whether
@@ -133,7 +167,7 @@ class _SplashScreenState extends State<SplashScreen>
     _exit = AnimationController(
       vsync: this,
       value: 1.0,
-      duration: const Duration(milliseconds: 320),
+      duration: _exitDuration,
     );
 
     _blossom = AnimationController(
@@ -230,8 +264,15 @@ class _SplashScreenState extends State<SplashScreen>
     // it is one indexed app_config read, so running it beside the update
     // check costs nothing rather than adding a second round-trip to the
     // splash tail. Fails open (#22).
+    // Budget is adaptive, not fixed — see [MaintenanceService.splashTimeout].
+    // A device that was blocked the last time we got a real answer waits
+    // longer for a definitive one, because letting it in and then locking it
+    // 15 s later (the founder's "loads normally then locks") is worse than a
+    // slightly slower splash for the few people already in an outage.
+    // Everyone else keeps the original fast path, and it still fails open.
     final maintenanceFuture = AppBootstrap.awaitSupabaseReady()
-        .then((_) => MaintenanceService.check())
+        .then((_) =>
+            MaintenanceService.check(timeout: MaintenanceService.splashTimeout))
         .catchError((_) => MaintenanceState.off);
 
     // Open the biometric platform channel NOW, while we are waiting on
@@ -243,8 +284,22 @@ class _SplashScreenState extends State<SplashScreen>
 
     await Future.wait([
       Future.delayed(_minLoaderDuration),
+      // Capped at the brand duration, NOT at some unrelated network budget.
+      //
+      // This was 2500ms, which is 700ms longer than the gold ring takes to
+      // close. Add the gates and the exit fade and a slow-network launch sat
+      // on the splash for ~3.2s — well past the point the animation had
+      // visibly finished, which is precisely the "launch is slow" report.
+      //
+      // Waiting less here is safe, and the code below was already written
+      // for it: `AppBootstrap.isReady` guards the Supabase-dependent read,
+      // and the routing decision falls back to a persisted-token read that
+      // needs no Supabase at all. Session restore from secure storage is the
+      // fast part; the slow part is a NETWORK token refresh we explicitly do
+      // not want to block on, and which finishes in the background while
+      // home paints from cache.
       AppBootstrap.awaitSupabaseReady().timeout(
-        const Duration(milliseconds: 2500),
+        _brandDuration,
         onTimeout: () {},
       ),
       // Cache box open (moved off the pre-runApp path). Timeboxed so a
@@ -271,8 +326,13 @@ class _SplashScreenState extends State<SplashScreen>
         const Duration(milliseconds: 400),
         onTimeout: () => UpdateCheck.none,
       ),
+      // 400 ms as before for everyone whose last answer was "not blocked" —
+      // the splash stays exactly as fast. A device that WAS blocked last
+      // time waits longer for a real answer, because for that device the
+      // 400 ms cap is what produced "loads normally, then locks": it gave
+      // up, failed open, and main.dart's 15 s poll locked it afterwards.
       maintenanceFuture.timeout(
-        const Duration(milliseconds: 400),
+        MaintenanceService.splashGateTimeout,
         onTimeout: () => MaintenanceState.off,
       ),
     ]);

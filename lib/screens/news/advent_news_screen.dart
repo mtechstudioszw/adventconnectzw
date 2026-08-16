@@ -301,7 +301,7 @@ class NewsHeroCard extends StatelessWidget {
                         ),
                         child: Center(
                           child: Icon(
-                            Icons.newspaper,
+                            _placeholderIcon(item.category),
                             color: AppColors.white.withValues(alpha: 0.55),
                             size: 56,
                           ),
@@ -449,13 +449,13 @@ class _NewsRowCard extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: (item.coverPhotoUrl ?? '').isEmpty
-                        ? const DecoratedBox(
-                            decoration: BoxDecoration(
+                        ? DecoratedBox(
+                            decoration: const BoxDecoration(
                               gradient: AppColors.appBarGradient,
                             ),
                             child: Center(
                               child: Icon(
-                                Icons.newspaper,
+                                _placeholderIcon(item.category),
                                 color: AppColors.white,
                                 size: 26,
                               ),
@@ -615,3 +615,24 @@ String _formatTime12(DateTime t) {
   return '$hour12:$minutes $suffix';
 }
 
+
+/// Glyph shown when an article has no cover photo.
+///
+/// This is not a rare fallback — it is what MOST of this list looks like.
+/// 45 of 47 approved articles have no `cover_photo_url`, and they cannot
+/// easily get one: the Adventist Review RSS feed carries no images at all
+/// (verified 15 Aug 2026 — no media:content, no enclosure, no inline img),
+/// and the article pages return a shell with no og:image, so there is
+/// nothing for the importer to extract.
+///
+/// One identical newspaper icon on forty-five cards read as a broken feed.
+/// Varying the glyph by category at least makes the list scannable while a
+/// real image source is sorted out.
+IconData _placeholderIcon(NewsCategory category) => switch (category) {
+      NewsCategory.trending => Icons.trending_up_rounded,
+      NewsCategory.announcement => Icons.campaign_rounded,
+      NewsCategory.globalSda => Icons.public_rounded,
+      NewsCategory.eventRecap => Icons.event_available_rounded,
+      NewsCategory.spiritual => Icons.auto_stories_rounded,
+      NewsCategory.general => Icons.newspaper_rounded,
+    };

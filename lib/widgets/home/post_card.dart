@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:share_plus/share_plus.dart';
 
 import '../../config/app_version.dart';
+import '../../config/share_config.dart';
 import '../../models/post_model.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -148,11 +149,18 @@ class _PostCardState extends State<PostCard>
   Future<void> _share() async {
     final text = (post.body ?? '').trim();
     final author = post.isChurchPost ? post.churchName!.trim() : post.authorName;
-    // TODO(phase-2): point this at a post-share Edge Function so WhatsApp
-    // renders an OG preview card, the way event links already do. Until that
-    // exists, sharing the text plus the store link still works everywhere.
-    final link =
-        'https://play.google.com/store/apps/details?id=$kAndroidPackageId';
+    // A PUBLIC post now shares a real link that unfurls an OG preview card in
+    // WhatsApp, the way event and product links already do (the phase-2 TODO
+    // that used to sit here).
+    //
+    // Anything not public keeps the store link on purpose. The worker only
+    // resolves public rows — deliberately, so a friends-only post cannot be
+    // unfurled by whoever the link reaches — so pointing a private post at it
+    // would share a link that 404s. A store link is not a preview, but it is
+    // never broken and it never leaks.
+    final link = post.visibility == PostVisibility.public
+        ? postShareUrl(post.id)
+        : 'https://play.google.com/store/apps/details?id=$kAndroidPackageId';
     final body = text.isEmpty
         ? '$author shared a post on Advent Connect.\n$link'
         : '"$text"\n\n— $author on Advent Connect\n$link';

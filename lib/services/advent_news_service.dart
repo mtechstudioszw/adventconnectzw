@@ -94,6 +94,55 @@ class AdventNewsService {
     }
   }
 
+  /// More articles to read after this one.
+  ///
+  /// The article page was a dead end: it fetched exactly the piece you had
+  /// opened and offered nothing after it, so every visit to Advent News was
+  /// one article long. This is the whole of "suggested news" — a reader who
+  /// finishes something is the cheapest reader to keep.
+  ///
+  /// Same category first, because that is the only relatedness signal the
+  /// table actually carries — there are no tags, no embeddings and no
+  /// read history to personalise from, and inventing a relevance score over
+  /// three fields would be dressing recency up as intelligence.
+  ///
+  /// It then TOPS UP from the rest of the feed rather than returning a short
+  /// list. A category with two articles in it would otherwise show a rail of
+  /// one, which reads as broken rather than as sparse — and the categories
+  /// here are genuinely thin.
+  ///
+  /// Pinned rows are deliberately NOT floated to the top the way they are in
+  /// the feed: this is "what to read next", and an editorial pin that already
+  /// sits on Home does not need a third placement.
+  static Future<List<AdventNews>> fetchRelated(
+    String excludeId, {
+    NewsCategory? category,
+    int limit = 6,
+  }) async {
+    if (excludeId.isEmpty) return const [];
+    try {
+      // One query for the pool, split in Dart. Two round trips (same
+      // category, then the rest) would double the latency of a section that
+      // sits below the fold and must never delay the article itself.
+      final response = await _client
+          .from(_table)
+          .select('*, $_authorEmbed')
+          .eq('status', 'approved')
+          .neq('id', excludeId)
+          .order('published_at', ascending: false)
+          .limit(limit * 5);
+      final pool = (response as List)
+          .map((row) => AdventNews.fromJson(row as Map<String, dynamic>))
+          .toList();
+      if (category == null) return pool.take(limit).toList();
+      final sameCategory = pool.where((n) => n.category == category).toList();
+      final rest = pool.where((n) => n.category != category).toList();
+      return <AdventNews>[...sameCategory, ...rest].take(limit).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// True when the current viewer can publish news. Open to every
   /// signed-in user as of patch_030 — authoring is no longer
   /// admin-gated. Returns false only when there is no session.

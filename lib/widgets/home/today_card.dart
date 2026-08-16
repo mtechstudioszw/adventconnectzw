@@ -68,7 +68,13 @@ class _TodayCardState extends State<TodayCard> {
     _loadHymn();
     _loadQuarterly();
     _loadLibraryPick('music', (i) => _track = i);
-    _loadLibraryPick('egw', (i) => _book = i);
+    // 'egw_book', NOT 'egw'. The Library's kind has always been `egw_book`
+    // (see LibraryItem.isPdf and admin_library_screen), so this query matched
+    // zero rows and `_book` stayed null — which silently dropped the "EGW
+    // read of the day" slide for every member since it was written. The page
+    // is built to disappear when its content is missing, so the bug looked
+    // exactly like the feature not existing.
+    _loadLibraryPick('egw_book', (i) => _book = i);
   }
 
   @override
@@ -88,7 +94,25 @@ class _TodayCardState extends State<TodayCard> {
     try {
       final hymns = await HymnService.all();
       if (!mounted || hymns.isEmpty) return;
-      setState(() => _hymn = hymns[_epochDay % hymns.length]);
+      // ALTERNATE THE LANGUAGE DAY BY DAY (founder, Aug: the hymn of the
+      // day should cover "both shona n english").
+      //
+      // Picking straight out of the combined list already spanned both, but
+      // the bundled hymnal is 695 English to 300 Shona — so a flat pick lands
+      // on English roughly 7 days in 10, and Shona hymns would surface barely
+      // twice a week in a Zimbabwean app. Alternating gives each language the
+      // same number of days regardless of how lopsided the collection is.
+      //
+      // Divide the day by two before indexing, so consecutive Shona days walk
+      // 0,1,2… through the Shona list rather than skipping every other hymn.
+      // Falls back to the whole collection if either language is missing, so
+      // a re-exported hymnal can never leave this page blank.
+      final shona = hymns.where((h) => h.language == 'Shona').toList();
+      final english = hymns.where((h) => h.language == 'English').toList();
+      final pool = (shona.isEmpty || english.isEmpty)
+          ? hymns
+          : (_epochDay.isEven ? shona : english);
+      setState(() => _hymn = pool[(_epochDay ~/ 2) % pool.length]);
     } catch (_) {
       // Bundled asset failed to parse — the card just drops this page.
     }

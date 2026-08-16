@@ -437,11 +437,50 @@ class YoutubeService {
   /// Built from data that already exists: take what they've been
   /// watching, find which playlists those videos belong to, and report
   /// how far in they got. No new table.
+  /// Series the member is part-way through.
+  ///
+  /// Goes through the `youtube_continue_series` RPC (patch_202), which does
+  /// the whole thing in ONE round trip. The Dart path below used to issue
+  /// three, and they could not overlap because each needed the previous
+  /// step's ids: history → playlist_items → playlists. That made this the
+  /// slowest shelf on the Watch tab, and `Future.wait` in `_bootstrap`
+  /// finishes when the slowest finishes, so it set the speed of the whole
+  /// tab. The database was never the problem — every query involved runs in
+  /// 3-5ms and is indexed; it was three sequential network hops.
+  ///
+  /// The three-query version is kept below as a fallback, so an app build
+  /// that reaches a deployment without patch_202 still shows the shelf
+  /// rather than silently losing it. Verified against production: the RPC
+  /// returns exactly the same rows as the fallback, and is scoped to the
+  /// caller by `auth.uid()` plus the `yt_history_own` policy.
   static Future<List<SeriesProgress>> fetchContinueSeries({
     int limit = 6,
   }) async {
     final uid = _uid;
     if (uid == null) return const [];
+    try {
+      final rows = await _c
+          .rpc('youtube_continue_series', params: {'p_limit': limit})
+          .timeout(const Duration(seconds: 15));
+      return [
+        for (final r in rows as List)
+          SeriesProgress(
+            playlist: YoutubePlaylist.fromJson(r as Map<String, dynamic>),
+            reachedPosition:
+                ((r)['reached_position'] as num?)?.toInt() ?? 0,
+          ),
+      ];
+    } catch (_) {
+      // RPC missing on this deployment — fall back to the old three-query
+      // walk rather than dropping the shelf.
+      return _fetchContinueSeriesLegacy(uid, limit);
+    }
+  }
+
+  static Future<List<SeriesProgress>> _fetchContinueSeriesLegacy(
+    String uid,
+    int limit,
+  ) async {
     try {
       final history = await _c
           .from('youtube_watch_history')

@@ -231,9 +231,21 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: _submitting ? null : _finish,
+                      // Greyed out until a reason is picked (founder, Aug).
+                      // The survey used to be skippable straight past this
+                      // button, so most people deleted "without saying" and
+                      // the answers that were meant to explain churn never
+                      // arrived. Disabling is deliberate friction, not a
+                      // trap: every option is one tap, "Other" is there for
+                      // anything unlisted, and Back is still available — the
+                      // caption under this button still says so.
+                      onPressed: (_submitting || _reason == null)
+                          ? null
+                          : _finish,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.red,
+                        disabledBackgroundColor: palette.divider,
+                        disabledForegroundColor: palette.textMuted,
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -249,8 +261,13 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                               ),
                             )
                           : Text(
+                              // Says what to DO, not what is broken. A
+                              // greyed button with no explanation reads as a
+                              // bug; this one names the one tap that enables
+                              // it. ("Delete without saying" is gone — that
+                              // path no longer exists.)
                               _reason == null
-                                  ? 'Delete without saying'
+                                  ? 'Choose a reason above'
                                   : 'Delete my account',
                               style: AppTextStyles.labelLarge.copyWith(
                                 color: AppColors.white,

@@ -61,7 +61,6 @@ class QuizMusic {
   static bool _off = false;
   static double _volume = defaultVolume;
   static bool _loaded = false;
-  static bool _listeningToSfx = false;
 
   /// True when the asset failed to load. Lets the settings screen tell the
   /// truth instead of offering a control that cannot do anything.
@@ -96,18 +95,14 @@ class QuizMusic {
   static void loadPrefs() {
     if (_loaded) return;
     _loaded = true;
-    // The master mute lives on QuizSfx, so the loop has to hear about it.
-    // Without this the speaker button stopped the effects and left the
-    // music running until the arena was closed. reconcile() is idempotent
-    // and cheap, so reacting to every revision bump (volume included) is
-    // simpler and safer than trying to react only to mute changes.
-    //
-    // Its own flag, not [_loaded]: resetForTest clears _loaded, and a
-    // second loadPrefs would then register the listener twice.
-    if (!_listeningToSfx) {
-      _listeningToSfx = true;
-      QuizSfx.revision.addListener(_onSfxChanged);
-    }
+    // NO LONGER listens to QuizSfx.revision. The loop used to reconcile on
+    // every effects-settings change so a master mute could stop it, but the
+    // only things that bump that revision now are the two *Sound effects*
+    // switches — and reacting to them is precisely the bug the founder
+    // reported: turning effects off killed the soundtrack too. Nothing
+    // reconcile() reads (the music toggle, and whether the Library player is
+    // playing) changes when effects settings change, so the listener was
+    // both harmful and pointless. See [shouldPlay].
     _off =
         (CacheService.readPref(_kOff) ?? CacheService.readPref(_legacyOff)) ==
         '1';
@@ -121,8 +116,6 @@ class QuizMusic {
   }
 
   static void _loadPrefs() => loadPrefs();
-
-  static void _onSfxChanged() => unawaited(reconcile());
 
   static Future<void> setEnabled(bool value) async {
     _loadPrefs();
@@ -150,13 +143,21 @@ class QuizMusic {
   /// platform behind it — the decision is the part that matters, the
   /// playback is just plumbing.
   ///
-  /// [muted] is the arena's MASTER mute, i.e. [QuizSfx.muted]. The speaker
-  /// button in the arena's top bar only ever called [QuizSfx.setMuted], so
-  /// muting silenced the taps and ticks and left a three-megabyte music bed
-  /// playing underneath — "I click mute and the music doesn't stop". One
-  /// speaker icon has to mean all the sound, so the soundtrack honours it
-  /// too. Turning the music off on its own is still what the separate
-  /// toggle in Sound & haptics is for.
+  /// [muted] is a MASTER mute — "silence everything", as a single speaker
+  /// icon in the arena would mean.
+  ///
+  /// It is deliberately NOT [QuizSfx.muted] any more (founder, Aug 2026:
+  /// "turn off sound effects the music stops — it should only stop when I
+  /// turn off music"). The original coupling was written for a speaker
+  /// button in the arena's top bar, where one icon meaning "all the sound"
+  /// was right. That button no longer calls [QuizSfx.setMuted] — the only
+  /// two callers left are the *Sound effects* switches in the quiz lobby
+  /// and in Sound & haptics, and neither of those should reach across and
+  /// stop the soundtrack. Effects and music are two switches; each one now
+  /// controls exactly what it is labelled.
+  ///
+  /// The parameter stays so a real master mute can be reintroduced without
+  /// reworking this decision — pass `true` from it and the loop stops.
   @visibleForTesting
   static bool shouldPlay({
     required bool enabled,
@@ -213,7 +214,7 @@ class QuizMusic {
     if (!shouldPlay(
       enabled: enabled,
       userMusicOn: MusicPlayerService.instance.isPlayingNow,
-      muted: QuizSfx.muted,
+      muted: false, // effects mute no longer silences the soundtrack
     )) {
       return;
     }
@@ -263,7 +264,7 @@ class QuizMusic {
     final should = shouldPlay(
       enabled: enabled,
       userMusicOn: MusicPlayerService.instance.isPlayingNow,
-      muted: QuizSfx.muted,
+      muted: false, // effects mute no longer silences the soundtrack
     );
     if (should && _player == null) {
       await start();

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:math' show Random;
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -155,18 +156,45 @@ class UsageAnalytics {
     _sessionId = _newSessionId();
   }
 
+  static final Random _rng = Random.secure();
+
+  /// A real RFC-4122 v4 UUID.
+  ///
+  /// The previous implementation derived this from
+  /// `microsecondsSinceEpoch` and emitted groups of **8-4-4-5-12** — the
+  /// fourth group was `'a'` prepended to an already-4-char value. That is
+  /// not a valid UUID, and `track_app_events` declares
+  /// `p_session_id uuid`, so PostgREST rejected every single call with
+  /// `22P02 invalid input syntax for type uuid` before the function body
+  /// ever ran. [flush] catches and only `debugPrint`s, so in a release
+  /// build the failure was completely silent: `app_events` and
+  /// `app_sessions` both sat at 0 rows from 3 Aug 2026 onward while the
+  /// app looked fully instrumented.
+  ///
+  /// The time-derived version also collided — every id generated within
+  /// the same millisecond was byte-identical, which made
+  /// [resetSession] a no-op and would have merged two users on a shared
+  /// phone into one session, the exact thing it exists to prevent.
   static String _newSessionId() {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    final rand = now.hashCode.toUnsigned(32).toRadixString(16).padLeft(8, '0');
-    final a = now.toUnsigned(32).toRadixString(16).padLeft(8, '0');
-    final b = (now >> 32).toUnsigned(16).toRadixString(16).padLeft(4, '0');
-    final c = (now ~/ 7).toUnsigned(16).toRadixString(16).padLeft(4, '0');
-    final d = (now ~/ 13).toUnsigned(16).toRadixString(16).padLeft(4, '0');
-    return '$a-$b-4${c.substring(1)}-a$d-$rand${a.substring(0, 4)}';
+    final b = List<int>.generate(16, (_) => _rng.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40; // version 4
+    b[8] = (b[8] & 0x3f) | 0x80; // variant 10xx
+    String hex(int start, int end) => [
+          for (var i = start; i < end; i++) b[i].toRadixString(16).padLeft(2, '0'),
+        ].join();
+    return '${hex(0, 4)}-${hex(4, 6)}-${hex(6, 8)}-${hex(8, 10)}-${hex(10, 16)}';
   }
 
   @visibleForTesting
   static int get queuedCount => _queue.length;
+
+  /// The id sent as `p_session_id`. Exposed so a test can assert it is a
+  /// UUID Postgres will actually accept — see the note on [_newSessionId].
+  @visibleForTesting
+  static String? get sessionId => _sessionId;
+
+  @visibleForTesting
+  static String newSessionIdForTest() => _newSessionId();
 
   @visibleForTesting
   static void debugStart() {

@@ -77,6 +77,33 @@ const TYPES = {
         d.price && d.price_currency ? `${d.price_currency} ${d.price}` : "",
     }),
   },
+  // Feed posts. Public visibility ONLY — the filter is in the query, not in
+  // the mapper, so a friends-only or private post returns "not found" rather
+  // than leaking its text into a link preview that anyone can unfurl.
+  "post-share": {
+    host: "post",
+    kicker: "POST",
+    tag: "COMMUNITY",
+    title: "Advent Connect ZW",
+    description: "A post from the Seventh-day Adventist community in Zimbabwe.",
+    fetch: (env, id) =>
+      fetchRow(
+        env,
+        "posts",
+        `id=eq.${encodeURIComponent(id)}&visibility=eq.public` +
+          `&select=content,image_url,image_urls`,
+      ),
+    map: (d) => ({
+      title: "Advent Connect ZW",
+      description: d.content ?? "",
+      image:
+        d.image_url ??
+        (Array.isArray(d.image_urls) && d.image_urls.length
+          ? String(d.image_urls[0])
+          : ""),
+      meta: "",
+    }),
+  },
   "event-share": {
     host: "event",
     kicker: "EVENT",

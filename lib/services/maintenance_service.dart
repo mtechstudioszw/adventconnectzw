@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'cache_service.dart';
 
 /// The current maintenance state, as the server describes it.
 class MaintenanceState {
@@ -64,11 +68,57 @@ class MaintenanceService {
   /// without waiting for a relaunch.
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
-  static Future<MaintenanceState> check() async {
+  /// What the LAST successful check said about this device.
+  ///
+  /// `pref:` so it survives sign-out — maintenance is a property of the
+  /// server, not of whoever happens to be signed in. See
+  /// [CacheService.clearUserData]; an unprefixed key here would be wiped and
+  /// the adaptive budget below would silently stop working for anyone who
+  /// signed out.
+  static const _kWasBlocked = 'pref:maintenance_blocked_v1';
+
+  static bool get _wasBlocked => CacheService.readPref(_kWasBlocked) == '1';
+
+  /// How long the splash should wait for an answer.
+  ///
+  /// THE BUG THIS FIXES (founder, Aug 2026): "if you open the app it loads
+  /// normally, after a while it locks". A 1500 ms budget that fails open
+  /// treats a SLOW answer exactly like NO answer — so on the mobile data
+  /// this app is actually used on, the splash gave up, let the member in,
+  /// and the 15 s poll in main.dart then threw the blocking screen up on
+  /// top of them. Being let in and then kicked out reads as a broken app.
+  ///
+  /// Fail-open is still right and is untouched: nobody should be locked out
+  /// by a dropped packet. What changes is only the BUDGET, and only when we
+  /// have reason to expect a block — if the last successful check said this
+  /// device was shut out, maintenance is probably still on, so it is worth
+  /// waiting for a definitive answer instead of guessing wrong twice.
+  /// Everyone else keeps the fast splash.
+  static Duration get splashTimeout => _wasBlocked
+      ? const Duration(milliseconds: 5000)
+      : const Duration(milliseconds: 1500);
+
+  /// How long the splash's GATE waits before giving up and routing on.
+  ///
+  /// The splash caps the maintenance answer at 400 ms so the loader never
+  /// stalls — that cap, not the RPC timeout, is the budget that actually
+  /// decides, and raising only [splashTimeout] would have changed nothing.
+  ///
+  /// Deliberately still 400 ms for everyone whose last known answer was
+  /// "not blocked", which is virtually every launch: the splash must stay
+  /// fast. Only a device that was genuinely shut out last time spends
+  /// longer, and only to avoid showing it the app and then snatching it
+  /// away. Kept below [splashTimeout] so the RPC is never the thing that
+  /// gives up first.
+  static Duration get splashGateTimeout => _wasBlocked
+      ? const Duration(milliseconds: 4500)
+      : const Duration(milliseconds: 400);
+
+  static Future<MaintenanceState> check({Duration? timeout}) async {
     try {
       final rows = await _client
           .rpc('maintenance_status')
-          .timeout(const Duration(milliseconds: 1500));
+          .timeout(timeout ?? const Duration(milliseconds: 1500));
       final list = rows as List;
       if (list.isEmpty) return last = MaintenanceState.off;
       final row = list.first as Map<String, dynamic>;
@@ -86,6 +136,10 @@ class MaintenanceService {
       // to route them somewhere they are not going is churn.
       final changed = next.blocked != last.blocked;
       last = next;
+      // Remember the ANSWER, not the attempt — only a successful check
+      // reaches here, so a flaky network can never leave a stale "blocked"
+      // behind. This is what [splashTimeout] reads on the next cold start.
+      unawaited(CacheService.writePref(_kWasBlocked, next.blocked ? '1' : '0'));
       if (changed) revision.value++;
       return next;
     } catch (e) {

@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
+import '../../screens/onboarding/widgets/film_scenes.dart' show AmbientPainter;
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_text_styles.dart';
@@ -55,10 +56,53 @@ class _Option {
   final String subtitle;
 }
 
-class _CreateScreen extends StatelessWidget {
+class _CreateScreen extends StatefulWidget {
   const _CreateScreen({required this.animation});
 
   final Animation<double> animation;
+
+  @override
+  State<_CreateScreen> createState() => _CreateScreenState();
+}
+
+class _CreateScreenState extends State<_CreateScreen>
+    with SingleTickerProviderStateMixin {
+  /// The same slow ambient drift the splash, onboarding film, auth shell
+  /// and maintenance screen run on. Reused rather than reinvented: this
+  /// is the app's own background, so Create now reads as part of Advent
+  /// Connect instead of a dark rectangle that could belong to anything.
+  late final AnimationController _ambient;
+
+  @override
+  void initState() {
+    super.initState();
+    _ambient = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Honour "remove animations": hold the field still rather than
+    // spinning a controller nobody can see.
+    if (AppMotion.enabled(context)) {
+      if (!_ambient.isAnimating) _ambient.repeat();
+    } else {
+      _ambient
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ambient.dispose();
+    super.dispose();
+  }
+
+  Animation<double> get animation => widget.animation;
 
   /// ## Why this is two lists and not one grid
   ///
@@ -160,12 +204,46 @@ class _CreateScreen extends StatelessWidget {
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => Navigator.of(context).pop(),
+                  // This used to be one flat ColoredBox of navy at 82%. Over
+                  // a blurred feed that is a dead, evenly-lit slab with no
+                  // light source and no depth — and below the last row it
+                  // became a large rectangle of nothing, which is where the
+                  // screen stopped looking designed.
+                  //
+                  // Three layers now: the blur, a vertical gradient so light
+                  // falls from the top the way it does everywhere else in the
+                  // app, and the app's own AmbientPainter drifting over it.
+                  // The ambient field is what fills the space under the last
+                  // row, so the foot of the screen is lit rather than empty.
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 18 * t, sigmaY: 18 * t),
-                    child: ColoredBox(
-                      // Matches the translation picker's depth — at 0.55 the
-                      // feed showed through hard enough to fight the tiles.
-                      color: AppColors.darkNavy.withValues(alpha: 0.82 * t),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            // Lifted where the title sits, settling deeper at
+                            // the foot. One hue throughout — this is a light
+                            // source, not a second colour.
+                            const Color(0xFF16233F).withValues(alpha: 0.86 * t),
+                            AppColors.darkNavy.withValues(alpha: 0.94 * t),
+                          ],
+                        ),
+                      ),
+                      child: Opacity(
+                        opacity: t,
+                        child: AnimatedBuilder(
+                          animation: _ambient,
+                          builder: (context, _) => CustomPaint(
+                            painter: AmbientPainter(
+                              loop: _ambient.value,
+                              film: 0,
+                            ),
+                            size: Size.infinite,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

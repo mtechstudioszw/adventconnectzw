@@ -19,7 +19,26 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const FEEDS = [
   { url: "https://adventistreview.org/feed/", label: "Adventist Review" },
-  { url: "https://www.adventistworld.org/feed/", label: "Adventist World" },
+
+  // REMOVED 16 Aug 2026 — "Adventist World"
+  // (https://www.adventistworld.org/feed/).
+  //
+  // That host now redirects to Adventist Review. The feed still answers 200,
+  // but it returns Adventist Review's OWN <link> and <description>, a
+  // lastBuildDate frozen at Oct 2024, and ZERO <item> elements. So it has
+  // been contributing nothing to every run.
+  //
+  // It was not merely useless, it was a duplicate-import waiting to happen:
+  // the channel it serves is already Adventist Review's, so the moment that
+  // redirect starts passing items through, every article would be imported a
+  // second time under the label "Adventist World" and the news list would
+  // read double. Removing it is safer than leaving a dead entry in place.
+  //
+  // A replacement second source is still wanted. adventist.news and
+  // news.adventist.org (Adventist News Network) both look right but returned
+  // 429 to every probe from here, so neither could be verified — check them
+  // from another network before adding, and confirm they carry images, which
+  // is the other half of the covers problem.
 ];
 
 const PER_FEED = 8; // newest N items per feed per run

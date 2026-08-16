@@ -296,7 +296,17 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
                 tooltip: 'Dismiss',
                 icon: Icon(Icons.close_rounded,
                     color: AppColors.white.withValues(alpha: 0.8), size: 18),
-                onPressed: () => SabbathSchoolPrefs.clearLastRead(),
+                // Was `() => SabbathSchoolPrefs.clearLastRead()`, which is
+                // why this button did nothing you could see: the pref was
+                // genuinely cleared, but nothing told the tab to rebuild, so
+                // the card sat there unchanged and the X read as broken.
+                // (It also dropped the Future on the floor, so the delete
+                // raced the next read.) Await it, then rebuild.
+                onPressed: () async {
+                  await SabbathSchoolPrefs.clearLastRead();
+                  if (!mounted) return;
+                  setState(() {});
+                },
               ),
             ],
           ),

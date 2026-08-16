@@ -10,7 +10,7 @@ class PrivacyScreen extends StatelessWidget {
       kicker: 'LEGAL',
       title: 'Privacy Policy',
       subtitle: 'What we collect, why we collect it, and how we look after it.',
-      lastUpdated: '20 June 2026',
+      lastUpdated: '16 August 2026',
       intro:
           'Your privacy matters to us. This policy explains the personal information Advent Connect ZW collects when you use the app, how we use it, and the choices you have. We aim to keep this clear and honest — if anything is unclear please reach out and we\'ll explain.',
       sections: const [
@@ -52,6 +52,31 @@ class PrivacyScreen extends StatelessWidget {
           title: 'Data Security',
           body:
               'We protect your data with industry-standard safeguards. Auth tokens are kept in your device\'s secure storage (Keychain on iOS, encrypted shared preferences on Android). All traffic between the app and our servers is encrypted in transit. Sensitive operations are protected at the database level with row-level security.',
+        ),
+        // SYNCED FROM THE PUBLISHED POLICY, NOT NEWLY DRAFTED.
+        //
+        // The live policy at mtechstudioszw.github.io/adventconnect-legal —
+        // the URL Google Play links to from the store listing — already
+        // discloses this in its "Who can access your data" and "Encryption
+        // model" sections. This in-app screen did NOT: it listed messages
+        // under content we collect and stopped there, with zero mention of
+        // administrator access or the absence of end-to-end encryption.
+        //
+        // So the copy most members will actually read was materially weaker
+        // than the one Play links to, while carrying a LATER "last updated"
+        // date — which made the weaker text look like the current one. The
+        // wording below is lifted from the published policy rather than
+        // paraphrased, so the two cannot drift apart in meaning.
+        LegalSection(
+          title: 'Who Can Access Your Data',
+          body:
+              'It is important to us that you know exactly who can see what:',
+          bullets: [
+            'You — your own data, and content shared with you. This is enforced at the database level with row-level security, not just in the app.',
+            'Other members — only what you make visible under the app\'s visibility rules, such as public versus friends-only posts, or public versus anonymous prayers.',
+            'Church admins — cannot read your private chats.',
+            'Our servers and administrators — backend functions use a privileged database credential that can read stored data. This means authorised administrators can technically access stored content, including messages. Messaging is not end-to-end encrypted, and messages are stored on our servers in readable form.',
+          ],
         ),
         LegalSection(
           title: 'Your Rights',

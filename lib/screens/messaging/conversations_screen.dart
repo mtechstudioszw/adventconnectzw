@@ -992,14 +992,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
               ),
               const Spacer(),
-              // Explore scopes (people who aren't friends yet, status,
-              // archived) still live in the full-screen scoped search — the
-              // inline field below covers the common case.
-              _CircleIconButton(
-                icon: Icons.person_search,
-                onTap: _openChatSearch,
-              ),
-              const SizedBox(width: 6),
+              // The person-search circle button was removed (founder, Aug).
+              // The inline field directly below already searches people,
+              // groups and messages, so the icon sat on top of the same job.
+              // Its OTHER job — the scoped search over people you aren't
+              // friends with yet, status and archived — was not duplicated
+              // anywhere, so it moved into the overflow menu as "Find
+              // people" rather than being deleted with the button.
               PopupMenuButton<String>(
                 icon: Icon(Icons.more_vert, color: context.palette.text),
                 color: context.palette.card,
@@ -1010,8 +1009,24 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                   if (v == 'self') _openSelfChat();
                   if (v == 'privacy') context.pushNamed('chat_privacy');
                   if (v == 'starred') context.pushNamed('starred_messages');
+                  if (v == 'find') _openChatSearch();
                 },
                 itemBuilder: (context) => const [
+                  // Find people — the ONLY route to the scoped search
+                  // (explore / status / archived) now that the header's
+                  // person-search button is gone. The inline field below
+                  // searches people, groups and messages, but NOT people
+                  // you aren't friends with yet, so dropping this entirely
+                  // would have quietly removed the only way to find them.
+                  PopupMenuItem(
+                    value: 'find',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.person_search),
+                      title: Text('Find people'),
+                    ),
+                  ),
                   PopupMenuItem(
                     value: 'self',
                     child: ListTile(

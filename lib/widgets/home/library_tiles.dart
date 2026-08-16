@@ -22,8 +22,13 @@ import '../motion/staggered_reveal.dart';
 ///
 /// Ordering is deliberate: **Quiz sits fourth** so it lands inside the first
 /// screenful, and it keeps the brand gradient so it still reads as the one
-/// highlight. This row is still the ONLY route into `/quiz` — don't reorder it
-/// out of view without adding another entry point.
+/// highlight.
+///
+/// This row was the ONLY route into `/quiz` until Aug 2026, when a quiz action
+/// was added to the Library screen's app bar. It is still the PRIMARY one and
+/// the only one on the home feed — the app-bar action is a second door for
+/// people already inside the Library, not a replacement — so the warning
+/// stands: don't reorder this tile out of view.
 class LibraryTiles extends StatelessWidget {
   const LibraryTiles({super.key});
 

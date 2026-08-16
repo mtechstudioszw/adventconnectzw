@@ -563,12 +563,52 @@ class _HomeScreenState extends State<HomeScreen>
           )
           .take(8)
           .toList();
-      // Show a per-user RANDOM selection of churches (stable for a given user,
-      // but different between users) instead of the same alphabetical first-6
-      // for everyone — so smaller/newer churches also get discovered.
+      // RELEVANCE FIRST, THEN DISCOVERY.
+      //
+      // This used to be a bare shuffle of all ~2,600 churches, taking 6.
+      // Stable per viewer, but with no relevance whatsoever — a member in
+      // Harare was shown six congregations from anywhere in the country
+      // (founder: "churches being showed in the feed just picking random
+      // churches"). The shuffle's own goal is in the old comment and is
+      // still worth keeping: don't show everyone the same alphabetical
+      // first-6, so smaller and newer churches get discovered too.
+      //
+      // So: shuffle first (that IS the discovery order), then float the
+      // churches in a city the viewer already has a connection to. Two
+      // buckets, concatenated — deliberately a partition and not a sort,
+      // because Dart's sort is not stable and would scramble the shuffle,
+      // making the rail change between launches for the same person.
       final allChurches = List<Church>.of(results[1] as List<Church>);
       allChurches.shuffle(Random((viewerId ?? 'guest').hashCode));
-      final churches = allChurches.take(6).toList();
+
+      // Cities the viewer is already connected to, derived from the churches
+      // they follow. Falls back to pure shuffle when they follow none, so a
+      // brand-new member sees exactly the old behaviour rather than an empty
+      // rail — and this stays correct even if _followedChurchIds has not been
+      // populated yet by the primary load.
+      final myCities = <String>{};
+      for (final c in allChurches) {
+        if (_followedChurchIds.contains(c.id)) {
+          final city = c.city.trim().toLowerCase();
+          if (city.isNotEmpty) myCities.add(city);
+        }
+      }
+
+      final List<Church> churches;
+      if (myCities.isEmpty) {
+        churches = allChurches.take(6).toList();
+      } else {
+        final near = <Church>[];
+        final rest = <Church>[];
+        for (final c in allChurches) {
+          if (myCities.contains(c.city.trim().toLowerCase())) {
+            near.add(c);
+          } else {
+            rest.add(c);
+          }
+        }
+        churches = [...near, ...rest].take(6).toList();
+      }
       var unreadMessages = 0;
       for (final c in results[5] as List<Conversation>) {
         unreadMessages += c.unreadCount;
@@ -769,7 +809,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   /// English greeting. This was Shona ("Mangwanani / Masikati / Manheru",
-  /// "Sabata yakanaka") — reverted on the founder's instruction, 29 Jul
+  /// "Sabata rakanaka") — reverted on the founder's instruction, 29 Jul
   /// 2026, so the header matches the English used everywhere else in the
   /// app rather than being the one localised string in it.
   String _greeting() {
@@ -1299,8 +1339,10 @@ class _HomeScreenState extends State<HomeScreen>
                   // bundled hymnal makes very unlikely.
                   TodayCard(devotion: _devotion),
                   const SizedBox(height: AppSpace.md),
-                  // Library launcher. This is the ONLY route into /quiz —
-                  // see LibraryTiles before reordering it.
+                  // Library launcher, and the quiz's only entry point ON THE
+                  // FEED — the Library app bar gained a second one in Aug
+                  // 2026, but that is only reachable once you are already in
+                  // the Library. See LibraryTiles before reordering it.
                   const LibraryTiles(),
                 ],
               ),
@@ -1359,6 +1401,38 @@ class _HomeScreenState extends State<HomeScreen>
 
   /// How many people the first rail takes before the second one starts.
   static const _firstRailSize = 6;
+
+  bool _toppingUpSuggestions = false;
+
+  /// Fetch more people to meet once dismissals have thinned the pool.
+  ///
+  /// Only fires when there is nothing left to slide into the gap — above
+  /// the threshold the rails backfill on their own and a refetch would be
+  /// wasted bandwidth on a screen that already made ten calls.
+  ///
+  /// `fetchSuggestedMembers` has no offset and picks randomly from a larger
+  /// discoverable pool, so asking for a bigger limit is how you get people
+  /// you have not seen; anyone already held is filtered out by id before
+  /// appending. Best-effort throughout — a failed top-up just means the
+  /// rail is shorter, which is exactly what happens today anyway.
+  Future<void> _topUpSuggestionsIfLow() async {
+    if (_toppingUpSuggestions) return;
+    if (_openSuggestions.length >= _firstRailSize + 3) return;
+    _toppingUpSuggestions = true;
+    try {
+      final more = await DirectoryService.fetchSuggestedMembers(limit: 40);
+      if (!mounted) return;
+      final known = {for (final e in _suggestedMembers) e.userId};
+      final fresh =
+          more.where((e) => !known.contains(e.userId)).toList();
+      if (fresh.isEmpty) return;
+      setState(() => _suggestedMembers = [..._suggestedMembers, ...fresh]);
+    } catch (_) {
+      // Silent: discovery is decoration, never a reason to show an error.
+    } finally {
+      _toppingUpSuggestions = false;
+    }
+  }
 
   /// Splits [_openSuggestions] between the two "people to meet" rails (#13).
   ///
@@ -2146,19 +2220,32 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       );
     }
-    if (_jobs.isNotEmpty) {
-      discoverable.add(
-        _DiscoverySlot(
-          key: 'jobs',
-          widget: _discoverySection(
-            title: 'Jobs & opportunities',
-            action: 'See all',
-            onAction: () => context.goNamed('jobs'),
-            child: _buildJobsRow(),
-          ),
+    // NOT gated on `_jobs.isNotEmpty` any more (founder, Aug: "put something
+    // in feed to suggest people post in jobs").
+    //
+    // It used to be, and that was self-defeating: with no jobs the whole
+    // section disappeared, so the one place that could ask someone to post a
+    // job only ever appeared once somebody already had. Nothing broke — the
+    // board simply stayed empty, quietly.
+    //
+    // Same shape as 'prayers' directly above, which already always renders
+    // and swaps in an invitation when it has nothing to show.
+    discoverable.add(
+      _DiscoverySlot(
+        key: 'jobs',
+        widget: _discoverySection(
+          title: 'Jobs & opportunities',
+          action: _jobs.isEmpty ? null : 'See all',
+          onAction: _jobs.isEmpty ? null : () => context.goNamed('jobs'),
+          child: _jobs.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _JobsEmpty(onTap: () => context.goNamed('jobs')),
+                )
+              : _buildJobsRow(),
         ),
-      );
-    }
+      ),
+    );
     // Stable per-viewer shuffle, weighted by onboarding interests so
     // the rails the user said they wanted ("Show me more of Events /
     // Prayer requests / Church announcements" in the onboarding
@@ -2429,8 +2516,18 @@ class _HomeScreenState extends State<HomeScreen>
               friendship: friendship,
               viewerId: viewerId,
               busy: _addingFriendIds.contains(m.userId),
-              onDismiss: () =>
-                  setState(() => _dismissedSuggestionIds.add(m.userId)),
+              onDismiss: () {
+                setState(() => _dismissedSuggestionIds.add(m.userId));
+                // Reveal SOMEONE ELSE rather than leaving a gap (founder:
+                // "when click exit on a profile... load another profile").
+                // The rails already backfill by themselves — they re-slice
+                // `_openSuggestions`, so the 7th person slides into the 6th
+                // slot for free. What they cannot do is conjure a 7th person
+                // when the pool is spent, and on a network this size the
+                // pool empties fast: 18 are fetched, then friends and
+                // earlier dismissals are filtered out of it.
+                _topUpSuggestionsIfLow();
+              },
               onAddFriend: () => _sendFriendRequest(m),
               onAcceptRequest: () async {
                 if (friendship == null) return;
@@ -4103,6 +4200,85 @@ class _AdventNewsHeroState extends State<_AdventNewsHero> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Invitation shown where the jobs row would be when the board is empty.
+///
+/// Mirrors [_PrayersEmpty] deliberately - same card, same 48dp tinted glyph,
+/// same trailing text button - because the two sit in the same rail and a
+/// second empty state invented from scratch would read as a different app.
+///
+/// The copy asks for a POST, not a browse. An empty board is not a browsing
+/// problem, and a "See all" pointing at nothing was the old behaviour.
+class _JobsEmpty extends StatelessWidget {
+  const _JobsEmpty({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppShadows.card(context),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(AppRadius.button),
+            ),
+            child: const Icon(
+              Icons.work_outline_rounded,
+              color: AppColors.primaryBlue,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Know of a job going?',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Post it here so someone in the community can apply.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onTap,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              'Post',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

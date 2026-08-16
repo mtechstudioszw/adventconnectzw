@@ -139,7 +139,16 @@ class _LegalLayoutState extends State<LegalLayout>
         color: AppColors.primaryBlue.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
       ),
+      // `mainAxisSize.min` so the pill hugs its label, plus a Flexible text
+      // so it wraps instead of overflowing.
+      //
+      // Every legal screen in the app — Terms, Privacy, Community Guidelines
+      // and now Help — painted a red-and-yellow overflow stripe at 2x text
+      // scale because this Text had no flex. Accessibility text sizes are
+      // exactly the setting an older member reading a legal document is
+      // likely to have turned on.
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
             Icons.update,
@@ -147,12 +156,14 @@ class _LegalLayoutState extends State<LegalLayout>
             size: 16,
           ),
           const SizedBox(width: 8),
-          Text(
-            'Last updated: ${widget.lastUpdated}',
-            style: AppTextStyles.labelMedium.copyWith(
-              color: AppColors.primaryBlue,
-              fontWeight: FontWeight.w700,
-              fontSize: 12.5,
+          Flexible(
+            child: Text(
+              'Last updated: ${widget.lastUpdated}',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
             ),
           ),
         ],

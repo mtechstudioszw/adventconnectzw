@@ -90,6 +90,56 @@ void main() {
     });
   });
 
+  group('session id', () {
+    // `track_app_events` declares `p_session_id uuid`. Postgres parses
+    // that argument BEFORE the function body runs, so an id it cannot
+    // cast fails the whole call with 22P02 — and UsageAnalytics.flush()
+    // swallows the error into a debugPrint. The result is a release
+    // build that looks fully instrumented and writes nothing, forever.
+    //
+    // That is exactly what happened: the original generator emitted
+    // groups of 8-4-4-5-12 (a stray 'a' prefixed to an already-4-char
+    // group), and app_events sat at 0 rows from 3 Aug 2026 while the
+    // admin console had no data to show.
+    final uuidV4 = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    );
+
+    test('is a UUID Postgres will accept', () {
+      for (var i = 0; i < 200; i++) {
+        final id = UsageAnalytics.newSessionIdForTest();
+        expect(
+          uuidV4.hasMatch(id),
+          isTrue,
+          reason: 'not a valid v4 UUID: "$id" '
+              '(groups ${id.split('-').map((g) => g.length).join('-')})',
+        );
+      }
+    });
+
+    test('start() sets a valid session id', () {
+      expect(UsageAnalytics.sessionId, isNotNull);
+      expect(uuidV4.hasMatch(UsageAnalytics.sessionId!), isTrue);
+    });
+
+    test('ids are unique, so two sessions never merge', () {
+      // The time-derived generator returned byte-identical ids for
+      // everything inside the same millisecond, which made
+      // resetSession() a no-op and would merge two people sharing a
+      // phone into one session — the exact thing it exists to prevent.
+      final ids = {
+        for (var i = 0; i < 1000; i++) UsageAnalytics.newSessionIdForTest(),
+      };
+      expect(ids.length, 1000);
+    });
+
+    test('resetSession() actually changes the id', () {
+      final before = UsageAnalytics.sessionId;
+      UsageAnalytics.resetSession();
+      expect(UsageAnalytics.sessionId, isNot(before));
+    });
+  });
+
   group('queueing', () {
     test('records opens and engagements', () {
       UsageAnalytics.open(Feature.chat);

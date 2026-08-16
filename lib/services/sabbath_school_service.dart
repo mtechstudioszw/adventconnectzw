@@ -27,12 +27,21 @@ class SabbathSchoolService {
 
   /// Default language. Shona first — this is a Zimbabwean app, so the mother
   /// tongue is the default and English is a switch away, not the reverse.
-  static const defaultLanguage = 'sn';
+  /// Adventech publishes ~90 languages; English is the default because it is
+  /// the language the quarterly is actually written and released in first —
+  /// the Shona edition lags, and a member opening the tab to an empty or
+  /// stale quarter reads as the feature being broken. Members who want Shona
+  /// pick it once and it now survives sign-out (see [_kLang]).
+  static const defaultLanguage = 'en';
 
   /// Pinned to the top of the picker; the remaining ~85 follow alphabetically.
   static const priorityLanguages = ['sn', 'en', 'nd', 'af', 'pt', 'sw'];
 
-  static const _kLang = 'ss_lang_v1';
+  // MUST keep the `pref:` prefix. CacheService.writePref does NOT add it, and
+  // clearUserData() deletes every key that lacks it — so without the prefix a
+  // member's chosen language was silently reset on every sign-out. The chosen
+  // reading language is device-level, not user-scoped, so `pref:` is correct.
+  static const _kLang = 'pref:ss_lang_v1';
   static const _kLangList = 'ss_languages_v1';
 
   /// Network calls are short-fused: the cache is almost always good enough,

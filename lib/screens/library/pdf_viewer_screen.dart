@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../config/share_config.dart';
 import '../../services/cache_service.dart';
 import '../../services/download_service.dart';
+import '../../services/egw_download_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -57,10 +58,29 @@ class PdfProgress {
 /// the URL hash) and reuse it on every subsequent open — which also makes a
 /// once-opened book readable offline.
 class PdfViewerScreen extends StatefulWidget {
-  const PdfViewerScreen({super.key, required this.title, required this.url});
+  const PdfViewerScreen({
+    super.key,
+    required this.title,
+    required this.url,
+    this.itemId,
+  });
 
   final String title;
   final String url;
+
+  /// `library_items.id` when this document is a Library book.
+  ///
+  /// Lets the reader check [EgwDownloadService] for a DURABLE copy before
+  /// falling back to its own cache. Optional because this screen also opens
+  /// documents that were never Library rows (the bundled hymnal).
+  ///
+  /// The distinction matters: _prepare() below already caches every PDF it
+  /// fetches, but into `getApplicationCacheDirectory()`, which the OS may
+  /// reclaim whenever storage is tight. That is fine for "I read this once";
+  /// it is not what someone means when they deliberately download a book for
+  /// a journey. A file saved through EgwDownloadService lives in application
+  /// SUPPORT and is only ever removed by the reader.
+  final String? itemId;
 
   @override
   State<PdfViewerScreen> createState() => _PdfViewerScreenState();
@@ -90,6 +110,19 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   Future<void> _prepare() async {
     try {
+      // A deliberately downloaded copy wins over the incidental cache, and
+      // skips the network entirely — including the HttpClient call below,
+      // which is what made an offline open fail even when the bytes were
+      // already on the device.
+      final id = widget.itemId;
+      if (id != null) {
+        final durable = await EgwDownloadService.localPath(id);
+        if (durable != null) {
+          if (!mounted) return;
+          setState(() => _localPath = durable);
+          return;
+        }
+      }
       final dir = await getApplicationCacheDirectory();
       final name = sha1.convert(widget.url.codeUnits).toString();
       final file = File('${dir.path}/library_$name.pdf');

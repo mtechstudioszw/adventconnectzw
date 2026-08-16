@@ -7,6 +7,7 @@ import '../../config/share_config.dart';
 import '../../models/library_item_model.dart';
 import '../../services/cache_service.dart';
 import '../../services/download_service.dart';
+import '../../services/egw_download_service.dart';
 import '../../services/library_launch_intent.dart';
 import '../../services/library_service.dart';
 import '../../theme/app_colors.dart';
@@ -136,7 +137,14 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
         .push(
           MaterialPageRoute<void>(
             builder: (_) =>
-                PdfViewerScreen(title: item.title, url: item.fileUrl),
+                // itemId lets the reader open a deliberately downloaded copy
+                // from application support instead of re-fetching, and makes
+                // an offline open work at all.
+                PdfViewerScreen(
+                  title: item.title,
+                  url: item.fileUrl,
+                  itemId: item.id,
+                ),
           ),
         )
         // Progress changes while reading; refresh the shelf on the way back.
@@ -443,6 +451,67 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                     if (ctx.mounted) Navigator.of(ctx).pop();
                   },
                 ),
+              // READ OFFLINE — distinct from "Save a copy" below, which hands
+              // the PDF to the OS share sheet and keeps nothing the app can
+              // reopen. This keeps the book inside application support, where
+              // the reader picks it up via PdfViewerScreen(itemId:).
+              //
+              // The viewer already caches whatever it fetches, but into the
+              // CACHE directory, which the OS reclaims under storage
+              // pressure. That is fine for "I read this once"; it is not what
+              // someone means when they download a book before a journey.
+              ListTile(
+                leading: Icon(
+                  EgwDownloadService.isDownloaded(item.id)
+                      ? Icons.offline_pin_rounded
+                      : Icons.cloud_download_outlined,
+                  color: EgwDownloadService.isDownloaded(item.id)
+                      ? AppColors.primaryBlue
+                      : palette.textMuted,
+                ),
+                title: Text(
+                  EgwDownloadService.isDownloaded(item.id)
+                      ? 'Remove download'
+                      : 'Read offline',
+                  style: AppTextStyles.bodyMedium,
+                ),
+                subtitle: Text(
+                  EgwDownloadService.isDownloaded(item.id)
+                      ? 'Frees the space this book is using'
+                      : 'Keeps this book on your phone, no data needed',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: palette.textMuted),
+                ),
+                onTap: () async {
+                  final wasDownloaded =
+                      EgwDownloadService.isDownloaded(item.id);
+                  Navigator.of(ctx).pop();
+                  final messenger = ScaffoldMessenger.of(context);
+                  if (wasDownloaded) {
+                    await EgwDownloadService.remove(item.id);
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Download removed')),
+                    );
+                    return;
+                  }
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Downloading ${item.title}…')),
+                  );
+                  final ok = await EgwDownloadService.download(item);
+                  if (!mounted) return;
+                  messenger.hideCurrentSnackBar();
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        ok
+                            ? '${item.title} is ready to read offline'
+                            : 'Could not download ${item.title}. Check your connection.',
+                      ),
+                    ),
+                  );
+                },
+              ),
               ListTile(
                 leading: Icon(Icons.download_outlined, color: palette.textMuted),
                 title:

@@ -109,10 +109,91 @@ diagnosed or has a stated unknown — nothing is a guess.
 
 ## 2b. EGW reader + Sabbath School batch (founder, 18 Aug 2026)
 
-Eight items in one message. **One is fixed, seven are diagnosed and NOT
-fixed.** None of it is verified on hardware — see §3a for why.
+Eight items in one message, plus five more he reported live on 19 Aug.
+**Ten are now fixed; two need his answer; two are open.** None of it is
+verified on hardware — he has no device this session, so everything below
+was reproduced and pinned with tests instead. See §3a.
 
-### FIXED — "takes long to open a book, it loads for ever"
+### The one cause behind five of these reports
+
+*"text size, day, sepia dosent work"*, *"save to shelf dosent work"* and
+*"read offline download dosent work"* were **one bug in three places**: a
+Hive write was `await`ed BEFORE the notifier that repaints was bumped, so
+the page, the bookmark and the download tick could not change until the
+handset finished writing. `CacheService.initialize()` starts a prune +
+`compact()` of a box that grows on every feed refresh, so that await is
+not free on a real phone. From the outside it is a dead button.
+
+Everywhere it mattered the value now moves first and the disk catches up.
+`writePref` reaches Hive's in-memory keystore before its first `await`, so
+a read on the same frame already sees the new value — only the flush is
+outstanding, and nothing on screen depends on it. **This is now a rule:
+never `await` storage before the notifier that repaints.**
+
+- [x] **The CI build was broken and had been since the Appodeal
+      migration.** `:app:processDebugMainManifest` — Appodeal's core SDK
+      declares `android:allowBackup="true"`, ours declares `false`, and the
+      merger refuses to pick. `tools:replace="android:allowBackup"` settles
+      it. **The value stays false**: auto-backup would copy auth state and
+      cached personal content off the device, against the Play data-safety
+      declaration. Fixed in `5115a48`.
+- [x] **Text size / Day / Sepia.** Two independent bugs at once, both of
+      the ones predicted below. The setters awaited the write (above), AND
+      `showModalBottomSheet`'s `backgroundColor` was evaluated once at call
+      time, so the sheet stayed white while a scrim dimmed the rest —
+      almost nothing was left on screen to show the tap had landed. The
+      sheet now paints its own ground and rebuilds off the same notifier as
+      the page. Pinned by `test/egw_reader_settings_test.dart`, which fails
+      against the old setters on exactly the founder's symptom.
+- [x] **Save to shelf.** Same await; the sheet also stayed open until the
+      flush returned. Pops on the same frame now.
+- [x] **Read offline / download.** `EgwDownloadService.download` had **no
+      timeout of any kind** — the identical bug fixed in `EgwBookService`
+      on 18 Aug, in the twin this service was deliberately written to
+      mirror. Only one half got the fix. Now 15s connect / 20s headers /
+      10min transfer, closes its client, and verifies `Content-Length`
+      before indexing (a truncated PDF is a valid PDF prefix, so nothing
+      downstream could tell).
+- [x] **Tap-to-turn removed** — founder: *"remove touching screen then
+      goes to next page"*. It fired on the gesture people make while
+      reading, and it is the same gesture as tap-to-highlight. Swiping
+      still turns.
+- [x] **The page-turn animation.** Was ~99° of rotation with heavy
+      perspective, so the outgoing page went near edge-on and its text
+      sheared into an unreadable wedge on every turn. Now ~29° with
+      lighter shading; the hinge and the shading are what sell it as
+      paper, not the depth of the angle.
+- [x] **The book cover while a book opens.** The wait now shows the book —
+      cover, title, "Opening…" — instead of a bare spinner over a dimmed
+      shelf.
+- [x] **Tap a sentence to highlight it.** Unblocked by removing
+      tap-to-turn. The boundary rule is the part most likely to be quietly
+      wrong — this shelf is dense with initials (E. G. White),
+      abbreviations (vol., Mrs.) and verse references (Col. 2:3), and a
+      naive split on `.` highlights two words and looks broken. A
+      terminator only ends a statement when what follows looks like a new
+      one, with an explicit exception for single-letter initials.
+      `EgwHighlights.rangesIn` also gained a whitespace-tolerant fallback:
+      passages are stored with whitespace collapsed while the source keeps
+      its line breaks, so a plain `indexOf` could miss a passage that was
+      genuinely there — it stored fine and simply never painted.
+      Pinned by `test/egw_tap_highlight_test.dart`.
+
+### Needs the founder
+
+- [ ] **"the refesh of egw dosent work"** — the fetch path is correct: it
+      goes to the network when online, filters `is_published = true`, and
+      falls back to cache. Cannot tell from here whether the pull gesture
+      does nothing or whether books he added are not appearing. **If the
+      latter, the likely answer is that the 11-book EGW seed was staged
+      but never run** (see the `egw-shelf-seed` memory).
+- [ ] **"there no shelf"** — ambiguous. Save-to-shelf is buried behind a
+      **long-press** on a cover, and the Saved shelf is a filter chip under
+      the search box. Do not guess which half he means.
+
+### Still open
+
+### FIXED 18 Aug — "takes long to open a book, it loads for ever"
 
 `EgwBookService._bytes()` had **no timeout of any kind**: not on the
 connection, not on the transfer. A stalled socket on mobile data hung the
@@ -138,61 +219,18 @@ book won't open" reports.
 
 ### NOT FIXED — still open
 
-- [ ] **Tap-to-highlight a whole statement.** Founder: *"when click text in
-      egw it should highlight a statement from were it starts to where it
-      end n u can hight many statements"*. Today highlighting exists but
-      only through drag-select → context menu → "Highlight"
-      (`egw_reader_screen.dart:576` `_quoteMenu`). He wants a **tap inside a
-      sentence to highlight that whole sentence**, and to accumulate many.
-      The storage already supports it: `EgwHighlights` matches by TEXT, not
-      offsets, and `rangesIn()` already renders multiple passages per block.
-      So this is a gesture + sentence-boundary problem, not a data one.
-      Needs: hit-test the tapped character offset within the block's
-      `TextSpan`, expand to sentence bounds, toggle via
-      `EgwHighlights.add/remove`. Watch out for `.` in abbreviations and
-      verse references when finding the boundary.
-
 - [ ] **Highlighting does not work in Sabbath School at all.**
       `ss_lesson_screen.dart` (1217 lines) has no highlight path — the
-      feature is EGW-only. Decide whether SS shares `EgwHighlights` (it is
-      keyed `bookId` + `chapterId`, so an SS lesson would need its own
-      namespace) or gets its own store. **Founder-facing question: should an
-      SS highlight sync to the account?** EGW highlights are device-local
-      today, which is already an open item.
-
-- [ ] **Show the book cover while it opens.** Founder: *"put the book
-      thumbnail at the first when u open book"*. Right now the open screen
-      is a bare loader while a ~1 MB EPUB downloads and parses in an
-      isolate. The cover is already on the shelf row, so it can be handed
-      to the reader as a hero and held under the spinner. This is most of
-      what makes the wait feel broken rather than slow.
-
-- [ ] **The page-turn animation is too much.** Founder: *"the swipe
-      animation is too much fix tt one or remove is"*. `_turnBy` animates
-      320ms `easeOutCubic` (`egw_reader_screen.dart:171`), and the
-      `PageView` adds its own physics on a drag. Reduce hard or drop to a
-      cut. Cross-check `AppMotion` — the standing rule is that motion must
-      never cost reading time.
-
-- [ ] **Text size / Day / Sepia do nothing when tapped.** NOT yet
-      explained. The wiring LOOKS right — `_ReaderSettingsSheet` writes via
-      `EgwReaderPrefs.setScale/setTheme`, both bump
-      `EgwReaderPrefs.revision`, and the reader's `build` is wrapped in a
-      `ValueListenableBuilder` on that notifier
-      (`egw_reader_screen.dart:192`). So do NOT assume the notifier is
-      missing. Suspects, in order:
-      1. `CacheService.writePref` throwing (the `await` would swallow the
-         `setState` that follows, so the SHEET would freeze too — matches
-         "click does nothing" exactly). Check the box is open.
-      2. `showModalBottomSheet`'s `backgroundColor` is computed ONCE at
-         call time (`_openSettings`, line 809), so the sheet's own ground
-         never changes — which reads as "sepia did nothing" even if the
-         page behind it did change.
-      3. `_repaginate` keys on scale but the sheet covers the page, so a
-         change may simply not be visible until dismissal.
-      **Verify with a widget test on `_ReaderSettingsSheet` backed by a real
-      Hive box before changing anything** — this is the item most likely to
-      be misdiagnosed.
+      feature is EGW-only. **The founder has now decided (19 Aug): an SS
+      highlight FOLLOWS THE ACCOUNT**, not the device. So unlike EGW's, this
+      one needs a table + RLS, which means it is **blocked on a fresh
+      Supabase token** — see §0, still not rotated.
+      Shape when it is picked up: a new table rather than reusing
+      `EgwHighlights` (that is keyed `bookId` + `chapterId` and is
+      deliberately device-local and sign-out-cleared). The tap-to-highlight
+      gesture and the sentence-boundary rule are done and reusable —
+      `EgwHighlights.sentenceAt` is pure and already covers initials,
+      abbreviations and verse references.
 
 - [ ] **Sabbath School throws `'_dependents.isEmpty': is not true`**
       (framework.dart:6268). This is an `InheritedElement` being unmounted
@@ -207,6 +245,31 @@ book won't open" reports.
       or `deactivate()`. **Reproduce it first** — an assertion with a stack
       trace is the cheapest bug on this list to locate and the easiest to
       "fix" in the wrong place.
+
+      **Narrowed 19 Aug, without a trace** (the founder said "fix" rather
+      than fetch one). The assertion is at `framework.dart:6268` in
+      `InheritedElement.debugDeactivated()` — read it in the SDK, do not
+      guess: it fires when an `InheritedElement` is DEACTIVATED while
+      dependents are still registered on it. A dependent removes itself in
+      `Element.deactivate()`, so this means the dependent was not
+      deactivated along with the subtree it appeared to belong to — the
+      textbook cause being a `GlobalKey`'d widget reactivated elsewhere
+      rather than torn down.
+      What has been ruled out: **there is no `GlobalKey` anywhere in
+      `sabbath_school_tab.dart` or `ss_lesson_screen.dart`**, and no
+      `of(context)` reached from `dispose()`/`deactivate()`. The
+      `AnimatedSwitcher` at `ss_lesson_screen.dart:798` uses a `ValueKey`,
+      not a global one.
+      Best remaining lead: `_SsDayReaderScreenState._loadDays` disposes
+      `_pageCtrl` and builds a new one INSIDE `setState`
+      (`ss_lesson_screen.dart:596`), which also swaps the body from a
+      spinner to the `PageView` in the same frame.
+      **Next step is a reproduction harness, not more reading.**
+      `SabbathSchoolService` tries the network and falls back to Hive, and
+      `flutter_test` fails HTTP fast — so seeding a box and pumping the real
+      screens drives the whole flow offline. Drive it hard: open a lesson,
+      swipe days, pop mid-load. An assert that fires in a test comes with
+      the stack trace that makes this a ten-minute fix.
 
 ## 3. Features requested, not started
 

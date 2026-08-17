@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/egw_book_model.dart';
@@ -71,6 +72,15 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
 
   /// Where a pointer went down, so a tap can be told from a scroll.
   Offset? _pointerDown;
+
+  /// Set when a paragraph has just claimed a tap as a highlight.
+  ///
+  /// The page-wide chrome toggle is a raw `Listener`, which sees every
+  /// pointer up whether or not a gesture consumed it. Hit testing dispatches
+  /// innermost-first, so a paragraph's `onTapUp` has already run by the time
+  /// the outer listener is called — without this, tapping a sentence would
+  /// highlight it AND hide the chrome in the same tap.
+  bool _tapClaimedByText = false;
 
   String get _chapterKey => 'pref:egw_pos:${widget.bookId}';
 
@@ -153,6 +163,10 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   void _onPointerUp(PointerUpEvent e) {
     final start = _pointerDown;
     _pointerDown = null;
+    if (_tapClaimedByText) {
+      _tapClaimedByText = false;
+      return;
+    }
     if (start == null) return;
     // A drag is a swipe or a text selection, not a tap.
     if ((e.position - start).distance > 12) return;
@@ -447,6 +461,23 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
       textAlign: isVerse ? TextAlign.center : TextAlign.left,
     );
 
+    // Founder, 18 Aug 2026: *"when click text in egw it should highlight a
+    // statement from were it starts to where it end n u can hight many
+    // statements"*. A tap lands on a paragraph, so the paragraph is what
+    // handles it — the surrounding page keeps the chrome toggle.
+    //
+    // `Builder` rather than a GlobalKey: its context resolves to the
+    // Text.rich's own RenderParagraph, which is the thing that can turn a
+    // touch point into a character offset. Minting GlobalKeys per block
+    // would be one per paragraph per page, and two identical paragraphs in
+    // a chapter would collide.
+    final tappable = Builder(
+      builder: (ctx) => GestureDetector(
+        onTapUp: (details) => _highlightSentenceAt(ctx, block, details),
+        child: body,
+      ),
+    );
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: isVerse ? 18 : 16,
@@ -460,10 +491,85 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
                   left: BorderSide(color: palette.accent, width: 2.5),
                 ),
               ),
-              child: body,
+              child: tappable,
             )
-          : body,
+          : tappable,
     );
+  }
+
+  /// Turns a tap inside a paragraph into a highlighted statement.
+  ///
+  /// Tapping a sentence that is already highlighted removes it, so the
+  /// gesture that made a highlight is the one that takes it away.
+  void _highlightSentenceAt(
+    BuildContext ctx,
+    EgwBlock block,
+    TapUpDetails details,
+  ) {
+    final render = _paragraphUnder(ctx.findRenderObject());
+    if (render == null) return;
+
+    final local = render.globalToLocal(details.globalPosition);
+    if (!(Offset.zero & render.size).contains(local)) return;
+
+    final painted = render.getPositionForOffset(local).offset;
+    final offset = _blockOffsetOf(block, painted);
+    final range = EgwHighlights.sentenceAt(block.text, offset);
+    final sentence = block.text.substring(range.start, range.end).trim();
+    if (sentence.length < 3) return;
+
+    if (EgwHighlights.has(widget.bookId, _current.id, sentence)) {
+      EgwHighlights.remove(widget.bookId, _current.id, sentence);
+    } else {
+      EgwHighlights.add(widget.bookId, _current.id, sentence);
+    }
+    _tapClaimedByText = true;
+    HapticFeedback.selectionClick();
+    setState(() {});
+  }
+
+  /// The paragraph painted somewhere beneath [node].
+  ///
+  /// The tap handler's own context does NOT resolve to the paragraph:
+  /// `GestureDetector` has a render object of its own, so
+  /// `findRenderObject()` stops there. Descending is also what keeps this
+  /// working for a blockquote, where the text sits inside a decorated
+  /// `Container` rather than directly under the detector.
+  RenderParagraph? _paragraphUnder(RenderObject? node) {
+    if (node == null) return null;
+    if (node is RenderParagraph) return node;
+    RenderParagraph? found;
+    node.visitChildren((child) {
+      found ??= _paragraphUnder(child);
+    });
+    return found;
+  }
+
+  /// Maps an offset in the PAINTED paragraph back to one in [block]`.text`.
+  ///
+  /// The two are not the same string. A page anchor contributes no
+  /// characters to `block.text` (its span's text is empty) but is painted as
+  /// a `WidgetSpan`, and a WidgetSpan occupies one character position in the
+  /// paragraph. So every page number a paragraph carries shifts painted
+  /// offsets one further along than the source — and a sentence picked with
+  /// the raw offset would start a word or two late, on exactly the
+  /// paragraphs that carry a page break.
+  int _blockOffsetOf(EgwBlock block, int painted) {
+    var inPainted = 0;
+    var inBlock = 0;
+    for (final span in block.spans) {
+      if (span.isPageMarker) {
+        if (painted <= inPainted) return inBlock;
+        inPainted += 1;
+        continue;
+      }
+      if (painted < inPainted + span.text.length) {
+        return inBlock + (painted - inPainted);
+      }
+      inPainted += span.text.length;
+      inBlock += span.text.length;
+    }
+    return inBlock;
   }
 
   /// Inline runs, including the two things the EPUB marks up for us, plus

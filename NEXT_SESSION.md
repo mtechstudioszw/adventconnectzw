@@ -6,60 +6,63 @@ Paste everything below the line.
 
 Continue the Advent Connect ZW work.
 
-**The founder's own bug list is the job this session. It is `TODO.md` §2b.
-Start there, not with anything else.** He reported eight things on 18 Aug;
-one is fixed and seven are diagnosed-but-not-fixed, each written up with the
-file, the line, the mechanism and the named suspects. He has said plainly he
-expects them addressed. Do not open a new front until they are done.
-
-Read `TODO.md` §2b first, then the `egw-text-source-solved` and
-`appodeal-shares-one-ad-view` memories.
+**Two things are left of the founder's EGW / Sabbath School batch, and both
+are Sabbath School.** Everything else in `TODO.md` §2b is done and pushed.
+Read §2b first — it now records the one bug that was behind five separate
+reports, and the rule that came out of it.
 
 ## Ask these two before anything else
 
-1. **Has the Supabase personal access token been rotated?** Asked on 18 Aug;
-   the answer was *"didnt rotate"*. The 16 Aug PAT and the one used for the
-   17 Aug DB work are both still live and both burned. Never reuse a token
-   from a transcript — ask for a fresh one, write it only to the session
-   scratchpad, never echo it back.
-2. **Is a phone connected?** This is now the biggest gap in the project.
-   Four of the seven open bugs are things only a human looking at a screen
-   can judge. **This machine cannot build Android at all** — see below.
+1. **Has the Supabase personal access token been rotated?** Asked 18 Aug
+   (*"didnt rotate"*) and again 19 Aug. Both burned tokens are still live.
+   **This now blocks real work**, not just tidiness: the founder decided SS
+   highlights follow the ACCOUNT, which needs a table + RLS. Never reuse a
+   token from a transcript — ask for a fresh one, write it only to the
+   session scratchpad, never echo it back.
+2. **Is a phone connected?** Answered "no" on 19 Aug, and it is still the
+   biggest gap in the project. **This machine cannot build Android at all**
+   — see below. Everything shipped on 19 Aug was reproduced and pinned with
+   widget tests instead, which worked well, but four earlier items were only
+   ever judged by reading code.
 
-## The seven, in the order I'd take them
+## What is left, in the order I'd take them
 
-1. **`'_dependents.isEmpty': is not true` in Sabbath School.** A crash, and
-   the cheapest on the list *if the founder can supply the stack trace*
-   (`flutter logs`, or the red screen). **Ask him for it first.** It is an
-   `InheritedElement` unmounted while something still depends on it — most
-   often a `GlobalKey` reparented across two subtrees in one frame. It is
-   NOT `context.palette` on its own; that resolves through `Theme.of`, which
-   fails differently.
-2. **Text size / Day / Sepia do nothing when tapped.** **Reproduce before
-   changing a line.** The obvious fix is the wrong one: the notifier wiring
-   is already correct (`egw_reader_screen.dart:192` wraps build in a
-   `ValueListenableBuilder` on `EgwReaderPrefs.revision`, and both setters
-   bump it). Top suspect is `CacheService.writePref` throwing, which would
-   swallow the `setState` after it and freeze the SHEET too — which matches
-   "click does nothing" exactly. Second suspect: `showModalBottomSheet`'s
-   `backgroundColor` is computed once at call time, so the sheet's own
-   ground never changes even when the page behind it does.
-3. **Show the book cover while a book opens** ("put the book thumbnail at
-   the first when u open book"). Quick, visual, and most of what makes the
-   wait feel broken rather than merely slow.
-4. **The page-turn animation is too much.** `_turnBy` is 320ms
-   `easeOutCubic` plus the `PageView`'s own physics. Cut it hard or drop to
-   a straight cut. Standing rule: motion must never cost reading time.
-5. **Tap-to-highlight a whole statement.** Tap inside a sentence, highlight
-   that sentence, accumulate many. Real work, not a patch — but the storage
-   is already on your side: `EgwHighlights` matches by TEXT not offsets, and
-   `rangesIn()` already renders multiple passages per block. So it is a
-   gesture + sentence-boundary problem. Watch abbreviations and verse
-   references when finding the boundary.
-6. **Highlighting in Sabbath School at all** — it does not exist there.
-   Needs the founder's call: should an SS highlight follow the account, or
-   stay on the device like EGW's do?
-7. Anything he adds. He reports in batches; expect more.
+1. **`'_dependents.isEmpty': is not true` in Sabbath School.** The founder
+   said "fix" rather than fetch a stack trace, so it has to be reproduced
+   here. **Do not hunt by reading — build the harness.** §2b records what is
+   already ruled out (no `GlobalKey` anywhere in either SS file, no
+   `of(context)` from `dispose`/`deactivate`) and the exact SDK line the
+   assert lives on. `SabbathSchoolService` falls back to Hive when the
+   network fails, and `flutter_test` fails HTTP fast, so seeding a box and
+   pumping the real screens drives the whole flow offline. Open a lesson,
+   swipe days, pop mid-load.
+2. **Highlighting in Sabbath School.** Decided 19 Aug: it **follows the
+   account**. Blocked on the token. The gesture and the sentence-boundary
+   rule are done and reusable — `EgwHighlights.sentenceAt` is pure, tested,
+   and already handles initials, abbreviations and verse references.
+3. **Two of his reports still need an answer from him**, both in §2b:
+   *"the refesh of egw dosent work"* (the fetch path is provably correct —
+   likely the 11-book seed was never run) and *"there no shelf"*
+   (ambiguous). Ask; do not guess.
+4. Anything he adds. He reports in batches; expect more.
+
+## What shipped 19 Aug (do not redo any of it)
+
+* **The CI build was broken and had been since the Appodeal migration** —
+  manifest merger, `allowBackup`. Every "the last build failed" report
+  traces to this. Fixed in `5115a48`.
+* **One bug was behind five reports**: a Hive write awaited before the
+  notifier that repaints. Reading settings, save-to-shelf and the download
+  tick all looked dead because of it. **New standing rule: never `await`
+  storage before the notifier that repaints.** `writePref` reaches Hive's
+  in-memory keystore before its first `await`, so a same-frame read already
+  sees the new value.
+* **`EgwDownloadService.download` had no timeout of any kind** — the same
+  bug fixed in `EgwBookService` on 18 Aug, in the twin it was written to
+  mirror. Only one half got the fix. **When you fix a service that says it
+  mirrors another, go and check the other one.**
+* Tap-to-turn removed, page curl cut from ~99° to ~29°, cover shown while a
+  book opens, and tap-a-sentence-to-highlight built and tested.
 
 ## What shipped 18 Aug (do not redo any of it)
 
@@ -126,6 +129,22 @@ in `adventconnectzw/`.
 10. **Never paste a large file into chat** — it truncates silently at ~50k
     chars. The founder's app-ads.txt was cut at a third and it looked
     complete. Have him save files to the repo instead.
+11. **A test that leaves a Hive write outstanding must not close the box in
+    teardown.** `testWidgets` runs in a fake-async zone; a write started
+    there never completes, and `Hive.deleteFromDisk()` waits on the write
+    queue forever. The file then sits out the TEN-MINUTE test timeout and
+    looks like a hang rather than failing assertions — it cost most of an
+    hour on 19 Aug. Use a fresh box NAME per test and just detach.
+    `test/egw_reader_settings_test.dart` documents the pattern.
+12. **`Builder(...).findRenderObject()` returns the nearest descendant
+    render object, which is NOT necessarily the one you want.** Wrapping a
+    `Text` in a `GestureDetector` puts the detector's own render object in
+    the way, so a hit-test for a character offset silently found nothing.
+    Descend to the `RenderParagraph` explicitly.
+13. **When output looks empty, suspect the pipe, not the process.**
+    `flutter test ... | Select-Object -Last N` buffers everything until the
+    command exits, and a parent `dart` process idling at flat CPU while
+    workers run looks exactly like a wedge. Both cost real time on 19 Aug.
 
 `flutter test` is ~2.5 min. Never run two at once. Never run
 `dart format lib/`.

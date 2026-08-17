@@ -48,11 +48,17 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   // guarded — Supabase init/network failures never break the push.
   if (refId.isNotEmpty) {
     try {
-      await AppBootstrap.startSupabaseInit();
+      // NOT startSupabaseInit(). This is a separate isolate, and a second
+      // GoTrue client with autoRefreshToken:true rotates the SAME refresh
+      // token — revoking the one the foreground app is holding and signing
+      // the member out of a session that is still alive on the server.
+      // See AppBootstrap.startSupabaseInitForBackgroundIsolate.
+      await AppBootstrap.startSupabaseInitForBackgroundIsolate();
       await AppBootstrap.awaitSupabaseReady();
       await MessagingService.markConversationDelivered(refId);
     } catch (_) {
-      // Falls back to marking on next app foreground, as before.
+      // Falls back to marking on next app foreground, as before. An expired
+      // access token here is a 401, and that is the intended trade.
     }
   }
 }

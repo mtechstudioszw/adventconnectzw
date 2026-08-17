@@ -1,126 +1,33 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart';
 
-/// Central registry for every AdMob identifier the app uses.
+/// Everything the Appodeal integration needs to identify itself.
 ///
-/// HOW TO GO LIVE (earn real money):
-///   1. In android/app/src/main/AndroidManifest.xml replace the
-///      `com.google.android.gms.ads.APPLICATION_ID` test value with your
-///      real AdMob App ID (the one with a "~").
-///   2. Paste your real ad-unit IDs into the `_realAndroid*` constants
-///      below (and `_realIos*` if/when you ship iOS).
-///   3. Leave [forceTestAds] alone — debug builds always use Google's
-///      test units so you never click your own live ads (an AdMob ban
-///      risk). Release builds use your real IDs automatically.
-///
-/// If a real ID is left blank we fall back to Google's public TEST unit
-/// for that format, so the app always has *something* to show.
+/// This file used to be a registry of AdMob ad-unit IDs, one per format
+/// per platform. **Appodeal has no ad-unit IDs at all** — you initialise
+/// with the App Key and then request by TYPE (interstitial / banner / MREC
+/// / rewarded), and Appodeal runs the waterfall server-side. So there is
+/// nothing to paste in here when a new placement is added; the dashboard's
+/// "Ad Units" page configures each type across networks and never mints an
+/// id. If you came here looking for where to put an id, you don't need one.
 class AdConfig {
   AdConfig._();
 
-  /// Debug builds (and the emulator) must never request live ads —
-  /// AdMob bans accounts for self-clicks. Flip to true to also force
-  /// test ads in a release build while QA-ing.
+  /// The Appodeal App Key for Advent Connect ZW (Android + iOS share it).
+  ///
+  /// **This is not a secret.** It ships inside every APK by design — it
+  /// identifies the app to the ad server the same way a bundle id does.
+  /// Do not treat it like the Supabase PAT; it does not need rotating and
+  /// it is fine in source control.
+  static const String appKey =
+      '1f6b42e57ed20ce3e9378dc3a59a46578c982215c968cca1';
+
+  /// Debug builds request Appodeal's test inventory instead of live ads.
+  ///
+  /// Kept for the same reason the AdMob version had it: clicking your own
+  /// live ads is fraud from the network's point of view, and every network
+  /// in the waterfall has its own version of that rule. Flip to true to
+  /// force test ads in a release build while QA-ing.
   static const bool forceTestAds = false;
 
-  static bool get _useTest => forceTestAds || kDebugMode;
-
-  // ----- YOUR REAL AD-UNIT IDS — paste between the quotes -------------
-  // Android
-  static const String _realAndroidBanner =
-      'ca-app-pub-2916679989954369/6190972001';
-  static const String _realAndroidNative =
-      'ca-app-pub-2916679989954369/8998501118';
-  static const String _realAndroidAppOpen =
-      'ca-app-pub-2916679989954369/5334588274';
-  static const String _realAndroidInterstitial =
-      'ca-app-pub-2916679989954369/8625563652';
-  // Rewarded — opt-in "watch an ad for a bonus" (Bible Quiz hints).
-  static const String _realAndroidRewarded =
-      'ca-app-pub-2916679989954369/7507923106';
-  // iOS (only needed once you publish an iOS build)
-  static const String _realIosBanner = '';
-  static const String _realIosNative = '';
-  static const String _realIosAppOpen = '';
-  static const String _realIosInterstitial = '';
-  static const String _realIosRewarded = '';
-
-  // ----- Google's public TEST unit IDs (safe to ship in debug) -------
-  static const String _testAndroidBanner =
-      'ca-app-pub-3940256099942544/6300978111';
-  static const String _testAndroidNative =
-      'ca-app-pub-3940256099942544/2247696110';
-  static const String _testAndroidAppOpen =
-      'ca-app-pub-3940256099942544/9257395921';
-  static const String _testAndroidInterstitial =
-      'ca-app-pub-3940256099942544/1033173712';
-  static const String _testIosBanner =
-      'ca-app-pub-3940256099942544/2934735716';
-  static const String _testIosNative =
-      'ca-app-pub-3940256099942544/3986624511';
-  static const String _testIosAppOpen =
-      'ca-app-pub-3940256099942544/5575463023';
-  static const String _testIosInterstitial =
-      'ca-app-pub-3940256099942544/4411468910';
-  static const String _testAndroidRewarded =
-      'ca-app-pub-3940256099942544/5224354917';
-  static const String _testIosRewarded =
-      'ca-app-pub-3940256099942544/1712485313';
-
-  static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
-
-  /// Picks the real id if set (and not forced to test), else the test id.
-  static String _pick({
-    required String realAndroid,
-    required String realIos,
-    required String testAndroid,
-    required String testIos,
-  }) {
-    if (_useTest) return _isAndroid ? testAndroid : testIos;
-    final real = _isAndroid ? realAndroid : realIos;
-    if (real.isNotEmpty) return real;
-    return _isAndroid ? testAndroid : testIos;
-  }
-
-  static String get bannerUnitId => _pick(
-        realAndroid: _realAndroidBanner,
-        realIos: _realIosBanner,
-        testAndroid: _testAndroidBanner,
-        testIos: _testIosBanner,
-      );
-
-  static String get nativeUnitId => _pick(
-        realAndroid: _realAndroidNative,
-        realIos: _realIosNative,
-        testAndroid: _testAndroidNative,
-        testIos: _testIosNative,
-      );
-
-  static String get appOpenUnitId => _pick(
-        realAndroid: _realAndroidAppOpen,
-        realIos: _realIosAppOpen,
-        testAndroid: _testAndroidAppOpen,
-        testIos: _testIosAppOpen,
-      );
-
-  static String get interstitialUnitId => _pick(
-        realAndroid: _realAndroidInterstitial,
-        realIos: _realIosInterstitial,
-        testAndroid: _testAndroidInterstitial,
-        testIos: _testIosInterstitial,
-      );
-
-  static String get rewardedUnitId => _pick(
-        realAndroid: _realAndroidRewarded,
-        realIos: _realIosRewarded,
-        testAndroid: _testAndroidRewarded,
-        testIos: _testIosRewarded,
-      );
-
-  /// True when we're still on a placeholder/test id for the current
-  /// platform — handy for a debug banner / logging.
-  static bool get usingTestAds =>
-      _useTest ||
-      (_isAndroid ? _realAndroidBanner.isEmpty : _realIosBanner.isEmpty);
+  static bool get useTestAds => forceTestAds || kDebugMode;
 }

@@ -125,13 +125,24 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />
-        <!-- AdMob application ID (Advent Connect ZW, Android). The matching
-             ad-unit IDs live in lib/services/ads/ad_config.dart — paste the
-             real banner/native/app-open/interstitial unit IDs there to start
-             earning (until then AdConfig serves Google test units). -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-2916679989954369~1736721670" />
+        <!-- Ads are served by Appodeal (18 Aug 2026), which needs NO
+             manifest entry: the App Key is passed to Appodeal.initialize()
+             from lib/services/ads/ad_config.dart and there are no ad-unit
+             IDs to declare anywhere.
+
+             The AdMob `com.google.android.gms.ads.APPLICATION_ID` meta-data
+             that used to sit here is gone with the AdMob adapter. It is not
+             optional trivia: play-services-ads CRASHES the app on launch if
+             it is on the classpath without this tag. So if an AdMob adapter
+             is ever added back to app/build.gradle.kts, this must come back
+             in the same change:
+
+             <meta-data
+                 android:name="com.google.android.gms.ads.APPLICATION_ID"
+                 android:value="ca-app-pub-2916679989954369~1736721670" />
+
+             The AdMob account is disapproved and under appeal, so that
+             should not happen soon. -->
         <!-- just_audio_background: the media-session service + media-button
              receiver that power background playback and the lock-screen /
              notification controls for the Library Music player. -->

@@ -68,7 +68,7 @@ android {
         applicationId = "io.supabase.adventconnectzw.advent_connect_zw"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // Floor minSdk at 24 (Android 7.0): google_mobile_ads needs 23 and
+        // Floor minSdk at 24 (Android 7.0): the Appodeal SDK needs 23 and
         // webview_flutter 4.14 (embedded YouTube live chat) needs 24.
         minSdk = maxOf(24, flutter.minSdkVersion)
         targetSdk = flutter.targetSdkVersion
@@ -143,4 +143,29 @@ dependencies {
     // Provides Java 8+ APIs (java.time, etc) on older Android versions.
     // Required because flutter_local_notifications uses these APIs.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // ----- Appodeal mediated networks ---------------------------------
+    //
+    // The Appodeal core SDK and the IAB (MRAID) renderer come from the
+    // stack_appodeal_flutter plugin's own build.gradle, so they are NOT
+    // repeated here. Everything below is a MEDIATED NETWORK, added one at
+    // a time, and each one costs APK size — do not paste the full list
+    // from Appodeal's README.
+    //
+    // Only these are usable today (founder's dashboard, 17 Aug 2026):
+    //   * BidMachine        — the adapter below
+    //   * Backfill          — served by the core SDK + iab renderer
+    //   * Ad Server Campaigns — same
+    // Every other network reports "does not pass all restrictions" and
+    // unlocks only once the app has live store traffic. When one unlocks,
+    // generate its line with Appodeal's Dependencies Wizard:
+    //   https://docs.appodeal.com/android/advanced/configure-mediated-networks
+    //
+    // NEVER add an AdMob adapter. The AdMob ACCOUNT (not just the app) is
+    // disapproved and under appeal; serving through it is the one thing
+    // that must not happen. AdsService also calls disableNetwork("admob")
+    // as a second line of defence. If that ever changes, the AdMob App ID
+    // meta-data has to go back into AndroidManifest.xml at the same time —
+    // play-services-ads crashes on launch without it.
+    implementation("com.appodeal.ads.sdk.adapters:bidmachine:3.7.1.0")
 }

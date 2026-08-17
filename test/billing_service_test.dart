@@ -103,8 +103,29 @@ void main() {
   /// Waits for the async verify → acknowledge → refresh chain that a
   /// stream event kicks off. Several hops deep, so a single microtask
   /// drain isn't enough.
-  Future<void> settle() =>
-      Future<void>.delayed(const Duration(milliseconds: 20));
+  ///
+  /// This used to be a flat 20ms sleep, which is a race: the chain ends in
+  /// a secure-storage write that has no plugin under a headless binding, so
+  /// how long it takes is down to how fast the machine unwinds a failing
+  /// platform channel. On a slow run the assertions landed while the state
+  /// was still `verifying` and the whole file went red — a flake that
+  /// looked exactly like a regression in whatever had just been changed.
+  ///
+  /// Now it keeps the same 20ms floor and then waits for the flow to
+  /// actually leave its in-flight states, so it can only ever settle MORE
+  /// than before, never less.
+  Future<void> settle() async {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    const inFlight = {
+      PremiumFlowState.purchasing,
+      PremiumFlowState.verifying,
+      PremiumFlowState.loadingOffer,
+    };
+    for (var i = 0; i < 200; i++) {
+      if (!inFlight.contains(BillingService.state.value)) return;
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+  }
 
   setUp(() async {
     await BillingService.debugReset();

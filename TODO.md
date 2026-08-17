@@ -1,6 +1,6 @@
 # Advent Connect ZW — open work
 
-Last updated 17 Aug 2026. Ordered by priority. Everything here is either
+Last updated 18 Aug 2026. Ordered by priority. Everything here is either
 diagnosed or has a stated unknown — nothing is a guess.
 
 ---
@@ -8,8 +8,18 @@ diagnosed or has a stated unknown — nothing is a guess.
 ## 0. Blocked on the founder (nothing ships until these move)
 
 - [ ] **Rotate the leaked Supabase token.** An `sbp_` PAT was pasted into
-      chat on 16 Aug. The previous one was already rotated and now returns
-      `Unauthorized`; this one is still live.
+      chat on 16 Aug, and another was used for the 17 Aug DB work. Founder
+      confirmed on **18 Aug that it has NOT been rotated** — both are still
+      live and both are burned. No DB or Management-API work was done in
+      the 18 Aug ads session for this reason; none was needed.
+- [ ] **Paste the Appodeal `app-ads.txt` block.** Appodeal generates it per
+      publisher (many lines, one per mediated network) — it cannot be
+      guessed. Get it from the Appodeal dashboard
+      (Apps → Advent Connect ZW → app-ads.txt) and paste it into BOTH
+      `docs/app-ads.txt` and `legal-site/app-ads.txt`, where a comment is
+      already waiting for it. **This is a revenue blocker, not paperwork:**
+      until it is there, demand partners cannot verify we authorised them
+      and their bids get filtered.
 - [ ] **Move auth email off Gmail.** FOUNDER CHOSE "stay on Gmail for now"
       (17 Aug), so this stays open and WILL recur. Raising `rate_limit_otp`
       is **not** a workaround — Gmail throttles bursts itself and caps
@@ -366,111 +376,171 @@ diagnosed or has a stated unknown — nothing is a guess.
 - [ ] **Suggested news** — done (Keep reading rail), listed so it is not
       rebuilt.
 
-## 3a. ADS — THE WHOLE NEXT SESSION. Appodeal migration + quiz monetisation
+## 3a. ADS — Appodeal migration + quiz monetisation. DONE 18 Aug, NOT verified on hardware
 
-**Provider chosen: Appodeal** (founder, 17 Aug). AdMob is out — the account
-AND the app were disapproved, so fill is zero today regardless of code.
+**AdMob is gone.** `google_mobile_ads` is removed from `pubspec.yaml`;
+`stack_appodeal_flutter: 4.2.0` replaces it. 472 tests pass,
+`flutter analyze` clean (4 pre-existing infos). **Nothing has run on a
+phone** — see "What still needs a device" below, which is the whole
+remaining risk.
 
-### Credentials + facts
-* App key: `1f6b42e57ed20ce3e9378dc3a59a46578c982215c968cca1`
-  (NOT a secret — it ships inside every APK by design. Unlike the Supabase
-  PAT, this one does not need rotating.)
-* Bundle: `io.supabase.adventconnectzw.advent_connect_zw`
-* Package: **`stack_appodeal_flutter: 4.2.0`** (official, Android+iOS,
-  published ~late June 2026). Pin EXACT per project policy.
-* Floors already clear: app `minSdk` is 24 (needs 23), iOS target 13.0
-  (needs 13.0). No bump required.
+### What the code looks like now
 
-### The two things that will surprise you
-1. **Appodeal has NO ad unit IDs.** You init with the App Key and request by
-   TYPE (interstitial / banner / MREC / rewarded / native); Appodeal runs the
-   waterfall. The dashboard's "Ad Units" page configures each type across all
-   networks — it is not where IDs are minted. Nothing to paste into code.
-2. **Appodeal has NO App-Open format.** The available list is Interstitials,
-   Banners, MREC, Videos, Rewarded Videos, Native. So `AppOpenAdManager` has
-   no equivalent and must become an interstitial-on-resume or be dropped —
-   and if it becomes an interstitial, `_appOpenBlockedPrefixes` in
-   `main.dart` (chat, prayer, auth, marketplace, events, churches, library,
-   news) must carry over to it.
+* `AdConfig` is no longer a registry of ad-unit IDs — Appodeal has none.
+  It holds the App Key and a test-mode flag, nothing else.
+* `AdsService.init()` configures, attaches callbacks, and calls
+  `Appodeal.initialize`. **The premium-before-ads ordering in `main.dart`
+  survived untouched**, which was the point: it only ever decided WHETHER
+  `AdsService.init()` runs, never which SDK is behind it.
+* `discardCachedAds()` is real now: auto-cache off for all four types,
+  hide + destroy the banner/MREC views, and `canRequestAds` drops to
+  false — which is what actually stops every `show()` in the app.
+* **`AppOpenAdManager` is gone** (Appodeal has no App-Open format).
+  `ResumeAdManager` replaces it: a capped interstitial on resume that
+  **delegates to `InterstitialAdManager`**, so the 2-minute global gap
+  applies to it too. Two managers each holding their own cap would have
+  shown two full-screen ads back to back.
+* The route blocklist moved out of `main.dart` (where it was private and
+  untestable) into `ResumeAdManager.blockedPrefixes`.
+* **`NativeAdCard` → `FeedAdCard`.** Appodeal's Flutter plugin has no
+  native format (`AppodealAdType.NativeAd` is marked "In progress" in the
+  SDK's own enum), so the in-feed card is a 300x250 MREC in the app's own
+  card chrome with an explicit "Sponsored" label doing the attribution
+  Google's native template used to.
+* Consent: **removed our UMP flow entirely.** Appodeal 3.0+ bundles the
+  Stack Consent Manager and gathers consent during `initialize()`. Running
+  both would have asked the same user twice.
 
-### Network reality (from the founder's dashboard, 17 Aug)
-Most networks are blocked: `does not pass all restrictions` (AppLovin,
-BigoAds, DT Exchange, ironSource, Mintegral, VK), `has to be connected
-manually` (AdMob, Amazon, Meta, Yandex), `not connected yet` (Inmobi).
-**Available to start: BidMachine, Backfill, Ad Server Campaigns.** More
-unlock with live store traffic. Do NOT connect AdMob — it is disapproved.
+### The third surprise, which the brief did not have
 
-### Invariants that MUST survive the swap
-* `main.dart:134-157` — `await PremiumService.init()`, then
-  `if (!PremiumService.isActive) startAds()`, plus the listener that calls
-  `AdsService.discardCachedAds()` on a mid-session purchase and `startAds()`
-  on lapse. **A subscriber must never initialise an ad SDK at all** — this
-  ordering is provider-agnostic, so keep the new init inside
-  `AdsService.init()`.
-* Ad surfaces gate on `AdsService.canRequestAds`.
-* `discardCachedAds()` needs a real Appodeal implementation.
-* The banner trap: a 50dp banner became a full-screen bar THREE times from a
-  `Center` without `heightFactor: 1`.
-* `docs/app-ads.txt` — Appodeal supplies its own lines (many, one per
-  mediated network). ADD them; `docs/` is a live site and must never be
-  deleted.
-* Appodeal ships its own GDPR/CCPA consent dialog, which replaces the
-  current EU consent flow — do not run both.
+The brief listed two (no ad-unit IDs, no App-Open). There is a third, and
+it is the one that would have shipped a visible bug:
 
-### Quiz monetisation (founder: "we are sitting on top of money")
-Correction to the premise: **the quiz already serves rewarded ads** —
-`quiz_round_screen.dart:549`, for lifelines. But the funnel is tiny: it
-fires only when the player is out of coins AND an ad happens to be loaded,
-and grants the lifeline free when none is ready.
+**Appodeal hands out ONE banner view and ONE MREC view per process.** From
+the plugin's own Android source (`AppodealAdView.kt`), both live in static
+`WeakReference`s and every new platform view starts with
+`(adView.parent as? ViewGroup)?.removeView(adView)`. So a second banner
+does not get a second ad — it *rips the view out of the first one*, which
+then renders an empty box.
 
-The founder proposed lives-that-reset + an ad to earn one. **Advised
-against gating scripture** — this is a church app and making Bible study
-harder to force ad views risks trust. Founder agreed to revisit as part of
-this work. The principle recommended instead: **make the reward additive,
-not the block punitive** — which also converts better.
+This is reachable in the shipping app: pushing Jobs on top of Home leaves
+both routes mounted (Navigator keeps a covered route alive) and both place
+a banner.
 
-Ranked placements to build:
-1. **Survival continue.** Survival is already sudden death; offer "watch to
-   continue your run" at the moment of death. Highest-converting placement
-   in mobile gaming and purely additive.
-2. **Double your points** at round end.
-3. **Explicit coin top-up** in the lobby — a real button, not a silent
-   fallback. Probably multiplies current impressions on its own.
-4. **Streak repair** — one ad restores a missed day. Cap at once a week so
-   the streak still means something.
-5. **Lifelines** — keep, but make the ad offer visible rather than hidden.
+Two consequences, both already in the code:
 
-**Do NOT gate the Daily Challenge.** It is the habit that brings people
-back; blocking a streak behind an ad is the placement most likely to feel
-extractive.
+1. `AdViewSlot` (`lib/services/ads/ad_view_slot.dart`) arbitrates. Widgets
+   claim a slot and render only while their claim is active; the **newest**
+   claim wins, because that is the screen the user is looking at, and
+   releasing hands the view back to the one underneath. Pinned by
+   `test/ad_view_slot_test.dart`.
+2. **The in-feed cards are capped at ONE per feed** — Home was 3, Watch
+   repeated every 8 videos forever. That is a capacity limit, not a taste
+   one: three MREC cards would have meant one ad and two empty gaps.
 
-**Premium gets these free** (continues, lifelines). That makes the
-subscription more valuable and costs nothing, since subscribers never load
-an SDK.
+### Advent Chat carries no ads. Ever.
 
-## 3b. Old AdMob notes — kept for the app-ads.txt / blocklist detail
+Founder, 18 Aug: *"chat tab should not get ads n messaging etc all thing
+associated with messaging."* This already held — the inbox uses a plain
+`Scaffold` with `MainBottomNav` rather than `MainScaffold`, so it never
+picked up the default banner — but that was an accident of how the screen
+was written, and `MainScaffold.showAd` **defaults to true**. Anyone
+converting the inbox to `MainScaffold` "for consistency" would have put
+ads in Advent Chat without noticing.
 
-- [ ] **The founder intends to move off AdMob mediation** (17 Aug). Nothing
-      picked yet. Read before touching it:
-      - **The AdMob account is disapproved and under appeal** — that is
-        account-level, not app-level, and nothing in the codebase caused it
-        or can fix it.
-      - **`docs/app-ads.txt` holds the AdMob publisher authorisation**
-        (`google.com, pub-2916679989954369, DIRECT, …`). Google crawls it.
-        A new provider means a NEW line, usually alongside the existing one
-        rather than replacing it — and `docs/` must never be deleted, it is
-        a live site.
-      - `AdsService` + `AppOpenAdManager` own SDK init, EU consent and the
-        App-Open cap. `main.dart` deliberately resolves **premium before
-        ads** so a subscriber never starts the ad SDK at all — preserve that
-        ordering with any new provider.
-      - Ad surfaces gate on `AdsService.canRequestAds`, and there is a
-        standing trap: a 50dp banner became a full-screen bar three times
-        because of a `Center` without `heightFactor: 1`.
-      - `_appOpenBlockedPrefixes` in `main.dart` lists the routes where a
-        full-screen ad must never appear (chat, prayer, auth, marketplace,
-        events, churches, library, news). Any new provider's interstitial
-        needs the same blocklist.
+`test/ads_never_in_chat_test.dart` now reads every file under
+`lib/screens/messaging/` and fails if any of them so much as imports an ad
+widget, and separately asserts `/messages` is still on the full-screen
+blocklist.
+
+### Quiz monetisation — what shipped
+
+The premise correction from 17 Aug held up, and one more came out of the
+code: **the lifeline chip already switched to a "watch an ad" affordance
+when the player couldn't afford it.** That placement was less hidden than
+the brief assumed. What was actually missing was everything around it.
+
+Built, all of it purely additive — *nothing in the quiz is gated behind an
+ad, and the Daily Challenge is untouched*:
+
+1. **Survival continue.** The run ends by the rules, then offers "Continue
+   your run" with "End run" beside it at equal weight and no countdown
+   pressuring the choice. Capped at **one per run** — a run that can be
+   extended forever is not sudden death, and the leaderboard it feeds stops
+   meaning anything. The combo resets, so an ad can never buy a multiplier.
+2. **Coin top-up in the lobby** — the "real button, not a silent fallback".
+   50 coins.
+3. **Streak repair**, once a week. Works because a missed day does *not*
+   clear the stored streak — the reset is lazy, computed on the next
+   `recordDailyComplete()`. Repair moves the "last played" marker to
+   yesterday so the next daily continues instead of resetting. It does not
+   invent progress: you still have to play today.
+4. **Double your coins at round end** — and the results-screen interstitial
+   is **skipped** when that offer is showing, so the player never gets two
+   ads on one screen.
+5. **Premium gets continues and lifelines free.** They can't watch a
+   rewarded ad (they never load an SDK), so charging them coins for what a
+   free player can watch for was the wrong way round. The lifeline chip
+   says `FREE`. Coin offers are hidden from them entirely — with lifelines
+   free, coins buy a subscriber nothing.
+
+**Deliberate change from the brief: it doubles COINS, not points.** Points
+feed lifetime totals, personal bests and the shared leaderboard, and
+`QuizCloudService.recordRound` has already banked the round by the time the
+results screen is up. Doubling them would put an ad-bought score on a board
+other members are ranked against. Coins are private in-app currency, so
+doubling them is pure upside with nothing to distrust. **Founder should
+confirm this call.**
+
+Rules and caps all live in `lib/services/quiz_rewards_service.dart`, pinned
+by `test/quiz_rewards_test.dart` (16 tests).
+
+### What still needs a device — the whole remaining risk
+
+Everything below is unverifiable without hardware and none of it is
+verified:
+
+- [ ] **A real ad actually filling.** Only BidMachine / Backfill / Ad
+      Server Campaigns are live, so expect thin fill at first. Watch for
+      `Appodeal` lines in `adb logcat`.
+- [ ] **The consent dialog appears once and only once**, and that we are
+      not double-prompting.
+- [ ] **The banner is 50dp and the MREC 250dp on a real screen.** The frame
+      contract is pinned by two tests, but the platform view itself has
+      never been laid out.
+- [ ] **Scroll the Home and Watch feeds** and confirm the sponsored card
+      never leaves an empty gap and never teleports between positions —
+      that is what the slot arbitration is there to prevent.
+- [ ] **Push Jobs on top of Home** and confirm exactly one banner is
+      visible, then pop back and confirm Home's returns.
+- [ ] **Resume from background** and confirm at most one interstitial, and
+      never over a chat, prayer or auth screen.
+- [ ] **A rewarded ad end to end**: the survival continue is the one to
+      test, because it is the only placement that changes game state.
+- [ ] **APK size.** Only the BidMachine adapter was added; do not paste
+      Appodeal's full README dependency list, it is ~70 adapters.
+
+### iOS is NOT done
+
+There is no `ios/Podfile` in the repo at all, so iOS has never been
+pod-installed and Appodeal cannot build there. Also note the README's own
+Podfile pins **`platform :ios, '15.0'`** (the base SDK claims 13.0, but the
+Firebase adapter needs 15.0) — the 17 Aug note that "iOS 13.0 already
+clears the floor" is optimistic. iOS stays deferred; see the iOS readiness
+item.
+
+### Do not undo these
+
+* **Never add an AdMob adapter** to `android/app/build.gradle.kts`. The
+  account is disapproved and under appeal. `AdsService` also calls
+  `disableNetwork("admob")` as a second line of defence.
+* If one is ever added back, the `com.google.android.gms.ads.APPLICATION_ID`
+  meta-data must return to `AndroidManifest.xml` **in the same change** —
+  play-services-ads crashes the app on launch without it. The removed tag
+  is quoted verbatim in a comment where it used to sit.
+* The `heightFactor: 1` banner trap still applies and is still pinned by
+  `test/ad_banner_height_test.dart` — `AdBannerFrame` is provider-agnostic
+  and the migration did not touch it.
 
 ## 4. Known-unfinished, lower priority
 

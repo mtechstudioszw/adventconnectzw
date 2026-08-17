@@ -152,11 +152,21 @@ dependencies:
   # Pinned exact per project policy (no caret ranges on new deps).
   in_app_review: 2.0.12
 
-  # AdMob — banner + native + App-Open + interstitial (stories) ads to
-  # monetise the free app. All placement/frequency logic lives in
-  # lib/services/ads/. Deliberately NO ads in Advent Chat, auth/onboarding,
-  # or prayer screens. Pinned exact (min Dart 3.10; we're on 3.11).
-  google_mobile_ads: 9.0.0
+  # Appodeal — banner + MREC + interstitial + rewarded ads to monetise the
+  # free app. Replaced google_mobile_ads on 18 Aug 2026: the AdMob ACCOUNT
+  # (not just the app) was disapproved, so fill was zero no matter what the
+  # code did. All placement/frequency logic still lives in lib/services/ads/.
+  # Deliberately NO ads in Advent Chat, auth/onboarding, or prayer screens.
+  #
+  # Two things that differ from the AdMob model:
+  #   * There are no ad-unit IDs. You initialise with the App Key and
+  #     request by TYPE; Appodeal runs the waterfall server-side. Nothing
+  #     gets pasted into ad_config.dart any more.
+  #   * There is no App-Open format, so the App-Open ad became a capped
+  #     interstitial-on-resume (see lib/services/ads/app_open_ad_manager.dart).
+  # Appodeal ships its own GDPR/CCPA consent dialog, which replaces the
+  # AdMob UMP flow — never run both. Pinned exact per project policy.
+  stack_appodeal_flutter: 4.2.0
 
   # Premium subscription — $3/month, removes every ad surface above.
   # Google Play only for now; the app talks to lib/services/billing/

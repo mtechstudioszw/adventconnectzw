@@ -12,7 +12,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
-import '../../widgets/ads/native_ad_card.dart';
+import '../../widgets/ads/feed_ad_card.dart';
 import '../../widgets/home/live_banner.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../../widgets/youtube/watch_cards.dart';
@@ -794,10 +794,16 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
           final child = i < 5
               ? StaggeredReveal(index: i, rise: 18, child: card)
               : card;
-          // A native card every ~8 videos keeps the browse feed earning
-          // without an interstitial interrupting it.
-          if ((i + 1) % 8 == 0) {
-            return Column(children: [child, const NativeAdCard()]);
+          // One sponsored card, after the 8th video, keeps the browse feed
+          // earning without an interstitial interrupting it.
+          //
+          // It used to repeat every 8 videos in an unbounded list. Appodeal
+          // has a SINGLE shared MREC view per process, so on a long scroll
+          // those cards fought each other: whichever mounted last took the
+          // native view and every other one rendered an empty box. One card
+          // is the real capacity. See AdViewSlot.
+          if (i == 7) {
+            return Column(children: [child, const FeedAdCard()]);
           }
           return child;
         },

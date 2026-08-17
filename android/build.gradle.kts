@@ -2,6 +2,12 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // Appodeal SDK + its network adapters. stack_appodeal_flutter's own
+        // build.gradle already injects this into rootProject.allprojects, so
+        // a minimal integration builds without it — it is declared here as
+        // well so the app's own adapter dependencies in app/build.gradle.kts
+        // don't silently depend on a plugin's side effect.
+        maven { url = uri("https://artifactory.appodeal.com/appodeal") }
     }
 }
 

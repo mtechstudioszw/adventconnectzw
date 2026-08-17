@@ -1,95 +1,144 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:stack_appodeal_flutter/stack_appodeal_flutter.dart';
 
-import 'ad_config.dart';
+import 'ad_impression_counter.dart';
 import 'ads_service.dart';
 
-/// Opt-in rewarded ads — the user CHOOSES to watch for a bonus (e.g. a Bible
-/// Quiz hint). Loads ahead of time and reloads after each show.
+/// Opt-in rewarded ads — the user CHOOSES to watch for a bonus.
+///
+/// Every rewarded placement in the app goes through here: the quiz's
+/// survival continue, double-points, coin top-up, streak repair and
+/// lifelines. Appodeal auto-caches rewarded video, so there is no ad object
+/// to hold — only the SDK's word on whether one is ready.
+///
+/// ## Why [available] is a notifier and not just a bool
+///
+/// Under AdMob the quiz offered a rewarded ad only when one happened to
+/// already be loaded, and silently granted the bonus for free otherwise —
+/// so the button never *said* anything, and the founder's read was that the
+/// quiz wasn't serving ads at all. The offers now render from [available],
+/// which means a placement can appear the moment fill arrives instead of
+/// being decided once, invisibly, at the wrong moment.
 class RewardedAdManager {
   RewardedAdManager._();
 
-  static RewardedAd? _ad;
-  static bool _isLoading = false;
+  static bool _loaded = false;
   static bool _isShowing = false;
+  static Completer<bool>? _pending;
+
+  /// Whether the user actually earned the reward this showing. Set by
+  /// `onRewardedVideoFinished`, read when the ad closes.
+  static bool _earned = false;
 
   /// True only when there's an ad to show AND we're allowed to show it.
-  /// For a premium subscriber this is always false, and the quiz's
-  /// lifeline path already grants the lifeline free when no ad is
-  /// available — which is exactly the right premium behaviour: they get
-  /// the hint without the ad, rather than losing the hint.
-  static bool get isReady => _ad != null && AdsService.canRequestAds;
+  /// Always false for a premium subscriber.
+  static bool get isReady => _loaded && AdsService.canRequestAds;
 
-  /// Drop any preloaded ad (a subscription just started).
-  static void discardCache() {
-    _ad?.dispose();
-    _ad = null;
+  /// [isReady] as something the UI can rebuild on.
+  static final ValueNotifier<bool> available = ValueNotifier<bool>(false);
+
+  /// Registered once, by [AdsService.init]. One handler per process.
+  static void attachCallbacks() {
+    Appodeal.setRewardedVideoCallbacks(
+      onRewardedVideoLoaded: (_) => _setLoaded(true),
+      onRewardedVideoFailedToLoad: () => _setLoaded(false),
+      onRewardedVideoExpired: () => _setLoaded(false),
+      onRewardedVideoShown: () {
+        _setLoaded(false);
+        unawaited(AdImpressionCounter.record());
+      },
+      onRewardedVideoShowFailed: () {
+        _setLoaded(false);
+        _finish(false);
+      },
+      onRewardedVideoFinished: (_, _) => _earned = true,
+      // The reward is granted on CLOSE, not on finish: `onRewardedVideoFinished`
+      // fires while the ad is still on screen, and granting there would let
+      // a lifeline appear underneath an ad the player is still watching.
+      onRewardedVideoClosed: (isFinished) => _finish(_earned || isFinished),
+    );
   }
 
-  /// Preload a rewarded ad so it's ready when the user taps "watch".
+  static void _setLoaded(bool value) {
+    _loaded = value;
+    available.value = isReady;
+    if (!value) loadAd();
+  }
+
+  static void _finish(bool earned) {
+    _isShowing = false;
+    final pending = _pending;
+    _pending = null;
+    if (pending != null && !pending.isCompleted) pending.complete(earned);
+    loadAd();
+  }
+
+  /// Ask for the next rewarded video. Auto-cache normally handles this;
+  /// calling it explicitly after a miss brings the retry forward.
   static void loadAd() {
-    if (!AdsService.canRequestAds || _isLoading || _ad != null) return;
-    _isLoading = true;
-    RewardedAd.load(
-      adUnitId: AdConfig.rewardedUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (ad) {
-          _ad = ad;
-          _isLoading = false;
-        },
-        onAdFailedToLoad: (error) {
-          debugPrint('Rewarded failed to load: $error');
-          _ad = null;
-          _isLoading = false;
-        },
-      ),
-    );
+    if (!AdsService.canRequestAds) return;
+    try {
+      Appodeal.cache(AppodealAdType.RewardedVideo);
+    } catch (e) {
+      debugPrint('Rewarded cache failed: $e');
+    }
+  }
+
+  /// Ask the SDK directly whether a rewarded ad is cached.
+  static Future<void> refresh() async {
+    if (!AdsService.canRequestAds) {
+      _setLoaded(false);
+      return;
+    }
+    try {
+      _loaded = await Appodeal.isLoaded(AppodealAdType.RewardedVideo);
+      available.value = isReady;
+      if (!_loaded) loadAd();
+    } catch (e) {
+      debugPrint('RewardedAdManager.refresh failed: $e');
+    }
+  }
+
+  /// A subscription just started (or the SDK was suspended).
+  static void markUnavailable() {
+    _loaded = false;
+    _isShowing = false;
+    available.value = false;
+    _finish(false);
   }
 
   /// Show the rewarded ad. Returns true only if the user EARNED the reward
   /// (watched enough). Returns false if no ad was ready or it was dismissed
   /// early — the caller grants the bonus only on true.
   static Future<bool> showForReward() async {
-    if (_isShowing) return false;
-    final ad = _ad;
-    if (ad == null) {
-      loadAd();
+    if (_isShowing || !isReady) return false;
+    _isShowing = true;
+    _earned = false;
+    final done = Completer<bool>();
+    _pending = done;
+    try {
+      final shown = await Appodeal.show(AppodealAdType.RewardedVideo);
+      if (!shown) {
+        // Nothing was presented, so no close callback is coming. Resolving
+        // here is what stops the caller's "watching…" state hanging forever.
+        _finish(false);
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Rewarded show failed: $e');
+      _finish(false);
       return false;
     }
-    _ad = null;
-    _isShowing = true;
-    var earned = false;
-    // ad.show() resolves as soon as the ad is DISPLAYED, not when it's
-    // dismissed — so reading `earned` right after it would always be false
-    // (the reward callback fires later). Gate completion on dismissal via a
-    // Completer so the caller gets the real earned/not-earned result.
-    final done = Completer<bool>();
-    void finish(bool value) {
-      if (!done.isCompleted) done.complete(value);
-    }
-
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        _isShowing = false;
-        ad.dispose();
-        loadAd();
-        finish(earned);
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        _isShowing = false;
-        ad.dispose();
-        loadAd();
-        finish(false);
-      },
-    );
-    await ad.show(
-      onUserEarnedReward: (_, _) {
-        earned = true;
-      },
-    );
     return done.future;
+  }
+
+  @visibleForTesting
+  static void debugSetLoaded(bool value) {
+    _loaded = value;
+    _isShowing = false;
+    _pending = null;
+    available.value = isReady;
   }
 }

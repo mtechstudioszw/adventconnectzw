@@ -117,6 +117,48 @@ class QuizProgressService {
   /// True once today's Daily Challenge is done.
   static bool playedToday() => CacheService.readPref(_kLastDay) == _dayKey();
 
+  /// The day the Daily Challenge was last completed, or null if never.
+  ///
+  /// [_dayKey] is not zero-padded (`2026-8-7`), so this parses the parts
+  /// rather than handing the string to [DateTime.parse], which would reject
+  /// it for eight days of every month.
+  static DateTime? lastPlayedDate() {
+    final raw = CacheService.readPref(_kLastDay);
+    if (raw == null || raw.isEmpty) return null;
+    final parts = raw.split('-');
+    if (parts.length != 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    return DateTime(year, month, day);
+  }
+
+  /// Whole days since the last Daily Challenge — 0 today, 1 yesterday, and
+  /// 2+ means the streak is about to reset. Null if they've never played.
+  static int? daysSinceLastDaily() {
+    final last = lastPlayedDate();
+    if (last == null) return null;
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day).difference(last).inDays;
+  }
+
+  /// Rescue a streak that a missed day is about to discard.
+  ///
+  /// Moves the "last played" marker to yesterday, so the next
+  /// [recordDailyComplete] takes the `last == yesterday` branch and
+  /// CONTINUES the streak instead of resetting it to 1. It deliberately
+  /// does not touch the streak counter itself — the number stays whatever
+  /// was honestly earned, and the player still has to play today to
+  /// advance it.
+  ///
+  /// Gated by [QuizRewards.canRepairStreak] (once a week). Nothing else
+  /// should call this.
+  static Future<void> repairStreak() async {
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    await CacheService.writePref(_kLastDay, _dayKey(yesterday));
+  }
+
   /// Advances the streak, resetting to 1 if a day was missed.
   static Future<void> recordDailyComplete() async {
     if (playedToday()) return;

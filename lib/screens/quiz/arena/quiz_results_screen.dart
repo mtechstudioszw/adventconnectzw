@@ -8,6 +8,7 @@ import '../../../config/share_config.dart';
 import '../../../models/quiz_round.dart';
 import '../../../services/ads/interstitial_ad_manager.dart';
 import '../../../services/quiz_progress_service.dart';
+import '../../../services/quiz_rewards_service.dart';
 import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
@@ -16,6 +17,7 @@ import 'quiz_review_screen.dart';
 import 'widgets/arena_scaffold.dart';
 import 'widgets/burst_layer.dart';
 import 'widgets/quiz_share_card.dart';
+import 'widgets/rewarded_offer.dart';
 import 'widgets/xp_bar.dart';
 
 /// The payoff.
@@ -47,6 +49,10 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
   bool _celebrationDone = false;
   bool _sharing = false;
   Timer? _starTimer;
+
+  /// Coins granted by the "double your coins" offer, 0 until claimed.
+  int _bonusCoins = 0;
+  bool _claimingDouble = false;
 
   QuizRoundResult get _result => widget.result;
 
@@ -113,8 +119,45 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
 
   /// The one capped interstitial for the session — only now that the
   /// celebration has actually played out.
+  ///
+  /// Skipped entirely when the double-coins offer is showing. Firing an
+  /// interstitial on top of an opt-in rewarded offer would mean two ads on
+  /// one screen, and it would bury the offer that is both worth more and
+  /// the one the player actually chose.
   void _afterCelebration() {
+    if (_canOfferDouble) return;
     InterstitialAdManager.maybeShow();
+  }
+
+  /// Whether "double your coins" can be offered.
+  ///
+  /// **Coins, not points — a deliberate change from the brief.** Points
+  /// feed lifetime totals, personal bests and the shared leaderboard
+  /// ([QuizCloudService.recordRound] has already banked this round by the
+  /// time this screen is on). Doubling them would put an ad-bought score on
+  /// a board other members are ranked against, which is exactly the kind of
+  /// thing that costs trust in a church app. Coins are private in-app
+  /// currency, so doubling them is pure upside with nothing to distrust.
+  bool get _canOfferDouble =>
+      _result.coinsEarned > 0 &&
+      _bonusCoins == 0 &&
+      // A subscriber has nothing to spend coins on — lifelines are free.
+      !QuizRewards.grantedFree &&
+      QuizRewards.canOffer;
+
+  Future<void> _claimDouble() async {
+    if (_claimingDouble) return;
+    setState(() => _claimingDouble = true);
+    final earned = await QuizRewards.claim();
+    if (!mounted) return;
+    setState(() => _claimingDouble = false);
+    if (!earned) return;
+    final bonus = _result.coinsEarned;
+    await QuizProgressService.addCoins(bonus);
+    if (!mounted) return;
+    setState(() => _bonusCoins = bonus);
+    QuizSfx.play(QuizSound.levelUp);
+    QuizSfx.hapticCombo();
   }
 
   @override
@@ -172,6 +215,27 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
                           detail: result.streak == 1
                               ? 'Come back tomorrow to keep it alive'
                               : 'Keep it going tomorrow',
+                        ),
+                      ],
+                      // Held until the celebration has played out, for the
+                      // same reason "Play again" is: nothing competes with
+                      // the moment the player just earned.
+                      if (_celebrationDone && _canOfferDouble) ...[
+                        const SizedBox(height: 16),
+                        RewardedOfferButton(
+                          icon: Icons.monetization_on_rounded,
+                          label: 'Double your ${_result.coinsEarned} coins',
+                          subtitle: 'Take another ${_result.coinsEarned}',
+                          busy: _claimingDouble,
+                          onClaimed: _claimDouble,
+                        ),
+                      ],
+                      if (_bonusCoins > 0) ...[
+                        const SizedBox(height: 16),
+                        _buildBanner(
+                          icon: Icons.monetization_on_rounded,
+                          label: 'COINS DOUBLED',
+                          detail: '$_bonusCoins extra coins added',
                         ),
                       ],
                       const SizedBox(height: 22),
@@ -313,7 +377,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
         Expanded(
           child: _StatTile(
             icon: Icons.monetization_on_rounded,
-            value: '+${_result.coinsEarned}',
+            value: '+${_result.coinsEarned + _bonusCoins}',
             label: 'Coins',
           ),
         ),

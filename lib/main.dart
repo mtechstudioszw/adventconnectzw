@@ -14,7 +14,7 @@ import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
 import 'services/cache_service.dart';
 import 'services/ads/ads_service.dart';
-import 'services/ads/app_open_ad_manager.dart';
+import 'services/ads/resume_ad_manager.dart';
 import 'services/connectivity_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
@@ -127,19 +127,24 @@ Future<void> _initBackgroundServices() async {
   }
   attachUsageTracking();
 
-  // Premium has to resolve BEFORE AdMob: a subscriber should never start
-  // the ad SDK at all, not merely hide its output. init() is one
+  // Premium has to resolve BEFORE the ad SDK: a subscriber should never
+  // start it at all, not merely hide its output. init() is one
   // secure-storage read of the cached expiry, so it's cheap enough to
   // await here; refresh() goes to the server and can land whenever.
+  //
+  // This ordering is deliberately provider-agnostic — it survived the
+  // AdMob → Appodeal swap untouched because the only thing it decides is
+  // WHETHER AdsService.init() is called, never which SDK is behind it.
   await PremiumService.init();
   unawaited(PremiumService.refresh());
 
-  // AdMob: gather EU consent + initialise the SDK off the critical path
-  // so the first frame isn't blocked. Ad surfaces check
-  // AdsService.canRequestAds. Once ready, warm an App-Open ad for the
-  // next resume.
+  // Appodeal: initialise off the critical path so the first frame isn't
+  // blocked. The SDK gathers GDPR/CCPA consent itself during init (Stack
+  // Consent Manager), so there is no separate consent step here any more.
+  // Ad surfaces check AdsService.canRequestAds. Once ready, warm an
+  // interstitial for the next resume.
   void startAds() {
-    unawaited(AdsService.init().then((_) => AppOpenAdManager.loadAd()));
+    unawaited(AdsService.init().then((_) => ResumeAdManager.loadAd()));
   }
 
   if (!PremiumService.isActive) startAds();
@@ -511,52 +516,21 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       // the app was backgrounded take effect without a relaunch — and it
       // re-arms the expiry timer.
       if (AuthService.isSignedIn) unawaited(PremiumService.refresh());
-      // App-Open ad on return-to-foreground (capped once / 3h), but never
-      // over a sensitive flow — Advent Chat, prayer, auth/onboarding,
-      // splash/lock, banned/update, admin.
-      _maybeShowAppOpenAd();
+      // Full-screen ad on return-to-foreground (capped once / 3h), but
+      // never over a sensitive flow — Advent Chat, prayer, auth/onboarding,
+      // splash/lock, banned/update, admin. Appodeal has no App-Open format,
+      // so this is an interstitial sharing the global interstitial cap.
+      _maybeShowResumeAd();
     }
   }
 
-  // Routes where a full-screen App-Open ad must NOT appear.
-  static const _appOpenBlockedPrefixes = <String>[
-    '/messages', // Advent Chat (inbox + conversations)
-    '/prayer',
-    '/splash',
-    '/biometric-lock',
-    '/onboarding',
-    '/login',
-    '/signup',
-    '/email-verification',
-    '/profile-setup',
-    '/forgot-password',
-    '/reset-password',
-    '/account-banned',
-    '/update-required',
-    '/admin',
-    // Browsing/opening a church, event or product must not trigger a
-    // full-screen App-Open ad on resume — the tester hit an unskippable ad
-    // every time they tapped one of these. Revenue stays on the home feed +
-    // stories.
-    '/marketplace',
-    '/events',
-    '/churches',
-    '/library',
-    '/news',
-  ];
-
-  void _maybeShowAppOpenAd() {
+  /// The route blocklist moved to [ResumeAdManager.blockedPrefixes] — next
+  /// to the thing it restrains, where a test can read it. It was private
+  /// here, so nothing could check that Advent Chat was still on it.
+  void _maybeShowResumeAd() {
     if (!AuthService.isSignedIn) return;
     final loc = appRouter.routerDelegate.currentConfiguration.uri.path;
-    final blocked = _appOpenBlockedPrefixes.any(
-      (prefix) => loc.startsWith(prefix),
-    );
-    if (blocked) {
-      // Still keep one warm for when they land somewhere it's allowed.
-      AppOpenAdManager.loadAd();
-      return;
-    }
-    unawaited(AppOpenAdManager.showIfReady());
+    unawaited(ResumeAdManager.showIfReady(loc));
   }
 
   Future<void> _maybeRequireBiometric() async {

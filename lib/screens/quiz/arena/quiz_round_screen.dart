@@ -7,6 +7,7 @@ import '../../../models/quiz_round.dart';
 import '../../../services/ads/rewarded_ad_manager.dart';
 import '../../../services/quiz_cloud_service.dart';
 import '../../../services/quiz_progress_service.dart';
+import '../../../services/quiz_rewards_service.dart';
 import '../../../services/quiz_service.dart';
 import '../../../services/quiz_music.dart';
 import '../../../services/quiz_sfx.dart';
@@ -18,6 +19,7 @@ import 'widgets/arena_hud.dart';
 import 'widgets/arena_scaffold.dart';
 import 'widgets/burst_layer.dart';
 import 'widgets/countdown_overlay.dart';
+import 'widgets/rewarded_offer.dart';
 
 /// Plays a round.
 ///
@@ -79,6 +81,18 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   final Set<Lifeline> _usedThisQuestion = {};
 
   Lifeline? _lifelineBusy;
+
+  // ---- Survival continue --------------------------------------------------
+  /// Showing the "your run is over — continue?" offer.
+  bool _offeringContinue = false;
+
+  /// An ad is on screen for the continue offer.
+  bool _claimingContinue = false;
+
+  /// Continues taken in this run. Capped by [QuizRewards.continuesPerRun];
+  /// a run that can be extended forever is not sudden death any more, and
+  /// the leaderboard it feeds stops meaning anything.
+  int _continuesUsed = 0;
 
   /// Mutable because Extra Time lengthens the current question's clock.
   late int _questionSeconds = _mode.secondsPerQuestion;
@@ -327,7 +341,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     // the round never feels stalled. Sudden death ends here instead.
     _advanceAfter(const Duration(milliseconds: 1400), () {
       if (_mode.suddenDeath) {
-        _finish();
+        _endSuddenDeath();
       } else {
         _next();
       }
@@ -399,7 +413,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     // retired, so waiting would have left the run frozen on the question
     // it should have ended on.
     if (!correct && _mode.suddenDeath) {
-      _advanceAfter(const Duration(milliseconds: 1200), _finish);
+      _advanceAfter(const Duration(milliseconds: 1200), _endSuddenDeath);
       return;
     }
 
@@ -407,6 +421,60 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     if (_mode == QuizMode.speed) {
       _advanceAfter(const Duration(milliseconds: 850), _next);
     }
+  }
+
+  // ---- Survival continue --------------------------------------------------
+
+  /// Whether the "watch a short ad to keep going" offer can appear.
+  ///
+  /// Deliberately additive: the run has ALREADY ended by the rules, and
+  /// declining costs nothing. Nothing was taken away to create this moment
+  /// — which is the whole difference between a continue and a lives gate,
+  /// and why this one is fit for a church app.
+  bool get _canOfferContinue =>
+      _mode.suddenDeath &&
+      _continuesUsed < QuizRewards.continuesPerRun &&
+      // Pointless on the last question — there is nothing to continue into.
+      _index < _questions.length - 1 &&
+      QuizRewards.canOffer;
+
+  /// A Survival run just ended. Offer the continue, or finish.
+  void _endSuddenDeath() {
+    if (_finishing || !mounted) return;
+    if (_canOfferContinue) {
+      setState(() => _offeringContinue = true);
+    } else {
+      _finish();
+    }
+  }
+
+  Future<void> _claimContinue() async {
+    if (_claimingContinue) return;
+    setState(() => _claimingContinue = true);
+    final earned = await QuizRewards.claim();
+    if (!mounted) return;
+    setState(() => _claimingContinue = false);
+    // Not earned (dismissed early, or no fill after all). Leave the offer
+    // up rather than ending the run out from under them — declining has to
+    // be their choice, not the ad network's.
+    if (!earned) return;
+
+    _continuesUsed++;
+    setState(() {
+      _offeringContinue = false;
+      // The continue rescues the RUN, not the streak. Buying back a combo
+      // would let an ad purchase a multiplier, and the multiplier is what
+      // the score is made of.
+      _combo = 0;
+    });
+    QuizSfx.play(QuizSound.go);
+    _next();
+  }
+
+  void _declineContinue() {
+    if (!mounted) return;
+    setState(() => _offeringContinue = false);
+    _finish();
   }
 
   void _next() {
@@ -544,7 +612,13 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   Future<void> _useLifeline(Lifeline lifeline) async {
     if (_lifelineBusy != null || !_lifelineAvailable(lifeline)) return;
 
-    final paid = await QuizProgressService.spendCoins(lifeline.cost);
+    // Subscribers get lifelines outright. They can't watch a rewarded ad
+    // (they never load an ad SDK at all), so the alternative was charging
+    // them coins for something a free player can get by watching — which is
+    // the wrong way round. Costs us nothing and makes the subscription
+    // worth more.
+    final paid = QuizRewards.grantedFree ||
+        await QuizProgressService.spendCoins(lifeline.cost);
     if (!paid) {
       if (RewardedAdManager.isReady) {
         setState(() => _lifelineBusy = lifeline);
@@ -698,6 +772,8 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
                   onDone: _startRound,
                 ),
               ),
+            if (_offeringContinue)
+              Positioned.fill(child: _buildContinueOffer()),
           ],
         ),
       ),
@@ -774,6 +850,66 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     );
   }
 
+  /// The arcade continue: "your run ended — want to keep going?"
+  ///
+  /// Survival is already sudden death, so this is the classic continue and
+  /// the highest-converting placement in mobile games. It is also the one
+  /// placement where an ad is unambiguously a *gift*: the run is over
+  /// either way, and "End run" sits right there with equal weight. There is
+  /// no countdown pressuring the choice.
+  Widget _buildContinueOffer() {
+    return ColoredBox(
+      color: ArenaTheme.canvasTop.withValues(alpha: 0.88),
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.favorite_rounded,
+                    size: 44, color: ArenaTheme.gold),
+                const SizedBox(height: 14),
+                Text(
+                  'Run over',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.headlineSmall.copyWith(
+                    color: ArenaTheme.textOnNavy,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$_points points on question ${_index + 1}',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: ArenaTheme.textMutedOnNavy),
+                ),
+                const SizedBox(height: 22),
+                RewardedOfferButton(
+                  icon: Icons.play_circle_fill_rounded,
+                  label: 'Continue your run',
+                  subtitle: 'Pick up at the next question',
+                  busy: _claimingContinue,
+                  onClaimed: _claimContinue,
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: _claimingContinue ? null : _declineContinue,
+                  child: Text(
+                    'End run',
+                    style: AppTextStyles.labelMedium
+                        .copyWith(color: ArenaTheme.textMutedOnNavy),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// The lifeline strip.
   ///
   /// Second Chance is the odd one out: it only appears *after* a wrong
@@ -787,6 +923,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     if (available.isEmpty) return const SizedBox.shrink();
 
     final coins = QuizProgressService.coins();
+    final free = QuizRewards.grantedFree;
     return SizedBox(
       height: 40,
       child: ListView.separated(
@@ -795,11 +932,14 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final lifeline = available[i];
-          final affordable = coins >= lifeline.cost;
+          // A subscriber is never "unable to afford" one — the chip has to
+          // say so, or it would show a coin price it isn't going to charge.
+          final affordable = free || coins >= lifeline.cost;
           final busy = _lifelineBusy == lifeline;
           return _LifelineChip(
             lifeline: lifeline,
             affordable: affordable,
+            free: free,
             busy: busy,
             highlight: lifeline == Lifeline.secondChance,
             onTap: _lifelineBusy != null ? null : () => _useLifeline(lifeline),
@@ -1046,11 +1186,15 @@ class _LifelineChip extends StatelessWidget {
     required this.affordable,
     required this.busy,
     required this.onTap,
+    this.free = false,
     this.highlight = false,
   });
 
   final Lifeline lifeline;
   final bool affordable;
+
+  /// Premium: no coins, no ad. Shown as "FREE" instead of a price.
+  final bool free;
   final bool busy;
   final bool highlight;
   final VoidCallback? onTap;
@@ -1111,7 +1255,17 @@ class _LifelineChip extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 7),
-                if (affordable)
+                if (free)
+                  Text(
+                    'FREE',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: ArenaTheme.gold,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 10.5,
+                      letterSpacing: 0.5,
+                    ),
+                  )
+                else if (affordable)
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

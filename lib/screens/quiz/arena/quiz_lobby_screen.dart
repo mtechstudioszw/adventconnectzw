@@ -13,6 +13,7 @@ import '../../../services/quiz_launch_intent.dart';
 import '../../../services/quiz_match_service.dart';
 import '../../../services/quiz_music.dart';
 import '../../../services/quiz_progress_service.dart';
+import '../../../services/quiz_rewards_service.dart';
 import '../../../services/quiz_service.dart';
 import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_motion.dart';
@@ -26,6 +27,7 @@ import 'quiz_matchmaking_screen.dart';
 import 'quiz_results_screen.dart';
 import 'quiz_round_screen.dart';
 import 'widgets/arena_scaffold.dart';
+import 'widgets/rewarded_offer.dart';
 import 'widgets/xp_bar.dart';
 
 /// The Quiz Arena's home.
@@ -50,6 +52,10 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
 
   late Future<List<String>> _categories;
   bool _busy = false;
+
+  /// A rewarded ad is on screen for one of the lobby's offers.
+  bool _claimingCoins = false;
+  bool _claimingRepair = false;
 
   /// Set while a "challenge a friend" round is being played — the challenge
   /// is only created once there's a real score to challenge with.
@@ -366,6 +372,7 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
               _buildHeader(),
               const SizedBox(height: 20),
               _reveal(0, _buildIdentity()),
+              ..._buildRewardOffers(),
               if (session != null) ...[
                 const SizedBox(height: 16),
                 _reveal(1, _buildResume(session)),
@@ -530,6 +537,76 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// The lobby's two opt-in offers, both purely additive.
+  ///
+  /// Nothing here is a gate. The coin top-up is the "real button, not a
+  /// silent fallback" the founder asked for: before this, the only way a
+  /// player ever saw a rewarded ad was to run out of coins mid-question and
+  /// happen to have one cached, which is why the funnel measured almost
+  /// nothing. Streak repair only appears when there is genuinely a streak
+  /// about to be lost, and at most once a week.
+  ///
+  /// **The Daily Challenge is deliberately not among these.** It is the
+  /// habit that brings people back; putting it behind an ad is the single
+  /// placement most likely to feel extractive in a church app.
+  List<Widget> _buildRewardOffers() {
+    final offers = <Widget>[
+      if (QuizRewards.canRepairStreak)
+        RewardedOfferButton(
+          icon: Icons.local_fire_department_rounded,
+          label: 'Save your ${QuizProgressService.currentStreak()}-day streak',
+          subtitle: 'Play today and it carries on',
+          busy: _claimingRepair,
+          onClaimed: _claimStreakRepair,
+        ),
+      // Hidden from subscribers: their lifelines are already free, so coins
+      // buy them nothing.
+      if (!QuizRewards.grantedFree && QuizRewards.canOffer)
+        RewardedOfferButton(
+          icon: Icons.monetization_on_rounded,
+          label: 'Get ${QuizRewards.coinTopUp} coins',
+          subtitle: 'Spend them on lifelines',
+          busy: _claimingCoins,
+          onClaimed: _claimCoins,
+        ),
+    ];
+    if (offers.isEmpty) return const [];
+    return [
+      for (final offer in offers) ...[
+        const SizedBox(height: 12),
+        offer,
+      ],
+    ];
+  }
+
+  Future<void> _claimCoins() async {
+    if (_claimingCoins) return;
+    setState(() => _claimingCoins = true);
+    final granted = await QuizRewards.topUpCoins();
+    if (!mounted) return;
+    setState(() => _claimingCoins = false);
+    if (granted <= 0) return;
+    QuizSfx.play(QuizSound.levelUp);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$granted coins added')),
+    );
+  }
+
+  Future<void> _claimStreakRepair() async {
+    if (_claimingRepair) return;
+    setState(() => _claimingRepair = true);
+    final repaired = await QuizRewards.repairStreak();
+    if (!mounted) return;
+    setState(() => _claimingRepair = false);
+    if (!repaired) return;
+    QuizSfx.play(QuizSound.levelUp);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Streak saved — play today to keep it going'),
       ),
     );
   }

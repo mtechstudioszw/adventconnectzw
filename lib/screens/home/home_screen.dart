@@ -47,7 +47,7 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
-import '../../widgets/ads/native_ad_card.dart';
+import '../../widgets/ads/feed_ad_card.dart';
 import '../../widgets/premium/premium_promo_sheet.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_entry.dart';
@@ -2043,11 +2043,11 @@ class _HomeScreenState extends State<HomeScreen>
       if ((i + 1) % _musicEveryNPosts == 0 && musicIdx < _music.length) {
         children.add(HomeMusicCard(item: _music[musicIdx++]));
       }
-      // Sponsored native ad after every _adEveryNPosts posts, capped at
-      // _maxFeedAds per render so we don't fire dozens of ad requests on
-      // a long scroll. The card self-hides until/unless an ad loads.
+      // Sponsored card after every _adEveryNPosts posts, capped at
+      // _maxFeedAds per render. The card self-hides until/unless an ad is
+      // actually available, so a miss leaves no gap in the feed.
       if ((i + 1) % _adEveryNPosts == 0 && adsInserted < _maxFeedAds) {
-        children.add(const NativeAdCard());
+        children.add(const FeedAdCard());
         adsInserted++;
       }
     }
@@ -2078,10 +2078,15 @@ class _HomeScreenState extends State<HomeScreen>
   // video never land back to back.
   static const _musicEveryNPosts = 6;
 
-  // Sponsored native-ad cadence. Capped per render so a long scroll doesn't
-  // spawn dozens of ad requests. Deliberately a revenue trade for feel.
+  // Sponsored-card cadence.
+  //
+  // The cap is 1, not the 3 it was under AdMob, and that is a capacity
+  // limit rather than a taste one: Appodeal hands out a SINGLE shared MREC
+  // view per process, so a second card on screen steals the native view
+  // from the first and leaves it blank. Three cards would have meant one
+  // ad and two empty gaps. See AdViewSlot.
   static const _adEveryNPosts = 8;
-  static const _maxFeedAds = 3;
+  static const _maxFeedAds = 1;
 
   /// Maps an onboarding-interest label (the user-facing strings from
   /// _PersonalizationPage._interestOptions) to the discovery slot

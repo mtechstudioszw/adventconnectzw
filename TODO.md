@@ -69,11 +69,27 @@ diagnosed or has a stated unknown — nothing is a guess.
       are unverified.
 - [ ] **Church admin dashboard — what else belongs there?** Open question
       from the founder.
-- [ ] **Quiz name gate.** Only **7 `quiz_profiles` rows exist for 200
-      members**, and live match makes you invent a quiz name before playing.
-      That gate — not discovery — is why "many people are not seeing it".
-      Default the name from the profile; the rename entry already exists in
-      the arena header.
+- [ ] **Quiz live match reach.** Only **7 `quiz_profiles` rows exist for 200
+      members**.
+      **CORRECTION (17 Aug): this is NOT a name gate.** I said earlier that
+      live match forces you to invent a quiz name first and that this was
+      throttling the funnel. That was wrong, and checking the server settled
+      it:
+      - `quiz_profile_ensure()` **already auto-creates** the profile from the
+        member's first name, with unique-collision handling ("Tendai",
+        "Tendai 1", …), and `quiz_match_find` calls it before anything else.
+      - **No database function raises `QUIZ_PROFILE_REQUIRED` at all**, so
+        `QuizMatchService`'s `QuizProfileRequired` branch — and the profile
+        sheet it opens — is **dead code** on that path.
+      So there is no gate to remove. 7 profiles exist because only ~11 people
+      have ever opened live match; the row is created on first search. The
+      real problem is **discovery and having somebody to play**, so the work
+      is promoting the entry point and solving the empty-lobby problem
+      (scheduled match times, or leaning on the async challenge that already
+      works) — not removing a barrier that isn't there.
+      - [ ] Separately: delete the dead `QuizProfileRequired` path, or make
+            the server actually raise it. Right now it is a branch that can
+            never run.
 - [ ] **Quiz lobby restyle** — founder says it is not premium. No direction
       chosen yet.
 - [ ] **Better route into the quiz from Home**, plus what features belong
@@ -107,8 +123,12 @@ diagnosed or has a stated unknown — nothing is a guess.
 
 ### Standing rules that keep earning their place
 
-1. **Check whether it already exists before building it.** Nine "missing"
-   features this month turned out to be built and quietly broken.
+1. **Check whether it already exists before building it.** Ten "missing"
+   features this month turned out to be built and quietly broken — the most
+   recent being the quiz "name gate" above, which does not exist. The rule
+   catches wrong diagnoses, not just wasted builds: acting on that one would
+   have meant removing a barrier that was already gone while the real cause
+   (an empty lobby) went untouched.
 2. **Query with an authenticated context**, not the anon key — several
    tables are `TO {authenticated}` and read as empty otherwise.
 3. **Verify against the DB, a test, or a render — never by reading code.**

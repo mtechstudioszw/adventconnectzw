@@ -1,6 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
+import '../../../services/highlight_text.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -35,6 +37,8 @@ class SsHtmlText extends StatefulWidget {
     required this.fontScale,
     this.textColor,
     this.onVerseTap,
+    this.highlights = const <String>{},
+    this.onHighlightTap,
   });
 
   final String html;
@@ -44,6 +48,15 @@ class SsHtmlText extends StatefulWidget {
   /// Called with the raw `verse` attribute (e.g. "1Cor1031") when the reader
   /// taps an inline scripture reference.
   final void Function(String verseRef, String label)? onVerseTap;
+
+  /// Passages to paint a wash behind, matched by TEXT — see
+  /// [HighlightText.rangesIn] for why not by offsets.
+  final Set<String> highlights;
+
+  /// Called with the whole statement a tap landed inside. Null disables
+  /// tap-to-highlight, which is what any other caller of this renderer
+  /// wants.
+  final void Function(String sentence)? onHighlightTap;
 
   @override
   State<SsHtmlText> createState() => _SsHtmlTextState();
@@ -124,15 +137,18 @@ class _SsHtmlTextState extends State<SsHtmlText> {
             borderRadius:
                 const BorderRadius.horizontal(right: Radius.circular(12)),
           ),
-          child: RichText(
-            text: _spanFor(
-              context,
-              block.inlines,
-              base: AppTextStyles.bodyLarge.copyWith(
-                color: color,
-                fontSize: 16 * fontScale,
-                height: 1.75,
-                fontStyle: FontStyle.italic,
+          child: _tappable(
+            block.inlines,
+            RichText(
+              text: _spanFor(
+                context,
+                block.inlines,
+                base: AppTextStyles.bodyLarge.copyWith(
+                  color: color,
+                  fontSize: 16 * fontScale,
+                  height: 1.75,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
           ),
@@ -174,8 +190,11 @@ class _SsHtmlTextState extends State<SsHtmlText> {
         }
         return Padding(
           padding: const EdgeInsets.only(bottom: 14),
-          child: RichText(
-            text: _spanFor(context, block.inlines, base: _bodyStyle(color)),
+          child: _tappable(
+            block.inlines,
+            RichText(
+              text: _spanFor(context, block.inlines, base: _bodyStyle(color)),
+            ),
           ),
         );
     }
@@ -192,37 +211,133 @@ class _SsHtmlTextState extends State<SsHtmlText> {
     List<_Inline> inlines, {
     required TextStyle base,
   }) {
-    return TextSpan(
-      children: [
-        for (final inline in inlines)
-          if (inline.verseRef != null)
-            TextSpan(
-              text: inline.text,
-              style: base.copyWith(
-                color: AppColors.primaryBlue,
-                fontWeight: FontWeight.w600,
-              ),
-              recognizer: _recognizerFor(inline.verseRef!, inline.text),
-            )
-          else
-            TextSpan(
-              text: inline.text,
-              style: base.copyWith(
-                fontWeight: inline.bold ? FontWeight.w700 : base.fontWeight,
-                fontStyle: inline.italic ? FontStyle.italic : base.fontStyle,
-                fontSize: inline.small
-                    ? (base.fontSize ?? 16) * 0.82
-                    : base.fontSize,
-                // <sup> can't shift the baseline in a plain TextSpan, so
-                // verse numbers are rendered small + bold + blue instead —
-                // it reads as a verse marker without layout gymnastics.
-                color: inline.superscript
-                    ? AppColors.primaryBlue
-                    : base.color,
-              ),
-            ),
-      ],
+    // Highlights are matched against the block's own plain text and then
+    // mapped back onto the spans, so a wash can start or end mid-span
+    // without covering a whole run.
+    final ranges = widget.highlights.isEmpty
+        ? const <({int start, int end})>[]
+        : HighlightText.rangesIn(_plain(inlines), widget.highlights);
+
+    final wash = AppColors.goldAccent.withValues(alpha: 0.28);
+    final out = <InlineSpan>[];
+    var cursor = 0;
+
+    /// Emits [text] split at highlight boundaries.
+    void emit(String text, TextStyle style, {GestureRecognizer? recognizer}) {
+      if (text.isEmpty) return;
+      final start = cursor;
+      cursor += text.length;
+      if (ranges.isEmpty) {
+        out.add(TextSpan(text: text, style: style, recognizer: recognizer));
+        return;
+      }
+      var at = start;
+      final end = start + text.length;
+      while (at < end) {
+        final hit = ranges.firstWhere(
+          (r) => r.end > at && r.start < end,
+          orElse: () => (start: -1, end: -1),
+        );
+        if (hit.start < 0) {
+          out.add(TextSpan(
+            text: text.substring(at - start),
+            style: style,
+            recognizer: recognizer,
+          ));
+          return;
+        }
+        if (hit.start > at) {
+          out.add(TextSpan(
+            text: text.substring(at - start, hit.start - start),
+            style: style,
+            recognizer: recognizer,
+          ));
+          at = hit.start;
+        }
+        final stop = hit.end < end ? hit.end : end;
+        out.add(TextSpan(
+          text: text.substring(at - start, stop - start),
+          style: style.copyWith(backgroundColor: wash),
+          recognizer: recognizer,
+        ));
+        at = stop;
+      }
+    }
+
+    for (final inline in inlines) {
+      if (inline.verseRef != null) {
+        emit(
+          inline.text,
+          base.copyWith(
+            color: AppColors.primaryBlue,
+            fontWeight: FontWeight.w600,
+          ),
+          recognizer: _recognizerFor(inline.verseRef!, inline.text),
+        );
+        continue;
+      }
+      emit(
+        inline.text,
+        base.copyWith(
+          fontWeight: inline.bold ? FontWeight.w700 : base.fontWeight,
+          fontStyle: inline.italic ? FontStyle.italic : base.fontStyle,
+          fontSize:
+              inline.small ? (base.fontSize ?? 16) * 0.82 : base.fontSize,
+          // <sup> can't shift the baseline in a plain TextSpan, so verse
+          // numbers are rendered small + bold + blue instead — it reads as a
+          // verse marker without layout gymnastics.
+          color: inline.superscript ? AppColors.primaryBlue : base.color,
+        ),
+      );
+    }
+    return TextSpan(children: out);
+  }
+
+  /// The block's text with no markup — what highlights are matched against.
+  static String _plain(List<_Inline> inlines) =>
+      inlines.map((i) => i.text).join();
+
+  /// Wraps a rendered block so a tap inside it highlights the whole
+  /// statement it landed in.
+  ///
+  /// Founder, 18 Aug 2026: highlighting does not exist in Sabbath School at
+  /// all. `Builder` rather than a `GlobalKey` — one key per block per day
+  /// would collide the moment two blocks were identical — and the render
+  /// object is searched for rather than assumed, because `GestureDetector`
+  /// has one of its own that `findRenderObject()` stops at.
+  Widget _tappable(List<_Inline> inlines, Widget child) {
+    if (widget.onHighlightTap == null) return child;
+    return Builder(
+      builder: (ctx) => GestureDetector(
+        onTapUp: (details) {
+          final render = _paragraphUnder(ctx.findRenderObject());
+          if (render == null) return;
+          final local = render.globalToLocal(details.globalPosition);
+          if (!(Offset.zero & render.size).contains(local)) return;
+
+          // No WidgetSpans in this renderer, so the painted offset and the
+          // block's own text agree. (The EGW reader has to map between them
+          // because its page anchors paint as widgets.)
+          final text = _plain(inlines);
+          final offset = render.getPositionForOffset(local).offset;
+          final range = HighlightText.sentenceAt(text, offset);
+          final sentence = text.substring(range.start, range.end).trim();
+          if (sentence.length < 3) return;
+          widget.onHighlightTap!(sentence);
+        },
+        child: child,
+      ),
     );
+  }
+
+  RenderParagraph? _paragraphUnder(RenderObject? node) {
+    if (node == null) return null;
+    if (node is RenderParagraph) return node;
+    RenderParagraph? found;
+    node.visitChildren((child) {
+      found ??= _paragraphUnder(child);
+    });
+    return found;
   }
 }
 

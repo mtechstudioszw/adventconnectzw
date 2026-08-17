@@ -12,12 +12,38 @@ diagnosed or has a stated unknown — nothing is a guess.
       confirmed on **18 Aug that it has NOT been rotated** — both are still
       live and both are burned. No DB or Management-API work was done in
       the 18 Aug ads session for this reason; none was needed.
-- [x] **Appodeal `app-ads.txt` — DONE 18 Aug.** Verified 19 Aug: **2,505
-      record lines in BOTH `docs/app-ads.txt` and `legal-site/app-ads.txt`.**
-      Was listed here as an open revenue blocker long after it shipped;
-      re-checked on disk rather than trusted. Still needs to be SERVED at
-      `https://<the domain in the Play listing>/app-ads.txt` to count —
-      committing the file is not the same as publishing it.
+- [ ] **`app-ads.txt` IS NOT PUBLISHED. Revenue is still blocked.**
+      The file is right and complete in the repo — 2,505 records in both
+      `docs/app-ads.txt` and `legal-site/app-ads.txt`. **It is not what is
+      being served.** Checked live on 19 Aug:
+
+      | URL | What is actually there |
+      |---|---|
+      | `mtechstudioszw.github.io/app-ads.txt` | **ONE line**, the old AdMob entry `google.com, pub-2916679989954369, DIRECT, …` |
+      | `mtechstudioszw.github.io/adventconnect-legal/app-ads.txt` | **404** |
+      | `mtechstudioszw.github.io/adventconnectzw/app-ads.txt` | **404** |
+
+      Two separate problems, and the second is the one that wastes time:
+
+      1. The served file is **stale** — a single AdMob line, from before the
+         Appodeal migration. AdMob is gone from the app and the account is
+         disapproved, so that line authorises a seller we no longer use and
+         authorises none of the ones we do.
+      2. **Crawlers only read the DOMAIN ROOT.** The spec takes the
+         developer website from the store listing, reduces it to a domain,
+         and fetches `https://<domain>/app-ads.txt`. The Play listing points
+         at `mtechstudioszw.github.io/adventconnect-legal/privacy.html`, so
+         the domain is `mtechstudioszw.github.io` and the ONLY file that
+         counts is the one at its root. Publishing to
+         `/adventconnect-legal/app-ads.txt` would still be invisible.
+         `github.io` is on the Public Suffix List, so
+         `mtechstudioszw.github.io` is its own domain — that part is fine.
+
+      **Fix:** replace the one-line file at the root of the
+      `mtechstudioszw.github.io` Pages repo with `docs/app-ads.txt` from
+      here. Then re-fetch `https://mtechstudioszw.github.io/app-ads.txt` and
+      confirm it is 2,505 lines, not one. Founder action — that repo is not
+      in this tree.
 - [ ] **Move auth email off Gmail.** FOUNDER CHOSE "stay on Gmail for now"
       (17 Aug), so this stays open and WILL recur. Raising `rate_limit_otp`
       is **not** a workaround — Gmail throttles bursts itself and caps
@@ -252,18 +278,31 @@ book won't open" reports.
 
 ### NOT FIXED — still open
 
-- [ ] **Highlighting does not work in Sabbath School at all.**
-      `ss_lesson_screen.dart` (1217 lines) has no highlight path — the
-      feature is EGW-only. **The founder has now decided (19 Aug): an SS
-      highlight FOLLOWS THE ACCOUNT**, not the device. So unlike EGW's, this
-      one needs a table + RLS, which means it is **blocked on a fresh
-      Supabase token** — see §0, still not rotated.
-      Shape when it is picked up: a new table rather than reusing
-      `EgwHighlights` (that is keyed `bookId` + `chapterId` and is
-      deliberately device-local and sign-out-cleared). The tap-to-highlight
-      gesture and the sentence-boundary rule are done and reusable —
-      `EgwHighlights.sentenceAt` is pure and already covers initials,
-      abbreviations and verse references.
+- [x] **Highlighting in Sabbath School — BUILT 19 Aug. Client is done; the
+      migration is NOT applied.** Founder chose (19 Aug) that an SS
+      highlight **follows the account**, so unlike EGW's device-local
+      store this needed a table.
+      - **`database/patch_208_ss_highlights.sql` is written and NOT RUN.**
+        Applying it needs a token (§0). Owner-only RLS, one policy per verb
+        written out rather than a single `FOR ALL` — `.upsert()` needs
+        SELECT *and* INSERT *and* UPDATE to be right, and a missing SELECT
+        policy is a trap this project has already hit once. It revokes the
+        default `anon` grant by name, because `REVOKE FROM PUBLIC` alone
+        leaves anon holding it.
+      - `SsHighlights` (`lib/services/ss_highlights_service.dart`) is
+        offline-first on purpose: a local mirror paints on the frame the
+        member taps, changes queue, and `load()` flushes the queue before
+        taking the server's answer — so a highlight made on a bus is not
+        erased by the fetch meant to restore it. **Until the patch is
+        applied every write simply stays queued**, which is the same code
+        path as being offline and is covered by tests.
+      - The text rules moved to `lib/services/highlight_text.dart`, shared
+        by both readers. `EgwHighlights` delegates to it. Two copies of the
+        sentence rule would drift, and that rule is the part most likely to
+        be quietly wrong.
+      - Pinned by `test/ss_highlights_test.dart` (15 tests) — including the
+        renderer half, because the store can be perfect and the feature
+        still dead if a tap never reaches it.
 
 - [x] **Sabbath School throws `'_dependents.isEmpty': is not true`** — FIXED
       19 Aug, see above. The diagnosis below was on the right track about

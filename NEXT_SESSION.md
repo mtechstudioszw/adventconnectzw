@@ -27,14 +27,18 @@ reports, and the rule that came out of it.
 
 ## What is left, in the order I'd take them
 
-1. **Highlighting in Sabbath School.** The last item of his batch. Decided
-   19 Aug: it **follows the account**, so it needs a table + RLS and is
-   blocked on the token. The gesture and the sentence-boundary rule are done
-   and reusable — `EgwHighlights.sentenceAt` is pure, tested, and already
-   handles initials, abbreviations and verse references.
-2. **"there no shelf"** — his one report from 19 Aug still unresolved, and
+1. **Apply `database/patch_208_ss_highlights.sql`.** Sabbath School
+   highlighting is BUILT and tested — the client works offline today and
+   queues every write. The table does not exist yet, so nothing has reached
+   an account. This is the first thing to do once a token arrives, and the
+   patch has its own VERIFY block at the bottom: four policies, `anon`
+   without SELECT, `authenticated` with it.
+2. **`app-ads.txt` is still not published** — see §0. The file in the repo
+   is right; what is SERVED at the domain root is a single stale AdMob line.
+   Revenue stays blocked until that changes, and it is a founder action.
+3. **"there no shelf"** — his one report from 19 Aug still unresolved, and
    genuinely ambiguous. Ask; do not guess. §2b has both readings.
-3. Anything he adds. He reports in batches; expect more.
+4. Anything he adds. He reports in batches; expect more.
 
 **The Sabbath School crash is FIXED** — his own repro ("click the pencil
 icon n click back") was the whole diagnosis. It was never a `GlobalKey`

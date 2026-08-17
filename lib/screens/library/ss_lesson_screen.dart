@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -6,6 +8,7 @@ import '../../config/share_config.dart';
 import '../../models/sabbath_school_model.dart';
 import '../../services/sabbath_school_prefs.dart';
 import '../../services/sabbath_school_service.dart';
+import '../../services/ss_highlights_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
@@ -1144,6 +1147,12 @@ class _DayPageState extends State<_DayPage>
     });
     widget.onRead();
     if (content != null) widget.onLoaded(content);
+
+    // Reconcile this day's highlights with the account, AFTER the text is
+    // on screen. Not awaited and never blocking: the local mirror already
+    // painted, so this only ever corrects it — a highlight removed on
+    // another device disappearing, or one made offline finally landing.
+    unawaited(SsHighlights.load(widget.day.readPath));
   }
 
   @override
@@ -1193,10 +1202,22 @@ class _DayPageState extends State<_DayPage>
           ),
         ),
         const SizedBox(height: 18),
-        SsHtmlText(
-          html: content.contentHtml,
-          fontScale: widget.fontScale,
-          onVerseTap: (ref, label) => _showVerse(context, content, ref, label),
+        // Highlights follow the ACCOUNT here, unlike EGW's — founder's call,
+        // 19 Aug 2026. The reader rebuilds from `SsHighlights.revision`, so
+        // a tap paints on the next frame and the network catches up after.
+        ValueListenableBuilder<int>(
+          valueListenable: SsHighlights.revision,
+          builder: (context, _, _) => SsHtmlText(
+            html: content.contentHtml,
+            fontScale: widget.fontScale,
+            highlights: SsHighlights.forDay(widget.day.readPath),
+            onHighlightTap: (sentence) {
+              SsHighlights.toggle(widget.day.readPath, sentence);
+              HapticFeedback.selectionClick();
+            },
+            onVerseTap: (ref, label) =>
+                _showVerse(context, content, ref, label),
+          ),
         ),
       ],
     );

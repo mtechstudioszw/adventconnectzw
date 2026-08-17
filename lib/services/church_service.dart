@@ -512,6 +512,56 @@ class ChurchService {
     }
   }
 
+  /// WHICH of my friends belong to each church, not just how many
+  /// (patch_205).
+  ///
+  /// Replaces the bare count on the church card. `total` is the true number
+  /// even though at most [limit] faces come back, so the card can say "+4"
+  /// honestly — counting the returned rows would understate every church
+  /// with more than three.
+  ///
+  /// Best-effort like [fetchFriendCounts]: on any failure the caller falls
+  /// back to the count chip rather than showing nothing.
+  static Future<Map<String, ChurchFriendFaces>> fetchFriendFaces(
+    List<String> churchIds, {
+    int limit = 3,
+  }) async {
+    if (churchIds.isEmpty) return const {};
+    final ids = churchIds
+        .map(int.tryParse)
+        .whereType<int>()
+        .toList(growable: false);
+    if (ids.isEmpty) return const {};
+    try {
+      final res = await _client.rpc(
+        'church_friend_faces',
+        params: {'p_church_ids': ids, 'p_limit': limit},
+      );
+      if (res is! List) return const {};
+      // The RPC returns one row PER FRIEND, already ordered, so the rows are
+      // grouped here rather than asking the database for nested JSON.
+      final out = <String, ChurchFriendFaces>{};
+      for (final r in res) {
+        final m = r as Map;
+        final id = m['church_id'].toString();
+        final entry = out[id] ??= ChurchFriendFaces(
+          total: (m['total'] as num?)?.toInt() ?? 0,
+          friends: <ChurchFriend>[],
+        );
+        entry.friends.add(
+          ChurchFriend(
+            id: m['friend_id'].toString(),
+            name: (m['full_name'] as String?)?.trim() ?? '',
+            photoUrl: m['photo_url'] as String?,
+          ),
+        );
+      }
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
   /// Set (or clear) the signed-in member's home church — `profiles
   /// .church_id`. Needs no RPC: profiles_update_self already allows a
   /// member to write their own row.
@@ -1268,4 +1318,45 @@ class PendingChurchAdmin {
           DateTime.now(),
     );
   }
+}
+
+/// One of my friends who worships at a given church.
+///
+/// Only ever an ACCEPTED friend — `church_friend_faces` copies the
+/// friendship predicate from `church_friend_counts` unchanged, so this can
+/// never name a stranger or a pending request.
+class ChurchFriend {
+  const ChurchFriend({
+    required this.id,
+    required this.name,
+    required this.photoUrl,
+  });
+
+  final String id;
+  final String name;
+  final String? photoUrl;
+
+  /// First name only — the card shows "Tendai and 4 others", and a full
+  /// name eats the width the church's own name needs.
+  String get firstName {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'A friend';
+    final first = trimmed.split(' ').first;
+    return first.isEmpty ? 'A friend' : first;
+  }
+}
+
+/// The capped faces for one church, plus the TRUE total.
+///
+/// [total] is deliberately not `friends.length`: the RPC returns at most
+/// three rows, so counting them would render "3 friends here" for a church
+/// where seven of your friends worship.
+class ChurchFriendFaces {
+  ChurchFriendFaces({required this.total, required this.friends});
+
+  final int total;
+  final List<ChurchFriend> friends;
+
+  /// How many are NOT shown, for the "+N" chip.
+  int get overflow => total - friends.length;
 }

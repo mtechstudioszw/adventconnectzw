@@ -62,6 +62,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   /// churchId → how many of my friends worship there (patch_176). Loaded
   /// once per church list, not per row.
   Map<String, int> _friendCounts = const {};
+  Map<String, ChurchFriendFaces> _friendFaces = const {};
 
   /// The viewer's `profiles.church_id`. Drives the MINE badge and the
   /// home glyph on each row.
@@ -121,9 +122,15 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   /// failure just means the chips don't render.
   Future<void> _loadFriendCounts(List<Church> list) async {
     if (list.isEmpty) return;
-    final counts = await ChurchService.fetchFriendCounts(
-      list.take(60).map((c) => c.id).toList(),
-    );
+    final ids = list.take(60).map((c) => c.id).toList();
+    // Faces, not just a number (patch_205). The count is still fetched as a
+    // fallback: fetchFriendFaces is best-effort, and a church whose faces
+    // failed should still say "2 friends here" rather than nothing.
+    final faces = await ChurchService.fetchFriendFaces(ids);
+    if (mounted && faces.isNotEmpty) {
+      setState(() => _friendFaces = {..._friendFaces, ...faces});
+    }
+    final counts = await ChurchService.fetchFriendCounts(ids);
     if (!mounted || counts.isEmpty) return;
     setState(() => _friendCounts = {..._friendCounts, ...counts});
   }
@@ -853,6 +860,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         final card = ChurchCard(
           church: c,
           friendCount: _friendCounts[c.id] ?? 0,
+          friends: _friendFaces[c.id],
           isHomeChurch: _homeChurchId == c.id,
           onSetHome: () => _toggleHomeChurch(c),
           onTap: () => context.pushNamed(

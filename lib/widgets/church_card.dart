@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/church_service.dart';
 import '../models/church_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
@@ -13,6 +14,7 @@ class ChurchCard extends StatelessWidget {
     required this.onTap,
     this.distanceLabel,
     this.friendCount = 0,
+    this.friends,
     this.isHomeChurch = false,
     this.onSetHome,
   });
@@ -24,6 +26,10 @@ class ChurchCard extends StatelessWidget {
   /// How many of the viewer's friends belong to this church (patch_176).
   /// Zero hides the chip — "0 friends here" is not information.
   final int friendCount;
+
+  /// Named friends at this church (patch_205), capped with a true total.
+  /// Null means they haven't loaded — the card falls back to [friendCount].
+  final ChurchFriendFaces? friends;
 
   /// This is the viewer's `profiles.church_id`. Gets a badge, and the
   /// set-home affordance flips to "remove".
@@ -214,8 +220,20 @@ class ChurchCard extends StatelessWidget {
                           ),
                           // Social proof that actually helps someone
                           // choose: people you already know worship here.
-                          // Counts only — never a name (patch_176).
-                          if (friendCount > 0)
+                          //
+                          // patch_176 showed a COUNT and deliberately never a
+                          // name. The founder reversed that (17 Aug 2026) —
+                          // "1 friend here" is a weaker prompt than seeing
+                          // who, and these are already accepted friends whose
+                          // church you can read off their profile anyway.
+                          //
+                          // Faces when we have them, the old count chip when
+                          // we don't: fetchFriendFaces is best-effort, and a
+                          // church whose faces failed to load should still
+                          // say something true.
+                          if (friends != null && friends!.friends.isNotEmpty)
+                            _FriendFaces(faces: friends!)
+                          else if (friendCount > 0)
                             _MiniChip(
                               icon: Icons.people_alt_rounded,
                               label: friendCount == 1
@@ -269,6 +287,104 @@ class ChurchCard extends StatelessWidget {
 }
 
 /// Small tinted pill used for the row's secondary facts.
+/// Overlapping faces + "Tendai and 4 others", in the slot the count chip
+/// used to hold.
+///
+/// The faces overlap by a third of their width. That is not decoration: it
+/// says "a group" at a glance in a strip narrower than three separate
+/// avatars would need, on a card that also has to fit a church name, a city
+/// and a service time.
+///
+/// The name is the point of the whole change, so it is the part that
+/// ellipsises last — the "+N" is a fixed-width fact and the faces are fixed
+/// size, leaving the text to take whatever is left.
+class _FriendFaces extends StatelessWidget {
+  const _FriendFaces({required this.faces});
+
+  final ChurchFriendFaces faces;
+
+  static const double _size = 22;
+  static const double _overlap = 8;
+
+  String get _label {
+    final shown = faces.friends;
+    if (shown.isEmpty) return '';
+    final first = shown.first.firstName;
+    final others = faces.total - 1;
+    if (others <= 0) return '$first worships here';
+    if (others == 1) return '$first and 1 other';
+    return '$first and $others others';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = faces.friends;
+    final width = _size + (shown.length - 1) * (_size - _overlap);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: width,
+          height: _size,
+          child: Stack(
+            children: [
+              for (var i = 0; i < shown.length; i++)
+                Positioned(
+                  left: i * (_size - _overlap),
+                  child: Container(
+                    width: _size,
+                    height: _size,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      // A ring in the card's own colour is what separates
+                      // the overlapping discs; without it they merge into
+                      // one blob at this size.
+                      border: Border.all(color: context.palette.card, width: 2),
+                      color: AppColors.primaryBlue,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: (shown[i].photoUrl ?? '').isEmpty
+                        ? Center(
+                            child: Text(
+                              shown[i].firstName.characters.first
+                                  .toUpperCase(),
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          )
+                        : CachedImage(
+                            shown[i].photoUrl!,
+                            fit: BoxFit.cover,
+                            width: _size,
+                            height: _size,
+                          ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            _label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.textMuted,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MiniChip extends StatelessWidget {
   const _MiniChip({required this.icon, required this.label});
 

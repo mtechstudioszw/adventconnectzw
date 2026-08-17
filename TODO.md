@@ -90,10 +90,46 @@ diagnosed or has a stated unknown — nothing is a guess.
       - [ ] Separately: delete the dead `QuizProfileRequired` path, or make
             the server actually raise it. Right now it is a branch that can
             never run.
-- [ ] **Quiz lobby restyle** — founder says it is not premium. No direction
-      chosen yet.
-- [ ] **Better route into the quiz from Home**, plus what features belong
-      there. Open question.
+- [ ] **Quiz lobby restyle — DIRECTION CHOSEN (17 Aug): "Daily Challenge
+      hero + quiet modes".**
+      Today's challenge dominates the screen, carrying the streak and whether
+      it has been played. The other five modes drop to a quiet list beneath
+      it. This is the same decision that fixed the create screen: the fault
+      is a uniform grid of glass tiles at one visual weight, so nothing reads
+      as the thing to do. Keep the dark arena canvas — only the hierarchy
+      changes.
+      Order on the screen: Daily Challenge hero → live-match strip (which now
+      shows "N online now") → MORE WAYS TO PLAY list (Quick Play, Survival,
+      Speed Round, Fix Your Mistakes, Leaderboard).
+
+- [ ] **Quiz entry from Home — DIRECTION CHOSEN (17 Aug): BOTH.**
+      Two entry points doing two different jobs:
+      - **A Daily Challenge card in the Today slot** — the question teaser,
+        "5 questions · 2 min", and the streak, tapping **straight into the
+        questions and skipping the lobby**. Streaks are what make a daily
+        quiz sticky and nothing on Home currently says one is waiting.
+      - **A live dot on the existing Quiz pill** in the Library row — lit
+        when somebody has challenged you, or showing "N on". This is the
+        "someone wants you" signal; the card is the habit.
+      Needs invite-count plumbing to Home, which does not exist yet.
+
+- [ ] **Live match must be DISCOVERABLE, not buried** (founder, 17 Aug).
+      Today it is two taps deep and behind a tile: Home → Quiz → Live match.
+      Nobody finds it, which is most of why only ~11 members have ever
+      played one.
+      Surface it on **Home**, not only inside the quiz lobby. It is the only
+      real-time, person-to-person thing in the whole app, so it earns a slot
+      the way Stories does — and it is strongest exactly when it is true:
+      - when somebody has **challenged you** → that is a notification-grade
+        event and should be unmissable on Home, not a number on a tile;
+      - when **others are online** → "7 online now · play someone" is a
+        reason to tap that a static label can never be;
+      - when **nobody is around** → say so and offer the async challenge,
+        rather than advertising an empty arena (already fixed inside the
+        lobby tile; the Home surface must do the same).
+      The presence roster already gives the count — `PresenceService
+      .onlineUsers` — and `QuizMatchService.invites()` already gives pending
+      challenges. The missing piece is only the Home surface itself.
 - [ ] **Suggested news** — done (Keep reading rail), listed so it is not
       rebuilt.
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../models/quiz_match.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/quiz_match_service.dart';
 import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_text_styles.dart';
@@ -209,9 +210,52 @@ class _QuizMatchmakingScreenState extends State<QuizMatchmakingScreen> {
       if (next.isActive) {
         _enter(next);
       } else if (next.isOver) {
+        // Includes a ready check that expired or was declined. Say so
+        // rather than dropping silently back to the idle card — from the
+        // player's side the pairing visibly happened.
+        final refused = match.isReadyCheck;
         _stopSearching();
+        if (refused && mounted) {
+          setState(() => _match = null);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('That match didn\'t start. Try again.'),
+            ),
+          );
+        }
+      } else {
+        // `ready` lands here: keep polling so the prompt can show the
+        // opponent confirming, and so the countdown stays honest.
+        setState(() => _match = next);
       }
     } catch (_) {}
+  }
+
+  /// Confirm or refuse a ready check.
+  ///
+  /// The match does not start — and no clock runs — until BOTH players
+  /// confirm. Declining cancels it immediately so the other player is freed
+  /// rather than left waiting out the deadline.
+  Future<void> _respondToReady(bool ready) async {
+    final match = _match;
+    if (match == null) return;
+    try {
+      final next = await QuizMatchService.setReady(match.id, ready: ready);
+      if (!mounted) return;
+      if (next.isActive) {
+        _enter(next);
+      } else if (next.isOver) {
+        _stopSearching();
+        setState(() => _match = null);
+      } else {
+        setState(() => _match = next);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not confirm. Try again.')),
+      );
+    }
   }
 
   void _stopSearching() {
@@ -367,6 +411,21 @@ class _QuizMatchmakingScreenState extends State<QuizMatchmakingScreen> {
         },
       );
     }
+    // Paired, but provisional. Nothing has started and no clock is running
+    // until both players say yes — which is the whole point of the state.
+    final match = _match;
+    if (match != null && match.isReadyCheck) {
+      final me = AuthService.currentUser?.id;
+      return _ReadyCheckCard(
+        opponentName: match.opponent?.name ?? 'Your opponent',
+        opponentPhoto: match.opponent?.photoUrl,
+        iAmReady: match.iAmReady(me),
+        theyAreReady: match.theyAreReady(me),
+        secondsLeft: match.readySecondsLeft,
+        onAccept: () => _respondToReady(true),
+        onDecline: () => _respondToReady(false),
+      );
+    }
     if (_searching) {
       return _SearchingCard(seconds: _waitedSeconds);
     }
@@ -378,6 +437,167 @@ class _QuizMatchmakingScreenState extends State<QuizMatchmakingScreen> {
           'clock. Fastest correct answer scores most.',
       actionLabel: 'Find an opponent',
       onAction: _start,
+    );
+  }
+}
+
+/// "Tendai wants to play — ready?"
+///
+/// The moment that used to not exist. Joining a match previously threw both
+/// players straight into question one with the clock already running, so the
+/// person who had been waiting entered a match they never agreed to, several
+/// seconds down. This card is that consent, and the countdown is honest: at
+/// zero the server cancels and both players are free.
+class _ReadyCheckCard extends StatelessWidget {
+  const _ReadyCheckCard({
+    required this.opponentName,
+    required this.opponentPhoto,
+    required this.iAmReady,
+    required this.theyAreReady,
+    required this.secondsLeft,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  final String opponentName;
+  final String? opponentPhoto;
+  final bool iAmReady;
+  final bool theyAreReady;
+  final int secondsLeft;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: ArenaTheme.glass,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: ArenaTheme.glassBorder),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          UserAvatar(
+            photoUrl: opponentPhoto,
+            name: opponentName,
+            size: 68,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            opponentName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.titleLarge.copyWith(
+              color: ArenaTheme.textOnNavy,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            iAmReady
+                ? 'Waiting for them to accept…'
+                : 'is ready to play. Seven questions, head to head.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: ArenaTheme.textMutedOnNavy,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Both sides shown, so "waiting" is never ambiguous about who on.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _ReadyPip(label: 'You', ready: iAmReady),
+              const SizedBox(width: 10),
+              _ReadyPip(label: opponentName.split(' ').first, ready: theyAreReady),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (!iAmReady) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: onAccept,
+                style: FilledButton.styleFrom(
+                  backgroundColor: ArenaTheme.gold,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(
+                  'Accept  ·  ${secondsLeft}s',
+                  style: AppTextStyles.buttonText.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: onDecline,
+              child: Text(
+                'Not now',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: ArenaTheme.textMutedOnNavy,
+                ),
+              ),
+            ),
+          ] else
+            Text(
+              '${secondsLeft}s',
+              style: AppTextStyles.headlineSmall.copyWith(
+                color: ArenaTheme.gold,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadyPip extends StatelessWidget {
+  const _ReadyPip({required this.label, required this.ready});
+
+  final String label;
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: ready
+            ? ArenaTheme.gold.withValues(alpha: 0.16)
+            : ArenaTheme.glassBorder.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            ready ? Icons.check_circle_rounded : Icons.more_horiz_rounded,
+            size: 15,
+            color: ready ? ArenaTheme.gold : ArenaTheme.textMutedOnNavy,
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: ready ? ArenaTheme.gold : ArenaTheme.textMutedOnNavy,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -469,8 +469,12 @@ class _MatchScoreboard extends StatelessWidget {
             child: _PlayerScore(
               name: opponent?.name ?? 'Opponent',
               photoUrl: opponent?.photoUrl,
-              points: theirs,
-              leading: theirs > mine,
+              // Withheld until the match is over (patch_203). The server
+              // stops sending it, so this is not merely a visual mask.
+              points: match.scoresHidden ? null : theirs,
+              // Nobody "leads" while the comparison is hidden — a crown on
+              // one side would leak exactly what the hiding is protecting.
+              leading: !match.scoresHidden && theirs > mine,
               answered: match.theyAnswered(uid),
               alignEnd: true,
             ),
@@ -493,7 +497,12 @@ class _PlayerScore extends StatelessWidget {
 
   final String name;
   final String? photoUrl;
-  final int points;
+
+  /// Null while the score is deliberately withheld — the opponent's total is
+  /// not published until the match completes, so there is genuinely no
+  /// number to show. Rendered as a dash: a 0 here reads as a real score of
+  /// zero, which is a lie rather than a secret.
+  final int? points;
   final bool leading;
 
   /// They have locked an answer to the question on screen. The pip says
@@ -540,7 +549,17 @@ class _PlayerScore extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
-        ScorePill(points: points, compact: true),
+        // A dash, not a zero — see the note on [points].
+        if (points == null)
+          Text(
+            '—',
+            style: AppTextStyles.titleMedium.copyWith(
+              color: ArenaTheme.textFaintOnNavy,
+              fontWeight: FontWeight.w800,
+            ),
+          )
+        else
+          ScorePill(points: points!, compact: true),
       ],
     );
 

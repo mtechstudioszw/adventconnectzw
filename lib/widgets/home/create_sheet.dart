@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import '../../screens/onboarding/widgets/film_scenes.dart' show AmbientPainter;
+import '../../theme/app_palette.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_text_styles.dart';
@@ -223,11 +224,16 @@ class _CreateScreenState extends State<_CreateScreen>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            // Lifted where the title sits, settling deeper at
-                            // the foot. One hue throughout — this is a light
-                            // source, not a second colour.
-                            const Color(0xFF16233F).withValues(alpha: 0.86 * t),
-                            AppColors.darkNavy.withValues(alpha: 0.94 * t),
+                            // White, on the founder's call (17 Aug 2026).
+                            //
+                            // Still a gradient rather than one flat fill —
+                            // pure #FFFFFF edge to edge is what made the navy
+                            // version read as a dead slab, and the fault was
+                            // the flatness, not the hue. This falls to the
+                            // app's own scaffold grey so the sheet has a
+                            // light source and a floor.
+                            AppColors.white.withValues(alpha: 0.97 * t),
+                            AppColors.lightGrey.withValues(alpha: 0.99 * t),
                           ],
                         ),
                       ),
@@ -285,7 +291,7 @@ class _CreateScreenState extends State<_CreateScreen>
                                       'What would you\nlike to share?',
                                       style: AppTextStyles.displayMedium
                                           .copyWith(
-                                        color: AppColors.white,
+                                        color: context.palette.text,
                                         height: 1.15,
                                       ),
                                     ),
@@ -334,7 +340,7 @@ class _CreateScreenState extends State<_CreateScreen>
                               child: Text(
                                 'MORE WAYS TO CONTRIBUTE',
                                 style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.white.withValues(alpha: 0.5),
+                                  color: context.palette.textMuted,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 1.4,
                                   fontSize: 10.5,
@@ -417,10 +423,10 @@ class _PrimaryTile extends StatelessWidget {
           decoration: BoxDecoration(
             // Brighter glass than the rows below — the difference in fill is
             // half of what makes these read as the primary pair.
-            color: AppColors.white.withValues(alpha: 0.10),
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(AppRadius.lg),
             border: Border.all(
-              color: AppColors.white.withValues(alpha: 0.20),
+              color: context.palette.divider,
             ),
           ),
           child: Column(
@@ -450,7 +456,7 @@ class _PrimaryTile extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.white,
+                  color: context.palette.text,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -460,7 +466,7 @@ class _PrimaryTile extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.caption.copyWith(
-                  color: AppColors.white.withValues(alpha: 0.68),
+                  color: context.palette.textMuted,
                   height: 1.3,
                 ),
               ),
@@ -496,10 +502,10 @@ class _SecondaryRow extends StatelessWidget {
             vertical: AppSpace.md,
           ),
           decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.05),
+            color: context.palette.card,
             borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(
-              color: AppColors.white.withValues(alpha: 0.11),
+              color: context.palette.divider,
             ),
           ),
           child: Row(
@@ -513,7 +519,7 @@ class _SecondaryRow extends StatelessWidget {
                 child: Icon(
                   option.icon,
                   size: 21,
-                  color: AppColors.white.withValues(alpha: 0.85),
+                  color: AppColors.primaryBlue,
                 ),
               ),
               const SizedBox(width: AppSpace.md),
@@ -527,7 +533,7 @@ class _SecondaryRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.white,
+                        color: context.palette.text,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -537,7 +543,7 @@ class _SecondaryRow extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.caption.copyWith(
-                        color: AppColors.white.withValues(alpha: 0.60),
+                        color: context.palette.textMuted,
                         height: 1.3,
                       ),
                     ),
@@ -548,7 +554,7 @@ class _SecondaryRow extends StatelessWidget {
               Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
-                color: AppColors.white.withValues(alpha: 0.35),
+                color: context.palette.textMuted,
               ),
             ],
           ),
@@ -574,16 +580,16 @@ class _CloseButton extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.16),
+            color: context.palette.card,
             shape: BoxShape.circle,
             border: Border.all(
-              color: AppColors.white.withValues(alpha: 0.24),
+              color: context.palette.divider,
             ),
           ),
           alignment: Alignment.center,
-          child: const Icon(
+          child: Icon(
             Icons.close_rounded,
-            color: AppColors.white,
+            color: context.palette.text,
             size: 21,
           ),
         ),

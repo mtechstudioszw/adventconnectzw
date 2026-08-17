@@ -126,6 +126,23 @@ class QuizMatchService {
   static Future<QuizMatch> accept(String matchId) =>
       _call('quiz_match_accept', {'p_match_id': matchId});
 
+  /// Confirm (or refuse) a ready check — patch_203.
+  ///
+  /// A random pairing is provisional: the match sits in `ready` and the
+  /// question clock does NOT start until both players call this. Before it
+  /// existed, the second player joining set the match active and stamped
+  /// `question_started_at` in the same statement, so the player who had been
+  /// waiting was pulled into a match they never agreed to AND lost time on
+  /// question one while still watching a "searching" spinner.
+  ///
+  /// Declining, or letting the 12-second deadline pass, cancels the match
+  /// and frees the other player to search again immediately.
+  static Future<QuizMatch> setReady(String matchId, {bool ready = true}) =>
+      _call('quiz_match_ready', {
+        'p_match_id': matchId,
+        'p_ready': ready,
+      });
+
   static Future<QuizMatch> state(String matchId) =>
       _call('quiz_match_state', {'p_match_id': matchId});
 

@@ -53,7 +53,29 @@ class QuizMatch {
     required this.clockSkew,
     this.revealedIndex,
     this.myChoice,
+    this.aReady = false,
+    this.bReady = false,
+    this.readyDeadline,
+    this.scoresHidden = false,
   });
+
+  /// Ready check (patch_203). A pairing is provisional until BOTH players
+  /// confirm — the match sits in `ready`, and crucially the question clock
+  /// does not start. Before this, joining a match set it `active` and
+  /// stamped `question_started_at` in the same statement, so the player who
+  /// had been waiting lost time on question one while still looking at a
+  /// "searching" spinner.
+  final bool aReady;
+  final bool bReady;
+
+  /// When the ready check expires. Past this the server cancels the match
+  /// and frees whichever player did confirm.
+  final DateTime? readyDeadline;
+
+  /// True while the opponent's score is deliberately withheld — the server
+  /// returns null for it until the match is over. Without this flag a
+  /// withheld score parses to 0 and reads as a real score of zero.
+  final bool scoresHidden;
 
   /// The correct option for the current question — non-null only once the
   /// question has closed for BOTH players. This is what lets the reveal
@@ -112,6 +134,20 @@ class QuizMatch {
   bool get isActive => status == 'active';
   bool get isOver => status == 'complete' || status == 'cancelled';
   bool get isRevealing => resolvedAt != null;
+
+  /// Paired, but nobody is committed yet and no clock is running.
+  bool get isReadyCheck => status == 'ready';
+
+  /// Have I confirmed? Drives which half of the prompt is still live.
+  bool iAmReady(String? uid) => amPlayerA(uid) ? aReady : bReady;
+  bool theyAreReady(String? uid) => amPlayerA(uid) ? bReady : aReady;
+
+  /// Seconds left to confirm, server-corrected like every other clock here.
+  int get readySecondsLeft {
+    final d = readyDeadline;
+    if (d == null) return 0;
+    return d.difference(serverNow).inSeconds.clamp(0, 60);
+  }
 
   QuizQuestion? get question =>
       currentIndex >= 0 && currentIndex < questions.length
@@ -192,6 +228,14 @@ class QuizMatch {
           : serverNow.difference(DateTime.now()),
       revealedIndex: (json['revealed_index'] as num?)?.toInt(),
       myChoice: (json['my_choice'] as num?)?.toInt(),
+      aReady: json['a_ready'] == true,
+      bReady: json['b_ready'] == true,
+      readyDeadline:
+          DateTime.tryParse(json['ready_deadline']?.toString() ?? ''),
+      // Absent on a server that predates patch_203, which is the same
+      // deployment where nothing is withheld — so false is the right
+      // default and the score fields below stay meaningful.
+      scoresHidden: json['scores_hidden'] == true,
     );
   }
 
@@ -202,9 +246,16 @@ class QuizMatch {
   /// blanked key. So the durable parts of the previous snapshot are carried
   /// forward rather than re-fetched — a round trip per push would defeat
   /// the point of the subscription.
-  QuizMatch mergeRealtimeRow(Map<String, dynamic> row) => QuizMatch(
+  QuizMatch mergeRealtimeRow(Map<String, dynamic> row) {
+    final nextStatus = (row['status'] ?? status).toString();
+    // Decide from the INCOMING status, not the current one. Reading the old
+    // value here meant the row that flips the match to `complete` was still
+    // treated as hidden, so the final totals were dropped and the reveal
+    // never happened — the scores simply stayed blank at the end.
+    final nextHidden = nextStatus != 'complete';
+    return QuizMatch(
         id: id,
-        status: (row['status'] ?? status).toString(),
+        status: nextStatus,
         questions: questions,
         questionCount:
             (row['question_count'] as num?)?.toInt() ?? questionCount,
@@ -217,10 +268,29 @@ class QuizMatch {
         resolvedAt: DateTime.tryParse(row['resolved_at']?.toString() ?? ''),
         playerA: (row['player_a'] ?? playerA).toString(),
         playerB: row['player_b']?.toString() ?? playerB,
-        aPoints: (row['a_points'] as num?)?.toInt() ?? aPoints,
-        bPoints: (row['b_points'] as num?)?.toInt() ?? bPoints,
-        aCorrect: (row['a_correct'] as num?)?.toInt() ?? aCorrect,
-        bCorrect: (row['b_correct'] as num?)?.toInt() ?? bCorrect,
+        // Scores are deliberately NOT taken from a Realtime row while they
+        // are hidden.
+        //
+        // `quiz_match_view` withholds the opponent's total until the match
+        // is over, but Realtime delivers the RAW table row — which carries
+        // a_points and b_points in full. Merging them here would hand back
+        // exactly what the view is withholding, and the hiding would be
+        // decorative. Own score still moves: the answer response carries it.
+        //
+        // Once the match completes, `scores_hidden` goes false and the final
+        // totals merge normally, which is what reveals them.
+        aPoints: nextHidden
+            ? aPoints
+            : (row['a_points'] as num?)?.toInt() ?? aPoints,
+        bPoints: nextHidden
+            ? bPoints
+            : (row['b_points'] as num?)?.toInt() ?? bPoints,
+        aCorrect: nextHidden
+            ? aCorrect
+            : (row['a_correct'] as num?)?.toInt() ?? aCorrect,
+        bCorrect: nextHidden
+            ? bCorrect
+            : (row['b_correct'] as num?)?.toInt() ?? bCorrect,
         aAnsweredIndex:
             (row['a_answered_index'] as num?)?.toInt() ?? aAnsweredIndex,
         bAnsweredIndex:
@@ -229,7 +299,16 @@ class QuizMatch {
         forfeitedBy: row['forfeited_by']?.toString(),
         opponent: opponent,
         clockSkew: clockSkew,
+        aReady: row['a_ready'] == true || aReady,
+        bReady: row['b_ready'] == true || bReady,
+        readyDeadline:
+            DateTime.tryParse(row['ready_deadline']?.toString() ?? '') ??
+                readyDeadline,
+        // The raw row has no `scores_hidden` — it is a view-only field — so
+        // it is derived from the status the row DID carry.
+        scoresHidden: nextHidden,
       );
+  }
 }
 
 /// What the server hands back once an answer is locked — and the only route

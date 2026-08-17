@@ -1499,12 +1499,19 @@ class _ChipTile extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // palette, NOT AppColors. The unselected label was
+                  // `AppColors.darkNavy` — #0D1B3E, near-black — sitting on
+                  // `context.palette.card`, which IS dark in dark mode. So
+                  // every unpicked interest was near-black on near-black and
+                  // the whole grid read as empty. The selected blue was fine,
+                  // which is why it looked like the chips had vanished rather
+                  // than broken.
                   Icon(
                     option.icon,
                     size: 18,
                     color: selected
                         ? AppColors.primaryBlue
-                        : AppColors.textMuted,
+                        : context.palette.textMuted,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -1512,7 +1519,7 @@ class _ChipTile extends StatelessWidget {
                     style: AppTextStyles.labelMedium.copyWith(
                       color: selected
                           ? AppColors.primaryBlue
-                          : AppColors.darkNavy,
+                          : context.palette.text,
                       fontWeight: FontWeight.w700,
                       fontSize: 13.5,
                     ),

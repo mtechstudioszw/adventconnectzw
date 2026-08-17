@@ -216,7 +216,16 @@ class HomeShortcutChips extends StatelessWidget {
             child: _ShortcutChip(
               icon: Icons.event_outlined,
               label: 'Events',
-              tint: AppColors.darkNavy,
+              // `AppColors.text`, not `AppColors.darkNavy`.
+              //
+              // Both are the same #0D1B3E in light mode, so this looks
+              // identical there — but darkNavy is a `const` and never flips,
+              // while `text` is reassigned by AppTextStyles.applyBrightness.
+              // The chip's glyph and its tinted disc were therefore drawn in
+              // near-black on a dark surface and the Events shortcut simply
+              // was not there in dark mode. Its neighbours survived only
+              // because primaryBlue and goldAccent happen to read on both.
+              tint: AppColors.text,
               onTap: onEvents,
             ),
           ),

@@ -79,4 +79,58 @@ void main() {
       expect(t.takeException(), isNull);
     });
   }
+
+  // A shared card travels far past the app — WhatsApp statuses, church
+  // groups — so it has to carry the app MARK, not just the name (founder,
+  // 17 Aug). And the source credit has to be right: an Ellen White quote
+  // saying "KJV" would be wrong on someone else's status.
+  //
+  // NOTE the logo is asserted structurally, not by golden: asset images
+  // need `runAsync` to decode under flutter_test and render blank
+  // otherwise, so a golden here would prove nothing either way.
+  group('branding', () {
+    testWidgets('the card carries the app logo', (t) async {
+      await _pump(t);
+
+      final logos = t
+          .widgetList<Image>(find.byType(Image))
+          .map((i) => i.image)
+          .whereType<AssetImage>()
+          .map((a) => a.assetName);
+      expect(
+        logos,
+        contains('assets/icon/logo.png'),
+        reason: 'shared cards must be branded with the app mark',
+      );
+    });
+
+    testWidgets('defaults to KJV for scripture', (t) async {
+      await _pump(t);
+      expect(find.text('KJV'), findsOneWidget);
+    });
+
+    testWidgets('credits Ellen G. White when told to', (t) async {
+      t.view.physicalSize = const Size(360, 720);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(t.view.reset);
+
+      await t.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(
+            body: VerseShareSheet(
+              reference: 'Steps to Christ, p. 21',
+              text: 'It is not wise to look to ourselves.',
+              attribution: 'Ellen G. White',
+            ),
+          ),
+        ),
+      );
+      await t.pump();
+
+      expect(find.text('Ellen G. White'), findsOneWidget);
+      expect(find.text('KJV'), findsNothing);
+      expect(t.takeException(), isNull);
+    });
+  });
 }

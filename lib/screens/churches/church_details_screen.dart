@@ -50,6 +50,11 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   // "under review" note instead of the claim link.
   bool _myPendingForThis = false;
 
+  /// Advent Connect members whose home church this is. Null until loaded,
+  /// or when the count could not be had — the card falls back to the
+  /// follower count rather than showing nothing.
+  int? _memberCount;
+
   bool get _isHomeChurch =>
       _homeChurchId != null &&
       _homeChurchId!.isNotEmpty &&
@@ -73,6 +78,9 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         ChurchService.isFollowing(widget.churchId),
         ChurchService.hasApprovedAdmin(widget.churchId),
         ChurchService.fetchMyAdminRoles(),
+        // Real membership (profiles.church_id), not followers. Fetched
+        // alongside rather than after, so it costs no extra round trip.
+        ChurchService.memberCount(widget.churchId),
       ]);
       if (!mounted) return;
       final roles = results[3] as List<ChurchAdminRole>;
@@ -92,6 +100,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         _hasAdmin = results[2] as bool;
         _myRole = mine;
         _myPendingForThis = pending;
+        _memberCount = results[4] as int?;
         _loading = false;
       });
     } catch (_) {
@@ -252,7 +261,20 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   /// half, so the logo sits ON the seam rather than near it.
   static const double _avatarDrop = _avatarSize / 2;
 
+  /// Hero: a real cover photo, or — when there isn't one — nothing.
+  ///
+  /// A missing cover photo is NOT a reason to paint a navy rectangle
+  /// (founder rule, 28 Jul 2026, already applied to profile_screen.dart
+  /// and confirmed again for churches on 17 Aug). It matters more here
+  /// than anywhere else in the app: **no church in production has a cover
+  /// photo**, so the placeholder was not an edge case — it was the hero
+  /// every member saw on every church, a navy slab filling the top ~26%
+  /// of the screen and stopping at a hard seam.
   Widget _buildHero(Church church) {
+    final cover = church.coverPhotoUrl;
+    final hasCover = cover != null && cover.isNotEmpty;
+    if (!hasCover) return _buildFlatHero(church);
+
     return Stack(
       // The avatar deliberately hangs past the cover's bottom edge.
       clipBehavior: Clip.none,
@@ -270,20 +292,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
             // member looked at it. Matching the ratio is what makes an
             // upload "just fit".
             aspectRatio: 16 / 9,
-            child: church.coverPhotoUrl == null || church.coverPhotoUrl!.isEmpty
-                ? Container(
-                    decoration: const BoxDecoration(
-                      gradient: AppColors.appBarGradient,
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.church,
-                        size: 56,
-                        color: AppColors.white,
-                      ),
-                    ),
-                  )
-                : GestureDetector(
+            child: GestureDetector(
                     onTap: () =>
                         FullImageViewer.show(context, church.coverPhotoUrl),
                     child: CachedImage(
@@ -325,6 +334,53 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         ),
         Positioned(left: 20, bottom: 0, child: _buildAvatar(church)),
       ],
+    );
+  }
+
+  /// The no-cover hero: a flat back row and the logo, on `scaffoldBg`.
+  ///
+  /// Two things could NOT be carried over from the cover version, and both
+  /// would have been silent faults — the standing lesson that flattening a
+  /// navy surface breaks every foreground that assumed a dark backdrop:
+  ///   * the back arrow was white on a 40%-black scrim, which is invisible
+  ///     on light grey. It becomes a normal `palette.text` icon here.
+  ///   * the avatar's ring is `palette.scaffoldBg`, drawn so the logo looks
+  ///     punched THROUGH the cover. With no cover it is ring-on-ring, so
+  ///     the shadow is all that separates it — which is exactly right, and
+  ///     is why the avatar keeps its shadow rather than gaining a border.
+  Widget _buildFlatHero(Church church) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => context.canPop()
+                  ? context.pop()
+                  : context.goNamed('churches'),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  Icons.arrow_back,
+                  color: context.palette.text,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Aligned to the same x as the cover version's avatar (12 + 8),
+          // so the identity does not shift when a church adds a photo.
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: _buildAvatar(church),
+          ),
+        ],
+      ),
     );
   }
 
@@ -462,13 +518,31 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                     color: AppColors.primaryBlue,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    // Exact follower count, honestly labelled — the app
-                    // has no data on real congregation membership.
-                    '${church.membersCount} on Advent',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w600,
+                  // Flexible, not bare. This label got longer ("N members
+                  // on Advent" vs "N on Advent") and immediately overflowed
+                  // by 105px at 2.5x text scale — an unflexed Text in a Row
+                  // THROWS rather than clipping, and this project has
+                  // shipped that bug before.
+                  Flexible(
+                    child: Text(
+                      // MEMBERS when we have them, followers otherwise.
+                      //
+                      // The old comment here said the app "has no data on
+                      // real congregation membership". It does:
+                      // `profiles.church_id` is the member's home church,
+                      // and 156 people have set one. `follower_count` is a
+                      // different act — you can follow a church you do not
+                      // attend — so the two are different sets, and the
+                      // label now says which one it is showing.
+                      _memberCount != null
+                          ? '$_memberCount ${_memberCount == 1 ? "member" : "members"} on Advent'
+                          : '${church.membersCount} following on Advent',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],

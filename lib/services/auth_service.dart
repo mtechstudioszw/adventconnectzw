@@ -113,6 +113,12 @@ class AuthService {
     }
   }
 
+  /// Test seam for [_friendlyAuthError]. This mapping is user-facing copy
+  /// that told people the wrong wait for months, so it is pinned by tests
+  /// rather than trusted by reading.
+  @visibleForTesting
+  static String friendlyAuthErrorForTest(String raw) => _friendlyAuthError(raw);
+
   /// Translate Supabase's raw auth errors into something a user can
   /// act on. Anything we don't recognise falls through untouched.
   static String _friendlyAuthError(String raw) {
@@ -125,8 +131,33 @@ class AuthService {
           'Please try again in a moment, or contact support if this '
           'keeps happening.';
     }
+    // Rate limits, most specific first. NEVER quote a wait we were not
+    // given: the old single branch answered every rate limit with "wait a
+    // minute and try again" when the project-wide OTP window is an HOUR,
+    // so people returned to the button 60s later to fail again. The
+    // attempts that did squeak through are most of the "codes are getting
+    // spammed" report, and the ones that didn't are "it's not sending the
+    // reset code" — one cause, two symptoms.
+    //
+    // GoTrue gives an exact number for the per-email cooldown, so prefer
+    // it over anything we'd invent.
+    final after = RegExp(r'after (\d+) seconds?').firstMatch(lower);
+    if (after != null) {
+      final seconds = int.tryParse(after.group(1)!) ?? 60;
+      return 'Please wait $seconds seconds before asking for another code.';
+    }
+    // The project-wide OTP budget (Supabase `rate_limit_otp`) is shared
+    // between signup verification and password recovery, so ordinary
+    // signup traffic can exhaust it and make resets fail for everybody.
+    // Say so honestly and point at the one route that needs no email.
+    if (lower.contains('over_email_send_rate_limit') ||
+        lower.contains('email rate limit')) {
+      return 'Too many codes have been requested across the app in the '
+          'last hour, so we can\'t send another one yet. Try again later '
+          'this hour — or use Continue with Google, which needs no code.';
+    }
     if (lower.contains('rate limit') || lower.contains('too many')) {
-      return 'Too many attempts — please wait a minute and try again.';
+      return 'Too many attempts — please wait a few minutes and try again.';
     }
     if (lower.contains('already registered') ||
         lower.contains('user already') ||

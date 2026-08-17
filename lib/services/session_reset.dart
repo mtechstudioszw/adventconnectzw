@@ -8,6 +8,7 @@ import 'messaging_service.dart';
 import 'music_player_service.dart';
 import 'premium_service.dart';
 import 'presence_service.dart';
+import 'quiz_home_signal.dart';
 import 'quiz_match_service.dart';
 import 'usage_analytics.dart';
 import 'voice_player_service.dart';
@@ -90,6 +91,13 @@ class SessionReset {
     // previous player's name and a subscription to their match.
     await _step('quizMatch', () async {
       QuizMatchService.resetForSignOut();
+    });
+
+    // Home's cached live-invite count. Same reason as above — it is a
+    // static notifier, so the next account would arrive to the previous
+    // player's live dot lit on the Quiz pill.
+    await _step('quizHomeSignal', () async {
+      QuizHomeSignal.resetForSignOut();
     });
 
     // User-scoped `pref:` keys. `clearUserData()` spares this namespace so

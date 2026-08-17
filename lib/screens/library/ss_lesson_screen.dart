@@ -14,6 +14,7 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/verse_share_card.dart';
 import 'widgets/ss_html_text.dart';
 
 // ---------------------------------------------------------------------------
@@ -553,6 +554,11 @@ class SsDayReaderScreen extends StatefulWidget {
 class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
   late PageController _pageCtrl;
   late List<SsDay> _days;
+
+  /// Day id → its fetched content, populated by each `_DayPage` as it
+  /// loads. The share sheet reads verses from here rather than fetching
+  /// them again for a day already on screen.
+  final Map<String, SsDayContent> _contentById = {};
   late int _index;
   double _scale = SabbathSchoolPrefs.fontScale();
 
@@ -642,12 +648,7 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
           IconButton(
             tooltip: 'Share',
             icon: const Icon(Icons.ios_share_rounded),
-            onPressed: day == null
-                ? null
-                : () => Share.share(
-                      '${widget.lessonTitle} — ${day.title}\n\n'
-                      'Sabbath School on Advent Connect ZW:\n$appDownloadUrl',
-                    ),
+            onPressed: day == null ? null : () => _openShareSheet(day),
           ),
         ],
       ),
@@ -666,6 +667,7 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
                       day: _days[i],
                       fontScale: _scale,
                       onRead: () => _noteProgress(_days[i]),
+                      onLoaded: (c) => _contentById[_days[i].id] = c,
                     ),
                   ),
                 ),
@@ -865,6 +867,123 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
     );
   }
 
+  /// Share the day: as a link, or as a branded image of one of its verses.
+  ///
+  /// The founder asked for "the same for sabbath school" as the Bible
+  /// (17 Aug) — a shareable image carrying the app logo. A whole day's
+  /// reading is far too long for a card, but the day already ships its
+  /// scripture in `SsDayContent.bible`, and a verse is exactly the shape
+  /// the card was built for.
+  ///
+  /// The list only appears when there is a choice to make: one verse goes
+  /// straight to the card, several offer a pick, none falls back to the
+  /// plain link. Nobody should have to choose from a list of one.
+  Future<void> _openShareSheet(SsDay day) async {
+    final verses = _contentById[day.id]?.bible ?? const <String, String>{};
+    final palette = context.palette;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: palette.sheet,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              leading: Icon(Icons.link_rounded, color: palette.textMuted),
+              title: Text(
+                'Share a link',
+                style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
+              ),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                Share.share(
+                  '${widget.lessonTitle} — ${day.title}\n\n'
+                  'Sabbath School on Advent Connect ZW:\n$appDownloadUrl',
+                );
+              },
+            ),
+            if (verses.isNotEmpty) ...[
+              Divider(height: 1, color: palette.divider),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                child: Text(
+                  'SHARE A VERSE AS AN IMAGE',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: palette.textMuted,
+                    letterSpacing: 1.3,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10.5,
+                  ),
+                ),
+              ),
+              // Bounded: a day can carry a dozen references and the sheet
+              // must not push its own first option off the screen.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final entry in verses.entries)
+                      ListTile(
+                        dense: true,
+                        leading: Icon(
+                          Icons.format_quote_rounded,
+                          color: AppColors.primaryBlue,
+                          size: 20,
+                        ),
+                        title: Text(
+                          entry.key,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          ssPlainText(entry.value),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _shareVerse(entry.key, entry.value);
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _shareVerse(String reference, String html) {
+    final text = ssPlainText(html);
+    if (text.isEmpty) return;
+    VerseShareSheet.open(
+      context,
+      reference: reference,
+      text: text,
+      // Not "KJV": the lesson feed serves whichever translation the
+      // language edition uses, and naming the wrong one on a shared image
+      // would be worse than naming none.
+      attribution: 'Sabbath School',
+    );
+  }
+
   Future<void> _openNote(SsDay day) async {
     final controller =
         TextEditingController(text: SabbathSchoolPrefs.note(day.readPath) ?? '');
@@ -933,11 +1052,16 @@ class _DayPage extends StatefulWidget {
     required this.day,
     required this.fontScale,
     required this.onRead,
+    required this.onLoaded,
   });
 
   final SsDay day;
   final double fontScale;
   final VoidCallback onRead;
+
+  /// Reports the fetched content up to the screen, so the app bar's share
+  /// sheet can offer the day's verses without fetching them a second time.
+  final ValueChanged<SsDayContent> onLoaded;
 
   @override
   State<_DayPage> createState() => _DayPageState();
@@ -965,6 +1089,7 @@ class _DayPageState extends State<_DayPage>
       _loading = false;
     });
     widget.onRead();
+    if (content != null) widget.onLoaded(content);
   }
 
   @override

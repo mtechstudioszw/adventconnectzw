@@ -21,25 +21,38 @@ class VerseShareSheet extends StatefulWidget {
     super.key,
     required this.reference,
     required this.text,
+    this.attribution = 'KJV',
   });
 
-  /// e.g. "John 3:16".
+  /// e.g. "John 3:16", or a book title for an EGW quote.
   final String reference;
 
   /// The verse body, already cleaned of KJV editorial markup.
   final String text;
+
+  /// The source credit shown in the card's footer, opposite the app mark.
+  ///
+  /// Defaults to `KJV` because the Bible was the first caller. Parameterised
+  /// (founder, 17 Aug) so the same card serves Sabbath School and EGW
+  /// quotes — an Ellen White quote has to say **Ellen G. White**, not KJV.
+  final String attribution;
 
   /// Opens the sheet.
   static Future<void> open(
     BuildContext context, {
     required String reference,
     required String text,
+    String attribution = 'KJV',
   }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => VerseShareSheet(reference: reference, text: text),
+      builder: (_) => VerseShareSheet(
+        reference: reference,
+        text: text,
+        attribution: attribution,
+      ),
     );
   }
 
@@ -278,20 +291,51 @@ class _VerseShareSheetState extends State<VerseShareSheet> {
             const SizedBox(height: 2),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  'KJV',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: style.foreground.withValues(alpha: 0.55),
-                    fontSize: 10,
+                // Flexible: an EGW attribution ("Ellen G. White") is far
+                // longer than "KJV", and an unflexed Text in a Row throws
+                // rather than clipping.
+                Flexible(
+                  child: Text(
+                    widget.attribution,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: style.foreground.withValues(alpha: 0.55),
+                      fontSize: 10,
+                    ),
                   ),
                 ),
-                Text(
-                  'Advent Connect ZW',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: style.foreground.withValues(alpha: 0.55),
-                    fontSize: 10,
-                  ),
+                const SizedBox(width: 8),
+                // The app mark. A shared card travels far beyond the app —
+                // WhatsApp statuses, church groups — so it has to carry the
+                // logo, not just the name (founder, 17 Aug).
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Opacity(
+                      opacity: 0.85,
+                      child: Image.asset(
+                        'assets/icon/logo.png',
+                        width: 16,
+                        height: 16,
+                        filterQuality: FilterQuality.high,
+                        // Never let a missing asset break the card — it is
+                        // rendered to an image, so a broken-image glyph
+                        // would ship inside somebody's shared quote.
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Advent Connect ZW',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: style.foreground.withValues(alpha: 0.55),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

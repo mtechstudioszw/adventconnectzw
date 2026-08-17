@@ -9,6 +9,9 @@ import '../../models/sabbath_school_model.dart';
 import '../../services/hymn_service.dart';
 import '../../services/library_launch_intent.dart';
 import '../../services/library_service.dart';
+import '../../models/quiz_round.dart';
+import '../../services/quiz_launch_intent.dart';
+import '../../services/quiz_progress_service.dart';
 import '../../services/sabbath_school_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -145,6 +148,13 @@ class _TodayCardState extends State<TodayCard> {
   List<_Slide> _slides() => [
         if (widget.devotion != null)
           _Slide(accent: 0.06, child: _DevotionPage(devotion: widget.devotion!)),
+        // The Daily Challenge, on the founder's call (17 Aug). Streaks are
+        // what make a daily quiz sticky, and nothing on Home said one was
+        // waiting — the quiz was a pill in a row of six with no state.
+        //
+        // Second, not first: the devotion is the reason most people open
+        // the app on a given morning, and the quiz should not displace it.
+        const _Slide(accent: 0.40, child: _DailyQuizPage()),
         if (_quarterly != null)
           _Slide(accent: 0.22, child: _LessonPage(quarterly: _quarterly!)),
         if (_hymn != null) _Slide(accent: 0.34, child: _HymnPage(hymn: _hymn!)),
@@ -722,6 +732,89 @@ class _HymnPage extends StatelessWidget {
 /// Music-of-the-day and EGW-read-of-the-day. Both are `library_items` rows,
 /// so they share one page: cover thumbnail, title, author, and the same
 /// blurred-art backdrop treatment.
+/// Today's quiz, as a Today-card page.
+///
+/// Taps straight into the questions rather than the lobby (founder,
+/// 17 Aug): the round is still started BY the lobby via
+/// [QuizLaunchIntent], because the lobby owns results, the streak write,
+/// challenge submit/send and the pending-opponent claim — a second copy of
+/// that flow here would drift, and quietly.
+class _DailyQuizPage extends StatelessWidget {
+  const _DailyQuizPage();
+
+  void _open(BuildContext context) {
+    QuizLaunchIntent.mode = QuizMode.daily;
+    context.pushNamed('quiz');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final played = QuizProgressService.playedToday();
+    final streak = QuizProgressService.currentStreak();
+
+    return _PageShell(
+      label: 'DAILY CHALLENGE',
+      icon: Icons.emoji_events_outlined,
+      onTap: () => _open(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            played
+                ? 'Done for today — your streak is safe.'
+                : 'Five questions. Everyone gets the same set today.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.titleMedium.copyWith(
+              color: AppColors.white,
+              fontWeight: FontWeight.w700,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // The streak is the whole reason to come back, so it is the
+              // loudest thing here when there is one.
+              if (streak > 0) ...[
+                const Icon(
+                  Icons.local_fire_department_rounded,
+                  color: AppColors.goldAccent,
+                  size: 16,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    streak == 1 ? '1 day streak' : '$streak day streak',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: AppColors.goldAccent,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Flexible(
+                child: Text(
+                  '5 questions · 2 min',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.white.withValues(alpha: 0.75),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LibraryPickPage extends StatelessWidget {
   const _LibraryPickPage({
     required this.item,

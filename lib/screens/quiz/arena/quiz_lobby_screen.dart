@@ -8,6 +8,8 @@ import '../../../models/quiz_question_model.dart';
 import '../../../models/quiz_round.dart';
 import '../../../services/quiz_challenge_service.dart';
 import '../../../services/quiz_cloud_service.dart';
+import '../../../services/quiz_home_signal.dart';
+import '../../../services/quiz_launch_intent.dart';
 import '../../../services/quiz_match_service.dart';
 import '../../../services/quiz_music.dart';
 import '../../../services/quiz_progress_service.dart';
@@ -95,6 +97,20 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
       }),
     );
     _refreshChallenges();
+
+    // Home can ask for a mode to start immediately — the Daily Challenge
+    // card "taps straight into the questions" (founder, 17 Aug). Started
+    // here rather than duplicated on Home so the round keeps the lobby's
+    // whole flow: results, streak, challenge submit/send, opponent claim.
+    //
+    // Deferred a frame: _play pushes a route and can show a SnackBar,
+    // neither of which is legal from initState.
+    final wanted = QuizLaunchIntent.take();
+    if (wanted != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _play(wanted);
+      });
+    }
   }
 
   @override
@@ -270,6 +286,13 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
 
   void _refreshChallenges() {
     QuizMatchService.invites().then((list) {
+      // Keep Home's live dot in step with what the lobby just learned.
+      // Without this the dot stays lit after the member has come in and
+      // dealt with the invite, until Home's own refresh window reopens —
+      // and returning from the arena does not re-run Home's bootstrap.
+      // Set outside the mounted check: the count is true regardless of
+      // whether this screen is still on the tree.
+      QuizHomeSignal.invites.value = list.length;
       if (mounted) setState(() => _liveInvites = list.length);
     });
     QuizChallengeService.incoming().then((list) {
@@ -347,16 +370,25 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
                 const SizedBox(height: 16),
                 _reveal(1, _buildResume(session)),
               ],
+              // Hierarchy, not decoration (founder, 17 Aug). The lobby was
+              // a uniform 2-up grid of glass tiles at ONE visual weight, so
+              // nothing on it read as the thing to do — the same fault that
+              // was fixed on the create screen. Today's challenge now
+              // dominates, live match gets its own full-width strip because
+              // it is the only real-time thing in the app, and the rest
+              // drop to a quiet list.
               const SizedBox(height: 18),
-              _reveal(2, _buildDaily()),
-              const SizedBox(height: 18),
-              _reveal(3, _buildSectionLabel('GAME MODES')),
-              const SizedBox(height: 10),
-              _reveal(4, _buildModes(mistakes)),
+              _reveal(2, _buildDailyHero()),
+              const SizedBox(height: 14),
+              _reveal(3, _buildLiveStrip()),
               const SizedBox(height: 20),
-              _reveal(5, _buildSectionLabel('TOPICS')),
+              _reveal(4, _buildSectionLabel('MORE WAYS TO PLAY')),
               const SizedBox(height: 10),
-              _reveal(6, _buildTopics()),
+              _reveal(5, _buildModeList(mistakes)),
+              const SizedBox(height: 20),
+              _reveal(6, _buildSectionLabel('TOPICS')),
+              const SizedBox(height: 10),
+              _reveal(7, _buildTopics()),
             ],
           ),
           if (_busy)
@@ -563,11 +595,18 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     );
   }
 
-  Widget _buildDaily() {
+  /// The hero. Today's challenge is the habit the whole quiz hangs on, so
+  /// it carries the weight that used to be spread evenly across six tiles.
+  ///
+  /// The streak is the reason to come back and is promoted accordingly:
+  /// it was a small gold number in the corner, and it is now a labelled
+  /// chip on its own line — "3 day streak" says what the number means,
+  /// which a flame glyph and a digit never did.
+  Widget _buildDailyHero() {
     final played = QuizProgressService.playedToday();
     final streak = QuizProgressService.currentStreak();
     return ArenaPanel(
-      padding: const EdgeInsets.fromLTRB(18, 17, 18, 18),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       gradient: LinearGradient(
         colors: [
           const Color(0xFF2B7FE0).withValues(alpha: 0.34),
@@ -586,49 +625,100 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
               const Icon(
                 Icons.today_rounded,
                 color: ArenaTheme.goldBright,
-                size: 21,
+                size: 17,
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 7),
               Text(
-                'Daily Challenge',
-                style: AppTextStyles.titleLarge.copyWith(
-                  color: ArenaTheme.textOnNavy,
+                'TODAY',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: ArenaTheme.goldBright,
                   fontWeight: FontWeight.w800,
-                  fontSize: 19,
+                  letterSpacing: 1.6,
+                  fontSize: 11,
                 ),
               ),
               const Spacer(),
-              if (streak > 0)
+              if (played)
                 Row(
                   children: [
                     const Icon(
-                      Icons.local_fire_department_rounded,
-                      color: ArenaTheme.gold,
-                      size: 18,
+                      Icons.check_circle_rounded,
+                      color: ArenaTheme.correctOnNavy,
+                      size: 15,
                     ),
-                    const SizedBox(width: 3),
+                    const SizedBox(width: 4),
                     Text(
-                      '$streak',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: ArenaTheme.goldBright,
+                      'Done',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: ArenaTheme.correctOnNavy,
                         fontWeight: FontWeight.w800,
+                        fontSize: 11,
                       ),
                     ),
                   ],
                 ),
             ],
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
+          // Flexible/soft-wrapping: this is the biggest type on the screen
+          // and it has to survive 2.5x text scale without throwing.
+          Text(
+            'Daily Challenge',
+            style: AppTextStyles.headlineLarge.copyWith(
+              color: ArenaTheme.textOnNavy,
+              fontWeight: FontWeight.w800,
+              fontSize: 27,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             played
-                ? 'Today\'s challenge is done — your streak is safe. Play it again for points any time.'
-                : 'Five questions. Everyone gets the same set today. Keep your streak alive.',
+                ? 'Done for today — your streak is safe. Play it again for points any time.'
+                : 'Five questions. Everyone gets the same set today.',
             style: AppTextStyles.bodyMedium.copyWith(
               color: ArenaTheme.textMutedOnNavy,
               height: 1.45,
             ),
           ),
-          const SizedBox(height: 15),
+          if (streak > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+              decoration: BoxDecoration(
+                color: ArenaTheme.gold.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(ArenaTheme.radiusPill),
+                border: Border.all(
+                  color: ArenaTheme.gold.withValues(alpha: 0.45),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.local_fire_department_rounded,
+                    color: ArenaTheme.goldBright,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 5),
+                  // Flexible, not bare: the label scales with the system
+                  // font and this Row is inside a pill with no give.
+                  Flexible(
+                    child: Text(
+                      streak == 1 ? '1 day streak' : '$streak day streak',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: ArenaTheme.goldBright,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
           ArenaButton(
             label: played ? 'Play again' : 'Start today\'s challenge',
             icon: played ? Icons.replay_rounded : Icons.play_arrow_rounded,
@@ -637,6 +727,20 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
           ),
         ],
       ),
+    );
+  }
+
+  /// Live match, promoted out of the grid onto its own full-width strip.
+  ///
+  /// It is the only real-time, person-to-person feature in the app, and it
+  /// was one of six identical tiles — which is most of why only ~11 members
+  /// have ever played one. The strip keeps the tile's hard-won honesty
+  /// about an empty arena (see [_LiveMatchStrip]).
+  Widget _buildLiveStrip() {
+    return _LiveMatchStrip(
+      invites: _liveInvites,
+      online: PresenceService.onlineUsers.length,
+      onTap: _openLiveMatch,
     );
   }
 
@@ -652,55 +756,73 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     );
   }
 
-  Widget _buildModes(int mistakes) {
-    final tiles = <Widget>[
-      _ModeTile(
-        mode: QuizMode.practice,
-        icon: Icons.shuffle_rounded,
-        onTap: () => _play(QuizMode.practice),
-      ),
-      _ModeTile(
-        mode: QuizMode.survival,
-        icon: Icons.favorite_rounded,
-        best: QuizProgressService.bestScore(QuizMode.survival),
-        onTap: () => _play(QuizMode.survival),
-      ),
-      _ModeTile(
-        mode: QuizMode.speed,
-        icon: Icons.bolt_rounded,
-        best: QuizProgressService.bestScore(QuizMode.speed),
-        onTap: () => _play(QuizMode.speed),
-      ),
-      _ModeTile(
-        mode: QuizMode.mistakes,
-        icon: Icons.auto_fix_high_rounded,
-        badge: mistakes > 0 ? '$mistakes' : null,
-        enabled: mistakes > 0,
-        onTap: () => _play(QuizMode.mistakes),
-      ),
-      _ChallengeTile(
-        incoming: _incomingChallenges,
-        onChallenge: _startChallenge,
-        onOpen: _openChallenges,
-      ),
-      // Live head-to-head sits BESIDE the async challenge above, not in
-      // place of it: they are different games. A challenge is played
-      // whenever you like; this one needs both people present now.
-      _LiveMatchTile(
-        invites: _liveInvites,
-        online: PresenceService.onlineUsers.length,
-        onTap: _openLiveMatch,
-      ),
-    ];
-
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      childAspectRatio: 1.28,
-      children: tiles,
+  /// The quiet list. Everything that is NOT today's challenge or a live
+  /// opponent, at a deliberately lower weight.
+  ///
+  /// A list, not a grid: rows give each mode its blurb back (the grid had
+  /// to drop them for space), read top-to-bottom in one pass, and — the
+  /// point of the change — visibly rank below the hero instead of
+  /// competing with it. The async challenge stays here rather than beside
+  /// live match: they are different games, one played whenever you like.
+  Widget _buildModeList(int mistakes) {
+    return Column(
+      children: [
+        _ModeRow(
+          label: QuizMode.practice.label,
+          blurb: QuizMode.practice.blurb,
+          icon: Icons.shuffle_rounded,
+          onTap: () => _play(QuizMode.practice),
+        ),
+        _ModeRow(
+          label: QuizMode.survival.label,
+          blurb: QuizMode.survival.blurb,
+          icon: Icons.favorite_rounded,
+          best: QuizProgressService.bestScore(QuizMode.survival),
+          onTap: () => _play(QuizMode.survival),
+        ),
+        _ModeRow(
+          label: QuizMode.speed.label,
+          blurb: QuizMode.speed.blurb,
+          icon: Icons.bolt_rounded,
+          best: QuizProgressService.bestScore(QuizMode.speed),
+          onTap: () => _play(QuizMode.speed),
+        ),
+        _ModeRow(
+          label: QuizMode.mistakes.label,
+          // Say why it is unavailable rather than just dimming it. A
+          // disabled row with no explanation reads as broken.
+          blurb: mistakes > 0
+              ? QuizMode.mistakes.blurb
+              : 'Nothing to fix yet — play a round first.',
+          icon: Icons.auto_fix_high_rounded,
+          badge: mistakes > 0 ? '$mistakes' : null,
+          enabled: mistakes > 0,
+          onTap: () => _play(QuizMode.mistakes),
+        ),
+        _ModeRow(
+          label: 'Challenge a friend',
+          blurb: _incomingChallenges > 0
+              ? 'Your turn in $_incomingChallenges'
+              : 'Send five questions. They play when they can.',
+          icon: Icons.sports_kabaddi_rounded,
+          badge: _incomingChallenges > 0 ? '$_incomingChallenges' : null,
+          highlight: _incomingChallenges > 0,
+          onTap: _incomingChallenges > 0 ? _openChallenges : _startChallenge,
+        ),
+        _ModeRow(
+          label: 'Leaderboard',
+          blurb: 'Where you stand this week.',
+          icon: Icons.leaderboard_rounded,
+          onTap: () {
+            QuizSfx.tap();
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const QuizLeaderboardScreen(),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -797,222 +919,158 @@ class _MiniStat extends StatelessWidget {
   }
 }
 
-class _ModeTile extends StatelessWidget {
-  const _ModeTile({
-    required this.mode,
+/// One row in the quiet "more ways to play" list.
+///
+/// Replaces the square `_ModeTile` that lived in a 2-up grid. The grid was
+/// the fault the founder named: six tiles at one visual weight, so nothing
+/// read as the thing to do, and each was too small to carry its blurb. A
+/// row is lower-weight than the hero by construction AND has the width to
+/// say what the mode actually is.
+class _ModeRow extends StatelessWidget {
+  const _ModeRow({
+    required this.label,
+    required this.blurb,
     required this.icon,
     required this.onTap,
     this.best = 0,
     this.badge,
     this.enabled = true,
+    this.highlight = false,
   });
 
-  final QuizMode mode;
+  final String label;
+  final String blurb;
   final IconData icon;
   final VoidCallback onTap;
   final int best;
   final String? badge;
   final bool enabled;
 
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: enabled ? 1 : 0.5,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: ArenaTheme.tileRadius,
-          onTap: enabled
-              ? () {
-                  QuizSfx.tap();
-                  onTap();
-                }
-              : null,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: ArenaTheme.glass,
-              borderRadius: ArenaTheme.tileRadius,
-              border: Border.all(color: ArenaTheme.glassBorder),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: ArenaTheme.gold.withValues(alpha: 0.16),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(icon, size: 18, color: ArenaTheme.gold),
-                    ),
-                    const Spacer(),
-                    if (badge != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: ArenaTheme.gold,
-                          borderRadius: BorderRadius.circular(
-                            ArenaTheme.radiusPill,
-                          ),
-                        ),
-                        child: Text(
-                          badge!,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: ArenaTheme.canvasTop,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 10.5,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  mode.label,
-                  style: AppTextStyles.titleSmall.copyWith(
-                    color: ArenaTheme.textOnNavy,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  best > 0 ? 'Best: $best' : mode.blurb,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: best > 0
-                        ? ArenaTheme.gold
-                        : ArenaTheme.textFaintOnNavy,
-                    fontSize: 11,
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Two actions in one tile: challenge someone new, or answer the ones
-/// waiting for you. The badge is the hook — an unanswered challenge is the
-/// strongest reason to reopen the arena.
-class _ChallengeTile extends StatelessWidget {
-  const _ChallengeTile({
-    required this.incoming,
-    required this.onChallenge,
-    required this.onOpen,
-  });
-
-  final int incoming;
-  final VoidCallback onChallenge;
-  final VoidCallback onOpen;
+  /// Draws the row in the "something is waiting for you" state — used when
+  /// a challenge is your turn. Deliberately the same green the live strip
+  /// uses, so "someone is waiting" reads identically wherever it appears.
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
-    final waiting = incoming > 0;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: ArenaTheme.tileRadius,
-        onTap: () {
-          QuizSfx.tap();
-          waiting ? onOpen() : onChallenge();
-        },
-        onLongPress: onOpen,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: waiting
-                ? ArenaTheme.gold.withValues(alpha: 0.14)
-                : ArenaTheme.glass,
+    final accent = highlight ? ArenaTheme.correctOnNavy : ArenaTheme.gold;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Opacity(
+        opacity: enabled ? 1 : 0.55,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
             borderRadius: ArenaTheme.tileRadius,
-            border: Border.all(
-              color: waiting
-                  ? ArenaTheme.gold.withValues(alpha: 0.55)
-                  : ArenaTheme.glassBorder,
-            ),
-            boxShadow: waiting
-                ? ArenaTheme.glow(ArenaTheme.gold, strength: 0.5)
+            onTap: enabled
+                ? () {
+                    QuizSfx.tap();
+                    onTap();
+                  }
                 : null,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 13,
+              ),
+              decoration: BoxDecoration(
+                color: highlight
+                    ? ArenaTheme.correctOnNavy.withValues(alpha: 0.12)
+                    : ArenaTheme.glass,
+                borderRadius: ArenaTheme.tileRadius,
+                border: Border.all(
+                  color: highlight
+                      ? ArenaTheme.correctOnNavy.withValues(alpha: 0.5)
+                      : ArenaTheme.glassBorder,
+                ),
+              ),
+              child: Row(
                 children: [
                   Container(
-                    width: 34,
-                    height: 34,
+                    width: 38,
+                    height: 38,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: ArenaTheme.gold.withValues(alpha: 0.16),
+                      color: accent.withValues(alpha: 0.16),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.sports_kabaddi_rounded,
-                      size: 18,
-                      color: ArenaTheme.gold,
+                    child: Icon(icon, size: 19, color: accent),
+                  ),
+                  const SizedBox(width: 13),
+                  // Expanded, not bare: these labels and blurbs scale with
+                  // the system font, and an unflexed Text in a Row THROWS
+                  // rather than clipping. This project has shipped that bug
+                  // before.
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleSmall.copyWith(
+                            color: ArenaTheme.textOnNavy,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          blurb,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: highlight
+                                ? ArenaTheme.correctOnNavy
+                                : ArenaTheme.textFaintOnNavy,
+                            fontSize: 11.5,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  if (waiting)
+                  const SizedBox(width: 10),
+                  if (badge != null)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
+                        horizontal: 8,
+                        vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: ArenaTheme.gold,
+                        color: accent,
                         borderRadius: BorderRadius.circular(
                           ArenaTheme.radiusPill,
                         ),
                       ),
                       child: Text(
-                        '$incoming',
+                        badge!,
                         style: AppTextStyles.labelSmall.copyWith(
                           color: ArenaTheme.canvasTop,
                           fontWeight: FontWeight.w800,
                           fontSize: 10.5,
                         ),
                       ),
+                    )
+                  else if (best > 0)
+                    Text(
+                      'Best $best',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: ArenaTheme.textFaintOnNavy,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: ArenaTheme.textFaintOnNavy,
                     ),
                 ],
               ),
-              const Spacer(),
-              Text(
-                waiting ? 'Challenges' : 'Challenge a friend',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.titleSmall.copyWith(
-                  color: ArenaTheme.textOnNavy,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                waiting
-                    ? '$incoming waiting for you'
-                    : 'Same questions. Higher score wins.',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: waiting ? ArenaTheme.gold : ArenaTheme.textFaintOnNavy,
-                  fontSize: 11,
-                  height: 1.3,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1020,10 +1078,20 @@ class _ChallengeTile extends StatelessWidget {
   }
 }
 
-/// Live head-to-head. Reads as the loud one on the grid because it is the
-/// only mode where someone else is waiting on you.
-class _LiveMatchTile extends StatelessWidget {
-  const _LiveMatchTile({
+/// Live head-to-head, as a full-width strip directly under the hero.
+///
+/// Promoted out of the 2-up grid (founder, 17 Aug): it is the only
+/// real-time, person-to-person feature in the app and it was one of six
+/// identical squares, which is most of why only ~11 members have ever
+/// played one.
+///
+/// The honesty about an empty arena is carried over unchanged and matters
+/// as much here as it did in the tile: the strip promised "head to head"
+/// whether forty people were online or nobody, so anyone tapping it at a
+/// quiet hour waited out a search, found no one, and concluded the feature
+/// was broken. An empty arena is the COMMON case, not the edge one.
+class _LiveMatchStrip extends StatelessWidget {
+  const _LiveMatchStrip({
     required this.invites,
     required this.online,
     required this.onTap,
@@ -1031,16 +1099,20 @@ class _LiveMatchTile extends StatelessWidget {
 
   final int invites;
 
-  /// Members online right now. Live match is only live if somebody else is
-  /// there, and the tile used to promise "head to head" at 3am to an empty
-  /// arena — which is how a working feature earns a reputation for being
-  /// broken. Say what is true instead.
+  /// Members online right now, from the presence roster.
   final int online;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final waiting = invites > 0;
+    final live = online > 1;
+    // Three states, three colours: someone is waiting (green, glowing),
+    // people are around (green), nobody is (faint).
+    final accent = waiting || live
+        ? ArenaTheme.correctOnNavy
+        : ArenaTheme.textFaintOnNavy;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1050,7 +1122,7 @@ class _LiveMatchTile extends StatelessWidget {
           onTap();
         },
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: waiting
                 ? ArenaTheme.correctOnNavy.withValues(alpha: 0.16)
@@ -1065,90 +1137,82 @@ class _LiveMatchTile extends StatelessWidget {
                 ? ArenaTheme.glow(ArenaTheme.correctOnNavy, strength: 0.5)
                 : null,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: ArenaTheme.correctOnNavy.withValues(alpha: 0.18),
-                      shape: BoxShape.circle,
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: ArenaTheme.correctOnNavy.withValues(alpha: 0.18),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.bolt_rounded,
+                  size: 22,
+                  color: ArenaTheme.correctOnNavy,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      waiting ? 'Someone wants to play' : 'Live match',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        color: ArenaTheme.textOnNavy,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.bolt_rounded,
-                      size: 19,
-                      color: ArenaTheme.correctOnNavy,
+                    const SizedBox(height: 2),
+                    Text(
+                      waiting
+                          ? 'Join before it expires'
+                          : live
+                          ? '$online online now · play someone'
+                          : 'Quiet right now — challenge someone instead',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: accent,
+                        fontSize: 11.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (waiting)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ArenaTheme.correctOnNavy,
+                    borderRadius: BorderRadius.circular(ArenaTheme.radiusPill),
+                  ),
+                  child: Text(
+                    '$invites',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: ArenaTheme.canvasTop,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
                     ),
                   ),
-                  const Spacer(),
-                  if (waiting)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: ArenaTheme.correctOnNavy,
-                        borderRadius: BorderRadius.circular(
-                          ArenaTheme.radiusPill,
-                        ),
-                      ),
-                      child: Text(
-                        '$invites',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: ArenaTheme.canvasTop,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 10.5,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                waiting ? 'Someone wants to play' : 'Live match',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.titleSmall.copyWith(
-                  color: ArenaTheme.textOnNavy,
-                  fontWeight: FontWeight.w800,
+                )
+              else
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: ArenaTheme.textFaintOnNavy,
                 ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                // Tell the truth about whether there is anyone to play.
-                //
-                // The tile promised "head to head, same clock" whether the
-                // arena held forty people or nobody, so a member who tapped
-                // it at a quiet hour waited out the search, found no one, and
-                // reasonably concluded the feature was broken. Only ~11
-                // people have ever reached live match; an empty arena is the
-                // COMMON case here, not the edge one, and pretending
-                // otherwise is what makes it feel dead.
-                //
-                // A count also tells them when to come back, which a spinner
-                // never can.
-                waiting
-                    ? 'Join before it expires'
-                    : online > 1
-                        ? '$online online now'
-                        : 'Quiet right now — challenge someone',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: waiting
-                      ? ArenaTheme.correctOnNavy
-                      : online > 1
-                          ? ArenaTheme.correctOnNavy
-                          : ArenaTheme.textFaintOnNavy,
-                  fontSize: 11,
-                  height: 1.3,
-                ),
-              ),
             ],
           ),
         ),

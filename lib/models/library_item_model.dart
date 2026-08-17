@@ -13,6 +13,7 @@ class LibraryItem {
     this.language,
     this.coverUrl,
     this.durationSeconds,
+    this.epubUrl,
   });
 
   final String id;
@@ -30,8 +31,19 @@ class LibraryItem {
   /// Track length for `music` items; null otherwise.
   final int? durationSeconds;
 
+  /// EPUB in the same bucket, when one exists.
+  ///
+  /// This is what unlocks the reflowable reader: the EPUB carries text,
+  /// the canonical page numbers inline and pre-tagged scripture, none of
+  /// which a rendered PDF page can give. Null-safe on purpose — the column
+  /// may not be present yet, and every reader path falls back to the PDF.
+  final String? epubUrl;
+
   bool get isPdf => kind == 'hymnal' || kind == 'egw_book';
   bool get isAudio => kind == 'music';
+
+  /// True when this book can open in the reflowable reader.
+  bool get hasEpub => (epubUrl ?? '').isNotEmpty;
 
   factory LibraryItem.fromJson(Map<String, dynamic> json) {
     return LibraryItem(
@@ -44,6 +56,10 @@ class LibraryItem {
       language: json['language'] as String?,
       coverUrl: json['cover_url'] as String?,
       durationSeconds: (json['duration_seconds'] as num?)?.toInt(),
+      // patch_206. Read defensively: an older client reading a newer row is
+      // fine either way, and a build that predates the column must not
+      // throw on its absence.
+      epubUrl: json['epub_url'] as String?,
     );
   }
 }

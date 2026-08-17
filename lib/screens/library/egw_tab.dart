@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../config/share_config.dart';
+import '../../models/egw_book_model.dart';
 import '../../models/library_item_model.dart';
 import '../../services/cache_service.dart';
 import '../../services/download_service.dart';
+import '../../services/egw_book_service.dart';
 import '../../services/egw_download_service.dart';
 import '../../services/library_launch_intent.dart';
 import '../../services/library_service.dart';
@@ -16,6 +19,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import 'egw_reader_screen.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
@@ -134,39 +138,91 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
     }).toList();
   }
 
-  /// The most recently opened book that isn't finished — powers the hero.
+  /// The most recently opened book — powers the "Continue reading" hero.
+  ///
+  /// Keyed on [EgwPrefs.lastOpenedAt], which `_open` records unconditionally
+  /// for every book the member opens. It used to require
+  /// `PdfProgress.hasStarted` as well, and that was the bug: the page is
+  /// persisted by the reader's `onPageChanged`, so a book opened and read
+  /// WITHOUT swiping never counted as started and was filtered out — the
+  /// hero kept offering the previous book (founder, 17 Aug: "Steps to
+  /// Christ still has continue reading after I open Great Controversy").
+  ///
+  /// "Opened" is the honest signal for this hero anyway: it is answering
+  /// "what were you last reading", not "what have you made progress in".
+  /// The reader now also marks a book started on render, so the two agree
+  /// for anything opened from here on.
   LibraryItem? get _continueBook {
-    final started =
-        _all.where((i) => PdfProgress.hasStarted(i.fileUrl)).toList();
-    if (started.isEmpty) return null;
-    started.sort((a, b) {
-      final at = EgwPrefs.lastOpenedAt(a.id) ?? 0;
-      final bt = EgwPrefs.lastOpenedAt(b.id) ?? 0;
-      return bt.compareTo(at);
-    });
-    return started.first;
+    LibraryItem? best;
+    var bestAt = 0;
+    for (final item in _all) {
+      final at = EgwPrefs.lastOpenedAt(item.id) ?? 0;
+      // Fall back to progress for books opened before opens were tracked.
+      if (at == 0 && !PdfProgress.hasStarted(item.fileUrl)) continue;
+      if (best == null || at > bestAt) {
+        best = item;
+        bestAt = at;
+      }
+    }
+    return best;
   }
 
-  void _open(LibraryItem item) {
+  /// Opens a book in the reflowable reader when it has an EPUB, and in the
+  /// PDF viewer when it does not.
+  ///
+  /// The EPUB path is strictly better — text that reflows, real
+  /// Day/Sepia/Night, page turns, select-to-quote with the canonical page
+  /// number — but it is never assumed: a book with no EPUB, a first open
+  /// with no signal, or a file that will not parse all fall through to the
+  /// PDF rather than failing. A member must never be told a book they can
+  /// see on the shelf cannot be opened.
+  Future<void> _open(LibraryItem item) async {
     EgwPrefs.noteOpened(item.id);
-    Navigator.of(context)
-        .push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                // itemId lets the reader open a deliberately downloaded copy
-                // from application support instead of re-fetching, and makes
-                // an offline open work at all.
-                PdfViewerScreen(
-                  title: item.title,
-                  url: item.fileUrl,
-                  itemId: item.id,
-                ),
-          ),
-        )
-        // Progress changes while reading; refresh the shelf on the way back.
-        .then((_) {
-      if (mounted) setState(() {});
-    });
+
+    EgwBook? book;
+    if (item.hasEpub) {
+      // Only show a wait if there IS one — a cached book resolves in the
+      // same frame and must not flash a dialog.
+      final pending = EgwBookService.load(item.epubUrl);
+      book = await _withProgress(pending);
+    }
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => book != null
+            ? EgwReaderScreen(book: book, bookId: item.id)
+            // itemId lets the viewer open a deliberately downloaded copy
+            // from application support instead of re-fetching, and makes
+            // an offline open work at all.
+            : PdfViewerScreen(
+                title: item.title,
+                url: item.fileUrl,
+                itemId: item.id,
+              ),
+      ),
+    );
+    // Progress changes while reading; refresh the shelf on the way back.
+    if (mounted) setState(() {});
+  }
+
+  /// Awaits [pending], showing a spinner only if it takes long enough to
+  /// notice. Downloading a book is a real wait on a first open; reopening
+  /// one is instant, and a dialog that flashes for 30ms reads as a glitch.
+  Future<EgwBook?> _withProgress(Future<EgwBook?> pending) async {
+    var settled = false;
+    unawaited(pending.whenComplete(() => settled = true));
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (settled || !mounted) return pending;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: BrandSpinner(size: 34)),
+    );
+    final book = await pending;
+    if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    return book;
   }
 
   @override

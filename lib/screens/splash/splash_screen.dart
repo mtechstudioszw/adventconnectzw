@@ -554,7 +554,11 @@ class _SplashScreenState extends State<SplashScreen>
         child: AnimatedBuilder(
           animation: _ambient,
           builder: (context, _) => CustomPaint(
-            painter: AmbientPainter(loop: _ambient.value, film: 0),
+            painter: AmbientPainter(
+              loop: _ambient.value,
+              film: 0,
+              dark: Theme.of(context).brightness == Brightness.dark,
+            ),
             child: const SizedBox.expand(),
           ),
         ),

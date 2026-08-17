@@ -66,7 +66,9 @@ void main() {
     t.view.devicePixelRatio = 1.0;
     addTearDown(t.view.reset);
 
-    await t.pumpWidget(_wrap(_church()));
+    // Must pass a cover: there is no 16:9 box at all without one now, by
+    // design (see the no-cover test below).
+    await t.pumpWidget(_wrap(_church(cover: 'https://example.test/c.jpg')));
     await t.pump();
 
     // edit_church_screen frames the admin's cover at 16:9. The public
@@ -76,5 +78,59 @@ void main() {
       find.byType(AspectRatio).first,
     );
     expect(cover.aspectRatio, closeTo(16 / 9, 0.001));
+  });
+
+  // A missing cover photo is not a reason to paint a navy rectangle
+  // (founder rule, 28 Jul 2026; re-confirmed for churches 17 Aug). This
+  // one matters more than the profile version it came from: NO church in
+  // production has a cover photo, so the placeholder was not an edge case
+  // — it was the hero on every church, a navy slab across the top ~26% of
+  // the screen ending in a hard seam.
+  group('no cover photo', () {
+    testWidgets('paints no 16:9 slab at all', (t) async {
+      await t.pumpWidget(_wrap(_church()));
+      await t.pump();
+
+      expect(
+        find.byType(AspectRatio),
+        findsNothing,
+        reason: 'the no-cover hero must not reserve a 16:9 band',
+      );
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('lifts the name above the fold on a small phone', (t) async {
+      t.view.physicalSize = const Size(360, 640);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(t.view.reset);
+
+      await t.pumpWidget(_wrap(_church()));
+      await t.pump();
+
+      // The whole point of removing the slab: the identity and the primary
+      // action come up the screen. The slab was ~200dp on this phone.
+      final name = t.getTopLeft(find.textContaining('Harare City Centre'));
+      expect(
+        name.dy,
+        lessThan(240),
+        reason: 'church name should sit high without a cover slab',
+      );
+    });
+
+    testWidgets('the back arrow survives the flattening', (t) async {
+      // The standing trap: flattening a navy surface breaks every
+      // foreground that assumed a dark backdrop. This arrow was white on a
+      // 40%-black scrim, which is invisible on light grey.
+      await t.pumpWidget(_wrap(_church()));
+      await t.pump();
+
+      final arrow = t.widget<Icon>(find.byIcon(Icons.arrow_back));
+      expect(arrow.color, isNot(const Color(0xFFFFFFFF)));
+      expect(
+        arrow.color!.computeLuminance(),
+        lessThan(0.5),
+        reason: 'back arrow must be dark on the light scaffold',
+      );
+    });
   });
 }

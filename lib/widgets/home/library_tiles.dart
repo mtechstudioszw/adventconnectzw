@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../services/quiz_home_signal.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -81,6 +82,9 @@ class LibraryTiles extends StatelessWidget {
                 label: label,
                 icon: icon,
                 hero: hero,
+                // Quiz (and only Quiz) carries the live signal — see
+                // [_Tile.live].
+                live: tab < 0,
                 onTap: () => tab < 0
                     ? context.pushNamed('quiz')
                     : context.pushNamed('library', extra: tab),
@@ -99,6 +103,7 @@ class _Tile extends StatelessWidget {
     required this.icon,
     required this.hero,
     required this.onTap,
+    this.live = false,
   });
 
   final String label;
@@ -108,54 +113,103 @@ class _Tile extends StatelessWidget {
   final bool hero;
   final VoidCallback onTap;
 
+  /// Watch the quiz's live signal and show a dot when somebody has
+  /// challenged you.
+  ///
+  /// This is the "someone wants you" half of the founder's Home decision
+  /// (17 Aug) — the Daily Challenge card is the habit, this is the
+  /// interrupt. It is deliberately a DOT and not a number: the count is
+  /// meaningless to act on (you can only play one match at a time) and a
+  /// badge here would compete with the unread counts on the nav bar.
+  final bool live;
+
   @override
   Widget build(BuildContext context) {
+    if (!live) return _build(context, invites: 0);
+    return ValueListenableBuilder<int>(
+      valueListenable: QuizHomeSignal.invites,
+      builder: (context, invites, _) => _build(context, invites: invites),
+    );
+  }
+
+  Widget _build(BuildContext context, {required int invites}) {
     final palette = context.palette;
+    final waiting = invites > 0;
     return Semantics(
       button: true,
-      label: label,
+      label: waiting ? '$label, someone wants to play' : label,
       child: Pressable(
         onTap: onTap,
         haptics: true,
         pressedScale: 0.94,
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
-          decoration: BoxDecoration(
-            gradient: hero ? AppColors.primaryGradient : null,
-            color: hero ? null : palette.card,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: hero ? null : Border.all(color: palette.divider),
-            boxShadow: hero
-                ? [
-                    BoxShadow(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.28),
-                      blurRadius: 12,
-                      offset: const Offset(0, 5),
-                    ),
-                  ]
-                : AppShadows.card(context),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: hero ? AppColors.white : AppColors.primaryBlue,
+        // clipBehavior none: the dot deliberately overhangs the pill's
+        // top-right corner, the way a notification badge does.
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+              decoration: BoxDecoration(
+                gradient: hero ? AppColors.primaryGradient : null,
+                color: hero ? null : palette.card,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: hero ? null : Border.all(color: palette.divider),
+                boxShadow: hero
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.28),
+                          blurRadius: 12,
+                          offset: const Offset(0, 5),
+                        ),
+                      ]
+                    : AppShadows.card(context),
               ),
-              const SizedBox(width: AppSpace.sm - 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: hero ? AppColors.white : palette.text,
-                  fontWeight: FontWeight.w700,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color: hero ? AppColors.white : AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: AppSpace.sm - 2),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: hero ? AppColors.white : palette.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (waiting)
+              Positioned(
+                top: -1,
+                right: -1,
+                child: Container(
+                  width: 13,
+                  height: 13,
+                  decoration: BoxDecoration(
+                    // #2E7D32 is tuned for a light page and goes murky on
+                    // the dark one, where this dot is the only thing on
+                    // Home saying somebody is waiting for you. Lift it.
+                    color:
+                        Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF4CD964)
+                        : AppColors.successGreen,
+                    shape: BoxShape.circle,
+                    // Ringed in the page background, not white: on the
+                    // dark palette a white ring is a bright halo, and the
+                    // dot has to read as sitting ON the feed either way.
+                    border: Border.all(color: palette.scaffoldBg, width: 2),
+                  ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );

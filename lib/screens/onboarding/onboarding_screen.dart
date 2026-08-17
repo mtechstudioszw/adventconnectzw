@@ -196,6 +196,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 painter: AmbientPainter(
                   loop: _ambient.value,
                   film: _film.value,
+                  dark: Theme.of(context).brightness == Brightness.dark,
                 ),
               ),
             ),
@@ -341,7 +342,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   child: Text(
                     'I already have an account',
                     style: AppTextStyles.labelMedium.copyWith(
-                      color: AppColors.textMuted,
+                      color: context.palette.textMuted,
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),

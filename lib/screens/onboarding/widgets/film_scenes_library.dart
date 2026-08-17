@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import 'film_scenes.dart';
 
@@ -67,11 +68,15 @@ class SceneLibrary extends StatelessWidget {
                 width: 268,
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 decoration: BoxDecoration(
-                  color: AppColors.white,
+                  color: context.palette.card,
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.darkNavy.withValues(alpha: 0.12),
+                      color: byBrightness(
+                        context,
+                        light: AppColors.darkNavy.withValues(alpha: 0.12),
+                        dark: Colors.black.withValues(alpha: 0.46),
+                      ),
                       blurRadius: 24,
                       offset: const Offset(0, 12),
                     ),
@@ -85,7 +90,7 @@ class SceneLibrary extends StatelessWidget {
                         Text(
                           'JOHN 3',
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.textMuted,
+                            color: context.palette.textMuted,
                             fontSize: 9.5,
                             letterSpacing: 1.3,
                             fontWeight: FontWeight.w800,
@@ -153,9 +158,7 @@ class SceneLibrary extends StatelessWidget {
                                           i * 0.18 + 0.55,
                                         )),
                             decoration: BoxDecoration(
-                              color: AppColors.darkNavy.withValues(
-                                alpha: i == 0 ? 0.30 : 0.16,
-                              ),
+                              color: ink(context, i == 0 ? 0.30 : 0.16),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -196,12 +199,19 @@ class SceneLibrary extends StatelessWidget {
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.white,
+                              // Library tile pills — these sit on the
+                              // scaffold, not on a card, so they use the
+                              // card tone to lift off it in both modes.
+                              color: context.palette.card,
                               borderRadius: BorderRadius.circular(100),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.darkNavy.withValues(
-                                    alpha: 0.10,
+                                  color: byBrightness(
+                                    context,
+                                    light: AppColors.darkNavy.withValues(
+                                      alpha: 0.10,
+                                    ),
+                                    dark: Colors.black.withValues(alpha: 0.40),
                                   ),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
@@ -220,7 +230,7 @@ class SceneLibrary extends StatelessWidget {
                                 Text(
                                   _tiles[i].$1,
                                   style: AppTextStyles.labelSmall.copyWith(
-                                    color: AppColors.darkNavy,
+                                    color: context.palette.text,
                                     fontSize: 8.5,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -337,11 +347,15 @@ class SceneFeed extends StatelessWidget {
                     width: 268,
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                     decoration: BoxDecoration(
-                      color: AppColors.white,
+                      color: context.palette.card,
                       borderRadius: BorderRadius.circular(18),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.darkNavy.withValues(alpha: 0.12),
+                          color: byBrightness(
+                            context,
+                            light: AppColors.darkNavy.withValues(alpha: 0.12),
+                            dark: Colors.black.withValues(alpha: 0.46),
+                          ),
                           blurRadius: 22,
                           offset: const Offset(0, 10),
                         ),
@@ -368,9 +382,7 @@ class SceneFeed extends StatelessWidget {
                                   width: 96,
                                   height: 7,
                                   decoration: BoxDecoration(
-                                    color: AppColors.darkNavy.withValues(
-                                      alpha: 0.28,
-                                    ),
+                                    color: ink(context, 0.28),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
@@ -379,9 +391,7 @@ class SceneFeed extends StatelessWidget {
                                   width: 58,
                                   height: 5,
                                   decoration: BoxDecoration(
-                                    color: AppColors.darkNavy.withValues(
-                                      alpha: 0.14,
-                                    ),
+                                    color: ink(context, 0.14),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
@@ -397,9 +407,7 @@ class SceneFeed extends StatelessWidget {
                               width: w,
                               height: 6,
                               decoration: BoxDecoration(
-                                color: AppColors.darkNavy.withValues(
-                                  alpha: 0.14,
-                                ),
+                                color: ink(context, 0.14),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
@@ -452,7 +460,7 @@ class SceneFeed extends StatelessWidget {
                               child: Text(
                                 '${(12 + 30 * countIn).round()}',
                                 style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.textMuted,
+                                  color: context.palette.textMuted,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -519,7 +527,14 @@ class SceneQuiz extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.darkNavy.withValues(alpha: 0.22),
+                      // The quiz card keeps its navy gradient in both
+                      // modes (it reads as the arena), but its shadow has
+                      // to go deeper to separate from a dark scaffold.
+                      color: byBrightness(
+                        context,
+                        light: AppColors.darkNavy.withValues(alpha: 0.22),
+                        dark: Colors.black.withValues(alpha: 0.52),
+                      ),
                       blurRadius: 26,
                       offset: const Offset(0, 12),
                     ),

@@ -3,7 +3,8 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
-import '../../screens/onboarding/widgets/film_scenes.dart' show AmbientPainter;
+import '../../screens/onboarding/widgets/film_scenes.dart'
+    show AmbientPainter, byBrightness;
 import '../../theme/app_palette.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -224,16 +225,36 @@ class _CreateScreenState extends State<_CreateScreen>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            // White, on the founder's call (17 Aug 2026).
+                            // White in LIGHT mode, on the founder's call
+                            // (17 Aug 2026) — and still a gradient rather
+                            // than one flat fill, because pure #FFFFFF edge
+                            // to edge is what made the navy version read as
+                            // a dead slab. The fault was the flatness, not
+                            // the hue.
                             //
-                            // Still a gradient rather than one flat fill —
-                            // pure #FFFFFF edge to edge is what made the navy
-                            // version read as a dead slab, and the fault was
-                            // the flatness, not the hue. This falls to the
-                            // app's own scaffold grey so the sheet has a
-                            // light source and a floor.
-                            AppColors.white.withValues(alpha: 0.97 * t),
-                            AppColors.lightGrey.withValues(alpha: 0.99 * t),
+                            // Dark mode keeps that intent instead of the
+                            // literal colour: a white sheet under
+                            // palette-aware dark cards was the whole of the
+                            // "create sheet is white in dark mode" report
+                            // (founder, 17 Aug). Same shape — lifted at the
+                            // top, falling to the app's own floor — so the
+                            // sheet still has a light source.
+                            byBrightness(
+                              context,
+                              light: AppColors.white.withValues(alpha: 0.97 * t),
+                              dark: context.palette.cardMuted.withValues(
+                                alpha: 0.97 * t,
+                              ),
+                            ),
+                            byBrightness(
+                              context,
+                              light: AppColors.lightGrey.withValues(
+                                alpha: 0.99 * t,
+                              ),
+                              dark: context.palette.scaffoldBg.withValues(
+                                alpha: 0.99 * t,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -245,6 +266,7 @@ class _CreateScreenState extends State<_CreateScreen>
                             painter: AmbientPainter(
                               loop: _ambient.value,
                               film: 0,
+                              dark: Theme.of(context).brightness == Brightness.dark,
                             ),
                             size: Size.infinite,
                           ),

@@ -93,8 +93,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   int _pages = 0;
   int _current = 0;
   late final int _resumePage;
-  bool _night = false;
+  /// Night mode OVERRIDE. Null means "follow the app theme".
+  ///
+  /// This was a plain `bool _night = false`, so the reader opened on a
+  /// blazing white page even with the whole app in dark mode — which is
+  /// what "dark mode doesn't work in EGW" is (founder, 17 Aug). The page
+  /// content is a rendered PDF, so no amount of `context.palette` on the
+  /// chrome could reach it; the renderer's own nightMode is the only lever.
+  ///
+  /// Kept as an override rather than replaced outright: a reader
+  /// legitimately wants to flip it per book, and once they do, their
+  /// choice must win over the theme for the rest of the session.
+  bool? _nightOverride;
   PDFViewController? _ctrl;
+
+  /// Only ever read from `build` — it needs a context to see the theme.
+  bool get _night =>
+      _nightOverride ?? Theme.of(context).brightness == Brightness.dark;
 
   // Per-document last-page key, so reopening a book continues where you left
   // off (resume reading — a basic-feeling reader was the tester's complaint).
@@ -222,7 +237,8 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             icon: Icon(_night
                 ? Icons.light_mode_outlined
                 : Icons.dark_mode_outlined),
-            onPressed: () => setState(() => _night = !_night),
+            // Records an explicit choice, which then outranks the theme.
+            onPressed: () => setState(() => _nightOverride = !_night),
           ),
           IconButton(
             tooltip: 'Share',
@@ -312,6 +328,22 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         PdfProgress.pageCountKey(widget.url),
                         pages.toString(),
                       );
+                    }
+                    // Mark the book STARTED on render, not on the first page
+                    // turn.
+                    //
+                    // The page was only ever written by onPageChanged, so a
+                    // book you opened and read without swiping was invisible
+                    // to `PdfProgress.hasStarted` — and the EGW shelf's
+                    // "Continue reading" hero filters on exactly that. Open
+                    // Steps to Christ and turn a page, then open Great
+                    // Controversy and read page one, and the hero still
+                    // offered Steps to Christ (founder, 17 Aug).
+                    //
+                    // Only writes when absent, so it can never clobber a real
+                    // resume position with the default page.
+                    if (!PdfProgress.hasStarted(widget.url)) {
+                      CacheService.writePref(_pageKey, _resumePage.toString());
                     }
                   },
                   onPageChanged: (page, _) {

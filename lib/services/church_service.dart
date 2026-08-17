@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/church_model.dart';
 import 'analytics_service.dart';
@@ -83,6 +84,41 @@ class ChurchService {
         .select('church_id')
         .eq('user_id', user.id);
     return (response as List).map((row) => row['church_id'].toString()).toSet();
+  }
+
+  /// Advent Connect members whose HOME CHURCH is [churchId].
+  ///
+  /// Not the same as `follower_count`, which is what the card used to show
+  /// (founder, 17 Aug: "verify the member count is actually the number of
+  /// Advent Connect members in that church"). Membership is
+  /// `profiles.church_id`; following is a separate act. Measured against
+  /// production the two agree for 115 of 117 churches today — but they are
+  /// different sets, and the gap only widens as people follow churches they
+  /// do not attend.
+  ///
+  /// Returns null when the count cannot be had, so callers can fall back to
+  /// the follower count rather than showing nothing. See patch_207 — a
+  /// read-only RPC deliberately, not a trigger on `profiles`.
+  static Future<int?> memberCount(String churchId) async {
+    final id = int.tryParse(churchId);
+    if (id == null) return null;
+    try {
+      final rows = await _client.rpc(
+        'church_member_counts',
+        params: {
+          'p_ids': [id],
+        },
+      );
+      if (rows is! List) return null;
+      // The RPC returns NO row for a church with no members, so absent
+      // means zero rather than unknown.
+      if (rows.isEmpty) return 0;
+      final first = Map<String, dynamic>.from(rows.first as Map);
+      return (first['members'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      debugPrint('ChurchService.memberCount failed: $e');
+      return null;
+    }
   }
 
   static Future<bool> isFollowing(String churchId) async {

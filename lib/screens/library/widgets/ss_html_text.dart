@@ -398,6 +398,16 @@ List<_Inline> _parseInlines(String html) {
 String _stripTags(String html) =>
     html.replaceAll(RegExp(r'<[^>]*>'), '');
 
+/// Lesson HTML as plain readable text.
+///
+/// Public because the share card needs it: a verse taken from the day's
+/// `bible` map is HTML, and putting raw markup on a shared image would be
+/// visible to everyone the member sends it to. Reuses the entity table
+/// below rather than duplicating it — the feed uses named entities that a
+/// naive tag-strip leaves as `&mdash;` in the middle of a sentence.
+String ssPlainText(String html) =>
+    _decodeEntities(_stripTags(html)).replaceAll(RegExp(r'\s+'), ' ').trim();
+
 /// The lesson feed uses a handful of named entities plus numeric ones.
 String _decodeEntities(String input) {
   var s = input

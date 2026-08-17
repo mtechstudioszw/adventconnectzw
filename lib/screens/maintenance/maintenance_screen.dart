@@ -148,6 +148,7 @@ class _MaintenanceScreenState extends State<MaintenanceScreen>
                     painter: AmbientPainter(
                       loop: animate ? _ambient.value : 0.2,
                       film: 0,
+                      dark: Theme.of(context).brightness == Brightness.dark,
                     ),
                   ),
                 ),

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 
 /// Scene compositions for the onboarding film.
@@ -90,10 +91,30 @@ class FilmTimeline {
 /// Driven by its own repeating loop value [loop] plus the film value for
 /// parallax, painted in one layer with zero blur filters.
 class AmbientPainter extends CustomPainter {
-  AmbientPainter({required this.loop, required this.film});
+  AmbientPainter({
+    required this.loop,
+    required this.film,
+    required this.dark,
+  });
 
   final double loop; // 0→1 repeating (~14s)
   final double film; // master film position, for parallax drift
+
+  /// Whether the surface underneath is the dark palette.
+  ///
+  /// Required, not defaulted: this painter backs SIX screens (onboarding,
+  /// auth shell, the auth flow, splash, maintenance, the create sheet) and
+  /// a default would have let some of them keep the light-mode field
+  /// silently. Let the compiler ask every caller.
+  final bool dark;
+
+  /// Light has to EMIT on a dark ground. The brand blue at alpha 0.07
+  /// reads as a soft wash over #F5F7FA and is simply *not there* over
+  /// #0B1124 — which is how the ambient field, the thing that keeps the
+  /// film breathing, collapsed into a flat dead slab in dark mode. Lift
+  /// the hue toward white and roughly double the alpha so it still glows.
+  Color _lift(Color c) => dark ? Color.lerp(c, Colors.white, 0.42)! : c;
+  double _a(double alpha) => dark ? alpha * 2.1 : alpha;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -121,20 +142,20 @@ class AmbientPainter extends CustomPainter {
     blob(
       Offset(w * 0.82 - pan + math.cos(a) * 30, h * 0.16 + math.sin(a) * 22),
       w * 0.55,
-      AppColors.primaryBlue,
-      0.07,
+      _lift(AppColors.primaryBlue),
+      _a(0.07),
     );
     blob(
       Offset(w * 0.05 - pan * 0.6 + math.sin(a * 0.8) * 26, h * 0.62),
       w * 0.48,
-      AppColors.primaryBlue,
-      0.05,
+      _lift(AppColors.primaryBlue),
+      _a(0.05),
     );
     blob(
       Offset(w * 0.55 - pan * 0.8, h * 0.88 + math.cos(a * 0.7) * 18),
       w * 0.42,
-      AppColors.goldAccent,
-      0.06,
+      _lift(AppColors.goldAccent),
+      _a(0.06),
     );
 
     // Ghost UI fragments — faint rounded rects floating at 3 depths.
@@ -148,7 +169,9 @@ class AmbientPainter extends CustomPainter {
       final x =
           w * (0.12 + (i * 0.15) % 0.8) - pan * d + math.sin(phase) * 10 * d;
       final y = h * (0.10 + (i * 0.23) % 0.85) + math.cos(phase) * 14 * d;
-      ghost.color = AppColors.primaryBlue.withValues(alpha: 0.05 + 0.03 * d);
+      ghost.color = _lift(
+        AppColors.primaryBlue,
+      ).withValues(alpha: _a(0.05 + 0.03 * d));
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
@@ -168,22 +191,63 @@ class AmbientPainter extends CustomPainter {
       final d = depths[i % 3];
       final x = w * ((i * 0.37 + 0.08) % 1.0) + math.sin(a + i) * 8 * d;
       final y = h * ((i * 0.61 + loop * (0.10 + 0.12 * d)) % 1.0);
-      dust.color = (i.isEven ? AppColors.goldAccent : AppColors.primaryBlue)
-          .withValues(alpha: 0.10 + 0.08 * d);
+      dust.color = _lift(
+        i.isEven ? AppColors.goldAccent : AppColors.primaryBlue,
+      ).withValues(alpha: _a(0.10 + 0.08 * d).clamp(0.0, 1.0));
       canvas.drawCircle(Offset(x, y), 1.2 + 1.6 * d, dust);
     }
   }
 
   @override
   bool shouldRepaint(AmbientPainter old) =>
-      old.loop != loop || old.film != film;
+      // `dark` belongs here: without it a live theme switch keeps the old
+      // field painted until some other value happens to change.
+      old.loop != loop || old.film != film || old.dark != dark;
 }
 
 // ---------------------------------------------------------------------------
 // Shared mini-UI pieces (fake data, pure visuals)
 // ---------------------------------------------------------------------------
 
-/// Soft white "app surface" used by every miniature demo card.
+/// Pick a value per brightness.
+///
+/// Used where a colour has no clean [AppPalette] token — mostly fills that
+/// sit ON a card and so cannot simply reuse `palette.card`. Light-mode
+/// values are passed through untouched, keeping the pre-dark-mode look
+/// byte-for-byte identical, which is the same contract AppPalette follows.
+T byBrightness<T>(BuildContext context, {required T light, required T dark}) =>
+    Theme.of(context).brightness == Brightness.dark ? dark : light;
+
+/// A knocked-back "ink" tone for the placeholder bars, hairlines and
+/// dots the film draws ON a card.
+///
+/// Navy at 10–30% alpha is the light-mode look and is simply absent on a
+/// dark card, which is why every mock row and text bar in the film went
+/// blank in dark mode. Dark mode uses white at a slightly higher alpha to
+/// land at the same perceived weight.
+Color ink(BuildContext context, double alpha) => byBrightness(
+  context,
+  light: AppColors.darkNavy.withValues(alpha: alpha),
+  dark: Colors.white.withValues(alpha: (alpha * 1.5).clamp(0.0, 1.0)),
+);
+
+/// Brand blue, made legible as TEXT on whichever ground is behind it.
+///
+/// #1565C0 on the dark scaffold #0B1124 measures about 2.9:1 — under the
+/// 4.5:1 floor and visibly murky. Identity is the hue, not the exact
+/// value, so lift it in dark mode rather than abandoning the blue.
+Color blueText(BuildContext context) => byBrightness(
+  context,
+  light: AppColors.primaryBlue,
+  dark: const Color(0xFF6FA8F5),
+);
+
+/// The "app surface" used by every miniature demo card in the film.
+///
+/// This was a hardcoded white slab with a navy shadow. In dark mode that
+/// is a glaring white rectangle on a near-black ground, which is most of
+/// what "the onboarding is not premium in dark mode" meant — the film
+/// showed off an app that looked nothing like the one behind it.
 class _MiniSurface extends StatelessWidget {
   const _MiniSurface({required this.child, this.width = 280, this.padding});
   final Widget child;
@@ -192,19 +256,30 @@ class _MiniSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: width,
       padding: padding ?? const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: palette.card,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: AppColors.darkNavy.withValues(alpha: 0.05),
+          // A dark card on a dark ground needs its edge drawn by a LIGHT
+          // hairline; the light-mode navy border is invisible there and
+          // the card loses its shape.
+          color: dark
+              ? Colors.white.withValues(alpha: 0.09)
+              : AppColors.darkNavy.withValues(alpha: 0.05),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.darkNavy.withValues(alpha: 0.10),
+            // Shadows do not read on dark backgrounds — they need to be
+            // deeper and closer to black to separate the card at all.
+            color: dark
+                ? Colors.black.withValues(alpha: 0.44)
+                : AppColors.darkNavy.withValues(alpha: 0.10),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -228,7 +303,7 @@ class _TextBar extends StatelessWidget {
       width: width * grow,
       height: height,
       decoration: BoxDecoration(
-        color: AppColors.darkNavy.withValues(alpha: 0.10),
+        color: ink(context, 0.10),
         borderRadius: BorderRadius.circular(height / 2),
       ),
     );
@@ -313,7 +388,11 @@ class SceneLine extends StatelessWidget {
                       ? AppTextStyles.displayMedium
                       : AppTextStyles.headlineMedium)
                   .copyWith(
-                    color: AppColors.darkNavy,
+                    // Was AppColors.darkNavy — navy caption text on the
+                    // dark scaffold, i.e. "Ready for Sabbath." was
+                    // invisible in dark mode (founder, 17 Aug). Every
+                    // caption in the film went through this one line.
+                    color: context.palette.text,
                     fontWeight: emphasis ? FontWeight.w800 : FontWeight.w700,
                     height: 1.2,
                     letterSpacing: -0.2,
@@ -793,7 +872,14 @@ class SceneChatMarket extends StatelessWidget {
                               Opacity(
                                 opacity: typing.clamp(0.0, 1.0),
                                 child: _ChatBubble(
-                                  color: AppColors.white,
+                                  // Received bubble: it sits ON the mini
+                                  // surface, so it needs its own fill that
+                                  // separates from the card in both modes.
+                                  color: byBrightness(
+                                    context,
+                                    light: AppColors.white,
+                                    dark: context.palette.cardMuted,
+                                  ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -817,8 +903,14 @@ class SceneChatMarket extends StatelessWidget {
                                               width: 7,
                                               height: 7,
                                               decoration: BoxDecoration(
-                                                color: AppColors.darkNavy
-                                                    .withValues(alpha: 0.35),
+                                                color: byBrightness(
+                                                  context,
+                                                  light: AppColors.darkNavy
+                                                      .withValues(alpha: 0.35),
+                                                  dark: Colors.white.withValues(
+                                                    alpha: 0.45,
+                                                  ),
+                                                ),
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
@@ -833,11 +925,15 @@ class SceneChatMarket extends StatelessWidget {
                                 scale: bubble1,
                                 alignment: Alignment.bottomLeft,
                                 child: _ChatBubble(
-                                  color: AppColors.white,
+                                  color: byBrightness(
+                                    context,
+                                    light: AppColors.white,
+                                    dark: context.palette.cardMuted,
+                                  ),
                                   child: Text(
                                     'Happy Sabbath! 🙏',
                                     style: AppTextStyles.bodySmall.copyWith(
-                                      color: AppColors.darkNavy,
+                                      color: context.palette.text,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -922,7 +1018,11 @@ class _ChatBubble extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.darkNavy.withValues(alpha: 0.08),
+            color: byBrightness(
+              context,
+              light: AppColors.darkNavy.withValues(alpha: 0.08),
+              dark: Colors.black.withValues(alpha: 0.36),
+            ),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -1133,11 +1233,17 @@ class SceneWatch extends StatelessWidget {
                 width: 280,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: AppColors.white,
+                  // Hand-rolled card rather than _MiniSurface (it clips a
+                  // video thumbnail), so it needs the same treatment.
+                  color: context.palette.card,
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.darkNavy.withValues(alpha: 0.12),
+                      color: byBrightness(
+                        context,
+                        light: AppColors.darkNavy.withValues(alpha: 0.12),
+                        dark: Colors.black.withValues(alpha: 0.46),
+                      ),
                       blurRadius: 24,
                       offset: const Offset(0, 12),
                     ),
@@ -1351,7 +1457,10 @@ class SceneSabbathFinale extends StatelessWidget {
                           Text(
                             'SABBATH',
                             style: AppTextStyles.overline.copyWith(
-                              color: AppColors.darkNavy,
+                              // Sits directly on the scaffold inside the
+                              // gold ring — navy here vanished in dark mode
+                              // exactly like the caption below it.
+                              color: context.palette.text,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 2.4,
                             ),
@@ -1360,7 +1469,7 @@ class SceneSabbathFinale extends StatelessWidget {
                           Text(
                             'Fri 5:43 PM',
                             style: AppTextStyles.labelMedium.copyWith(
-                              color: AppColors.primaryBlue,
+                              color: blueText(context),
                               fontWeight: FontWeight.w700,
                             ),
                           ),

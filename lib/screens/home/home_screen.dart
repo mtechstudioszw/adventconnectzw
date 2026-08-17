@@ -28,6 +28,7 @@ import '../../services/connectivity_service.dart';
 import '../../widgets/offline_toast.dart';
 import '../../services/directory_service.dart';
 import '../../services/gallery_service.dart';
+import '../../services/quiz_home_signal.dart';
 import '../../services/devotion_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
@@ -55,6 +56,7 @@ import '../../widgets/home/create_sheet.dart';
 import '../../widgets/home/featured_church_events.dart';
 import '../../widgets/home/home_header.dart';
 import '../../widgets/home/library_tiles.dart';
+import '../../widgets/home/quiz_live_strip.dart';
 import '../../widgets/home/music_card.dart';
 import '../../widgets/home/section_header.dart';
 import '../../widgets/home/signup_survey_sheet.dart';
@@ -447,6 +449,11 @@ class _HomeScreenState extends State<HomeScreen>
     }
     // Refresh Watch content (live banner + feed videos) on pull-to-refresh.
     unawaited(_loadWatch());
+    // The Quiz pill's live dot. Forced because this path is either a
+    // deliberate pull-to-refresh or a first mount, and both deserve a real
+    // answer; QuizHomeSignal shares one in-flight request between callers
+    // so the mount/resume/refresh pile-up is still a single RPC.
+    unawaited(QuizHomeSignal.refresh(force: true));
     // Always hydrate from cache first so the screen paints real
     // content immediately, before the network call resolves.
     // Facebook-style: see something instantly, then silently refresh.
@@ -1356,6 +1363,13 @@ class _HomeScreenState extends State<HomeScreen>
                   // 2026, but that is only reachable once you are already in
                   // the Library. See LibraryTiles before reordering it.
                   const LibraryTiles(),
+                  // Live match, but ONLY when somebody has challenged you
+                  // or somebody is actually online — it renders nothing
+                  // otherwise. Placed under the Library row so it reads as
+                  // a live interruption rather than a permanent fixture,
+                  // and so it never pushes the Today card off screen.
+                  const SizedBox(height: AppSpace.md),
+                  const QuizLiveStrip(),
                 ],
               ),
             ),

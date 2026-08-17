@@ -813,11 +813,29 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
   /// was one of six identical tiles — which is most of why only ~11 members
   /// have ever played one. The strip keeps the tile's hard-won honesty
   /// about an empty arena (see [_LiveMatchStrip]).
+  /// The live-match strip, rebuilt whenever the presence roster changes.
+  ///
+  /// Two things were wrong here and both read to the founder as the strip
+  /// lying (18 Aug 2026):
+  ///
+  ///  1. **It counted the member reading it.** The presence channel is
+  ///     created with `self: true`, so you are always in your own roster.
+  ///     Alone in the app, the strip said "1 online now".
+  ///  2. **It never updated.** `onlineUsers.length` was read once at build
+  ///     time with nothing listening, so the number froze at whatever it
+  ///     was when the lobby was opened.
+  ///
+  /// The third problem is in the wording, not the number — see
+  /// [_LiveMatchStrip].
   Widget _buildLiveStrip() {
-    return _LiveMatchStrip(
-      invites: _liveInvites,
-      online: PresenceService.onlineUsers.length,
-      onTap: _openLiveMatch,
+    final me = QuizMatchService.uid;
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: PresenceService.onChange,
+      builder: (context, roster, _) => _LiveMatchStrip(
+        invites: _liveInvites,
+        online: roster.where((id) => id != me).length,
+        onTap: _openLiveMatch,
+      ),
     );
   }
 
@@ -1176,14 +1194,28 @@ class _LiveMatchStrip extends StatelessWidget {
 
   final int invites;
 
-  /// Members online right now, from the presence roster.
+  /// **Other** members with the app open right now — the caller already
+  /// removed the viewer from the roster.
+  ///
+  /// This is NOT "players waiting in the arena", and the copy below must
+  /// never imply that it is. It comes from the app-wide `online_users`
+  /// presence channel, so it counts people reading the news feed, in a
+  /// chat, or watching a video just the same. Saying "N online now · play
+  /// someone" told members an opponent was queued and ready; they tapped,
+  /// searched, found nobody, and concluded live match was broken. What is
+  /// actually true is that those people are reachable — [QuizMatchService.invite]
+  /// works on any member with a quiz profile — so the strip offers a
+  /// challenge, which is a promise it can keep.
+  ///
+  /// A real "N waiting in the arena" needs a server-side count of open
+  /// queue entries; see TODO.md. Do not fake it from this number.
   final int online;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final waiting = invites > 0;
-    final live = online > 1;
+    final live = online > 0;
     // Three states, three colours: someone is waiting (green, glowing),
     // people are around (green), nobody is (faint).
     final accent = waiting || live
@@ -1251,7 +1283,12 @@ class _LiveMatchStrip extends StatelessWidget {
                       waiting
                           ? 'Join before it expires'
                           : live
-                          ? '$online online now · play someone'
+                          // "in the app", not "in the arena" — see [online].
+                          // The strip may not promise a queued opponent it
+                          // has no way to know about.
+                          ? (online == 1
+                                ? '1 member in the app · challenge them'
+                                : '$online members in the app · challenge one')
                           : 'Quiet right now — challenge someone instead',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

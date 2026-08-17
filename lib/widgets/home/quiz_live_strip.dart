@@ -30,7 +30,14 @@ import '../motion/pressable.dart';
 ///     never be.
 /// Anything else, and Home says nothing.
 class QuizLiveStrip extends StatelessWidget {
-  const QuizLiveStrip({super.key});
+  const QuizLiveStrip({super.key, this.viewerId});
+
+  /// The signed-in member's id, so they can be filtered out of the online
+  /// roster. Passed in rather than read from [AuthService] here for the
+  /// same reason `StoriesRail` takes one: reaching into Supabase from a
+  /// leaf widget makes it untestable, and this is the exact number that
+  /// was wrong.
+  final String? viewerId;
 
   @override
   Widget build(BuildContext context) {
@@ -42,8 +49,11 @@ class QuizLiveStrip extends StatelessWidget {
           valueListenable: PresenceService.onChange,
           builder: (context, online, _) {
             final waiting = invites > 0;
-            // Yourself is in the roster, so "someone else" needs > 1.
-            final others = online.length - 1;
+            // Filter the viewer out by id rather than subtracting one.
+            // Subtracting assumed you are always in the roster, but a
+            // member who turned OFF "show me as online" never joins it —
+            // so for them the count was one short, every time.
+            final others = online.where((id) => id != viewerId).length;
             if (!waiting && others < 1) return const SizedBox.shrink();
             return _strip(context, invites: invites, others: others);
           },
@@ -119,11 +129,18 @@ class QuizLiveStrip extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
+                      // "in the app", not "in the arena". This count comes
+                      // from the app-wide presence channel, so it includes
+                      // members reading the feed or in a chat. Promising
+                      // "play someone" told people an opponent was queued
+                      // and waiting; they tapped, searched, found nobody,
+                      // and decided live match was broken. Offering a
+                      // challenge is a promise this number can keep.
                       waiting
                           ? 'Tap to join before it expires'
                           : others == 1
-                          ? '1 person online now · play someone'
-                          : '$others online now · play someone',
+                          ? '1 member in the app · challenge them'
+                          : '$others members in the app · challenge one',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.labelSmall.copyWith(

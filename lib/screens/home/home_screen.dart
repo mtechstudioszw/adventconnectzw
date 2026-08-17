@@ -1285,6 +1285,14 @@ class _HomeScreenState extends State<HomeScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Live match sits ABOVE the live video (founder, 18 Aug
+                  // 2026). It is the only real-time, person-to-person thing
+                  // in the app, and a person waiting to play you goes stale
+                  // in seconds — a live stream is still there in ten
+                  // minutes. It renders nothing at all unless somebody has
+                  // challenged you or somebody else is in the app, so on a
+                  // quiet day this costs the live banner no space at all.
+                  QuizLiveStrip(viewerId: AuthService.currentUser?.id),
                   // LIVE now — collapses to nothing when no channel is live,
                   // and becomes a swipeable deck when several are.
                   LiveBanner(live: _liveVideos, onTap: _openVideo),
@@ -1315,9 +1323,9 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                   // Navigation, not authoring — so these sit UNDER the
                   // composer card rather than inside it. Order here is
-                  // fixed by the founder (28 Jul): header, live banner,
-                  // composer, these chips, stories, devotion, library
-                  // tiles, feed.
+                  // fixed by the founder (28 Jul, amended 18 Aug): header,
+                  // live match, live banner, composer, these chips,
+                  // stories, devotion, library tiles, feed.
                   HomeShortcutChips(
                     onChurches: () => context.pushNamed('churches'),
                     onEvents: () => context.pushNamed('events'),
@@ -1363,13 +1371,9 @@ class _HomeScreenState extends State<HomeScreen>
                   // 2026, but that is only reachable once you are already in
                   // the Library. See LibraryTiles before reordering it.
                   const LibraryTiles(),
-                  // Live match, but ONLY when somebody has challenged you
-                  // or somebody is actually online — it renders nothing
-                  // otherwise. Placed under the Library row so it reads as
-                  // a live interruption rather than a permanent fixture,
-                  // and so it never pushes the Today card off screen.
-                  const SizedBox(height: AppSpace.md),
-                  const QuizLiveStrip(),
+                  // QuizLiveStrip used to sit here, under the Library row.
+                  // The founder moved it to the top of Home on 18 Aug 2026,
+                  // above the live video — do not add a second copy here.
                 ],
               ),
             ),

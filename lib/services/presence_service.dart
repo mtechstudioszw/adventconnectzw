@@ -58,6 +58,17 @@ class PresenceService {
   /// inbox and the chat-screen header listen on this.
   static ValueListenable<Set<String>> get onChange => _notifier;
 
+  /// Test seam: set the online roster without a realtime socket, so the
+  /// widgets that render "who is around" can be tested at all. They could
+  /// not be before, and the count they showed was wrong in three ways.
+  @visibleForTesting
+  static void debugSetRoster(Set<String> ids) {
+    _onlineUserIds
+      ..clear()
+      ..addAll(ids);
+    _notifier.value = Set.unmodifiable(_onlineUserIds);
+  }
+
   /// Joins the presence channel and starts the last-seen heartbeat.
   /// Safe to call multiple times — re-joining replaces any stale
   /// subscription.

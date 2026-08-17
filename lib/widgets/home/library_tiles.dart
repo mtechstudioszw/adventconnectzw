@@ -21,9 +21,15 @@ import '../motion/staggered_reveal.dart';
 /// horizontally halves the height and matches the chip vocabulary already used
 /// on the Marketplace.
 ///
-/// Ordering is deliberate: **Quiz sits fourth** so it lands inside the first
-/// screenful, and it keeps the brand gradient so it still reads as the one
-/// highlight.
+/// Ordering is the founder's, set 18 Aug 2026: **Bible, Quiz, EGW, Sabbath,
+/// Hymnal, Music**. Quiz moved from fourth to second, so it is now well
+/// inside the first screenful rather than at its edge; it keeps the brand
+/// gradient so it still reads as the one highlight of the row.
+///
+/// The display order and the Library's TAB order are deliberately allowed to
+/// differ — each entry carries its own tab index in the tuple below, so
+/// reordering this list moves the pill without moving the tab it opens. Do
+/// not "tidy" the indexes to match the display order.
 ///
 /// This row was the ONLY route into `/quiz` until Aug 2026, when a quiz action
 /// was added to the Library screen's app bar. It is still the PRIMARY one and
@@ -48,11 +54,11 @@ class LibraryTiles extends StatelessWidget {
   // Quiz uses index -1 because it routes to `/quiz`, not the Library.
   static const _items = <(String, IconData, int, bool)>[
     ('Bible', Icons.menu_book_rounded, 0, false),
+    ('Quiz', Icons.emoji_events_rounded, -1, true),
+    ('EGW', Icons.auto_stories_rounded, 3, false),
     ('Sabbath', Icons.school_rounded, 1, false),
     ('Hymnal', Icons.queue_music_rounded, 2, false),
-    ('Quiz', Icons.emoji_events_rounded, -1, true),
     ('Music', Icons.headphones_rounded, 4, false),
-    ('EGW', Icons.auto_stories_rounded, 3, false),
   ];
 
   @override

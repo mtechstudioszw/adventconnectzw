@@ -8,10 +8,20 @@ import 'presence_service.dart';
 
 /// Raised when an action needs a quiz profile the player hasn't made yet.
 ///
-/// Its own type rather than a string match on the message: the founder's
-/// rule is that a profile is optional for solo play and required for the
-/// leaderboard and challenges, so this is a routine branch in the UI, not
-/// an error to show.
+/// **In practice this never fires, and that is correct.** No database
+/// function raises `QUIZ_PROFILE_REQUIRED` — verified against production.
+/// `quiz_profile_ensure()` creates the profile instead, deriving the display
+/// name from the member's first name and walking collisions ("Tendai",
+/// "Tendai 1", …), and `quiz_match_find` calls it before anything else. So
+/// there is no name gate: a member who has never opened the quiz can search
+/// for an opponent and the row is written for them.
+///
+/// Kept rather than deleted because the contract is still the right one — if
+/// a future action does demand an explicit name, this is the branch it
+/// should take, and `QuizProfileSheet` is already wired to it. Do NOT read
+/// its existence as evidence of a gate: it was mistaken for one during the
+/// 17 Aug investigation, and the real reason live match sees little use is
+/// an empty arena, not a barrier.
 class QuizProfileRequired implements Exception {
   const QuizProfileRequired();
   @override

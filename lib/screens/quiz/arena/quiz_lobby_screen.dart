@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../services/presence_service.dart';
 import '../../../models/quiz_match.dart';
 import '../../../models/quiz_question_model.dart';
 import '../../../models/quiz_round.dart';
@@ -685,7 +686,11 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
       // Live head-to-head sits BESIDE the async challenge above, not in
       // place of it: they are different games. A challenge is played
       // whenever you like; this one needs both people present now.
-      _LiveMatchTile(invites: _liveInvites, onTap: _openLiveMatch),
+      _LiveMatchTile(
+        invites: _liveInvites,
+        online: PresenceService.onlineUsers.length,
+        onTap: _openLiveMatch,
+      ),
     ];
 
     return GridView.count(
@@ -1018,9 +1023,19 @@ class _ChallengeTile extends StatelessWidget {
 /// Live head-to-head. Reads as the loud one on the grid because it is the
 /// only mode where someone else is waiting on you.
 class _LiveMatchTile extends StatelessWidget {
-  const _LiveMatchTile({required this.invites, required this.onTap});
+  const _LiveMatchTile({
+    required this.invites,
+    required this.online,
+    required this.onTap,
+  });
 
   final int invites;
+
+  /// Members online right now. Live match is only live if somebody else is
+  /// there, and the tile used to promise "head to head" at 3am to an empty
+  /// arena — which is how a working feature earns a reputation for being
+  /// broken. Say what is true instead.
+  final int online;
   final VoidCallback onTap;
 
   @override
@@ -1105,15 +1120,31 @@ class _LiveMatchTile extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
+                // Tell the truth about whether there is anyone to play.
+                //
+                // The tile promised "head to head, same clock" whether the
+                // arena held forty people or nobody, so a member who tapped
+                // it at a quiet hour waited out the search, found no one, and
+                // reasonably concluded the feature was broken. Only ~11
+                // people have ever reached live match; an empty arena is the
+                // COMMON case here, not the edge one, and pretending
+                // otherwise is what makes it feel dead.
+                //
+                // A count also tells them when to come back, which a spinner
+                // never can.
                 waiting
                     ? 'Join before it expires'
-                    : 'Head to head, same clock.',
+                    : online > 1
+                        ? '$online online now'
+                        : 'Quiet right now — challenge someone',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.labelSmall.copyWith(
                   color: waiting
                       ? ArenaTheme.correctOnNavy
-                      : ArenaTheme.textFaintOnNavy,
+                      : online > 1
+                          ? ArenaTheme.correctOnNavy
+                          : ArenaTheme.textFaintOnNavy,
                   fontSize: 11,
                   height: 1.3,
                 ),

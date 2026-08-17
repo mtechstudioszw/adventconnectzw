@@ -44,10 +44,26 @@ class _CirclesSheetState extends State<_CirclesSheet> {
 
   bool _changed = false;
 
+  /// Owned by the sheet, not by the dialog it opens.
+  ///
+  /// It used to be created next to `showDialog` and disposed on the line
+  /// after the `await`. That await completes when the route is POPPED, not
+  /// when it has finished leaving — so the controller died while the
+  /// `autofocus`ed `TextField` was still mounted and animating out. That is
+  /// the `'_dependents.isEmpty': is not true` red screen the founder hit in
+  /// Sabbath School on 19 Aug; see `_DayNoteSheet` in ss_lesson_screen.dart.
+  final _nameCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -69,7 +85,7 @@ class _CirclesSheetState extends State<_CirclesSheet> {
   }
 
   Future<void> _create() async {
-    final controller = TextEditingController();
+    final controller = _nameCtrl..clear();
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -106,7 +122,6 @@ class _CirclesSheetState extends State<_CirclesSheet> {
         ],
       ),
     );
-    controller.dispose();
     if (name == null || !mounted) return;
     try {
       final circle = await PrayerCircleService.create(name);

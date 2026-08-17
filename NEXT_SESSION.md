@@ -27,24 +27,20 @@ reports, and the rule that came out of it.
 
 ## What is left, in the order I'd take them
 
-1. **`'_dependents.isEmpty': is not true` in Sabbath School.** The founder
-   said "fix" rather than fetch a stack trace, so it has to be reproduced
-   here. **Do not hunt by reading — build the harness.** §2b records what is
-   already ruled out (no `GlobalKey` anywhere in either SS file, no
-   `of(context)` from `dispose`/`deactivate`) and the exact SDK line the
-   assert lives on. `SabbathSchoolService` falls back to Hive when the
-   network fails, and `flutter_test` fails HTTP fast, so seeding a box and
-   pumping the real screens drives the whole flow offline. Open a lesson,
-   swipe days, pop mid-load.
-2. **Highlighting in Sabbath School.** Decided 19 Aug: it **follows the
-   account**. Blocked on the token. The gesture and the sentence-boundary
-   rule are done and reusable — `EgwHighlights.sentenceAt` is pure, tested,
-   and already handles initials, abbreviations and verse references.
-3. **Two of his reports still need an answer from him**, both in §2b:
-   *"the refesh of egw dosent work"* (the fetch path is provably correct —
-   likely the 11-book seed was never run) and *"there no shelf"*
-   (ambiguous). Ask; do not guess.
-4. Anything he adds. He reports in batches; expect more.
+1. **Highlighting in Sabbath School.** The last item of his batch. Decided
+   19 Aug: it **follows the account**, so it needs a table + RLS and is
+   blocked on the token. The gesture and the sentence-boundary rule are done
+   and reusable — `EgwHighlights.sentenceAt` is pure, tested, and already
+   handles initials, abbreviations and verse references.
+2. **"there no shelf"** — his one report from 19 Aug still unresolved, and
+   genuinely ambiguous. Ask; do not guess. §2b has both readings.
+3. Anything he adds. He reports in batches; expect more.
+
+**The Sabbath School crash is FIXED** — his own repro ("click the pencil
+icon n click back") was the whole diagnosis. It was never a `GlobalKey`
+reparent: a `TextEditingController` was disposed the line after
+`await showModalBottomSheet`, which returns when the route is POPPED, not
+when it has finished LEAVING. Pinned, and verified red against the old code.
 
 ## What shipped 19 Aug (do not redo any of it)
 
@@ -63,6 +59,19 @@ reports, and the rule that came out of it.
   mirrors another, go and check the other one.**
 * Tap-to-turn removed, page curl cut from ~99° to ~29°, cover shown while a
   book opens, and tap-a-sentence-to-highlight built and tested.
+* **Pull-to-refresh was broken across the whole Library**, not just EGW:
+  `setState(() => _future = future)` is an arrow body, so it RETURNS the
+  Future it assigns, and `setState` asserts against that. Eight call sites.
+  A debug apk throws on every pull.
+* **The Sabbath School red screen** — a `TextEditingController` disposed
+  during a route's exit transition. Two more instances of the same shape
+  fixed alongside it (`prayer_circles_sheet`, `church_admin_approvals`).
+
+**Three of the day's bugs were one-line mistakes with no compiler or
+analyzer signal at all** — an arrow body that returned a value, an `await`
+that resolved earlier than it looked, and a notify that came after a disk
+write. `flutter analyze` was clean through every one of them. Reproducing
+before fixing is what found all three; do not skip it.
 
 ## What shipped 18 Aug (do not redo any of it)
 

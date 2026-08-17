@@ -44,6 +44,7 @@ class _ChurchAdminApprovalsScreenState
   @override
   void dispose() {
     _poll?.cancel();
+    _reasonCtrl.dispose();
     super.dispose();
   }
 
@@ -157,8 +158,19 @@ class _ChurchAdminApprovalsScreenState
     }
   }
 
+  /// Owned by the screen, not by the dialog.
+  ///
+  /// It used to be created next to `showDialog` and disposed on the line
+  /// after the `await`. That await completes when the route is POPPED, not
+  /// when it has finished leaving — so the controller died while the
+  /// `autofocus`ed `TextField` was still mounted and animating out, which is
+  /// the `'_dependents.isEmpty': is not true` red screen the founder hit in
+  /// Sabbath School on 19 Aug (see `_DayNoteSheet`). Same shape, same crash,
+  /// waiting for whoever rejected a church admin request.
+  final _reasonCtrl = TextEditingController();
+
   Future<String?> _askReason() async {
-    final c = TextEditingController();
+    final c = _reasonCtrl..clear();
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -186,7 +198,6 @@ class _ChurchAdminApprovalsScreenState
         ],
       ),
     );
-    c.dispose();
     return result;
   }
 

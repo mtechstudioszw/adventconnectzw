@@ -12,14 +12,12 @@ diagnosed or has a stated unknown — nothing is a guess.
       confirmed on **18 Aug that it has NOT been rotated** — both are still
       live and both are burned. No DB or Management-API work was done in
       the 18 Aug ads session for this reason; none was needed.
-- [ ] **Paste the Appodeal `app-ads.txt` block.** Appodeal generates it per
-      publisher (many lines, one per mediated network) — it cannot be
-      guessed. Get it from the Appodeal dashboard
-      (Apps → Advent Connect ZW → app-ads.txt) and paste it into BOTH
-      `docs/app-ads.txt` and `legal-site/app-ads.txt`, where a comment is
-      already waiting for it. **This is a revenue blocker, not paperwork:**
-      until it is there, demand partners cannot verify we authorised them
-      and their bids get filtered.
+- [x] **Appodeal `app-ads.txt` — DONE 18 Aug.** Verified 19 Aug: **2,505
+      record lines in BOTH `docs/app-ads.txt` and `legal-site/app-ads.txt`.**
+      Was listed here as an open revenue blocker long after it shipped;
+      re-checked on disk rather than trusted. Still needs to be SERVED at
+      `https://<the domain in the Play listing>/app-ads.txt` to count —
+      committing the file is not the same as publishing it.
 - [ ] **Move auth email off Gmail.** FOUNDER CHOSE "stay on Gmail for now"
       (17 Aug), so this stays open and WILL recur. Raising `rate_limit_otp`
       is **not** a workaround — Gmail throttles bursts itself and caps
@@ -179,17 +177,52 @@ never `await` storage before the notifier that repaints.**
       genuinely there — it stored fine and simply never painted.
       Pinned by `test/egw_tap_highlight_test.dart`.
 
+- [x] **Pull-to-refresh was broken across the WHOLE Library, not just EGW.**
+      Founder: *"the refesh of egw dosent work"*, then *"if u swipe down it
+      dosent refresh"*. One character:
+
+          setState(() => _future = future)   // arrow body RETURNS the Future
+
+      `setState` asserts that its callback did not return a Future — that is
+      how `setState(() async {…})` is caught. The assert fires after the
+      assignment but before `markNeedsBuild()`, and the throw escapes
+      `_refresh`, so its `await future` never runs. `BrandedRefreshIndicator`
+      awaits `onRefresh` to know how long to spin, so it got an exception
+      and settled instantly however long the fetch took.
+      **CI ships a DEBUG apk, so this fired on his phone on every pull.**
+      Found in **eight** places: the EGW, Sabbath School and Music tabs, and
+      five admin reload buttons. All now use a braced body.
+      Pinned by `test/egw_tab_refresh_test.dart`, and
+      `test/branded_refresh_indicator_test.dart` pins the indicator itself
+      against every scroll-view shape the Library uses (including a shelf too
+      short to scroll and an empty one) so the next report of this kind can
+      be localised in one run.
+- [x] **Sabbath School `'_dependents.isEmpty': is not true` — FIXED.** The
+      founder's own repro solved it: *"when reading n u click the pencil icon
+      n click back the screens turns red"*. `_openNote` created a
+      `TextEditingController`, `await`ed `showModalBottomSheet`, then
+      disposed it. **That await completes when the route is POPPED, not when
+      it has finished leaving** — the sheet is mounted for the whole exit
+      transition, so the controller died while a live `EditableText` was
+      still listening, and the field failed on its way out while still
+      registered as a dependent of the inherited widgets it had read.
+      `InheritedElement.debugDeactivated()` then asserted. `autofocus: true`
+      is why it happened every time rather than occasionally.
+      The editor is now a `StatefulWidget` (`_DayNoteSheet`) that owns its
+      controller, so the framework disposes it when the element actually
+      unmounts. **The same shape was found in two more places** and fixed
+      with it: `prayer_circles_sheet.dart` (new circle) and
+      `church_admin_approvals_screen.dart` (reject reason), both with
+      `autofocus` fields and eager disposal.
+      Pinned by `test/ss_note_sheet_crash_test.dart` — **verified red
+      against the original code**, failing with the founder's exact error.
+
 ### Needs the founder
 
-- [ ] **"the refesh of egw dosent work"** — the fetch path is correct: it
-      goes to the network when online, filters `is_published = true`, and
-      falls back to cache. Cannot tell from here whether the pull gesture
-      does nothing or whether books he added are not appearing. **If the
-      latter, the likely answer is that the 11-book EGW seed was staged
-      but never run** (see the `egw-shelf-seed` memory).
-- [ ] **"there no shelf"** — ambiguous. Save-to-shelf is buried behind a
-      **long-press** on a cover, and the Saved shelf is a filter chip under
-      the search box. Do not guess which half he means.
+- [ ] **"there no shelf"** — ambiguous, and the only report from 19 Aug not
+      yet resolved. Save-to-shelf is buried behind a **long-press** on a
+      cover, and the Saved shelf is a filter chip under the search box. Do
+      not guess which half he means.
 
 ### Still open
 
@@ -232,7 +265,11 @@ book won't open" reports.
       `EgwHighlights.sentenceAt` is pure and already covers initials,
       abbreviations and verse references.
 
-- [ ] **Sabbath School throws `'_dependents.isEmpty': is not true`**
+- [x] **Sabbath School throws `'_dependents.isEmpty': is not true`** — FIXED
+      19 Aug, see above. The diagnosis below was on the right track about
+      the mechanism and wrong about the culprit: it is not a `GlobalKey`
+      reparent, it is a `TextEditingController` disposed during a route's
+      exit transition. Kept for the record.
       (framework.dart:6268). This is an `InheritedElement` being unmounted
       while something still depends on it. It is NOT caused by
       `context.palette` alone — that resolves through `Theme.of`, which

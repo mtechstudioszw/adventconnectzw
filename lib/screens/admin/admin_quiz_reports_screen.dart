@@ -47,7 +47,11 @@ class _AdminQuizReportsScreenState extends State<AdminQuizReportsScreen> {
     return (rows as List).cast<Map<String, dynamic>>();
   }
 
-  void _reload() => setState(() => _future = _load());
+  // Braces: an arrow body returns the assigned Future, and `setState`
+  // asserts against that — so this threw instead of reloading.
+  void _reload() => setState(() {
+        _future = _load();
+      });
 
   Future<void> _resolve(Map<String, dynamic> report) async {
     try {

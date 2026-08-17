@@ -123,7 +123,12 @@ class _MusicTabState extends State<MusicTab>
 
   Future<void> _refresh() async {
     final future = _load();
-    setState(() => _future = future);
+    // Braces, not an arrow: an arrow body returns the assigned Future and
+    // `setState` asserts against that, which silently broke pull-to-refresh
+    // on every Library tab. See `_EgwTabState._refresh`.
+    setState(() {
+      _future = future;
+    });
     await future;
   }
 

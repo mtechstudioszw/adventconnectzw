@@ -984,61 +984,115 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
     );
   }
 
-  Future<void> _openNote(SsDay day) async {
-    final controller =
-        TextEditingController(text: SabbathSchoolPrefs.note(day.readPath) ?? '');
-    await showModalBottomSheet<void>(
+  void _openNote(SsDay day) {
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 18,
-          bottom: MediaQuery.viewInsetsOf(ctx).bottom + 18,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Your note — ${day.title}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.titleSmall
-                    .copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              maxLines: 6,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'What stood out to you today?',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+      builder: (_) => _DayNoteSheet(day: day),
+    );
+  }
+}
+
+/// The note editor, owning its own controller.
+///
+/// Founder, 19 Aug 2026: *"tt sabbath school error comes when reading n u
+/// click the pencil icon n click back the screens turns red"* — the
+/// `'_dependents.isEmpty': is not true` crash.
+///
+/// This used to be a plain `builder:` closure over a controller created
+/// beside it:
+///
+///     final controller = TextEditingController(...);
+///     await showModalBottomSheet(...);
+///     controller.dispose();
+///
+/// `showModalBottomSheet`'s future completes when the route is POPPED, not
+/// when it has finished leaving — the sheet is still mounted for the whole
+/// exit transition. So `dispose()` ran on a controller that a live
+/// `EditableText` was still listening to, and the field then failed on its
+/// way out while it was still registered as a dependent of the inherited
+/// widgets it had read (`Directionality`, `MediaQuery`, the focus markers).
+/// When the route's elements finally unmounted,
+/// `InheritedElement.debugDeactivated()` asserted `_dependents.isEmpty` and
+/// the screen went red. `autofocus: true` made it reliable rather than
+/// occasional, because the field was always the focused one being torn down.
+///
+/// Owning the controller in a `State` ties its lifetime to the widget's, so
+/// it is disposed when the element actually unmounts — after the
+/// transition, in the right order, by the framework.
+class _DayNoteSheet extends StatefulWidget {
+  const _DayNoteSheet({required this.day});
+
+  final SsDay day;
+
+  @override
+  State<_DayNoteSheet> createState() => _DayNoteSheetState();
+}
+
+class _DayNoteSheetState extends State<_DayNoteSheet> {
+  late final TextEditingController _controller = TextEditingController(
+    text: SabbathSchoolPrefs.note(widget.day.readPath) ?? '',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    // Not awaited: the sheet closes on the frame the member taps Save. The
+    // write is a Hive flush and nothing on screen depends on it — see the
+    // reading-settings fix for what awaiting it costs.
+    SabbathSchoolPrefs.setNote(widget.day.readPath, _controller.text);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 18,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 18,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Your note — ${widget.day.title}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.titleSmall
+                  .copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            maxLines: 6,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'What stood out to you today?',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () async {
-                  await SabbathSchoolPrefs.setNote(
-                      day.readPath, controller.text);
-                  if (ctx.mounted) Navigator.of(ctx).pop();
-                },
-                child: const Text('Save note'),
-              ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _save,
+              child: const Text('Save note'),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
-    controller.dispose();
   }
 }
 

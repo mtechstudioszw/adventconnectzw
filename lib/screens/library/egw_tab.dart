@@ -117,7 +117,21 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
 
   Future<void> _refresh() async {
     final future = _load();
-    setState(() => _future = future);
+    // The braces are load-bearing. `setState(() => _future = future)` is an
+    // ARROW body, so it returns the value it assigns — a Future — and
+    // `setState` asserts against exactly that, because it is how
+    // `setState(() async {…})` is caught.
+    //
+    // Founder, 19 Aug 2026: *"if u swipe down it dosent refresh"*. The assert
+    // fires after the assignment but before `markNeedsBuild()`, and the throw
+    // then escapes `_refresh` so the `await` below never runs. The refresh
+    // indicator, which awaits `onRefresh` to know how long to spin, was
+    // handed an exception instead — so the spinner blipped and vanished
+    // instantly, no matter how long the fetch actually took. CI ships a
+    // DEBUG apk, so this fired on his phone every single pull.
+    setState(() {
+      _future = future;
+    });
     await future;
   }
 

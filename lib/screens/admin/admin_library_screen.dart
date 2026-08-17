@@ -120,7 +120,11 @@ class _HymnsAdminTabState extends State<_HymnsAdminTab> {
   }
 
   void _reload() =>
-      setState(() => _future = LibraryAdminService.fetchAllHymns());
+      // Braces: an arrow body returns the assigned Future, and `setState`
+      // asserts against that — so this threw instead of reloading.
+      setState(() {
+        _future = LibraryAdminService.fetchAllHymns();
+      });
 
   Future<void> _openEditor([Hymn? hymn]) async {
     final saved = await Navigator.of(context).push<bool>(
@@ -443,7 +447,11 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
   }
 
   void _reload() =>
-      setState(() => _future = LibraryAdminService.fetchAllItems(widget.kind));
+      // Braces: an arrow body returns the assigned Future, and `setState`
+      // asserts against that — so this threw instead of reloading.
+      setState(() {
+        _future = LibraryAdminService.fetchAllItems(widget.kind);
+      });
 
   /// FAB tap → choose single (titled) upload or bulk (many files at once).
   Future<void> _showAddMenu() async {

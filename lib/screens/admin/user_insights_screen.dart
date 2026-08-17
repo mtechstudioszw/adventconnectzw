@@ -32,7 +32,11 @@ class _UserInsightsScreenState extends State<UserInsightsScreen> {
     return _InsightsData(summary: summary, recent: recent);
   }
 
-  void _reload() => setState(() => _future = _load());
+  // Braces: an arrow body returns the assigned Future, and `setState`
+  // asserts against that — so this threw instead of reloading.
+  void _reload() => setState(() {
+        _future = _load();
+      });
 
   @override
   Widget build(BuildContext context) {

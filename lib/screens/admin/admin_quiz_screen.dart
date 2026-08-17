@@ -26,7 +26,11 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
     _future = QuizService.fetchAllAdmin();
   }
 
-  void _reload() => setState(() => _future = QuizService.fetchAllAdmin());
+  // Braces: an arrow body returns the assigned Future, and `setState`
+  // asserts against that — so this threw instead of reloading.
+  void _reload() => setState(() {
+        _future = QuizService.fetchAllAdmin();
+      });
 
   Future<void> _edit([QuizQuestion? q]) async {
     final saved = await Navigator.of(context).push<bool>(

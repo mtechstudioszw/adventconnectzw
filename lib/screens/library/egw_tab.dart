@@ -29,7 +29,20 @@ import 'pdf_viewer_screen.dart';
 /// turn pages, so "continue where you left off" works across app restarts and
 /// offline.
 class EgwTab extends StatefulWidget {
-  const EgwTab({super.key, this.kind = 'egw_book'});
+  const EgwTab({super.key, this.kind = egwKind});
+
+  /// The `library_items.kind` EGW books are stored under.
+  ///
+  /// **It is `egw_book`, never `egw`.** That one string has now caused three
+  /// separate production bugs — the Today card's devotion slide queried
+  /// `kind='egw'` and found nothing, and the launch-intent guard below tested
+  /// against `'egw'` while the widget's own default was `'egw_book'`, so the
+  /// guard was never true and "EGW read of the day" never opened its book.
+  /// Both were invisible: a wrong kind returns an empty list or falls out of
+  /// an `if`, and neither throws.
+  ///
+  /// So the literal lives here once and everything compares against it.
+  static const String egwKind = 'egw_book';
 
   /// Library content kind. Defaults to EGW books; the shelf works for any
   /// uploaded-PDF kind.
@@ -84,7 +97,10 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
   /// the EGW tab consumes this, so the music tab's intent is untouched
   /// when both are mounted at once inside the Library's TabBarView.
   void _consumeLaunchIntent(List<LibraryItem> items) {
-    if (widget.kind != 'egw') return;
+    // Was `!= 'egw'`, which is never false for this widget — its own default
+    // kind is `egw_book` — so this returned early every single time and the
+    // book Home had named was silently dropped on the shelf.
+    if (widget.kind != EgwTab.egwKind) return;
     final wanted = LibraryLaunchIntent.takeEgw();
     if (wanted == null || !mounted) return;
     for (final item in items) {

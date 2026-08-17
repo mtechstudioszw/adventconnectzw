@@ -178,13 +178,12 @@ void main() {
       expect(t.takeException(), isNull);
     });
 
-    testWidgets('tapping the MIDDLE toggles the chrome away', (t) async {
+    testWidgets('tapping toggles the chrome away', (t) async {
       await t.pumpWidget(_host(dark: false));
       await t.pump();
       expect(find.byIcon(Icons.list_rounded), findsOneWidget);
 
       // Chrome hiding is most of what separates a reader from a viewer.
-      // The middle, specifically: the outer thirds turn pages.
       final size = t.view.physicalSize / t.view.devicePixelRatio;
       await t.tapAt(Offset(size.width / 2, size.height / 2));
       await t.pumpAndSettle();
@@ -205,7 +204,13 @@ void main() {
       expect(find.byType(ListView), findsNothing);
     });
 
-    testWidgets('tapping the right edge turns forward', (t) async {
+    // Founder, 18 Aug 2026: *"remove touching screen then goes to next
+    // page"*. Tapping the outer thirds used to turn as well as swiping.
+    // It fired on the gesture people make while reading rather than to
+    // navigate — resting a thumb, reaching for the top bar — so the page
+    // moved on its own; and it is the same gesture as tapping a sentence to
+    // highlight it, which the reader owes him next. A tap cannot mean both.
+    testWidgets('tapping an edge does NOT turn the page', (t) async {
       await t.pumpWidget(_host(dark: false));
       await t.pumpAndSettle();
 
@@ -215,20 +220,7 @@ void main() {
 
       await t.tapAt(Offset(size.width * 0.9, size.height / 2));
       await t.pumpAndSettle();
-
-      expect(pager.page?.round(), 1);
-    });
-
-    testWidgets('tapping the left edge turns back', (t) async {
-      await t.pumpWidget(_host(dark: false));
-      await t.pumpAndSettle();
-
-      final size = t.view.physicalSize / t.view.devicePixelRatio;
-      final pager = t.widget<PageView>(find.byType(PageView)).controller!;
-
-      await t.tapAt(Offset(size.width * 0.9, size.height / 2));
-      await t.pumpAndSettle();
-      expect(pager.page?.round(), 1);
+      expect(pager.page?.round(), 0);
 
       await t.tapAt(Offset(size.width * 0.1, size.height / 2));
       await t.pumpAndSettle();

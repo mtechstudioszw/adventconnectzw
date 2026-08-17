@@ -139,26 +139,25 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
         height: 1.25,
       );
 
-  /// A tap in the outer third turns a page; the middle toggles the chrome.
+  /// A tap toggles the chrome. It does NOT turn the page.
   ///
-  /// Both gestures, on the founder's call: people reading one-handed on a
-  /// commute tap, people on a sofa swipe, and a reader that only supports
-  /// one of them feels broken to half its readers.
-  void _onPointerUp(PointerUpEvent e, double width) {
+  /// Founder, 18 Aug 2026: *"remove touching screen then goes to next
+  /// page"*. Tapping the outer third used to turn, alongside the swipe.
+  /// Two things were wrong with it. It fires on the gesture people make
+  /// while READING — resting a thumb, dismissing the keyboard, reaching for
+  /// the top bar — so the page jumped on its own; and it is the same
+  /// gesture as tapping a sentence to highlight it, which is the next thing
+  /// this reader owes him. A tap cannot mean both.
+  ///
+  /// Swiping still turns, which is what the pagination was built for.
+  void _onPointerUp(PointerUpEvent e) {
     final start = _pointerDown;
     _pointerDown = null;
     if (start == null) return;
     // A drag is a swipe or a text selection, not a tap.
     if ((e.position - start).distance > 12) return;
 
-    final x = e.localPosition.dx;
-    if (x > width * 0.72) {
-      _turnBy(1);
-    } else if (x < width * 0.28) {
-      _turnBy(-1);
-    } else {
-      setState(() => _chromeVisible = !_chromeVisible);
-    }
+    setState(() => _chromeVisible = !_chromeVisible);
   }
 
   /// 1-based page within the chapter, clamped so the trailing
@@ -166,23 +165,6 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   int _pageNumber() {
     if (!_pager.hasClients || !_pager.position.haveDimensions) return 1;
     return ((_pager.page ?? 0).round() + 1).clamp(1, _pages.length);
-  }
-
-  void _turnBy(int direction) {
-    if (!_pager.hasClients) return;
-    final target = ((_pager.page ?? 0).round() + direction);
-    if (target < 0) {
-      if (_chapter > 0) _goTo(_chapter - 1);
-      return;
-    }
-    if (target > _pages.length) return;
-    _pager.animateToPage(
-      target,
-      // Fast enough that the turn never costs reading time — the motion is
-      // the act itself, not a flourish played on top of it.
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-    );
   }
 
   // ---- Build ----------------------------------------------------------------
@@ -257,7 +239,7 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
         return Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (e) => _pointerDown = e.position,
-          onPointerUp: (e) => _onPointerUp(e, constraints.maxWidth),
+          onPointerUp: _onPointerUp,
           child: SelectionArea(
             // Selection is what turns a page into a quotable source. The
             // text is captured here rather than read off the menu, because
@@ -297,6 +279,15 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   /// Deliberately driven by the drag rather than played as a fixed
   /// animation: the page is under the finger the whole way, so the motion
   /// costs no time. It is the real act, not a celebration of it.
+  ///
+  /// **Toned down 18 Aug 2026** — founder: *"the swipe animation is too much
+  /// fix tt one or remove it"*. The lift was ~99° of rotation with heavy
+  /// perspective, so mid-turn the outgoing page went nearly edge-on and the
+  /// text on it sheared into an unreadable wedge every single turn. What
+  /// makes it read as paper is the hinge at the left edge and the shading,
+  /// not the depth of the angle — so the angle is now shallow and the
+  /// shading light. The metaphor survives ("like an actual book", his own
+  /// request the day before); the theatre does not.
   Widget _turn(
     int index,
     double width,
@@ -332,7 +323,7 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
               Positioned.fill(
                 child: IgnorePointer(
                   child: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.16 * (1 - reveal)),
+                    color: Colors.black.withValues(alpha: 0.10 * (1 - reveal)),
                   ),
                 ),
               ),
@@ -345,18 +336,24 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
           alignment: Alignment.centerLeft,
           transform: Matrix4.identity()
             // Perspective — without it the rotation reads as a horizontal
-            // squash rather than a page lifting toward you.
-            ..setEntry(3, 2, 0.0012)
-            ..rotateY(-t * math.pi * 0.55),
+            // squash rather than a page lifting toward you. Shallower than
+            // it was, in step with the smaller angle: the two together are
+            // what decide how much the text on the moving page distorts.
+            ..setEntry(3, 2, 0.0007)
+            // ~29°, down from ~99°. At the old angle the outgoing page went
+            // close to edge-on and its text sheared into an unreadable
+            // wedge on every turn — that is the "too much".
+            ..rotateY(-t * math.pi * 0.16),
           child: Stack(
             children: [
               pinned,
-              // The turning page darkens as it goes edge-on, which is what
-              // makes it read as paper catching the light.
+              // The turning page darkens as it lifts, which is what makes it
+              // read as paper catching the light. Halved with the angle;
+              // the shading is now doing most of the work of selling it.
               Positioned.fill(
                 child: IgnorePointer(
                   child: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.22 * t),
+                    color: Colors.black.withValues(alpha: 0.12 * t),
                   ),
                 ),
               ),
@@ -584,16 +581,16 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
         // Toggles, so removing a highlight is the same gesture that made
         // it — selecting it again and tapping the same button.
         label: already ? 'Remove highlight' : 'Highlight',
-        onPressed: () async {
+        onPressed: () {
           ContextMenuController.removeAny();
           state.clearSelection();
           if (selected.trim().isEmpty) return;
           if (already) {
-            await EgwHighlights.remove(widget.bookId, _current.id, selected);
+            EgwHighlights.remove(widget.bookId, _current.id, selected);
           } else {
-            await EgwHighlights.add(widget.bookId, _current.id, selected);
+            EgwHighlights.add(widget.bookId, _current.id, selected);
           }
-          if (mounted) setState(() {});
+          setState(() {});
         },
       ),
       ContextMenuButtonItem(
@@ -808,95 +805,112 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   void _openSettings() {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor:
-          EgwReadingPalette.of(EgwReaderPrefs.resolve(context)).page,
+      // Transparent, because the sheet paints its OWN ground from the
+      // current setting. A colour passed here is evaluated once, when the
+      // sheet opens, and never again — so tapping Sepia left the sheet
+      // exactly as it was. The sheet covers the bottom of the screen and a
+      // scrim dims the rest, so with the sheet frozen there was almost
+      // nothing left on screen to show the tap had registered.
+      backgroundColor: Colors.transparent,
       builder: (_) => const _ReaderSettingsSheet(),
     );
   }
 }
 
-/// Type size and reading ground. Applies live — the reader rebuilds from
-/// `EgwReaderPrefs.revision` while this is still open, so the effect of a
-/// change is visible behind the sheet rather than after dismissing it.
-class _ReaderSettingsSheet extends StatefulWidget {
+/// Type size and reading ground. Applies live — the sheet AND the page
+/// behind it both rebuild from `EgwReaderPrefs.revision`, so a change shows
+/// on the next frame rather than after the sheet is dismissed.
+///
+/// Stateless on purpose. It used to `await` the write and then `setState`,
+/// which meant a slow disk froze the controls themselves: the swatch border
+/// and the slider thumb only moved once storage had caught up, so the sheet
+/// looked as dead as the page did.
+class _ReaderSettingsSheet extends StatelessWidget {
   const _ReaderSettingsSheet();
 
   @override
-  State<_ReaderSettingsSheet> createState() => _ReaderSettingsSheetState();
-}
-
-class _ReaderSettingsSheetState extends State<_ReaderSettingsSheet> {
-  @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: EgwReaderPrefs.revision,
+      builder: (context, _, _) => _build(context),
+    );
+  }
+
+  Widget _build(BuildContext context) {
     final theme = EgwReaderPrefs.resolve(context);
     final palette = EgwReadingPalette.of(theme);
     final scale = EgwReaderPrefs.scale();
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'TEXT SIZE',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: palette.muted,
-                letterSpacing: 1.4,
-                fontWeight: FontWeight.w800,
-                fontSize: 11,
-              ),
-            ),
-            Row(
-              children: [
-                Icon(Icons.text_fields, size: 16, color: palette.muted),
-                Expanded(
-                  child: Slider(
-                    value: scale,
-                    min: EgwReaderPrefs.minScale,
-                    max: EgwReaderPrefs.maxScale,
-                    divisions: 8,
-                    activeColor: palette.accent,
-                    onChanged: (v) async {
-                      await EgwReaderPrefs.setScale(v);
-                      if (mounted) setState(() {});
-                    },
-                  ),
+    return Material(
+      // The sheet's own ground follows the choice, so tapping a swatch
+      // changes something the finger is still resting on.
+      color: palette.page,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'TEXT SIZE',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: palette.muted,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
                 ),
-                Icon(Icons.text_fields, size: 26, color: palette.muted),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'PAGE',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: palette.muted,
-                letterSpacing: 1.4,
-                fontWeight: FontWeight.w800,
-                fontSize: 11,
               ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                for (final t in EgwReadingTheme.values)
+              Row(
+                children: [
+                  Icon(Icons.text_fields, size: 16, color: palette.muted),
                   Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: _ThemeSwatch(
-                        theme: t,
-                        selected: t == theme,
-                        onTap: () async {
-                          await EgwReaderPrefs.setTheme(t);
-                          if (mounted) setState(() {});
-                        },
-                      ),
+                    child: Slider(
+                      value: scale,
+                      min: EgwReaderPrefs.minScale,
+                      max: EgwReaderPrefs.maxScale,
+                      divisions: 8,
+                      activeColor: palette.accent,
+                      // Synchronous, so the thumb stays under the finger
+                      // and the page reflows as it moves. The rebuild comes
+                      // from `revision`, which the setter bumps before it
+                      // goes anywhere near storage.
+                      onChanged: EgwReaderPrefs.setScale,
                     ),
                   ),
-              ],
-            ),
-          ],
+                  Icon(Icons.text_fields, size: 26, color: palette.muted),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'PAGE',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: palette.muted,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  for (final t in EgwReadingTheme.values)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: _ThemeSwatch(
+                          theme: t,
+                          selected: t == theme,
+                          onTap: () => EgwReaderPrefs.setTheme(t),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

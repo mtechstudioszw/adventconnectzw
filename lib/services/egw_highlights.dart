@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -61,11 +62,7 @@ class EgwHighlights {
   static bool has(String bookId, String chapterId, String text) =>
       forChapter(bookId, chapterId).contains(_clean(text));
 
-  static Future<void> add(
-    String bookId,
-    String chapterId,
-    String text,
-  ) async {
+  static void add(String bookId, String chapterId, String text) {
     final passage = _clean(text);
     // A highlight of two words is noise; of nothing at all is a bug.
     if (passage.length < 3) return;
@@ -75,14 +72,10 @@ class EgwHighlights {
     if (list.contains(passage)) return;
     list.add(passage);
     all[chapterId] = list;
-    await _save(bookId, all);
+    _save(bookId, all);
   }
 
-  static Future<void> remove(
-    String bookId,
-    String chapterId,
-    String text,
-  ) async {
+  static void remove(String bookId, String chapterId, String text) {
     final passage = _clean(text);
     final all = Map<String, List<String>>.from(forBook(bookId));
     final list = List<String>.from(all[chapterId] ?? const []);
@@ -92,14 +85,24 @@ class EgwHighlights {
     } else {
       all[chapterId] = list;
     }
-    await _save(bookId, all);
+    _save(bookId, all);
   }
 
-  static Future<void> _save(
-    String bookId,
-    Map<String, List<String>> all,
-  ) async {
-    await CacheService.writePref(_key(bookId), jsonEncode(all));
+  /// The wash appears on the frame the member asked for it.
+  ///
+  /// The write is started but not awaited, and the order matters:
+  /// `writePref` reaches `box.put` before its first `await`, and Hive
+  /// updates its in-memory keystore there — so [forBook] already reads the
+  /// new passage back while only the disk flush is outstanding. Awaiting it
+  /// first is what made the reading settings feel dead (see
+  /// [EgwReaderPrefs]), and a highlight is even less forgiving: the member
+  /// is watching the exact words they just picked.
+  static void _save(String bookId, Map<String, List<String>> all) {
+    unawaited(
+      CacheService.writePref(_key(bookId), jsonEncode(all)).catchError(
+        (Object e) => debugPrint('EgwHighlights: could not persist: $e'),
+      ),
+    );
     revision.value++;
   }
 

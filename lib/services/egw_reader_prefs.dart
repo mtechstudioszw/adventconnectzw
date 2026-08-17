@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'cache_service.dart';
@@ -90,7 +92,48 @@ class EgwReaderPrefs {
   /// Rebuilds open readers when the settings sheet changes something.
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
+  /// The chosen ground and type size, held in memory as well as on disk.
+  ///
+  /// This is what makes the controls answer the finger. Reported 18 Aug
+  /// 2026 as *"text size, day, sepia dosent work"*: both setters used to
+  /// `await` a Hive write and only bump [revision] afterwards, so the page
+  /// could not change until the handset had finished writing. Hive
+  /// serialises a box behind a single queue and `CacheService.initialize()`
+  /// starts a prune + `compact()` of a box that grows on every feed
+  /// refresh — so that await is not free on a real phone, and while it is
+  /// outstanding the page, the swatches and the slider thumb all sit
+  /// exactly where they were. From the outside that is a dead button.
+  ///
+  /// So the value moves first and the disk catches up. Storage is now a
+  /// record of the choice rather than a gate on it.
+  static EgwReadingTheme? _theme;
+  static double? _scale;
+
+  @visibleForTesting
+  static void resetForTest() {
+    _theme = null;
+    _scale = null;
+    revision.value = 0;
+  }
+
+  /// Persist without ever making the UI wait, and without letting a storage
+  /// failure reach a member who only tapped "Sepia" — the setting still
+  /// applies for this session either way.
+  /// Called, not awaited. `writePref` updates Hive's in-memory keystore
+  /// before its first `await`, so a read taken on this same frame already
+  /// sees the new value — only the flush to disk is left outstanding, and
+  /// nothing on screen depends on it.
+  static void _persist(String key, String value) {
+    unawaited(
+      CacheService.writePref(key, value).catchError(
+        (Object e) => debugPrint('EgwReaderPrefs: could not persist $key: $e'),
+      ),
+    );
+  }
+
   static EgwReadingTheme theme() {
+    final chosen = _theme;
+    if (chosen != null) return chosen;
     final raw = CacheService.readPref(_kTheme);
     return EgwReadingTheme.values.firstWhere(
       (t) => t.name == raw,
@@ -98,9 +141,10 @@ class EgwReaderPrefs {
     );
   }
 
-  static Future<void> setTheme(EgwReadingTheme theme) async {
-    await CacheService.writePref(_kTheme, theme.name);
+  static void setTheme(EgwReadingTheme theme) {
+    _theme = theme;
     revision.value++;
+    _persist(_kTheme, theme.name);
   }
 
   /// Type scale. Clamped: below 0.8 the measure gets absurdly wide and
@@ -109,14 +153,18 @@ class EgwReaderPrefs {
   static const double maxScale = 1.6;
 
   static double scale() {
+    final chosen = _scale;
+    if (chosen != null) return chosen;
     final raw = double.tryParse(CacheService.readPref(_kScale) ?? '');
     return (raw ?? 1.0).clamp(minScale, maxScale);
   }
 
-  static Future<void> setScale(double value) async {
+  static void setScale(double value) {
     final v = value.clamp(minScale, maxScale);
-    await CacheService.writePref(_kScale, v.toStringAsFixed(2));
+    if (v == scale()) return;
+    _scale = v;
     revision.value++;
+    _persist(_kScale, v.toStringAsFixed(2));
   }
 
   /// Resolves the reading ground for a book opened right now.
@@ -126,7 +174,12 @@ class EgwReaderPrefs {
   /// doesn't work in EGW" complaint. So an untouched preference follows the
   /// app; an explicit choice always wins.
   static EgwReadingTheme resolve(BuildContext context) {
-    if (CacheService.readPref(_kTheme) != null) return theme();
+    // An in-memory choice counts as explicit even before it has landed on
+    // disk — otherwise the ground would snap back to the app's brightness
+    // on the very next frame after a tap.
+    if (_theme != null || CacheService.readPref(_kTheme) != null) {
+      return theme();
+    }
     return Theme.of(context).brightness == Brightness.dark
         ? EgwReadingTheme.night
         : EgwReadingTheme.day;

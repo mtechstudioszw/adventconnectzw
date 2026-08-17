@@ -49,12 +49,27 @@
          received images uses gal's add-only access. This keeps the app
          compliant with Google Play's Photo & Video Permissions policy
          (no broad-access declaration required). -->
+    <!-- tools:replace="android:allowBackup" is what makes this build at all.
+         Appodeal's core SDK (com.appodeal.ads.sdk:core) declares
+         android:allowBackup="true" in its own manifest, and the merger
+         refuses to pick between two explicit values — so every build since
+         the AdMob → Appodeal migration failed at :app:processDebugMainManifest
+         with "Attribute application@allowBackup value=(false) ... is also
+         present at [com.appodeal.ads.sdk:core]".
+
+         The value stays FALSE. Android's auto-backup would copy app data off
+         the device to the member's Google Drive; this app holds auth state
+         and cached personal content (chats, prayer requests), and the Play
+         data-safety declaration says it is not backed up. Flipping it to
+         true would clear the merger and quietly change what leaves the
+         phone — the SDK's default is not a reason to change our posture. -->
     <application
         android:label="Advent Connect ZW"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
-        android:fullBackupContent="false">
+        android:fullBackupContent="false"
+        tools:replace="android:allowBackup">
         <activity
             android:name=".MainActivity"
             android:exported="true"

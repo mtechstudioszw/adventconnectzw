@@ -184,7 +184,7 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
       // Only show a wait if there IS one — a cached book resolves in the
       // same frame and must not flash a dialog.
       final pending = EgwBookService.load(item.epubUrl);
-      book = await _withProgress(pending);
+      book = await _withProgress(item, pending);
     }
     if (!mounted) return;
 
@@ -206,10 +206,21 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
     if (mounted) setState(() {});
   }
 
-  /// Awaits [pending], showing a spinner only if it takes long enough to
-  /// notice. Downloading a book is a real wait on a first open; reopening
-  /// one is instant, and a dialog that flashes for 30ms reads as a glitch.
-  Future<EgwBook?> _withProgress(Future<EgwBook?> pending) async {
+  /// Awaits [pending], showing the book being opened only if there is
+  /// actually a wait. Downloading a book is a real one on a first open;
+  /// reopening one is instant, and a dialog that flashes for 30ms reads as
+  /// a glitch.
+  ///
+  /// Founder, 18 Aug 2026: *"put the book thumbnail at the first when u open
+  /// book"*. A bare spinner is what made this wait feel broken rather than
+  /// merely slow — it gives no sign that the tap even landed on the right
+  /// book. The cover is already on screen and already cached, so it costs
+  /// nothing to carry it into the wait, and it turns an anonymous delay into
+  /// a book being opened.
+  Future<EgwBook?> _withProgress(
+    LibraryItem item,
+    Future<EgwBook?> pending,
+  ) async {
     var settled = false;
     unawaited(pending.whenComplete(() => settled = true));
     await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -218,7 +229,11 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: BrandSpinner(size: 34)),
+      // The page's own ground, not a dim over it: this is a screen the book
+      // is opening ON, and a scrim would leave the shelf half-visible behind
+      // the cover it is meant to be lifting.
+      barrierColor: context.palette.scaffoldBg,
+      builder: (_) => _OpeningBook(item: item),
     );
     final book = await pending;
     if (mounted) Navigator.of(context, rootNavigator: true).pop();
@@ -505,9 +520,13 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                 ),
                 title: Text(isSaved ? 'Remove from saved' : 'Save to shelf',
                     style: AppTextStyles.bodyMedium),
-                onTap: () async {
-                  await EgwPrefs.toggleSaved(item.id);
-                  if (ctx.mounted) Navigator.of(ctx).pop();
+                onTap: () {
+                  // Pop on the same frame. The sheet used to wait for the
+                  // write to land before closing, which is what "save to
+                  // shelf doesn't work" looked like from the outside: a
+                  // menu item that stayed put after you tapped it.
+                  EgwPrefs.toggleSaved(item.id);
+                  Navigator.of(ctx).pop();
                 },
               ),
               if (started)
@@ -892,6 +911,95 @@ double _gridAspectRatio(BuildContext context) {
   return cellWidth / cellHeight;
 }
 
+/// What a member looks at while a book is being fetched and parsed.
+///
+/// The cover carries the whole thing. It is already cached — it was on the
+/// shelf a moment ago — so it paints on the first frame, and the wait reads
+/// as *this book, opening* instead of an anonymous spinner over a dimmed
+/// list. The only motion is a slow, shallow breath on the cover: enough to
+/// say the app is alive, not enough to become a thing being watched.
+class _OpeningBook extends StatefulWidget {
+  const _OpeningBook({required this.item});
+
+  final LibraryItem item;
+
+  @override
+  State<_OpeningBook> createState() => _OpeningBookState();
+}
+
+class _OpeningBookState extends State<_OpeningBook>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _breath = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final item = widget.item;
+
+    return Center(
+      child: SingleChildScrollView(
+        // The type here scales with the system font while the cover does
+        // not, so at 2.5x this column is taller than a small phone. It
+        // scrolls rather than overflowing.
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FadeTransition(
+                opacity: Tween<double>(begin: 1.0, end: 0.86).animate(_breath),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.darkNavy.withValues(alpha: 0.22),
+                        blurRadius: 28,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: _cover(item, width: 132, height: 198, radius: 12),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                item.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Opening…',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const BrandSpinner(size: 26),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BookCover extends StatelessWidget {
   const _BookCover({
     required this.item,
@@ -1088,6 +1196,22 @@ class EgwPrefs {
 
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
+  /// Started, never awaited. Nothing on screen may wait on a disk flush.
+  ///
+  /// These two keys are deliberately NOT `pref:`-prefixed: a saved shelf and
+  /// a reading history are the member's own, so `clearUserData()` clearing
+  /// them on sign-out is correct — the next person on a shared phone must
+  /// not inherit somebody's shelf. (The 24h janitor does not touch them
+  /// either way: it only prunes keys that carry a `__ts`, and `writePref`
+  /// stores none.)
+  static void _persist(String key, String value) {
+    unawaited(
+      CacheService.writePref(key, value).catchError(
+        (Object e) => debugPrint('EgwPrefs: could not persist $key: $e'),
+      ),
+    );
+  }
+
   static Set<String> saved() {
     final raw = CacheService.readPref(_kSaved);
     if (raw == null) return <String>{};
@@ -1098,10 +1222,21 @@ class EgwPrefs {
     }
   }
 
-  static Future<void> toggleSaved(String id) async {
+  /// Founder, 18 Aug 2026: *"save to shelf dosent work"*.
+  ///
+  /// It did work — it just could not be seen working. The write was awaited
+  /// before [revision] was bumped, so the bookmark, the Saved count and the
+  /// shelf itself all waited on a Hive flush, and the sheet that triggered
+  /// it sat open until the same flush returned. The same shape had already
+  /// made the reading settings look dead; see [EgwReaderPrefs].
+  ///
+  /// Notify first, persist after. `writePref` reaches Hive's in-memory
+  /// keystore before its first `await`, so [saved] reads the change back
+  /// immediately and only the disk flush is outstanding.
+  static void toggleSaved(String id) {
     final set = saved();
     set.contains(id) ? set.remove(id) : set.add(id);
-    await CacheService.writePref(_kSaved, jsonEncode(set.toList()));
+    _persist(_kSaved, jsonEncode(set.toList()));
     revision.value++;
   }
 
@@ -1118,9 +1253,9 @@ class EgwPrefs {
 
   static int? lastOpenedAt(String id) => _opened()[id];
 
-  static Future<void> noteOpened(String id) async {
+  static void noteOpened(String id) {
     final map = _opened()..[id] = DateTime.now().millisecondsSinceEpoch;
-    await CacheService.writePref(_kOpened, jsonEncode(map));
+    _persist(_kOpened, jsonEncode(map));
     revision.value++;
   }
 }

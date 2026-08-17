@@ -107,6 +107,107 @@ diagnosed or has a stated unknown — nothing is a guess.
         precedent for returning bare numbers, and CLAUDE.md's loudest
         warning is about triggers touching `profiles`.
 
+## 2b. EGW reader + Sabbath School batch (founder, 18 Aug 2026)
+
+Eight items in one message. **One is fixed, seven are diagnosed and NOT
+fixed.** None of it is verified on hardware — see §3a for why.
+
+### FIXED — "takes long to open a book, it loads for ever"
+
+`EgwBookService._bytes()` had **no timeout of any kind**: not on the
+connection, not on the transfer. A stalled socket on mobile data hung the
+open screen indefinitely, because an `HttpClient` with no
+`connectionTimeout` waits on the OS, which on Android is minutes.
+
+That also explains the founder's second observation — *"while loading then
+u cancel n click the book again it opens"*. Cancelling does not cancel
+anything: `_inFlight` holds the future independently of the screen, so the
+download runs on, finishes to disk, and the next tap hits
+`if (await file.exists())` and opens instantly from cache.
+
+Now: 15s connect, 20s headers, 60s whole transfer, `.part` always cleaned
+up, `client.close(force: true)`.
+
+**Also fixed while in there:** the download never verified `Content-Length`
+before renaming `.part` into place, even though `media2.egwwritings.org`
+**truncates silently** — the trap the seed script already defends against
+(see the `egw-text-source-solved` memory). A short file was cached forever,
+failed to parse on every future open, and dropped the member back to the
+PDF reader with no explanation. That is a strong candidate for other "the
+book won't open" reports.
+
+### NOT FIXED — still open
+
+- [ ] **Tap-to-highlight a whole statement.** Founder: *"when click text in
+      egw it should highlight a statement from were it starts to where it
+      end n u can hight many statements"*. Today highlighting exists but
+      only through drag-select → context menu → "Highlight"
+      (`egw_reader_screen.dart:576` `_quoteMenu`). He wants a **tap inside a
+      sentence to highlight that whole sentence**, and to accumulate many.
+      The storage already supports it: `EgwHighlights` matches by TEXT, not
+      offsets, and `rangesIn()` already renders multiple passages per block.
+      So this is a gesture + sentence-boundary problem, not a data one.
+      Needs: hit-test the tapped character offset within the block's
+      `TextSpan`, expand to sentence bounds, toggle via
+      `EgwHighlights.add/remove`. Watch out for `.` in abbreviations and
+      verse references when finding the boundary.
+
+- [ ] **Highlighting does not work in Sabbath School at all.**
+      `ss_lesson_screen.dart` (1217 lines) has no highlight path — the
+      feature is EGW-only. Decide whether SS shares `EgwHighlights` (it is
+      keyed `bookId` + `chapterId`, so an SS lesson would need its own
+      namespace) or gets its own store. **Founder-facing question: should an
+      SS highlight sync to the account?** EGW highlights are device-local
+      today, which is already an open item.
+
+- [ ] **Show the book cover while it opens.** Founder: *"put the book
+      thumbnail at the first when u open book"*. Right now the open screen
+      is a bare loader while a ~1 MB EPUB downloads and parses in an
+      isolate. The cover is already on the shelf row, so it can be handed
+      to the reader as a hero and held under the spinner. This is most of
+      what makes the wait feel broken rather than slow.
+
+- [ ] **The page-turn animation is too much.** Founder: *"the swipe
+      animation is too much fix tt one or remove is"*. `_turnBy` animates
+      320ms `easeOutCubic` (`egw_reader_screen.dart:171`), and the
+      `PageView` adds its own physics on a drag. Reduce hard or drop to a
+      cut. Cross-check `AppMotion` — the standing rule is that motion must
+      never cost reading time.
+
+- [ ] **Text size / Day / Sepia do nothing when tapped.** NOT yet
+      explained. The wiring LOOKS right — `_ReaderSettingsSheet` writes via
+      `EgwReaderPrefs.setScale/setTheme`, both bump
+      `EgwReaderPrefs.revision`, and the reader's `build` is wrapped in a
+      `ValueListenableBuilder` on that notifier
+      (`egw_reader_screen.dart:192`). So do NOT assume the notifier is
+      missing. Suspects, in order:
+      1. `CacheService.writePref` throwing (the `await` would swallow the
+         `setState` that follows, so the SHEET would freeze too — matches
+         "click does nothing" exactly). Check the box is open.
+      2. `showModalBottomSheet`'s `backgroundColor` is computed ONCE at
+         call time (`_openSettings`, line 809), so the sheet's own ground
+         never changes — which reads as "sepia did nothing" even if the
+         page behind it did change.
+      3. `_repaginate` keys on scale but the sheet covers the page, so a
+         change may simply not be visible until dismissal.
+      **Verify with a widget test on `_ReaderSettingsSheet` backed by a real
+      Hive box before changing anything** — this is the item most likely to
+      be misdiagnosed.
+
+- [ ] **Sabbath School throws `'_dependents.isEmpty': is not true`**
+      (framework.dart:6268). This is an `InheritedElement` being unmounted
+      while something still depends on it. It is NOT caused by
+      `context.palette` alone — that resolves through `Theme.of`, which
+      would throw a different error. Usual causes, in order of likelihood:
+      a `GlobalKey` reparented across two subtrees in one frame; a
+      `TabController`/`PageController` shared across rebuilt tabs; or a
+      dialog/sheet built from a context that has since unmounted. Start by
+      grepping `sabbath_school_tab.dart` + `ss_lesson_screen.dart` for
+      `GlobalKey` and for any `of(context)` call reached from `dispose()`
+      or `deactivate()`. **Reproduce it first** — an assertion with a stack
+      trace is the cheapest bug on this list to locate and the easiest to
+      "fix" in the wrong place.
+
 ## 3. Features requested, not started
 
 ### EGW batch (founder, 17 Aug) — 2 fixed, the reader still BLOCKED

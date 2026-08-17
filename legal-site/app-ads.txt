@@ -1,15 +1,33 @@
 # Advent Connect ZW — authorised digital sellers (IAB app-ads.txt).
 #
 # ACTION REQUIRED (founder): the Appodeal block is still missing.
-# Appodeal generates it per publisher — it is many lines, one per mediated
-# network, and it CANNOT be guessed or copied from another app. Get it from
-# the Appodeal dashboard (Apps -> Advent Connect ZW -> app-ads.txt) and
-# paste it below this comment, then redeploy both copies of this file:
-#   docs/app-ads.txt        <- the one Google and the ad networks crawl
-#   legal-site/app-ads.txt
-# Until it is here, Appodeal's demand partners cannot verify that we
-# authorised them, and bids get filtered — this is a revenue blocker, not
-# paperwork.
+#
+# Download it from https://app.appodeal.com/user_profile/ads_txt and SAVE
+# THE FILE straight over this one — do not paste it into a chat message.
+# It is several thousand lines and any paste gets truncated silently, which
+# would leave a file that LOOKS complete while every partner after the cut
+# goes unauthorised. Then copy the same file to legal-site/app-ads.txt.
+#
+# Two lines in Appodeal's template are placeholders and must be edited
+# after saving, or they are worse than useless:
+#   google.com, Publisher_ID, DIRECT, f08c47fec0942fa0
+#       -> Publisher_ID is OUR AdMob publisher id: pub-2916679989954369
+#          (the DIRECT line already at the bottom of this file). Appodeal
+#          ships the word "Publisher_ID" literally.
+#   facebook.com, Business_ID, RESELLER, c3e20eee3f780d68
+#       -> DELETE this line. Meta Audience Network is not connected (the
+#          dashboard lists it as "has to be connected manually"), and a
+#          literal "Business_ID" is an invalid record.
+#
+# Appodeal's own DIRECT lines, for reference — these are the ones that
+# authorise the demand we can actually serve today:
+#   appodeal.com, 439452, DIRECT
+#   bidmachine.io, 1, DIRECT
+#   bidmachine.io, 466, DIRECT
+#
+# Until the full block is here, Appodeal's demand partners cannot verify
+# that we authorised them and their bids get filtered — this is a revenue
+# blocker, not paperwork.
 #
 # The AdMob line below is kept on purpose. The AdMob ACCOUNT is disapproved
 # and under appeal; removing its authorisation would work against the

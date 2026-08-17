@@ -88,27 +88,69 @@ class EgwBookService {
       return file.readAsBytes();
     }
 
-    final client = HttpClient();
+    final tmp = File('${file.path}.part');
+    final client = HttpClient()
+      // Founder, 18 Aug 2026: *"takes long to open a book it loads for
+      // ever"*. There was no timeout of ANY kind here — not on the
+      // connection, not on the transfer — so a stalled socket on mobile
+      // data hung the open screen indefinitely with no way out. An
+      // HttpClient with no connectionTimeout waits on the OS, which on
+      // Android is minutes.
+      ..connectionTimeout = const Duration(seconds: 15);
     try {
       final req = await client.getUrl(Uri.parse(url));
-      final resp = await req.close();
+      final resp = await req.close().timeout(_headerTimeout);
       if (resp.statusCode != 200) {
         debugPrint('EgwBookService: HTTP ${resp.statusCode} for $url');
         return null;
       }
+
       // Write to a temporary file first and rename on success, so an
       // interrupted download can never leave a truncated EPUB that the
-      // parser would then reject on every future open. The White Estate
-      // server is known to truncate silently.
-      final tmp = File('${file.path}.part');
+      // parser would then reject on every future open.
       final sink = tmp.openWrite();
-      await resp.pipe(sink);
+      await resp.pipe(sink).timeout(_transferTimeout);
+
+      // media2.egwwritings.org TRUNCATES SILENTLY — that is the trap the
+      // seed script already had to defend against, and this path never
+      // did. A short file renamed into place is cached forever, fails to
+      // parse on every future open, and silently drops the member back to
+      // the PDF reader with no explanation.
+      final expected = resp.contentLength;
+      final actual = await tmp.length();
+      if (actual == 0 || (expected > 0 && actual != expected)) {
+        debugPrint(
+          'EgwBookService: truncated download for $url '
+          '($actual of $expected bytes) — not caching',
+        );
+        return null;
+      }
+
       await tmp.rename(file.path);
       return file.readAsBytes();
+    } on TimeoutException {
+      debugPrint('EgwBookService: timed out fetching $url');
+      return null;
     } finally {
-      client.close();
+      client.close(force: true);
+      // Never leave a `.part` behind. Without this a timed-out transfer
+      // leaves a growing pile of half-books in the cache directory, and
+      // the retry writes over one it cannot trust.
+      try {
+        if (await tmp.exists()) await tmp.delete();
+      } catch (_) {}
     }
   }
+
+  /// Long enough for a slow handshake on 3G, short enough that a dead
+  /// connection surfaces as an error the reader can act on rather than a
+  /// spinner that never resolves.
+  static const _headerTimeout = Duration(seconds: 20);
+
+  /// Whole-transfer ceiling. The books are ~0.6–1 MB, so a minute is
+  /// generous even on a bad connection — past that something is wrong and
+  /// saying so beats spinning.
+  static const _transferTimeout = Duration(seconds: 60);
 
   /// Drops the parsed-book cache. Books are public domain and not
   /// user-scoped, so the DOWNLOADS are deliberately left alone on sign-out

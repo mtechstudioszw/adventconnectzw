@@ -6,104 +6,126 @@ Paste everything below the line.
 
 Continue the Advent Connect ZW work.
 
-Read `TODO.md` §3a first — the ads migration landed on 18 Aug and that
-section is now a **device checklist**, not a plan. Then the
-`appodeal-migration-and-quiz-ads` and `appodeal-shares-one-ad-view`
-memories. `TODO.md` overall is the live queue and carries the evidence
-behind every item.
+**The founder's own bug list is the job this session. It is `TODO.md` §2b.
+Start there, not with anything else.** He reported eight things on 18 Aug;
+one is fixed and seven are diagnosed-but-not-fixed, each written up with the
+file, the line, the mechanism and the named suspects. He has said plainly he
+expects them addressed. Do not open a new front until they are done.
 
-## Do this before anything else
+Read `TODO.md` §2b first, then the `egw-text-source-solved` and
+`appodeal-shares-one-ad-view` memories.
 
-**Ask whether the Supabase personal access token has been rotated.** It was
-asked on 18 Aug and the answer was *"didnt rotate"* — so the 16 Aug PAT and
-the one used for the 17 Aug DB work are both still live and both burned. Do
-not reuse a token from any transcript. Ask for a fresh one, write it only to
-the session scratchpad, never echo it back.
+## Ask these two before anything else
 
-**Ask whether a phone is connected.** This is now the single biggest gap.
+1. **Has the Supabase personal access token been rotated?** Asked on 18 Aug;
+   the answer was *"didnt rotate"*. The 16 Aug PAT and the one used for the
+   17 Aug DB work are both still live and both burned. Never reuse a token
+   from a transcript — ask for a fresh one, write it only to the session
+   scratchpad, never echo it back.
+2. **Is a phone connected?** This is now the biggest gap in the project.
+   Four of the seven open bugs are things only a human looking at a screen
+   can judge. **This machine cannot build Android at all** — see below.
 
-## The state of the ads work
+## The seven, in the order I'd take them
 
-**AdMob is gone.** `google_mobile_ads` is out of `pubspec.yaml`;
-`stack_appodeal_flutter: 4.2.0` is in. 472 tests pass, `flutter analyze` is
-clean (4 pre-existing infos). The quiz rewarded placements are built too.
+1. **`'_dependents.isEmpty': is not true` in Sabbath School.** A crash, and
+   the cheapest on the list *if the founder can supply the stack trace*
+   (`flutter logs`, or the red screen). **Ask him for it first.** It is an
+   `InheritedElement` unmounted while something still depends on it — most
+   often a `GlobalKey` reparented across two subtrees in one frame. It is
+   NOT `context.palette` on its own; that resolves through `Theme.of`, which
+   fails differently.
+2. **Text size / Day / Sepia do nothing when tapped.** **Reproduce before
+   changing a line.** The obvious fix is the wrong one: the notifier wiring
+   is already correct (`egw_reader_screen.dart:192` wraps build in a
+   `ValueListenableBuilder` on `EgwReaderPrefs.revision`, and both setters
+   bump it). Top suspect is `CacheService.writePref` throwing, which would
+   swallow the `setState` after it and freeze the SHEET too — which matches
+   "click does nothing" exactly. Second suspect: `showModalBottomSheet`'s
+   `backgroundColor` is computed once at call time, so the sheet's own
+   ground never changes even when the page behind it does.
+3. **Show the book cover while a book opens** ("put the book thumbnail at
+   the first when u open book"). Quick, visual, and most of what makes the
+   wait feel broken rather than merely slow.
+4. **The page-turn animation is too much.** `_turnBy` is 320ms
+   `easeOutCubic` plus the `PageView`'s own physics. Cut it hard or drop to
+   a straight cut. Standing rule: motion must never cost reading time.
+5. **Tap-to-highlight a whole statement.** Tap inside a sentence, highlight
+   that sentence, accumulate many. Real work, not a patch — but the storage
+   is already on your side: `EgwHighlights` matches by TEXT not offsets, and
+   `rangesIn()` already renders multiple passages per block. So it is a
+   gesture + sentence-boundary problem. Watch abbreviations and verse
+   references when finding the boundary.
+6. **Highlighting in Sabbath School at all** — it does not exist there.
+   Needs the founder's call: should an SS highlight follow the account, or
+   stay on the device like EGW's do?
+7. Anything he adds. He reports in batches; expect more.
 
-**None of it has run on a phone.** That is the whole remaining risk, and
-TODO §3a has the checklist. The items that matter most:
+## What shipped 18 Aug (do not redo any of it)
 
-* a real ad filling at all (only BidMachine / Backfill / Ad Server
-  Campaigns are live, so expect thin fill);
-* the consent dialog appearing **once**;
-* the banner at 50dp and the MREC at 250dp on a real screen — the frame is
-  pinned by tests but the platform view has never been laid out;
-* scrolling Home and Watch and confirming the sponsored card never leaves a
-  gap or teleports;
-* pushing Jobs on top of Home: **exactly one banner**, and Home's returns
-  when you pop back;
-* a rewarded ad end to end — the survival continue, because it is the only
-  placement that changes game state.
+* **AdMob → Appodeal**, complete. `google_mobile_ads` is gone. The
+  premium-before-ads ordering in `main.dart` needed no changes.
+* **Quiz rewarded placements** — survival continue, lobby coin top-up,
+  weekly streak repair, double-coins at round end. All additive; nothing is
+  gated behind an ad and the Daily Challenge is untouched.
+* **The live-match strips stopped lying.** They were fed the APP-WIDE
+  presence roster and printed "N online now · play someone".
+* **`app-ads.txt` is installed** — 2,514 records, both copies. Revenue
+  unblocked.
+* **EGW book download now times out** (it had none at all) and verifies
+  `Content-Length` before caching.
+* Home library chips reordered; live-match strip moved above the live video.
 
-Two founder decisions are outstanding:
+**480 tests pass, `flutter analyze` clean (4 pre-existing infos), everything
+committed and pushed to `main`.**
 
-1. **Paste the Appodeal `app-ads.txt` block** from the dashboard into both
-   `docs/app-ads.txt` and `legal-site/app-ads.txt`. A comment is already
-   waiting for it. Until it is there, demand partners' bids get filtered —
-   a revenue blocker.
-2. **Confirm the double-coins call.** The brief said "double your points";
-   it doubles **coins** instead, because points feed personal bests and the
-   shared leaderboard and the round is already banked by the time the
-   results screen shows. Reasoning is in TODO §3a.
+## Two founder decisions still open
 
-## Still open, NOT ads
-
-* **Church posting identity** — posting as a church uses the ADMIN's name,
-  not the church's; events unverified. Not started.
-* **Offline popup on other screens** — Home has `showOfflineToast`; the
-  founder wanted the same elsewhere. Not started.
-* **Dead `QuizProfileRequired` branch** — verified unreachable against
-  production. Note that `QuizProfileSheet` itself is NOT dead and deleting
-  it breaks two features.
-* **Highlight sync** — EGW highlights are device-local, so they are lost on
-  sign-out and do not follow a member to a new phone. Needs the founder's
-  call on a table + RLS.
-* **Church admin dashboard** — the founder's own open question: what else
-  belongs there?
-* **iOS** — there is **no `ios/Podfile` in the repo at all**, so Appodeal
-  cannot build there. Appodeal's own Podfile pins `platform :ios, '15.0'`,
-  so the earlier "13.0 already clears the floor" note is optimistic.
+* **Double-coins vs double-points** at quiz round end. It doubles COINS
+  deliberately — the round is already banked on the shared leaderboard by
+  then, so doubling points would put an ad-bought rank in front of other
+  members. He has not confirmed.
+* **A truthful "N waiting in the arena"** needs a server-side count of open
+  queue entries — an RPC, so it is blocked on the token.
 
 ## How to work here
 
-The repo is a **nested clone**: working directory
-`C:\Users\j\Desktop\advent_connect_zw`, repo in `adventconnectzw/`.
+Nested clone: working directory `C:\Users\j\Desktop\advent_connect_zw`, repo
+in `adventconnectzw/`.
 
-Rules that keep earning their place:
+1. **`flutter build apk` on this machine is a DEAD END.** Three attempts,
+   ~12 minutes, all dying in Gradle *project evaluation* on corrupt
+   transform caches — deleting the 1.1GB cache does not help, the next run
+   corrupts fresh hashes. It never reaches the app's own config, so **a
+   failed local build tells you nothing about your change**. Push and let
+   `.github/workflows/build-apk.yml` build it. Founder's instruction:
+   *"let github build."* `gh` is not installed here.
+2. **A red CI run is often the upload step, not the build.** The
+   `softprops/action-gh-release` step hits transient GitHub 5xx *after* a
+   successful build. Read which step failed before believing the code broke.
+3. **Check whether it already exists before building it.** It caught one on
+   18 Aug: the quiz lifeline chip already switched to a "watch an ad"
+   affordance when the player could not afford it.
+4. **Read the plugin's source, not just its README.** The one dangerous fact
+   about Appodeal — a single shared banner view per process — is in
+   `AppodealAdView.kt`, not the docs.
+5. **Verify against the DB, a test, or a render — never by reading code.**
+   Renders work with no device: a throwaway `matchesGoldenFile` test plus
+   `--update-goldens`. Call `AppTextStyles.applyBrightness()` first or every
+   screen renders navy-on-navy.
+6. **Pump every screen at 1.6x and 2.5x.** An unflexed `Text` in a `Row`
+   THROWS.
+7. **A route name is just a string until someone taps it.**
+8. **`CacheService.writePref` does NOT add the `pref:` prefix** — without it
+   sign-out eats the key. Relevant to bug #2 above.
+9. **A test that sleeps a fixed number of ms waiting on an async chain is a
+   flake, not a regression.** `billing_service_test` had a flat 20ms
+   `settle()` and went red looking exactly like the ads work had broken
+   billing. Check `git status` on the files a failing test depends on before
+   believing it is yours.
+10. **Never paste a large file into chat** — it truncates silently at ~50k
+    chars. The founder's app-ads.txt was cut at a third and it looked
+    complete. Have him save files to the repo instead.
 
-1. **Check whether it already exists before building it.** It caught one
-   again on 18 Aug: the quiz lifeline chip already switched to a "watch an
-   ad" affordance when the player couldn't afford it, so half of "the quiz
-   isn't serving ads properly" was a diagnosis problem, not a build one.
-2. **Read the plugin's own source, not just its README.** The one genuinely
-   dangerous fact about Appodeal — that there is a single shared banner
-   view per process — is not in the docs. It is in `AppodealAdView.kt`.
-3. **Verify against the DB, a test, or a render — never by reading code.**
-4. **Renders work with no device** — a throwaway `matchesGoldenFile` test
-   plus `--update-goldens`. Delete the temp test and `test/renders/` after.
-   Call `AppTextStyles.applyBrightness()` first or every screen renders
-   navy-on-navy and you will report a bug that does not exist.
-5. **Pump every screen at 1.6x and 2.5x text scale.** An unflexed `Text` in
-   a `Row` THROWS.
-6. **A route name is just a string until someone taps it.**
-7. **Only the UI isolate may refresh auth tokens.**
-8. **A shared guard being fixed does not mean its callers were.**
-9. **`REVOKE FROM public` is not enough** — Supabase grants EXECUTE to anon
-   and authenticated by name. Verify with `has_function_privilege`.
-
-`flutter test` is ~2.5 min. **A test that sleeps a fixed number of
-milliseconds waiting for an async chain is a flake, not a regression** —
-`billing_service_test.dart` had a flat 20ms `settle()` racing a
-secure-storage write with no plugin behind it, and it went red on 18 Aug
-looking exactly like the ads work had broken billing. It now polls until
-the flow leaves its in-flight states. Check `git status` on the files a
-failing test actually depends on before believing it is yours. Never run
-two `flutter test` processes at once. Never run `dart format lib/`.
+`flutter test` is ~2.5 min. Never run two at once. Never run
+`dart format lib/`.

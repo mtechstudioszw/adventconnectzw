@@ -78,7 +78,11 @@ void main() {
       expect(m.isReadyCheck, isFalse);
       expect(m.questionStartedAt, isNotNull);
       // Full clock for both — nobody entered part-way through question one.
-      expect(m.remainingFraction, 1.0);
+      // closeTo, not equality: clockSkew is measured against DateTime.now()
+      // at parse time, so a millisecond of real elapsed time makes this
+      // 0.9999. What is being asserted is "essentially none of the question
+      // has been consumed", which is the thing that was broken.
+      expect(m.remainingFraction, closeTo(1.0, 0.01));
     });
 
     test('the countdown is server-corrected, not device time', () {

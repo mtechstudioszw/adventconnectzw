@@ -107,6 +107,11 @@ class _PostComposerState extends State<_PostComposer>
   String get _draftKey =>
       'composer_draft_v1${widget.churchId == null ? '' : ':${widget.churchId}'}';
 
+  /// The church this update is going out as, when posting from a church
+  /// admin dashboard. Loaded here as well as in the identity row because
+  /// the PREVIEW needs it — see [_openPreview]. Null for a personal post.
+  Church? _church;
+
   @override
   void initState() {
     super.initState();
@@ -114,6 +119,19 @@ class _PostComposerState extends State<_PostComposer>
     _controller.addListener(_onBodyChanged);
     _scroll.addListener(_onScroll);
     _entrance.forward();
+    unawaited(_loadComposerChurch());
+  }
+
+  /// Best-effort. A failure here costs the preview its church branding and
+  /// nothing else — the post itself carries `church_id`, so the feed still
+  /// renders it as the church regardless of what this returns.
+  Future<void> _loadComposerChurch() async {
+    final id = widget.churchId;
+    if (id == null) return;
+    try {
+      final church = await ChurchService.fetchChurchById(id);
+      if (mounted) setState(() => _church = church);
+    } catch (_) {/* preview falls back to the plain card */}
   }
 
   @override
@@ -228,6 +246,17 @@ class _PostComposerState extends State<_PostComposer>
       body: _controller.text,
       photos: List<String>.of(_photos),
       visibility: _visibility,
+      // The church's identity, NOT the admin's.
+      //
+      // These two arguments were simply never passed. `showPostPreview`
+      // has always accepted them and `PostCard` has always rendered a
+      // church post correctly — so the preview fell back to the signed-in
+      // admin's own name and photo and told a church admin their update
+      // would go out under their personal name. The feed was right the
+      // whole time; only the preview lied, which is the worse way round,
+      // because it is the bit you check before committing.
+      churchName: _church?.name,
+      churchPhotoUrl: _church?.profilePhotoUrl,
     );
     if (!mounted || !publish) return;
     await _publish();

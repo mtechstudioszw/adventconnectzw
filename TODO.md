@@ -133,6 +133,30 @@ diagnosed or has a stated unknown — nothing is a guess.
 - [ ] **Suggested news** — done (Keep reading rail), listed so it is not
       rebuilt.
 
+## 3b. Ad mediation change — founder is choosing a new provider
+
+- [ ] **The founder intends to move off AdMob mediation** (17 Aug). Nothing
+      picked yet. Read before touching it:
+      - **The AdMob account is disapproved and under appeal** — that is
+        account-level, not app-level, and nothing in the codebase caused it
+        or can fix it.
+      - **`docs/app-ads.txt` holds the AdMob publisher authorisation**
+        (`google.com, pub-2916679989954369, DIRECT, …`). Google crawls it.
+        A new provider means a NEW line, usually alongside the existing one
+        rather than replacing it — and `docs/` must never be deleted, it is
+        a live site.
+      - `AdsService` + `AppOpenAdManager` own SDK init, EU consent and the
+        App-Open cap. `main.dart` deliberately resolves **premium before
+        ads** so a subscriber never starts the ad SDK at all — preserve that
+        ordering with any new provider.
+      - Ad surfaces gate on `AdsService.canRequestAds`, and there is a
+        standing trap: a 50dp banner became a full-screen bar three times
+        because of a `Center` without `heightFactor: 1`.
+      - `_appOpenBlockedPrefixes` in `main.dart` lists the routes where a
+        full-screen ad must never appear (chat, prayer, auth, marketplace,
+        events, churches, library, news). Any new provider's interstitial
+        needs the same blocklist.
+
 ## 4. Known-unfinished, lower priority
 
 - [ ] **App cold-start, the native half.** The splash's own budget is fixed

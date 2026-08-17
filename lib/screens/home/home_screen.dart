@@ -25,6 +25,7 @@ import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
+import '../../widgets/offline_toast.dart';
 import '../../services/directory_service.dart';
 import '../../services/gallery_service.dart';
 import '../../services/devotion_service.dart';
@@ -433,6 +434,17 @@ class _HomeScreenState extends State<HomeScreen>
   /// Tier 2 failures are swallowed per-tier: a dead marketplace must never
   /// blank the feed.
   Future<void> _bootstrap() async {
+    // Pulling to refresh with no signal used to do nothing visible: the
+    // cached feed stayed put, the spinner retracted, and the member was left
+    // to conclude the app was broken. The app-wide OfflineBanner does not
+    // cover this — it reacts to the connection CHANGING, so a device that
+    // was already offline when the screen opened never triggers it.
+    //
+    // Checked before the work rather than after, so the answer arrives with
+    // the gesture instead of a round trip later.
+    if (!ConnectivityService.isOnline && mounted) {
+      showOfflineToast(context);
+    }
     // Refresh Watch content (live banner + feed videos) on pull-to-refresh.
     unawaited(_loadWatch());
     // Always hydrate from cache first so the screen paints real

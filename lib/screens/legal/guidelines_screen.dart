@@ -43,8 +43,8 @@ class GuidelinesScreen extends StatelessWidget {
       subtitle: 'How we look out for one another in this space.',
       lastUpdated: '10 June 2026',
       intro:
-          'Advent Connect ZW is a space for the Seventh-day Adventist '
-          'community in Zimbabwe to connect, encourage one another, share '
+          'Adventist Super App is a space for the Seventh-day Adventist '
+          'community worldwide to connect, encourage one another, share '
           'prayer, and support local churches. These Guidelines keep it safe '
           'and respectful. They apply everywhere in the App — the feed, '
           'stories, prayers, the directory, marketplace, jobs, events, and '

@@ -70,6 +70,17 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   /// Live selection, kept for the "Share quote" action.
   String _selection = '';
 
+  /// The page the pager has settled on.
+  ///
+  /// A `ValueNotifier` and not `setState`, because the ONLY thing on screen
+  /// that depends on it is the "Page 4 of 12" counter in the bottom bar.
+  /// `onPageChanged` used to call `setState`, which rebuilt the whole
+  /// reader — including the `PageView`'s `itemBuilder`, which re-creates
+  /// every `TextSpan` on all three live pages — in the middle of the fling.
+  /// That is the founder's *"page animation when swipping is abit lagging"*
+  /// (18 Aug 2026): the jank landed exactly at the moment the page crossed.
+  final ValueNotifier<int> _pageIndex = ValueNotifier<int>(0);
+
   /// Where a pointer went down, so a tap can be told from a scroll.
   Offset? _pointerDown;
 
@@ -82,20 +93,68 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   /// highlight it AND hide the chrome in the same tap.
   bool _tapClaimedByText = false;
 
-  String get _chapterKey => 'pref:egw_pos:${widget.bookId}';
+  /// The statements the member has picked, in reading order.
+  ///
+  /// Founder, 18 Aug 2026: *"the moment i click the text should highlight n
+  /// there a big share button to share image or text of the quote… n option
+  /// to highlight more sentence like how u highlight bible verse"*.
+  ///
+  /// So a tap does three things at once — highlights the statement, opens
+  /// the share bar, and leaves the bar open so the NEXT tap extends the
+  /// quote rather than starting a new one. That is the Bible tab's own
+  /// multi-verse behaviour, applied to sentences: a statement here is what
+  /// a verse is there, which is why the boundary rule ends on a full stop.
+  final List<_Picked> _quote = [];
+
+  /// Where reading stopped, as `chapter` or `chapter|anchor`.
+  ///
+  /// `pref:`-prefixed on purpose. This is a place in a public-domain book,
+  /// not personal content, and it belongs to the handset — losing it on
+  /// sign-out would be the same "it forgot where I was" the founder is
+  /// reporting. See [EgwHighlights] for the case that goes the other way.
+  String get _positionKey => 'pref:egw_pos:${widget.bookId}';
+
+  /// The place to jump to once the chapter has been measured, if any.
+  ///
+  /// Founder, 18 Aug 2026: *"when reading egw books its not caching when u
+  /// end reading so it will continue from there"*. Only the CHAPTER was
+  /// ever stored, so reopening a book dropped you at the top of a chapter
+  /// you might be forty pages into.
+  ///
+  /// The page number itself is the wrong thing to store: the reader
+  /// repaginates on every type-size, orientation or viewport change, so
+  /// "page 12" means a different place by the next session. What is stable
+  /// is the TEXT the page started on — the same reasoning that made
+  /// [EgwHighlights] store passages rather than offsets — so that is the
+  /// anchor, and it is re-found by matching.
+  String? _pendingAnchor;
+
+  /// How much of the page's opening text identifies it. Long enough to be
+  /// unique inside a chapter, short enough to survive the parser collapsing
+  /// whitespace differently.
+  static const int _anchorLength = 60;
 
   @override
   void initState() {
     super.initState();
-    _chapter = widget.initialChapter ??
-        int.tryParse(CacheService.readPref(_chapterKey) ?? '') ??
-        0;
+    final stored = CacheService.readPref(_positionKey) ?? '';
+    final divider = stored.indexOf('|');
+    // Older builds wrote a bare chapter index; it still reads correctly.
+    final chapterPart = divider < 0 ? stored : stored.substring(0, divider);
+    if (divider >= 0) {
+      final anchor = stored.substring(divider + 1);
+      if (anchor.isNotEmpty) _pendingAnchor = anchor;
+    }
+    _chapter = widget.initialChapter ?? int.tryParse(chapterPart) ?? 0;
+    // A chapter named by the caller is a deliberate jump, not a resume.
+    if (widget.initialChapter != null) _pendingAnchor = null;
     _chapter = _chapter.clamp(0, widget.book.chapters.length - 1);
   }
 
   @override
   void dispose() {
     _pager.dispose();
+    _pageIndex.dispose();
     super.dispose();
   }
 
@@ -105,16 +164,68 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
       _chapter = index;
       _chromeVisible = true;
       _pagesKey = ''; // force a re-measure for the new chapter
+      _pendingAnchor = null;
+      _quote.clear();
       // A fresh controller so the new chapter opens on its first page
       // without animating a turn across the whole old chapter.
       _pager.dispose();
       _pager = PageController();
     });
-    CacheService.writePref(_chapterKey, '$index');
+    _pageIndex.value = 0;
+    _savePosition(0);
     HapticFeedback.selectionClick();
   }
 
   EgwChapter get _current => widget.book.chapters[_chapter];
+
+  /// Records the chapter and the words the given page opens on.
+  ///
+  /// Not awaited, and deliberately so: `writePref` reaches Hive's in-memory
+  /// keystore before its first `await`, so the position is already readable
+  /// on this frame, and nothing on screen may wait on a disk flush while a
+  /// page is turning. That await is what froze the reading-settings sheet.
+  void _savePosition(int page) {
+    final anchor = _anchorFor(page);
+    CacheService.writePref(
+      _positionKey,
+      anchor == null ? '$_chapter' : '$_chapter|$anchor',
+    ).catchError(
+      (Object e) => debugPrint('EgwReader: could not save position: $e'),
+    );
+  }
+
+  /// The opening words of [page], as stored.
+  String? _anchorFor(int page) {
+    if (page < 0 || page >= _pages.length) return null;
+    for (final block in _pages[page].blocks) {
+      final text = block.text.trim();
+      if (text.isEmpty) continue;
+      final cut = text.length < _anchorLength ? text.length : _anchorLength;
+      // Newlines would survive into the stored value and break the split on
+      // `|`-free reads; the book's own wrapping is not part of the anchor.
+      return text.substring(0, cut).replaceAll(RegExp(r'\s+'), ' ');
+    }
+    return null;
+  }
+
+  /// The page [anchor] now falls on, after however the chapter re-measured.
+  int _pageForAnchor(String anchor) {
+    // First choice: a page that OPENS on those words, which is where the
+    // member actually was when the type size has not changed.
+    for (var i = 0; i < _pages.length; i++) {
+      if (_anchorFor(i) == anchor) return i;
+    }
+    // The type size or the screen changed, so the cuts moved. The page that
+    // CONTAINS the words is the honest answer — it is the same paragraph.
+    for (var i = 0; i < _pages.length; i++) {
+      final text = _pages[i].blocks
+          .map((b) => b.text)
+          .join(' ')
+          .replaceAll(RegExp(r'\s+'), ' ');
+      if (text.contains(anchor)) return i;
+    }
+    return 0;
+  }
 
   /// Re-measures the chapter when — and only when — the layout it was
   /// measured against has actually changed.
@@ -132,6 +243,36 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
       headingStyle: _headingStyle(scale),
       devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
     );
+    _restoreOrKeepPlace();
+  }
+
+  /// Puts the member back where they were — on open, and after a re-measure.
+  ///
+  /// A type-size change re-cuts the whole chapter under them, and without
+  /// this the pager keeps its page NUMBER, which after a re-measure points
+  /// at completely different words. Holding the anchor instead means the
+  /// paragraph stays put and the pages move around it.
+  void _restoreOrKeepPlace() {
+    final anchor = _pendingAnchor ?? _anchorFor(_pageIndex.value);
+    _pendingAnchor = null;
+    if (anchor == null || _pages.isEmpty) return;
+    final target = _pageForAnchor(anchor);
+    if (target == 0 && _pageIndex.value == 0) return;
+
+    // Everything here waits for the end of the frame. `_repaginate` runs
+    // inside `LayoutBuilder`'s builder, so touching a notifier or the
+    // controller now would be a markNeedsBuild during build — and on a
+    // first open the pager has no clients yet in any case.
+    //
+    // `jumpToPage`, not `animateTo`: reopening a book should LAND on the
+    // page, not scroll to it past forty pages of someone else's reading.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _pageIndex.value = target;
+      if (!_pager.hasClients) return;
+      if (_pager.page?.round() == target) return;
+      _pager.jumpToPage(target);
+    });
   }
 
   /// The two styles pagination measures with. The renderer uses these same
@@ -171,15 +312,19 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
     // A drag is a swipe or a text selection, not a tap.
     if ((e.position - start).distance > 12) return;
 
+    // A tap on the margin while a quote is open finishes it. The share bar
+    // is a mode, and every mode needs a way out that is not a button hunt.
+    if (_quote.isNotEmpty) {
+      setState(_quote.clear);
+      return;
+    }
+
     setState(() => _chromeVisible = !_chromeVisible);
   }
 
   /// 1-based page within the chapter, clamped so the trailing
   /// end-of-chapter card does not read as "page 13 of 12".
-  int _pageNumber() {
-    if (!_pager.hasClients || !_pager.position.haveDimensions) return 1;
-    return ((_pager.page ?? 0).round() + 1).clamp(1, _pages.length);
-  }
+  int _pageNumber(int index) => (index + 1).clamp(1, math.max(1, _pages.length));
 
   // ---- Build ----------------------------------------------------------------
 
@@ -207,7 +352,14 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
                 children: [
                   Positioned.fill(child: _page(palette, scale)),
                   if (_chromeVisible) _topBar(palette),
-                  if (_chromeVisible) _bottomBar(palette),
+                  // The quote bar REPLACES the bottom chrome while a
+                  // statement is picked. Two stacked bars would bury the
+                  // Share button the founder asked to be big, and the page
+                  // counter is not what anybody is looking at mid-quote.
+                  if (_quote.isNotEmpty)
+                    _quoteBar(palette)
+                  else if (_chromeVisible)
+                    _bottomBar(palette),
                 ],
               ),
             ),
@@ -267,13 +419,27 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
               itemCount: _pages.length + 1,
               onPageChanged: (i) {
                 HapticFeedback.selectionClick();
-                setState(() {});
+                // NO setState. The only thing that depends on the page
+                // number is the counter in the bottom bar, and rebuilding
+                // the whole reader — which re-runs `itemBuilder` and
+                // rebuilds every span on three live pages — lands in the
+                // middle of the fling. See [_pageIndex].
+                _pageIndex.value = i;
+                _savePosition(i);
               },
               itemBuilder: (context, i) {
                 final child = i == _pages.length
                     ? _endOfChapter(palette)
                     : _renderPage(_pages[i], palette, scale, columnWidth);
-                return _turn(i, constraints.maxWidth, child, palette);
+                // The turn animates a transform over this subtree every
+                // frame. Without a boundary the whole page — thousands of
+                // laid-out glyphs — is re-rasterised on each of them.
+                return _turn(
+                  i,
+                  constraints.maxWidth,
+                  RepaintBoundary(child: child),
+                  palette,
+                );
               },
             ),
           ),
@@ -518,14 +684,98 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
     final sentence = block.text.substring(range.start, range.end).trim();
     if (sentence.length < 3) return;
 
-    if (EgwHighlights.has(widget.bookId, _current.id, sentence)) {
-      EgwHighlights.remove(widget.bookId, _current.id, sentence);
-    } else {
-      EgwHighlights.add(widget.bookId, _current.id, sentence);
-    }
     _tapClaimedByText = true;
     HapticFeedback.selectionClick();
-    setState(() {});
+
+    final picked = _Picked(
+      text: sentence,
+      // Where it sits in the chapter, so several statements share out into
+      // reading order however they were tapped. Taps come in whatever order
+      // the eye finds them; a quote has to read top to bottom.
+      blockStart: _blockStartInChapter(block),
+      offset: range.start,
+    );
+
+    final already = _quote.indexWhere((p) => p.text == sentence);
+    if (already >= 0) {
+      // Tapping a picked statement drops it — the gesture that made the
+      // highlight is the one that takes it away.
+      _quote.removeAt(already);
+      EgwHighlights.remove(widget.bookId, _current.id, sentence);
+      setState(() {});
+      return;
+    }
+
+    // Tapping a statement highlighted in an EARLIER session re-opens it as
+    // the live quote rather than deleting it out from under a tap that was
+    // almost certainly meant as "share this one".
+    if (EgwHighlights.has(widget.bookId, _current.id, sentence) &&
+        _quote.isEmpty) {
+      setState(() => _quote.add(picked));
+      return;
+    }
+
+    EgwHighlights.add(widget.bookId, _current.id, sentence);
+    setState(() {
+      _quote
+        ..add(picked)
+        ..sort();
+      // The share bar takes the bottom of the screen; the chrome would sit
+      // under it.
+      _chromeVisible = false;
+    });
+  }
+
+  /// Where [block] starts within the chapter, in characters.
+  ///
+  /// A page's blocks may be SLICES of the chapter's, so identity does not
+  /// work here and neither does an index. Matching on the text does, and it
+  /// is only ever run on a tap.
+  int _blockStartInChapter(EgwBlock block) {
+    final needle = block.text;
+    var at = 0;
+    for (final b in _current.blocks) {
+      final index = b.text.indexOf(needle);
+      if (index >= 0) return at + index;
+      at += b.text.length;
+    }
+    return at;
+  }
+
+  /// The picked statements as one quotable passage.
+  String get _quoteText => _quote.map((p) => p.text).join(' ');
+
+  void _shareQuoteBar() {
+    final text = _quoteText.trim();
+    if (text.isEmpty) return;
+    _shareQuote(text);
+  }
+
+  Future<void> _copyQuote() async {
+    final text = _quoteText.trim();
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: '"$text"\n— ${_citation()}'));
+    if (!mounted) return;
+    HapticFeedback.selectionClick();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Quote copied'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Un-highlights everything in the live quote and closes the bar.
+  void _clearQuote({bool unhighlight = false}) {
+    if (unhighlight) {
+      for (final p in _quote) {
+        EgwHighlights.remove(widget.bookId, _current.id, p.text);
+      }
+    }
+    setState(() {
+      _quote.clear();
+      _chromeVisible = true;
+    });
   }
 
   /// The paragraph painted somewhere beneath [node].
@@ -715,19 +965,28 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
     );
   }
 
-  void _shareQuote(String text) {
-    // Cite the canonical printed page, which is the whole reason the
-    // EPUB was chosen over the PDF. Fall back to the chapter when a book
-    // carries no page anchors — the twelve daily devotionals are organised
-    // by date and have none.
-    final page = _current.startPage;
-    final where = page != null
+  /// Where a quote taken right now comes from, in citable form.
+  ///
+  /// The canonical printed page is the whole reason the EPUB was chosen over
+  /// the PDF, and it is read off the page ON SCREEN rather than the chapter
+  /// — a chapter runs twenty printed pages, so citing its first one is wrong
+  /// for all but the opening screen. Falls back to the chapter when a book
+  /// carries no page anchors at all; the twelve daily devotionals are
+  /// organised by date and have none.
+  String _citation() {
+    final index = _pageIndex.value;
+    final page = (index >= 0 && index < _pages.length)
+        ? _pages[index].printedPage ?? _current.startPage
+        : _current.startPage;
+    return page != null
         ? '${widget.book.title}, p. $page'
         : '${widget.book.title} — ${_current.title}';
+  }
 
+  void _shareQuote(String text) {
     VerseShareSheet.open(
       context,
-      reference: where,
+      reference: _citation(),
       text: text.trim(),
       attribution: widget.book.author ?? 'Ellen G. White',
     );
@@ -832,15 +1091,20 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    _pages.isEmpty
-                        ? 'Chapter ${_chapter + 1} of $total'
-                        : 'Page ${_pageNumber()} of ${_pages.length}',
-                    maxLines: 1,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: palette.text,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
+                  // The one thing on screen that follows the page, and the
+                  // only reason `onPageChanged` needs to notify anything.
+                  ValueListenableBuilder<int>(
+                    valueListenable: _pageIndex,
+                    builder: (context, index, _) => Text(
+                      _pages.isEmpty
+                          ? 'Chapter ${_chapter + 1} of $total'
+                          : 'Page ${_pageNumber(index)} of ${_pages.length}',
+                      maxLines: 1,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.text,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   Text(
@@ -862,6 +1126,173 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
                   _chapter < total - 1 ? () => _goTo(_chapter + 1) : null,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// The share bar — what a tap on a statement actually opens.
+  ///
+  /// Founder, 18 Aug 2026: *"the moment i click the text should highlight n
+  /// there a big a share button to share image or text of the qoute"*. So
+  /// Share is a full-width primary button, not a menu item: it is the whole
+  /// reason to pick a statement, and it was previously two gestures and a
+  /// long-press menu away.
+  ///
+  /// The bar stays up while more statements are tapped, and says how many
+  /// are in — that is the "highlight more sentences" half, and the count is
+  /// what tells the member the taps are accumulating rather than replacing.
+  Widget _quoteBar(EgwReadingPalette palette) {
+    final count = _quote.length;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.page,
+          border: Border(top: BorderSide(color: palette.rule)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 18,
+              offset: const Offset(0, -6),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.format_quote_rounded,
+                    size: 17,
+                    color: palette.accent,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      count == 1
+                          ? '1 statement · tap another to add it'
+                          : '$count statements picked',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.muted,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => _clearQuote(unhighlight: true),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      child: Text(
+                        'Unhighlight',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: palette.muted,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _quoteText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: palette.text,
+                  height: 1.4,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: _shareQuoteBar,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: palette.accent,
+                          foregroundColor: palette.page,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        icon: const Icon(Icons.ios_share_rounded, size: 19),
+                        label: Text(
+                          'Share quote',
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: palette.page,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _quoteAction(
+                    palette,
+                    icon: Icons.copy_rounded,
+                    tooltip: 'Copy',
+                    onTap: _copyQuote,
+                  ),
+                  const SizedBox(width: 8),
+                  _quoteAction(
+                    palette,
+                    icon: Icons.close_rounded,
+                    tooltip: 'Done',
+                    // Keeps the highlights, closes the bar. Removing them is
+                    // "Unhighlight" above — a member who has just marked
+                    // four statements must not lose them to the X.
+                    onTap: () => _clearQuote(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _quoteAction(
+    EgwReadingPalette palette, {
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkResponse(
+        onTap: onTap,
+        radius: 26,
+        child: Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border.all(color: palette.rule),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, size: 20, color: palette.text),
         ),
       ),
     );
@@ -921,6 +1352,32 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
       builder: (_) => const _ReaderSettingsSheet(),
     );
   }
+}
+
+/// One statement in the live quote, and where it sits in the chapter.
+///
+/// Ordered by position, not by the order it was tapped: somebody picking
+/// three statements will not always work down the page, and a quote that
+/// reads out of order is worse than no quote at all.
+@immutable
+class _Picked implements Comparable<_Picked> {
+  const _Picked({
+    required this.text,
+    required this.blockStart,
+    required this.offset,
+  });
+
+  final String text;
+
+  /// Character position of the containing block within the chapter.
+  final int blockStart;
+
+  /// Character position of the statement within that block.
+  final int offset;
+
+  @override
+  int compareTo(_Picked other) =>
+      (blockStart + offset).compareTo(other.blockStart + other.offset);
 }
 
 /// Type size and reading ground. Applies live — the sheet AND the page

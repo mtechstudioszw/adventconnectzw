@@ -5,7 +5,7 @@ import '../secure_storage_service.dart';
 /// Counts the ads this device has actually shown.
 ///
 /// It exists so the Premium screen can say something TRUE and personal —
-/// "you've seen 214 ads in Advent Connect" — instead of a generic claim.
+/// "you've seen 214 ads in Adventist Super App" — instead of a generic claim.
 /// A real number the user recognises is more persuasive than a promise,
 /// and it costs us nothing to be honest about it.
 ///

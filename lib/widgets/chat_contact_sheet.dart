@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -5,6 +6,7 @@ import '../models/friendship_model.dart';
 import '../models/story_model.dart';
 import '../services/auth_service.dart';
 import '../services/block_service.dart';
+import '../services/e2ee/e2ee_service.dart';
 import '../services/feed_service.dart';
 import '../services/messaging_service.dart';
 import '../services/presence_service.dart';
@@ -204,20 +206,42 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // The profile row came back empty even though we asked for it. Under
+    // `profiles_select_discoverable_or_self` (patch_201) that means one
+    // of exactly two things: they blocked us, or they are not
+    // discoverable. Either way we are not entitled to their details.
+    //
+    // This matters because of what the fallbacks below used to do. The
+    // name and photo passed into this sheet come from the CONVERSATION
+    // row, which is denormalised and survives the block — so `_profile
+    // ?.profilePhotoUrl ?? widget.fallbackPhotoUrl` quietly served the
+    // blocked user their blocker's profile picture out of a cache, right
+    // next to a bio and cover the policy had already taken away. Fall
+    // back to the name only; a thread with no name at the top is
+    // unusable, and the name is on every message bubble regardless.
+    final unavailable = !_loading && _profile == null;
+
     final name = (_profile?.fullName.trim().isNotEmpty == true)
         ? _profile!.fullName.trim()
         : widget.fallbackName;
-    final photoUrl = _profile?.profilePhotoUrl ?? widget.fallbackPhotoUrl;
-    final bio = _profile?.bio?.trim() ?? '';
-    final coverUrl = _profile?.coverPhotoUrl;
+    final photoUrl = unavailable
+        ? null
+        : (_profile?.profilePhotoUrl ?? widget.fallbackPhotoUrl);
+    final bio = unavailable ? '' : (_profile?.bio?.trim() ?? '');
+    final coverUrl = unavailable ? null : _profile?.coverPhotoUrl;
 
     // Presence is friends-only. This sheet opens from a tap on ANY post
     // author's avatar in the home feed, so it was telling you whether a
     // complete stranger was at their phone right now — and showing their
     // last-seen time on top of that. Neither belongs to someone you have
     // no relationship with. Friends still see the full line.
+    //
+    // PresenceService.isOnline is block-aware since patch_210, so a block
+    // in either direction already reads as offline here; `unavailable`
+    // additionally suppresses the "Offline"/"Last seen" line, which would
+    // otherwise still be a live signal about someone who has shut us out.
     final isOnline = _isFriend && PresenceService.isOnline(widget.userId);
-    final presence = !_isFriend
+    final presence = (!_isFriend || unavailable)
         ? null
         : isOnline
             ? 'Online'
@@ -482,9 +506,69 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
                 danger: !_blockedByMe,
                 onTap: () => _toggleBlock(name),
               ),
+              // The founder asked for the encryption note here as well as
+              // in the thread. This is the sheet a member opens when they
+              // are deciding whether to trust someone, which is exactly
+              // when "who else can read this" is the live question.
+              if (E2eeService.isEncryptionOn && !unavailable)
+                const _EncryptionFooter(),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "Messages are end-to-end encrypted" + a real link to the policy.
+///
+/// Gated on [E2eeService.isEncryptionOn] at the call site, never shown
+/// unconditionally: it is a security claim, and it must not appear on a
+/// thread that is still going out in the clear.
+class _EncryptionFooter extends StatelessWidget {
+  const _EncryptionFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final base = AppTextStyles.bodySmall.copyWith(
+      color: context.palette.textMuted,
+      fontSize: 11.5,
+      height: 1.45,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline, size: 14, color: context.palette.textMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: base,
+                children: [
+                  const TextSpan(
+                    text:
+                        'Messages are end-to-end encrypted. Nobody outside '
+                        'this chat — not even Adventist Super App — can read '
+                        'them. ',
+                  ),
+                  TextSpan(
+                    text: 'Learn more',
+                    style: base.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppColors.primaryBlue,
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => context.pushNamed('privacy'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

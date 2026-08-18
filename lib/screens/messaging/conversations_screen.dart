@@ -12,6 +12,7 @@ import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
 import '../../widgets/church_group_avatar.dart';
 import '../../services/presence_service.dart';
+import '../../services/typing_signal.dart';
 import '../widgets/main_bottom_nav.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -276,6 +277,15 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           if (undelivered.isNotEmpty) {
             unawaited(MessagingService.markMessagesDelivered(undelivered));
           }
+        }
+        // Their message IS the end of them typing. Without this the row
+        // reads "typing…" for up to 4 more seconds *underneath the
+        // message they just sent* — the same bug the chat screen fixed
+        // with its own early clear.
+        for (final r in rows) {
+          if (r['sender_id']?.toString() == me) continue;
+          final convo = r['conversation_id']?.toString() ?? '';
+          if (convo.isNotEmpty) TypingSignal.clear(convo);
         }
         _refreshDebounce?.cancel();
         _refreshDebounce = Timer(const Duration(milliseconds: 600), () {
@@ -2887,7 +2897,23 @@ class _ConversationTile extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      // "typing…" outranks the whole preview line — the
+                      // draft, the ticks, the glyph, the last message.
+                      // Someone writing to you right now is the most
+                      // current thing this row can say, and it is what the
+                      // indicator was missing: it existed only INSIDE an
+                      // open chat, where you can already see them typing.
+                      //
+                      // Listens on its own so a ping repaints one preview
+                      // line, not the inbox.
+                      ValueListenableBuilder<Map<String, String>>(
+                        valueListenable: TypingSignal.active,
+                        builder: (context, typing, child) {
+                          final kind = typing[conversation.id];
+                          if (kind == null) return child!;
+                          return _TypingPreview(kind: kind);
+                        },
+                        child: Row(
                         children: [
                           // Tick on the last message, but ONLY when the
                           // viewer sent it (patch_075 surfaces its real
@@ -3023,6 +3049,7 @@ class _ConversationTile extends StatelessWidget {
                             ),
                           ],
                         ],
+                        ),
                       ),
                     ],
                   ),
@@ -3043,6 +3070,45 @@ class _ConversationTile extends StatelessWidget {
     if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays < 7) return '${diff.inDays}d';
     return '${(diff.inDays / 7).floor()}w';
+  }
+}
+
+/// "typing…" / "recording audio…" in place of an inbox row's preview.
+///
+/// Brand blue and italic, matching the same line in the chat header, so
+/// the two surfaces read as one behaviour rather than two features.
+class _TypingPreview extends StatelessWidget {
+  const _TypingPreview({required this.kind});
+
+  /// 'typing' or 'recording' — the same two kinds the chat header shows.
+  final String kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final recording = kind == 'recording';
+    return Row(
+      children: [
+        Icon(
+          recording ? Icons.mic : Icons.more_horiz,
+          size: 14,
+          color: AppColors.primaryBlue,
+        ),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            recording ? 'recording audio…' : 'typing…',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.primaryBlue,
+              fontSize: 13,
+              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

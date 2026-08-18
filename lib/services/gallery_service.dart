@@ -13,7 +13,7 @@ class GalleryService {
   GalleryService._();
 
   /// Download [imageUrl] into the user's gallery under an album named
-  /// "Advent Connect". The album folder makes it easy to find later
+  /// "Adventist Super App". The album folder makes it easy to find later
   /// and keeps saved posts grouped together.
   ///
   /// Uses dart:io HttpClient directly to avoid pulling in the `http`
@@ -49,7 +49,7 @@ class GalleryService {
       final bytes = builder.toBytes();
       await Gal.putImageBytes(
         Uint8List.fromList(bytes),
-        album: 'Advent Connect',
+        album: 'Adventist Super App',
       );
       return true;
     } catch (e, st) {

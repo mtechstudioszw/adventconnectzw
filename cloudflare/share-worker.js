@@ -1,4 +1,4 @@
-// Advent Connect ZW — Open Graph share Worker
+// Adventist Super App — Open Graph share Worker
 //
 // Serves the share/landing pages for products, events, jobs and sellers as
 // real `text/html` so WhatsApp/Facebook render a thumbnail AND the in-page
@@ -33,6 +33,14 @@ const esc = (s) =>
     .replaceAll('"', "&quot;");
 
 // REST read with the anon key (respects RLS — all four are public content).
+//
+// NOTE the limit of this: the key is ANON, so `auth.role()` is 'anon' for
+// every one of these reads. Any table whose SELECT policy opens with
+// `auth.role() = 'authenticated'` returns [] here and the share card comes
+// out blank — no title, no description, no thumbnail, with no error to
+// notice. That is exactly what `posts` did. Before adding a share type,
+// check its policy against anon, or route it through an RPC like
+// fetchRpc() below.
 async function fetchRow(env, table, query) {
   try {
     const res = await fetch(
@@ -52,6 +60,31 @@ async function fetchRow(env, table, query) {
   }
 }
 
+// Same idea, through a SECURITY DEFINER RPC instead of the table.
+//
+// For content whose table is deliberately closed to anon: the function
+// returns one row by id and enforces its own visibility rule, so the
+// Worker can render a card without the feed becoming anonymously
+// enumerable. See database/patch_209_post_share_card.sql.
+async function fetchRpc(env, fn, params) {
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: {
+        apikey: env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Per-type config: how to fetch the row and map it to the card fields.
 const TYPES = {
   "product-share": {
@@ -59,7 +92,7 @@ const TYPES = {
     kicker: "FOR SALE",
     tag: "MARKETPLACE",
     title: "Marketplace listing",
-    description: "A product for sale on Advent Connect ZW marketplace.",
+    description: "A product for sale on Adventist Super App marketplace.",
     fetch: (env, id) =>
       fetchRow(
         env,
@@ -77,30 +110,33 @@ const TYPES = {
         d.price && d.price_currency ? `${d.price_currency} ${d.price}` : "",
     }),
   },
-  // Feed posts. Public visibility ONLY — the filter is in the query, not in
-  // the mapper, so a friends-only or private post returns "not found" rather
-  // than leaking its text into a link preview that anyone can unfurl.
+  // Feed posts. Public visibility ONLY — enforced inside post_share_card(),
+  // so a friends-only or private post returns "not found" rather than
+  // leaking its text into a link preview that anyone can unfurl.
+  //
+  // Goes through an RPC, not the table, for two reasons that both bit:
+  //   * `posts` RLS opens with auth.role() = 'authenticated' and this
+  //     Worker reads as ANON, so the direct select returned [] for every
+  //     post — every shared post link unfurled blank, with no error.
+  //   * that select asked for `content`; the column is `body`. It would
+  //     have 400'd even with the policy opened.
+  // Note `posts.id` is a UUID, unlike the bigint ids the other types use.
   "post-share": {
     host: "post",
     kicker: "POST",
     tag: "COMMUNITY",
-    title: "Advent Connect ZW",
-    description: "A post from the Seventh-day Adventist community in Zimbabwe.",
-    fetch: (env, id) =>
-      fetchRow(
-        env,
-        "posts",
-        `id=eq.${encodeURIComponent(id)}&visibility=eq.public` +
-          `&select=content,image_url,image_urls`,
-      ),
+    title: "Adventist Super App",
+    description: "A post from the Seventh-day Adventist community worldwide.",
+    fetch: (env, id) => fetchRpc(env, "post_share_card", { p_id: id }),
     map: (d) => ({
-      title: "Advent Connect ZW",
-      description: d.content ?? "",
-      image:
-        d.image_url ??
-        (Array.isArray(d.image_urls) && d.image_urls.length
-          ? String(d.image_urls[0])
-          : ""),
+      title: "Adventist Super App",
+      // Collapse newlines. A post body is multi-line far more often than
+      // a product title or an event name, and a raw newline inside an
+      // og:description attribute makes some scrapers stop at the first
+      // one — which turned "Happy Sabbath / From GJD Youth Camp / Durban"
+      // into a card that just said "Happy Sabbath".
+      description: (d.body ?? "").replace(/\s+/g, " ").trim(),
+      image: d.image ?? "",
       meta: "",
     }),
   },
@@ -108,8 +144,8 @@ const TYPES = {
     host: "event",
     kicker: "EVENT",
     tag: "EVENTS",
-    title: "Advent Connect ZW",
-    description: "Join the Seventh-day Adventist community in Zimbabwe.",
+    title: "Adventist Super App",
+    description: "Join the Seventh-day Adventist community worldwide.",
     fetch: (env, id) =>
       fetchRow(
         env,
@@ -128,7 +164,7 @@ const TYPES = {
     kicker: "JOB OPPORTUNITY",
     tag: "JOBS",
     title: "Job opportunity",
-    description: "A job opportunity shared on Advent Connect ZW.",
+    description: "A job opportunity shared on Adventist Super App.",
     fetch: (env, id) =>
       fetchRow(
         env,
@@ -162,9 +198,9 @@ const TYPES = {
     host: "user",
     kicker: "ADD ME",
     tag: "COMMUNITY",
-    title: "Connect on Advent Connect ZW",
+    title: "Connect on Adventist Super App",
     description:
-      "Someone shared their Advent Connect ZW code with you. Open the app to see their profile and send a friend request.",
+      "Someone shared their Adventist Super App code with you. Open the app to see their profile and send a friend request.",
     fetch: async () => null,
     map: () => ({ title: "", description: "", image: "", meta: "" }),
   },
@@ -173,7 +209,7 @@ const TYPES = {
     kicker: "STOREFRONT",
     tag: "MARKETPLACE",
     title: "Adventist marketplace seller",
-    description: "Browse this store on Advent Connect ZW marketplace.",
+    description: "Browse this store on Adventist Super App marketplace.",
     // Sellers are keyed by auth_user_id (matches the app's seller route).
     fetch: (env, id) =>
       fetchRow(
@@ -202,7 +238,7 @@ function renderHtml(cfg, id, fields) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${esc(title)} — Advent Connect ZW</title>
+  <title>${esc(title)} — Adventist Super App</title>
   <meta property="og:type" content="website" />
   <meta property="og:title" content="${esc(title)}" />
   <meta property="og:description" content="${esc(description)}" />
@@ -234,7 +270,7 @@ function renderHtml(cfg, id, fields) {
   <div class="card">
     <div class="brand">
       <div class="badge">A</div>
-      <div class="name">Advent Connect ZW</div>
+      <div class="name">Adventist Super App</div>
       <div class="tag">${esc(cfg.tag)}</div>
     </div>
     ${image ? `<img class="cover" src="${esc(image)}" alt="" />` : `<div class="cover"></div>`}
@@ -243,9 +279,9 @@ function renderHtml(cfg, id, fields) {
       <h1>${esc(title)}</h1>
       ${meta ? `<p class="meta">${esc(meta)}</p>` : ""}
       <p>${esc(description)}</p>
-      <a class="btn" href="${esc(appLink)}">Open in Advent Connect ZW</a>
+      <a class="btn" href="${esc(appLink)}">Open in Adventist Super App</a>
       <a class="btn-secondary" href="${esc(DOWNLOAD_URL)}">Don't have the app? Get it here</a>
-      <div class="muted">Faith • Community • Zimbabwe</div>
+      <div class="muted">Faith • Community • Worldwide</div>
     </div>
   </div>
   <script>

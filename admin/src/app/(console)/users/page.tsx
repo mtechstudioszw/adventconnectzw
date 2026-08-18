@@ -87,7 +87,7 @@ export default function UsersPage() {
                   const title = await ask({
                     title: `Notify ${u.full_name}`,
                     sub: "Step 1 of 2 — the notification title.",
-                    input: { placeholder: "e.g. A note from the Advent Connect team", required: true },
+                    input: { placeholder: "e.g. A note from the Adventist Super App team", required: true },
                     confirmLabel: "Next",
                   });
                   if (!title) return;

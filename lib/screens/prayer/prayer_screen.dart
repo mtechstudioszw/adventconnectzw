@@ -632,7 +632,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
                   filtered
                       ? 'There are prayers on the board — just none in this '
                           'filter. Clear it to see them all.'
-                      : 'Share a prayer request and pray together with the SDA community in Zimbabwe.',
+                      : 'Share a prayer request and pray together with the SDA community worldwide.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: context.palette.textMuted,

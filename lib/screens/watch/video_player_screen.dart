@@ -522,7 +522,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final url =
         'https://www.youtube.com/watch?v=${v.videoId}'
         '${secs > 5 ? '&t=${secs}s' : ''}';
-    await Share.share('${v.title}\n\nWatch on Advent Connect ZW:\n$url');
+    await Share.share('${v.title}\n\nWatch on Adventist Super App:\n$url');
   }
 
   Future<void> _openInYouTube() async {

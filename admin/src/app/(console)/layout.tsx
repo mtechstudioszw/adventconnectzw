@@ -32,7 +32,7 @@ export default function ConsoleLayout({ children }: { children: React.ReactNode 
           <div className="brand">
             <div className="brand-mark">AC</div>
             <div>
-              <div className="brand-name">Advent Connect</div>
+              <div className="brand-name">Adventist Super App</div>
               <div className="brand-sub">Admin</div>
             </div>
           </div>

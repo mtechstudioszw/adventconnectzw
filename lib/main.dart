@@ -23,7 +23,9 @@ import 'services/music_player_service.dart';
 import 'services/premium_service.dart';
 import 'services/usage_analytics.dart';
 import 'services/maintenance_service.dart';
+import 'services/e2ee/e2ee_service.dart';
 import 'services/presence_service.dart';
+import 'services/typing_signal.dart';
 import 'services/session_reset.dart';
 import 'services/sabbath_service.dart';
 import 'services/push_service.dart';
@@ -183,6 +185,14 @@ Future<void> _initBackgroundServices() async {
       case AuthChangeEvent.tokenRefreshed:
         if (data.session?.user != null) {
           unawaited(PresenceService.start());
+          // Who is typing to me, across every conversation. Keyed by the
+          // user id so a sign-in as someone else re-points the channel.
+          unawaited(TypingSignal.start(data.session!.user.id));
+          // E2EE: open the local key store and publish this device's
+          // public keys. Not awaited — a member must never wait on key
+          // setup to reach their inbox, and if it fails the app simply
+          // keeps sending the way every previous build did.
+          unawaited(E2eeService.start(data.session!.user.id));
           // Premium is per Advent account, so it has to be re-read on
           // every sign-in — the cached expiry belongs to whoever was
           // signed in last and grants this user nothing until confirmed.
@@ -212,8 +222,11 @@ Future<void> _initBackgroundServices() async {
 
   // Kick off presence immediately if we already have a session (warm
   // start). The auth-state listener above also covers later sign-ins.
-  if (Supabase.instance.client.auth.currentUser != null) {
+  final warmUser = Supabase.instance.client.auth.currentUser;
+  if (warmUser != null) {
     unawaited(PresenceService.start());
+    unawaited(TypingSignal.start(warmUser.id));
+    unawaited(E2eeService.start(warmUser.id));
   }
 
   // Firebase + Crashlytics + Push. Wrapped in a try so a missing /
@@ -583,7 +596,7 @@ class _AdventConnectAppState extends State<AdventConnectApp>
             : PlatformDispatcher.instance.platformBrightness;
         AppTextStyles.applyBrightness(brightness);
         return MaterialApp.router(
-          title: 'Advent Connect ZW',
+          title: 'Adventist Super App',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,

@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   const id = url.searchParams.get("id") ?? "";
 
   let title = "Marketplace listing";
-  let description = "A product for sale on Advent Connect ZW marketplace.";
+  let description = "A product for sale on Adventist Super App marketplace.";
   let image = "";
   let price = "";
 
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${esc(title)} — Advent Connect ZW</title>
+  <title>${esc(title)} — Adventist Super App</title>
   <meta property="og:type" content="product" />
   <meta property="og:title" content="${esc(title)}" />
   <meta property="og:description" content="${esc(description)}" />
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
   <div class="card">
     <div class="brand">
       <div class="badge">A</div>
-      <div class="name">Advent Connect ZW</div>
+      <div class="name">Adventist Super App</div>
       <div class="tag">MARKETPLACE</div>
     </div>
     ${image ? `<img class="cover" src="${esc(image)}" alt="" />` : `<div class="cover"></div>`}
@@ -102,9 +102,9 @@ Deno.serve(async (req) => {
       <h1>${esc(title)}</h1>
       ${price ? `<p class="price">${esc(price)}</p>` : ""}
       <p>${esc(description)}</p>
-      <a class="btn" href="${esc(appLink)}">Open in Advent Connect ZW</a>
+      <a class="btn" href="${esc(appLink)}">Open in Adventist Super App</a>
       <a class="btn-secondary" href="${esc(DOWNLOAD_URL)}">Don't have the app? Get it here</a>
-      <div class="muted">Buy + sell within the SDA community in Zimbabwe.</div>
+      <div class="muted">Buy + sell within the worldwide SDA community.</div>
     </div>
   </div>
   <script>

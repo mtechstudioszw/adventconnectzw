@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../widgets/screen_shell.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,6 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/friendship_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/e2ee/e2ee_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/gallery_service.dart';
@@ -799,6 +801,22 @@ class _ChatScreenState extends State<ChatScreen>
   String? _peerChurch;
   int _peerMutuals = 0;
   bool _peerContextLoaded = false;
+
+  /// The peer's "Who can message me" setting, one half of the composer
+  /// gate. `everyone` until the real value arrives so we never lock the
+  /// composer on a guess.
+  String _peerWhoCanMessage = 'everyone';
+
+  /// When the peer's E2EE security code last changed, if we haven't shown
+  /// it yet. Non-null renders the system line at the foot of the thread.
+  DateTime? _keyChangedAt;
+
+  /// Set when the SERVER refused a send that [_composerGate] thought was
+  /// allowed — a race (they changed the setting, or a second device got
+  /// the one free message in first). Locks the composer the same way the
+  /// predicted gate does, so the member never sees the same rejection
+  /// twice. Cleared whenever the thread reloads.
+  String? _serverGateMessage;
   Timer? _lastSeenRefreshTimer;
   Timer? _tickReconcileTimer;
   void Function()? _presenceListener;
@@ -1373,6 +1391,67 @@ class _ChatScreenState extends State<ChatScreen>
       _peerMutuals = ctx.mutualFriends;
       _peerContextLoaded = true;
     });
+    // Drives the composer gate — separate call so a failure here never
+    // costs the church/mutuals strip above.
+    final pref = await MessagingService.fetchWhoCanMessage(otherId);
+    if (!mounted) return;
+    setState(() => _peerWhoCanMessage = pref);
+    _refreshKeyChange(otherId);
+  }
+
+  /// Picks up a "their security code changed" marker recorded by the key
+  /// store. Cheap and synchronous — it is a single local read.
+  void _refreshKeyChange(String otherId) {
+    if (!E2eeService.isEncryptionOn) return;
+    final at = E2eeService.identityChangedAt(otherId);
+    if (at == null || !mounted) return;
+    setState(() => _keyChangedAt = at);
+  }
+
+  Future<void> _dismissKeyChange() async {
+    final otherId = _conversation?.otherUserId;
+    setState(() => _keyChangedAt = null);
+    if (otherId != null && otherId.isNotEmpty) {
+      await E2eeService.acknowledgeIdentityChange(otherId);
+    }
+  }
+
+  /// Why the composer is locked right now, or null when it is open.
+  ///
+  /// Thin wrapper over [composerGateFor] — the rules and the reasoning
+  /// live there, where a test can reach them. This half only gathers the
+  /// state and decides when NOT to ask.
+  ///
+  /// Returns null while the friendship is still resolving: locking the
+  /// composer on incomplete state would flash a "not friends" bar at two
+  /// people who have been friends for a year.
+  ComposerGate? get _composerGate {
+    final convo = _conversation;
+    if (convo == null || convo.isGroup || convo.isSelfChat) return null;
+    if (!_friendshipResolved) return null;
+    final me = AuthService.currentUser?.id ?? '';
+    final other = convo.otherUserId;
+    if (me.isEmpty || other.isEmpty) return null;
+
+    final theyHaveSpoken = _messages.any((m) => m.senderId == other);
+    final areFriends = _friendship?.isAccepted ?? false;
+
+    // A refusal the prediction did not see coming. Outranks the ordinary
+    // rules — the server has the final say on all of them — but never
+    // outranks a reply or an accepted friendship, or it would never lift.
+    final override = _serverGateMessage;
+    if (override != null && !theyHaveSpoken && !areFriends) {
+      return ComposerGate(title: 'Message not sent', body: override);
+    }
+
+    return composerGateFor(
+      otherName: convo.otherUserName,
+      theyHaveSpoken: theyHaveSpoken,
+      areFriends: areFriends,
+      requestPending: _friendship?.isPending ?? false,
+      whoCanMessage: _peerWhoCanMessage,
+      myMessageCount: _messages.where((m) => m.senderId == me).length,
+    );
   }
 
   @override
@@ -1581,6 +1660,25 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _lastTypingBroadcast = now;
     MessagingService.broadcastTyping(channel);
+    _pingPeerInbox();
+  }
+
+  /// Mirror the typing ping onto the peer's own channel so it also shows
+  /// on their INBOX row, not just inside an already-open chat.
+  ///
+  /// 1:1 only — see [MessagingService.broadcastTypingToInbox].
+  void _pingPeerInbox({String kind = 'typing'}) {
+    final convo = _conversation;
+    if (convo == null || convo.isGroup || convo.isSelfChat) return;
+    final other = convo.otherUserId;
+    if (other.isEmpty) return;
+    unawaited(
+      MessagingService.broadcastTypingToInbox(
+        recipientUserId: other,
+        conversationId: widget.conversationId,
+        kind: kind,
+      ),
+    );
   }
 
   // ---------- Voice notes ----------
@@ -1626,9 +1724,11 @@ class _ChatScreenState extends State<ChatScreen>
       final ch = _typingChannel;
       if (ch != null) {
         MessagingService.broadcastTyping(ch, kind: 'recording');
+        _pingPeerInbox(kind: 'recording');
         _recordingBroadcast?.cancel();
         _recordingBroadcast = Timer.periodic(const Duration(seconds: 2), (_) {
           MessagingService.broadcastTyping(ch, kind: 'recording');
+          _pingPeerInbox(kind: 'recording');
         });
       }
       _recordingTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
@@ -2011,16 +2111,23 @@ class _ChatScreenState extends State<ChatScreen>
       // Any other Postgrest error → existing rollback + retry path.
       setState(() => _pending.removeWhere((m) => m.id == tempId));
       _inputController.text = text;
-      // The friend-gate 3-message cap (patch_118) raises a check_violation
-      // (23514) with a user-facing message — show that verbatim so the
-      // sender understands why, instead of a generic failure line.
-      final friendly = e.code == '23514'
-          ? e.message
-          : 'Could not send message. Please try again.';
+      // The friend gate raises a check_violation (23514). It used to be
+      // reported as a snackbar quoting the database's own error text —
+      // after the message had already been pulled back out of the thread,
+      // so the member's reaction was "it vanished and a popup shouted at
+      // me". _composerGate now predicts this case and locks the composer
+      // before anything is typed, so reaching here means a genuine race:
+      // they flipped their setting, or another device used the one free
+      // message. Lock the composer with the server's own reason instead of
+      // popping a toast — same destination, no interruption.
+      if (e.code == '23514') {
+        setState(() => _serverGateMessage = e.message);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            friendly,
+            'Could not send message. Please try again.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -2048,16 +2155,22 @@ class _ChatScreenState extends State<ChatScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.scaffoldBg,
-      body: Column(
-        children: [
-          _selectMode ? _buildSelectionBar() : _buildHeader(),
-          _buildPinnedBanner(),
-          _buildFriendshipBanner(),
-          // Branded doodle wallpaper behind the thread — the chat reads
-          // as a place, not a list on a grey page.
-          Expanded(child: ChatWallpaper(child: _buildBody())),
-          _buildInputBar(),
-        ],
+      // The splash's ambient field, edge to edge behind the WHOLE chat.
+      // It used to wrap only _buildBody(), so it started under the header
+      // and stopped above the composer — the two seams the founder saw as
+      // "cut off". Header and composer now paint no ground of their own
+      // and the field runs behind them, under the status bar and past the
+      // home indicator.
+      body: ChatWallpaper(
+        child: Column(
+          children: [
+            _selectMode ? _buildSelectionBar() : _buildHeader(),
+            _buildPinnedBanner(),
+            _buildFriendshipBanner(),
+            Expanded(child: _buildBody()),
+            _buildInputBar(),
+          ],
+        ),
       ),
     );
   }
@@ -2159,6 +2272,11 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_friendshipResolved) return const SizedBox.shrink();
     final f = _friendship;
     if (f != null && f.isAccepted) return const SizedBox.shrink();
+    // When the composer is locked it already carries the friendship state
+    // and the Add friend button, right where the member is looking. Two
+    // gold cards saying overlapping things is what made this screen read
+    // as contradictory in the first place.
+    if (_composerGate != null) return const SizedBox.shrink();
 
     final viewerId = AuthService.currentUser?.id ?? '';
     final otherName = convo.otherUserName;
@@ -2172,8 +2290,13 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (isIncoming) {
       title = '$otherName wants to be friends';
+      // Was "You can still chat regardless" — flatly untrue, and the
+      // direct cause of the reported contradiction: the server allows a
+      // non-friend exactly ONE message. Accepting is what actually opens
+      // the thread, so say that.
       body =
-          'Accept to follow each other\'s friends-only posts. You can still chat regardless.';
+          'Accepting lets you both message freely, and you\'ll see each '
+          'other\'s friends-only posts.';
       action = Row(
         children: [
           Expanded(
@@ -2201,13 +2324,17 @@ class _ChatScreenState extends State<ChatScreen>
       );
     } else if (isOutgoingPending) {
       title = 'Friend request sent';
+      // Only reachable before the one free message has been used — past
+      // that, _composerGate takes over and this banner is suppressed.
       body =
-          'Waiting for $otherName to accept. You can keep chatting in the meantime.';
+          'Waiting for $otherName to accept. You can send one message in '
+          'the meantime.';
       action = null;
     } else {
       title = 'You\'re not friends with $otherName yet';
       body =
-          'You can still send messages. Add as a friend to follow each other\'s posts.';
+          'You can send one message before you\'re friends. Add $otherName '
+          'to keep talking and to see each other\'s posts.';
       action = Row(
         children: [
           Expanded(
@@ -2594,8 +2721,11 @@ class _ChatScreenState extends State<ChatScreen>
       pathParameters: {'id': widget.conversationId},
     );
     return FlatStatusBar(
+      // Transparent, not scaffoldBg: the ambient field behind the whole
+      // screen has to run under the header, or it reads as a band that
+      // starts below it.
       child: Container(
-        color: context.palette.scaffoldBg,
+        color: Colors.transparent,
         child: SafeArea(
           bottom: false,
           child: Padding(
@@ -3141,11 +3271,22 @@ class _ChatScreenState extends State<ChatScreen>
     final showPrivacyLine =
         !_isGroup && !(_conversation?.isSelfChat ?? false);
     final leading = showPrivacyLine ? 1 : 0;
+    // "Security code changed" sits at the BOTTOM, where WhatsApp puts it:
+    // it is the newest thing that happened in this thread, and burying it
+    // at the top would hide it behind a thousand messages.
+    final keyChangedAt = _keyChangedAt;
+    final trailing = keyChangedAt != null ? 1 : 0;
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
-      itemCount: _messages.length + leading,
+      itemCount: _messages.length + leading + trailing,
       itemBuilder: (context, rawIndex) {
+        if (trailing == 1 && rawIndex == _messages.length + leading) {
+          return _SecurityCodeChanged(
+            otherName: _conversation?.otherUserName ?? 'This contact',
+            onDismiss: _dismissKeyChange,
+          );
+        }
         if (showPrivacyLine && rawIndex == 0) {
           return Column(
             children: [
@@ -3161,6 +3302,7 @@ class _ChatScreenState extends State<ChatScreen>
                 ),
               _PrivacyNotice(
                 otherName: _conversation?.otherUserName ?? 'this person',
+                encrypted: E2eeService.isEncryptionOn,
               ),
             ],
           );
@@ -3386,7 +3528,9 @@ class _ChatScreenState extends State<ChatScreen>
     // only. Members chat and admins fall through to the normal composer.
     if (_isChurchChannel && !_channelCanPost) {
       return Container(
-        color: context.palette.card,
+        // Matches the live composer's translucency so a read-only chat
+        // doesn't slam an opaque bar across the ambient field.
+        color: context.palette.card.withValues(alpha: 0.82),
         child: SafeArea(
           top: false,
           child: Padding(
@@ -3421,7 +3565,9 @@ class _ChatScreenState extends State<ChatScreen>
     final deletedGroup = _conversation?.isDeletedGroup ?? false;
     if (_notAMember || deletedGroup) {
       return Container(
-        color: context.palette.card,
+        // Matches the live composer's translucency so a read-only chat
+        // doesn't slam an opaque bar across the ambient field.
+        color: context.palette.card.withValues(alpha: 0.82),
         child: SafeArea(
           top: false,
           child: Padding(
@@ -3480,7 +3626,9 @@ class _ChatScreenState extends State<ChatScreen>
     // tappable strip that opens the Unblock confirmation.
     if (_isBlocked) {
       return Container(
-        color: context.palette.card,
+        // Matches the live composer's translucency so a read-only chat
+        // doesn't slam an opaque bar across the ambient field.
+        color: context.palette.card.withValues(alpha: 0.82),
         child: SafeArea(
           top: false,
           child: InkWell(
@@ -3508,16 +3656,24 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       );
     }
+    // Friend-gated: the server would refuse the next message, so the
+    // composer says so up front instead of taking a message it cannot
+    // deliver. Same shape as the blocked / left-group strips above.
+    final gate = _composerGate;
+    if (gate != null) return _buildGatedComposer(gate);
     return Container(
       decoration: BoxDecoration(
-        color: context.palette.card,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, -4),
+        // Translucent so the ambient field carries on underneath instead
+        // of being cut off by an opaque slab — but still a surface, so the
+        // text field and its icons keep their contrast. The heavy drop
+        // shadow that used to separate composer from thread is now a
+        // hairline: over a soft gradient a 14px shadow reads as a smudge.
+        color: context.palette.card.withValues(alpha: 0.82),
+        border: Border(
+          top: BorderSide(
+            color: context.palette.divider.withValues(alpha: 0.6),
           ),
-        ],
+        ),
       ),
       child: SafeArea(
         top: false,
@@ -3938,6 +4094,28 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  /// The composer, locked, with the reason attached to it.
+  Widget _buildGatedComposer(ComposerGate gate) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.palette.card.withValues(alpha: 0.82),
+        border: Border(
+          top: BorderSide(
+            color: context.palette.divider.withValues(alpha: 0.6),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: _GatedComposer(
+          gate: gate,
+          busy: _friendshipBusy,
+          onAddFriend: _addFriend,
+        ),
+      ),
+    );
+  }
+
   Widget _buildPresenceSubtitle() {
     // Live activity wins over presence; recording wins over typing.
     if (_otherRecording) {
@@ -4028,6 +4206,273 @@ class _ChatScreenState extends State<ChatScreen>
 
 /// Centered day-divider chip between messages from different days.
 /// Centred grey pill for group system events (joined / left / removed).
+/// Why the composer is locked, in words the member reads.
+///
+/// The gate used to be discovered the hard way: you typed, you sent, the
+/// server refused, and a snackbar quoted the database's own error text at
+/// you — after your message had already been rolled back out of the
+/// thread. This carries the same reason to the composer *before* anything
+/// is typed. See [composerGateFor].
+class ComposerGate {
+  const ComposerGate({
+    required this.title,
+    required this.body,
+    this.showAddFriend = false,
+  });
+
+  final String title;
+  final String body;
+
+  /// Whether the lock has an action that clears it. "They aren't taking
+  /// messages" has none — offering a button that cannot help is worse
+  /// than offering nothing.
+  final bool showAddFriend;
+}
+
+/// The composer gate, as a pure function of the state that decides it.
+///
+/// Public and free-standing on purpose. This MIRRORS the production
+/// trigger `enforce_non_friend_message_cap`, and a client that drifts
+/// from it either blocks a message the server would have accepted or
+/// invites one it will refuse — a mismatch that is invisible until a
+/// member hits it. Pulling the decision out of the widget is what lets a
+/// test pin every branch against the trigger's own order:
+///
+///   1. a reply from them lifts EVERY gate, whatever the settings say;
+///   2. `nobody` blocks even friends;
+///   3. friends are otherwise free;
+///   4. `friends` blocks non-friends outright;
+///   5. `everyone` allows exactly one message until they accept.
+///
+/// Returns null when the composer should be open.
+ComposerGate? composerGateFor({
+  required String otherName,
+  required bool theyHaveSpoken,
+  required bool areFriends,
+  required bool requestPending,
+  required String whoCanMessage,
+  required int myMessageCount,
+}) {
+  final name = otherName.trim().isEmpty ? 'This person' : otherName.trim();
+
+  // 1. They have spoken in this thread → nothing is gated.
+  if (theyHaveSpoken) return null;
+
+  // 2. 'nobody' — the only setting that gates a friend too, which is why
+  // it is checked BEFORE the friendship shortcut, exactly as the trigger
+  // does.
+  if (whoCanMessage == 'nobody') {
+    return ComposerGate(
+      title: '$name isn\'t taking new messages',
+      body: 'They\'ve turned off new conversations in their chat settings. '
+          'You\'ll be able to write once they message you.',
+    );
+  }
+
+  // 3. Friends chat freely.
+  if (areFriends) return null;
+
+  // 4. Friends-only.
+  if (whoCanMessage == 'friends') {
+    return ComposerGate(
+      title: '$name only accepts messages from friends',
+      body: 'Send a friend request. Once they accept, you can write to '
+          'each other freely.',
+      showAddFriend: !requestPending,
+    );
+  }
+
+  // 5. 'everyone' — one message, then wait.
+  if (myMessageCount >= 1) {
+    return ComposerGate(
+      title: 'You\'re not friends with $name yet',
+      body: requestPending
+          ? 'Your message has been delivered. You can send more once $name '
+                'accepts your friend request or replies.'
+          : 'You can send one message before you\'re friends, and you\'ve '
+                'sent it. Add $name as a friend — once they accept, or '
+                'reply, you can keep talking.',
+      showAddFriend: !requestPending,
+    );
+  }
+  return null;
+}
+
+/// A composer that cannot be typed in, and says why.
+///
+/// Keeps the composer's silhouette — a pill where the input was, the same
+/// height, the same place — so a gated chat doesn't read as a broken
+/// screen with its bottom bar missing. The pill is dead: tapping it never
+/// raises the keyboard. Instead it nudges the reason above it, because the
+/// founder's note was that people tap the box first and only then want to
+/// know why nothing happened.
+class _GatedComposer extends StatefulWidget {
+  const _GatedComposer({
+    required this.gate,
+    required this.busy,
+    required this.onAddFriend,
+  });
+
+  final ComposerGate gate;
+  final bool busy;
+  final VoidCallback onAddFriend;
+
+  @override
+  State<_GatedComposer> createState() => _GatedComposerState();
+}
+
+class _GatedComposerState extends State<_GatedComposer> {
+  /// Bumped on every tap of the dead input; the shake is keyed on it.
+  int _nudge = 0;
+
+  void _onTapInput() {
+    if (!AppMotion.enabled(context)) return;
+    setState(() => _nudge++);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final gate = widget.gate;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TweenAnimationBuilder<double>(
+            key: ValueKey(_nudge),
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 420),
+            builder: (context, t, child) {
+              // Damped horizontal shake: three decreasing swings, settling
+              // at zero. Only runs when _nudge changes, so a static gated
+              // composer animates nothing.
+              final dx = _nudge == 0 ? 0.0 : sin(t * pi * 3) * 6 * (1 - t);
+              return Transform.translate(offset: Offset(dx, 0), child: child);
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: BoxDecoration(
+                color: AppColors.goldAccent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.goldAccent.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: AppColors.goldAccent,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          gate.title,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: palette.text,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    gate.body,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                      height: 1.45,
+                    ),
+                  ),
+                  if (gate.showAddFriend) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: widget.busy ? null : widget.onAddFriend,
+                        icon: const Icon(
+                          Icons.person_add_alt_1,
+                          size: 16,
+                          color: AppColors.primaryBlue,
+                        ),
+                        label: Text(
+                          widget.busy ? 'Sending…' : 'Add friend',
+                          style: AppTextStyles.buttonText.copyWith(
+                            color: AppColors.primaryBlue,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.primaryBlue),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // The dead input. Deliberately looks like the real one.
+          Semantics(
+            textField: false,
+            enabled: false,
+            label: '${gate.title}. ${gate.body}',
+            child: GestureDetector(
+              onTap: _onTapInput,
+              child: Container(
+                height: 46,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: palette.cardMuted.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: palette.divider.withValues(alpha: 0.8),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.lock_outline,
+                      size: 17,
+                      color: palette.textMuted.withValues(alpha: 0.7),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'You can\'t send messages yet',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: palette.textMuted.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// "Who is this?" strip above the first message of a new thread.
 ///
 /// Shows the two things that decide whether a stranger's message gets a
@@ -4104,9 +4549,19 @@ class _PeerContextStrip extends StatelessWidget {
 /// sits above the first message and scrolls away on its own the moment the
 /// conversation has any length to it.
 class _PrivacyNotice extends StatelessWidget {
-  const _PrivacyNotice({required this.otherName});
+  const _PrivacyNotice({required this.otherName, required this.encrypted});
 
   final String otherName;
+
+  /// Whether this thread is ACTUALLY encrypted right now.
+  ///
+  /// Drives the wording, and nothing else in the app is allowed to. "Your
+  /// messages are end-to-end encrypted" is a security claim, and printing
+  /// it while the crypto is off — or while the peer is on a build that
+  /// cannot decrypt, so we are sending plaintext to them — would make the
+  /// app lie to a member about who can read their words. So this comes
+  /// from [E2eeService.isEncryptionOn], not from a constant.
+  final bool encrypted;
 
   @override
   Widget build(BuildContext context) {
@@ -4132,10 +4587,73 @@ class _PrivacyNotice extends StatelessWidget {
             ),
             const SizedBox(width: 9),
             Expanded(
+              child: encrypted
+                  ? _EncryptedLine(otherName: first)
+                  : Text(
+                      'Messages here are between you and $first. Church '
+                      'admins cannot read private chats. Press and hold any '
+                      'message to report it.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.textMuted,
+                        fontSize: 11.5,
+                        height: 1.45,
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// WhatsApp's "security code changed" line.
+///
+/// Shown when a contact's identity key is replaced. Almost always they
+/// reinstalled or got a new phone — but the app cannot tell that apart
+/// from someone interposing, which is exactly why the member is told
+/// instead of being quietly reconnected.
+///
+/// It does NOT block the conversation. Refusing to send until the member
+/// re-verified would break the thread of everyone who simply changed
+/// handset, which is the overwhelming majority.
+class _SecurityCodeChanged extends StatelessWidget {
+  const _SecurityCodeChanged({
+    required this.otherName,
+    required this.onDismiss,
+  });
+
+  final String otherName;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final first = otherName.trim().split(' ').first;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: AppColors.goldAccent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.goldAccent.withValues(alpha: 0.35),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.lock_reset,
+              size: 16,
+              color: AppColors.goldAccent,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
               child: Text(
-                'Messages here are between you and $first. Church admins '
-                'cannot read private chats. Press and hold any message to '
-                'report it.',
+                'Your security code with $first changed. This usually '
+                'means they reinstalled Adventist Super App or changed phone. '
+                'Your messages are still end-to-end encrypted.',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: context.palette.textMuted,
                   fontSize: 11.5,
@@ -4143,8 +4661,65 @@ class _PrivacyNotice extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: onDismiss,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: context.palette.textMuted,
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Messages are end-to-end encrypted. Learn more."
+///
+/// The "Learn more" is a real tap target into the privacy policy, not
+/// decoration — a member told their messages are encrypted deserves
+/// somewhere to read what that means and what the app still can see.
+class _EncryptedLine extends StatelessWidget {
+  const _EncryptedLine({required this.otherName});
+
+  final String otherName;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = AppTextStyles.bodySmall.copyWith(
+      color: context.palette.textMuted,
+      fontSize: 11.5,
+      height: 1.45,
+    );
+    return Text.rich(
+      TextSpan(
+        style: base,
+        children: [
+          TextSpan(
+            text:
+                'Messages to $otherName are end-to-end encrypted. Nobody '
+                'outside this chat — not even Adventist Super App — can read '
+                'them. ',
+          ),
+          TextSpan(
+            text: 'Learn more',
+            style: base.copyWith(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w700,
+              decoration: TextDecoration.underline,
+              decorationColor: AppColors.primaryBlue,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => context.pushNamed('privacy'),
+          ),
+        ],
       ),
     );
   }
@@ -5318,7 +5893,17 @@ class _ImageBubbleState extends State<_ImageBubble> {
   @override
   Widget build(BuildContext context) {
     final isMine = widget.isMine;
-    final maxWidth = MediaQuery.of(context).size.width * 0.66;
+    final screen = MediaQuery.of(context).size;
+    final maxWidth = screen.width * 0.66;
+    // A photo bubble had a width cap and NO height cap. Width alone does
+    // not bound a picture: the image lays out at its own aspect ratio
+    // scaled to whatever width it is given, so a portrait shot (3:4, or a
+    // 9:16 screenshot) came out 1.2–1.8x TALLER than it was wide and ate
+    // the whole thread — the reported "sent picture almost covers the
+    // whole chat". Cap the height as well and let the picture letterbox
+    // to a narrower bubble; tapping still opens it full-screen, which is
+    // where a tall image belongs.
+    final maxImageHeight = screen.height * 0.42;
     // '📷 Photo' is the placeholder the server stores when there's no
     // caption — it's chrome, not something the sender wrote, so it must
     // never render as a caption under the picture.
@@ -5340,7 +5925,11 @@ class _ImageBubbleState extends State<_ImageBubble> {
             GestureDetector(
           onTap: _open,
           child: Container(
-            constraints: const BoxConstraints(minWidth: 160, minHeight: 160),
+            constraints: BoxConstraints(
+              minWidth: 160,
+              minHeight: 160,
+              maxHeight: maxImageHeight,
+            ),
             color: context.palette.cardMuted,
             child: Stack(
               fit: StackFit.passthrough,

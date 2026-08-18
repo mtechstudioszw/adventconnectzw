@@ -86,7 +86,7 @@ class _ChurchAdminApprovalsScreenState
   Future<void> _openWhatsApp(String phone, [String? message]) async {
     final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
     final text = message ??
-        'Hi, about your Advent Connect church-admin request…';
+        'Hi, about your Adventist Super App church-admin request…';
     final uri = Uri.parse(
         'https://wa.me/$cleaned?text=${Uri.encodeComponent(text)}');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -95,7 +95,7 @@ class _ChurchAdminApprovalsScreenState
   /// Welcome + feature rundown sent on WhatsApp when a claim is approved.
   String _approvedMessage(PendingChurchAdmin a) =>
       'Hi ${a.applicantName}, you are now an approved admin for '
-      '${a.churchName} on Advent Connect! 🎉\n\n'
+      '${a.churchName} on Adventist Super App! 🎉\n\n'
       'In your church dashboard you can:\n'
       '• Post announcements to your members\n'
       '• Share church updates to the whole app (shown with your church name + verified tick)\n'
@@ -109,7 +109,7 @@ class _ChurchAdminApprovalsScreenState
   /// needs verification before approval.
   String _proofMessage(PendingChurchAdmin a) =>
       'Hi ${a.applicantName}, thank you for requesting to manage '
-      '${a.churchName} on Advent Connect. Before we can approve you, please '
+      '${a.churchName} on Adventist Super App. Before we can approve you, please '
       'send proof of your position at the church (e.g. Elder, Clerk, Pastor) '
       '— a photo of an appointment letter or your church ID. Reply here with '
       'it and we will review again. Thank you!';

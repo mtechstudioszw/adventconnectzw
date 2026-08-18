@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/feed_service.dart';
+import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -32,6 +33,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
   List<FriendSummary> _friends = const [];
   bool _loading = true;
   String? _error;
+
+  /// Guards the message button against a double-tap opening two threads.
+  bool _opening = false;
 
   @override
   void initState() {
@@ -75,6 +79,43 @@ class _FriendsScreenState extends State<FriendsScreen> {
             f.fullName.toLowerCase().contains(q) ||
             (f.churchName ?? '').toLowerCase().contains(q))
         .toList();
+  }
+
+  /// Opens (or reuses) the 1:1 thread with this friend.
+  ///
+  /// This used to push `new_chat` — the people-picker — so tapping the
+  /// message icon on a specific friend dumped you on a list of all your
+  /// friends and made you find them again. Same primitive every other
+  /// "message this person" entry point uses: create-or-reuse, then push
+  /// `chat` with the conversation as `extra` so the header renders from
+  /// the object we already hold instead of blanking while it refetches.
+  Future<void> _openChat(FriendSummary f) async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: f.userId,
+        otherUserName: f.fullName,
+        source: 'direct',
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      router.pushNamed('chat', pathParameters: {'id': convo.id}, extra: convo);
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          content: Text(
+            'Could not open the chat. Try again.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
   }
 
   Future<void> _unfriend(FriendSummary f) async {
@@ -152,8 +193,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 subtitle: _loading
                     ? 'Loading…'
                     : _friends.length == 1
-                        ? '1 friend on Advent Connect.'
-                        : '${_friends.length} friends on Advent Connect.',
+                        ? '1 friend on Adventist Super App.'
+                        : '${_friends.length} friends on Adventist Super App.',
                 fallbackRoute: 'profile',
                 trailing: ScreenHeroTrailing(
                   icon: Icons.person_add_alt_1_outlined,
@@ -218,7 +259,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     icon: Icons.people_outline,
                     title: 'No friends yet',
                     message:
-                        'Find members from your church and around Zimbabwe, '
+                        'Find members from your church and around the globe, '
                         'and their stories will show up on your home screen.',
                     action: PrimaryGradientButton(
                       label: 'Find people',
@@ -254,9 +295,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         'user_profile',
                         pathParameters: {'userId': visible[i].userId},
                       ),
-                      onMessage: () => context.pushNamed(
-                        'new_chat',
-                      ),
+                      onMessage: () => _openChat(visible[i]),
                       onRemove: () => _unfriend(visible[i]),
                     );
                     if (i >= 8) return row;

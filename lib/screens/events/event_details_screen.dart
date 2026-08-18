@@ -632,7 +632,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   Future<void> _openWhatsApp(String phone, Event event) async {
     final cleaned = phone.replaceAll(RegExp(r'[^0-9+]'), '');
     final text = Uri.encodeComponent(
-      'Hi, I saw your event on Advent Connect ZW: ${event.title}',
+      'Hi, I saw your event on Adventist Super App: ${event.title}',
     );
     final url = Uri.parse('https://wa.me/$cleaned?text=$text');
     try {
@@ -678,7 +678,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     final shareUrl = eventShareUrl(event.id);
     final text =
         '${event.title}\n\n'
-        'Join me at this event on Advent Connect ZW:\n$shareUrl';
+        'Join me at this event on Adventist Super App:\n$shareUrl';
     await Share.share(text, subject: event.title);
   }
 
@@ -760,7 +760,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
     }
     final name = event.organizerName?.trim();
     if (name != null && name.isNotEmpty) return name;
-    return 'Advent Connect ZW';
+    return 'Adventist Super App';
   }
 
   Future<void> _openMap(Event event) async {

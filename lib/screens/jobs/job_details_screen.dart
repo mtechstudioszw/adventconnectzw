@@ -501,7 +501,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final shareUrl = jobShareUrl(job.id);
     final text =
         '${job.title}\n\n'
-        'Job opportunity on Advent Connect ZW:\n$shareUrl';
+        'Job opportunity on Adventist Super App:\n$shareUrl';
     try {
       await Share.share(text, subject: job.title);
     } catch (_) {

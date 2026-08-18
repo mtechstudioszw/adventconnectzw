@@ -12,7 +12,7 @@ class PrivacyScreen extends StatelessWidget {
       subtitle: 'What we collect, why we collect it, and how we look after it.',
       lastUpdated: '16 August 2026',
       intro:
-          'Your privacy matters to us. This policy explains the personal information Advent Connect ZW collects when you use the app, how we use it, and the choices you have. We aim to keep this clear and honest — if anything is unclear please reach out and we\'ll explain.',
+          'Your privacy matters to us. This policy explains the personal information Adventist Super App collects when you use the app, how we use it, and the choices you have. We aim to keep this clear and honest — if anything is unclear please reach out and we\'ll explain.',
       sections: const [
         LegalSection(
           title: 'Information We Collect',
@@ -92,12 +92,12 @@ class PrivacyScreen extends StatelessWidget {
         LegalSection(
           title: 'Children\'s Privacy',
           body:
-              'Advent Connect ZW is for members aged 16 and older. We do not knowingly collect personal information from anyone under 16. If you believe a younger person has registered, please contact us so we can remove the account. Members aged 16–17 are encouraged to use the app with the involvement of a parent or guardian.',
+              'Adventist Super App is for members aged 16 and older. We do not knowingly collect personal information from anyone under 16. If you believe a younger person has registered, please contact us so we can remove the account. Members aged 16–17 are encouraged to use the app with the involvement of a parent or guardian.',
         ),
         LegalSection(
-          title: 'Zimbabwe Data Protection Act Compliance',
+          title: 'Data Protection and Your Rights',
           body:
-              'We process personal information in accordance with the Cyber and Data Protection Act [Chapter 12:07] of Zimbabwe. You have the right to access, correct or object to the processing of your personal information, and to lodge a complaint with the relevant data protection authority.',
+              'The app is operated from Zimbabwe, and we process personal information in accordance with the Cyber and Data Protection Act [Chapter 12:07] of Zimbabwe. Wherever you live, you have the right to access, correct, export or object to the processing of your personal information, to withdraw consent, and to ask us to delete your account and data. If you are in a country with its own data-protection law — such as the GDPR in the UK and the European Economic Area, or comparable laws elsewhere — those rights apply to you in addition, and you may lodge a complaint with your local data protection authority.',
         ),
         LegalSection(
           title: 'Data Retention',

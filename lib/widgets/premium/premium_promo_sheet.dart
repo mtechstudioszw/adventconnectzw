@@ -91,8 +91,8 @@ class PremiumPromoSheet extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 seen >= 10
-                    ? "You've seen $seen ads in Advent Connect"
-                    : 'Advent Connect without the ads',
+                    ? "You've seen $seen ads in Adventist Super App"
+                    : 'Adventist Super App without the ads',
                 style: TextStyle(
                   fontSize: 22,
                   height: 1.2,

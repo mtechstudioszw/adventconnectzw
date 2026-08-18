@@ -40,18 +40,42 @@ class EgwHighlights {
   /// Bumped on every change so open readers repaint.
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
+  /// The decoded book, kept so a page turn does not re-parse JSON once per
+  /// paragraph.
+  ///
+  /// [forChapter] is called from the reader's `_inline`, which runs for
+  /// EVERY block on EVERY page it builds — and a `PageView` builds three
+  /// pages at a time and rebuilds them mid-fling. Decoding the whole book's
+  /// highlights thirty times per frame is exactly the kind of work that
+  /// shows up as *"the page animation when swipping is abit lagging"*
+  /// (founder, 18 Aug 2026), because it lands on the UI isolate in the
+  /// middle of the turn.
+  ///
+  /// Keyed by the raw string it was decoded from, so it cannot go stale:
+  /// every write goes through [_save], which puts the new JSON into Hive's
+  /// in-memory keystore before its first `await`, so the next read sees a
+  /// different raw string and re-decodes.
+  static String? _cachedRaw;
+  static String? _cachedBookId;
+  static Map<String, List<String>> _cachedBook = const {};
+
   /// Highlighted passages for a book, grouped by chapter id.
   static Map<String, List<String>> forBook(String bookId) {
     final raw = CacheService.readPref(_key(bookId));
     if (raw == null || raw.isEmpty) return const {};
+    if (bookId == _cachedBookId && raw == _cachedRaw) return _cachedBook;
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      return decoded.map(
+      final book = decoded.map(
         (chapter, list) => MapEntry(
           chapter,
           (list as List).map((e) => e.toString()).toList(),
         ),
       );
+      _cachedBookId = bookId;
+      _cachedRaw = raw;
+      _cachedBook = book;
+      return book;
     } catch (_) {
       return const {};
     }

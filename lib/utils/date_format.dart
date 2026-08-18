@@ -6,7 +6,7 @@ const List<String> _months = [
 ];
 
 /// Formats a profile's join date as "31 May 2026" for the
-/// "Joined Advent Connect ZW" line shown on every profile.
+/// "Joined Adventist Super App" line shown on every profile.
 String formatJoinDate(DateTime date) {
   final d = date.toLocal();
   return '${d.day} ${_months[d.month - 1]} ${d.year}';

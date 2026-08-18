@@ -7,7 +7,9 @@ import 'cart_service.dart';
 import 'messaging_service.dart';
 import 'music_player_service.dart';
 import 'premium_service.dart';
+import 'e2ee/e2ee_service.dart';
 import 'presence_service.dart';
+import 'typing_signal.dart';
 import 'quiz_home_signal.dart';
 import 'quiz_match_service.dart';
 import 'usage_analytics.dart';
@@ -64,6 +66,10 @@ class SessionReset {
     await _step('accountMode', AccountModeService.resetToPersonal);
     await _step('premium', PremiumService.clear);
     await _step('presence', PresenceService.stop);
+    await _step('typingSignal', TypingSignal.stop);
+    // Drops in-memory handles only. The Hive box and keystore entries are
+    // namespaced per user id and deliberately survive — see E2eeService.stop.
+    await _step('e2ee', () async => E2eeService.stop());
     await _step('usageAnalytics', UsageAnalytics.stop);
 
     // Audio keeps playing across a sign-out otherwise: the next member

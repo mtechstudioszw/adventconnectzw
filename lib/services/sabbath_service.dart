@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/countries.dart';
+import 'auth_service.dart';
 import 'cache_service.dart';
 
 /// Sabbath sundown helper. Mirrors Part 16 of the master reference:
@@ -100,12 +102,56 @@ class SabbathService {
 
   static List<String> get provinces => _provinceCoords.keys.toList();
 
+  /// The member's country, read straight from auth metadata so it is always
+  /// whatever `AuthService.updateProfile` last wrote. Falls back to ZW,
+  /// which is what patch_213 backfilled every pre-rebrand profile to.
+  /// One source of truth, shared with every listing form — see
+  /// `AuthService.currentCountry()`. Two readers of the same field is how
+  /// this file ended up with a second copy of the solar equation.
+  static String _countryCode() => AuthService.currentCountry();
+
+  /// Where to compute sundown for.
+  ///
+  /// A Zimbabwean province wins when one is set, because it is finer-grained
+  /// than a country centroid and it is what every existing user already has
+  /// — this keeps their times bit-for-bit unchanged. Everyone else resolves
+  /// to their country's populated centroid.
+  ///
+  /// **This is the fix for the global bug.** It used to be
+  /// `province() ?? 'Harare'`, so every member outside Zimbabwe — who has no
+  /// Zimbabwean province and never will — silently got Harare's sundown.
+  static ({double lat, double lon}) _coords({
+    String? overrideProvince,
+    String? overrideCountry,
+  }) {
+    String? p = overrideProvince;
+    if (p == null) {
+      try {
+        p = province();
+      } catch (_) {
+        // Cache not open yet — country resolution below still works.
+      }
+    }
+    final byProvince = p == null ? null : _provinceCoords[p];
+    if (byProvince != null) return byProvince;
+
+    final country = Countries.byCode(overrideCountry ?? _countryCode());
+    if (country != null) return (lat: country.lat, lon: country.lng);
+
+    return _provinceCoords['Harare']!;
+  }
+
   /// True while we're inside the Sabbath window: from Friday sundown
   /// through Saturday sundown. The home chip uses this to switch from
   /// a countdown ("Sabbath in 6h 12m") to a celebratory tag ("Happy
   /// Sabbath") for the duration.
-  static bool isSabbathNow({DateTime? from, String? overrideProvince}) {
+  static bool isSabbathNow({
+    DateTime? from,
+    String? overrideProvince,
+    String? overrideCountry,
+  }) {
     final end = currentSabbathEnd(
+      overrideCountry: overrideCountry,
       from: from,
       overrideProvince: overrideProvince,
     );
@@ -116,98 +162,127 @@ class SabbathService {
   /// (Saturday sundown in UTC). Otherwise null. Useful for showing a
   /// "Sabbath ends in 1h 20m" hint near the end of the day.
   static DateTime? currentSabbathEnd({
+    String? overrideCountry,
     DateTime? from,
     String? overrideProvince,
   }) {
-    final coordKey = overrideProvince ?? province() ?? 'Harare';
-    final coords = _provinceCoords[coordKey];
-    if (coords == null) return null;
-    final now = (from ?? DateTime.now()).toUtc();
-    // Africa/Harare wall-clock — same UTC+2 offset trick as below.
-    final hararet = now.add(const Duration(hours: 2));
+    final coords = _coords(
+      overrideProvince: overrideProvince,
+      overrideCountry: overrideCountry,
+    );
+
+    // Calendar work happens in the DEVICE's local time, because "which
+    // Friday is it" is a question about the user's own wall clock. The
+    // comparison then happens between UTC instants, which is the only
+    // frame where "has the sun set yet" is meaningful.
+    final nowLocal = (from ?? DateTime.now()).toLocal();
+    final nowUtc = nowLocal.toUtc();
 
     // Find the Friday that started the current Sabbath (today if it's
     // already Saturday or late Friday, yesterday if early Saturday, or
     // never if it's Sunday–Thursday).
-    DateTime friday = DateTime(hararet.year, hararet.month, hararet.day);
+    DateTime friday = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
     // Walk back to the most recent Friday.
     while (friday.weekday != DateTime.friday) {
       friday = friday.subtract(const Duration(days: 1));
     }
     final saturday = friday.add(const Duration(days: 1));
 
-    final fridaySunset = _sunsetLocal(
+    final fridaySunset = _sunsetUtc(
       date: friday,
       latDeg: coords.lat,
       lonDeg: coords.lon,
     );
-    final saturdaySunset = _sunsetLocal(
+    final saturdaySunset = _sunsetUtc(
       date: saturday,
       latDeg: coords.lat,
       lonDeg: coords.lon,
     );
 
-    if (hararet.isAfter(fridaySunset) && hararet.isBefore(saturdaySunset)) {
-      return saturdaySunset.subtract(const Duration(hours: 2)).toUtc();
+    if (nowUtc.isAfter(fridaySunset) && nowUtc.isBefore(saturdaySunset)) {
+      return saturdaySunset;
     }
     return null;
   }
 
-  /// The next Friday sundown after [from] in Africa/Harare local time.
-  /// Returns null if the province isn't recognised.
-  static DateTime? nextSabbathStart({DateTime? from, String? overrideProvince}) {
-    final coordKey = overrideProvince ?? province() ?? 'Harare';
-    final coords = _provinceCoords[coordKey];
-    if (coords == null) return null;
+  /// The next Friday sundown after [from], as a UTC instant.
+  ///
+  /// Never null now that a country centroid always resolves — it used to
+  /// return null whenever the stored province wasn't a Zimbabwean one,
+  /// which is every member abroad.
+  static DateTime? nextSabbathStart({
+    DateTime? from,
+    String? overrideProvince,
+    String? overrideCountry,
+  }) {
+    final coords = _coords(
+      overrideProvince: overrideProvince,
+      overrideCountry: overrideCountry,
+    );
 
-    final now = (from ?? DateTime.now()).toUtc();
-    // Africa/Harare is fixed UTC+2 — no DST. Cheap to do math in.
-    final hararet = now.add(const Duration(hours: 2));
+    final nowLocal = (from ?? DateTime.now()).toLocal();
+    final nowUtc = nowLocal.toUtc();
 
-    // Find the next Friday's date (CAT calendar). If today is Friday
+    // Find the next Friday on the user's own calendar. If today is Friday
     // and sunset hasn't passed yet, use today.
-    DateTime candidate = DateTime(hararet.year, hararet.month, hararet.day);
+    DateTime candidate = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
     while (candidate.weekday != DateTime.friday) {
       candidate = candidate.add(const Duration(days: 1));
     }
 
-    var sunsetCat = _sunsetLocal(
+    var sunset = _sunsetUtc(
       date: candidate,
       latDeg: coords.lat,
       lonDeg: coords.lon,
     );
     // If today is Friday but the sun has already set, jump to next Friday.
-    if (sunsetCat.isBefore(hararet)) {
+    if (sunset.isBefore(nowUtc)) {
       candidate = candidate.add(const Duration(days: 7));
-      sunsetCat = _sunsetLocal(
+      sunset = _sunsetUtc(
         date: candidate,
         latDeg: coords.lat,
         lonDeg: coords.lon,
       );
     }
 
-    // Convert back to UTC so the caller's `.difference(DateTime.now())`
-    // works regardless of device timezone.
-    return sunsetCat.subtract(const Duration(hours: 2)).toUtc();
+    // Already UTC, so the caller's `.difference(DateTime.now())` works
+    // regardless of device timezone.
+    return sunset;
   }
 
-  /// Returns sunset on the given date at (lat, lon), expressed in
-  /// Africa/Harare wall-clock time (UTC+2). Uses the standard NOAA
-  /// sunset equation. [date] should be at midnight local.
-  static DateTime _sunsetLocal({
+  /// Returns sunset on the given date at (lat, lon) as a **UTC instant**.
+  /// Uses the standard NOAA sunset equation. [date] is a date on the
+  /// device's local calendar.
+  ///
+  /// It used to return Africa/Harare wall-clock, with `+2` hardcoded at
+  /// both ends. Returning the instant instead is what makes this correct
+  /// worldwide: callers render it with `.toLocal()`, and the OS applies
+  /// the right offset — including DST, which a fixed offset cannot do and
+  /// which moves sundown by an hour for half the year across Europe, North
+  /// America and Australia.
+  static DateTime _sunsetUtc({
     required DateTime date,
     required double latDeg,
     required double lonDeg,
   }) {
-    // 1) Julian day for the given UTC date at noon.
-    //    Convert the local-noon date to UTC first by subtracting +2.
-    final dateUtcMidday = DateTime.utc(date.year, date.month, date.day, 12);
-    // Subtract 2h to get equivalent CAT-local-noon-in-UTC.
-    final adjUtc = dateUtcMidday.subtract(const Duration(hours: 2));
-    final jd = _julianDay(adjUtc);
+    // 1) Julian day for NOON UTC on [date]. Noon, not midnight, because a
+    //    Julian Day rolls over at noon — so this lands on a whole number
+    //    and the day count below is exact.
+    final jd = _julianDay(DateTime.utc(date.year, date.month, date.day, 12));
 
-    // 2) Days since J2000 + meridian shift for longitude.
-    final n = jd - 2451545.0 + 0.0008;
+    // 2) Days since J2000, then the meridian shift for longitude.
+    //
+    //    `n` MUST be a whole number of days. This is where sundown times
+    //    were wrong by ~2 hours for the entire life of the app: the old
+    //    code took the Julian day of 10:00 UTC (local noon minus the
+    //    hardcoded +2) and never rounded, so `n` carried a -0.0825 day
+    //    fraction straight into the solar-position terms — 1h59m of error,
+    //    every day, for everyone.
+    //
+    //    Verified after the fix against two independent references:
+    //    London 21 Jun 2026 → 20:21Z (actual ~20:21Z), and
+    //    Harare 21 Aug 2026 → 15:47Z (actual ~15:47Z).
+    final n = (jd - 2451545.0 + 0.0008).roundToDouble();
     final jStar = n - lonDeg / 360.0;
 
     // 3) Solar mean anomaly.
@@ -238,18 +313,23 @@ class SabbathService {
         (math.sin(_rad(-0.83)) - math.sin(phi) * math.sin(delta)) /
             (math.cos(phi) * math.cos(delta));
 
-    // No sunset (polar) — fall back to a safe 18:00 local. Doesn't
-    // happen at Zimbabwe latitudes, but guard anyway.
+    // No sunset — the sun never crosses the horizon that day. Falls back
+    // to 18:00 local, expressed as an instant.
+    //
+    // This stopped being theoretical with the rebrand: it is real life
+    // above the Arctic Circle in Norway, Sweden and Finland, all of which
+    // have Adventist congregations. A better answer there needs a
+    // published local convention, not more astronomy.
     if (cosOmega.abs() > 1.0) {
-      return DateTime(date.year, date.month, date.day, 18, 0);
+      return DateTime(date.year, date.month, date.day, 18, 0).toUtc();
     }
 
     final omegaDeg = _deg(math.acos(cosOmega));
     final jSet = jTransit + omegaDeg / 360.0;
 
-    // Convert Julian Day → UTC DateTime → Africa/Harare wall-clock.
-    final sunsetUtc = _fromJulianDay(jSet);
-    return sunsetUtc.add(const Duration(hours: 2));
+    // Julian Day → UTC instant. No offset applied: that is the caller's
+    // job, via toLocal().
+    return _fromJulianDay(jSet);
   }
 
   static double _julianDay(DateTime utc) {

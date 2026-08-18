@@ -10,7 +10,7 @@ import { CountedField, ErrorBox, Note, PageHead } from "@/components/ui";
 import { IconPower, IconWrench } from "@/components/icons";
 
 const DEFAULT_MESSAGE =
-  "Advent Connect is down for scheduled maintenance. We will be back shortly.";
+  "Adventist Super App is down for scheduled maintenance. We will be back shortly.";
 
 /**
  * The one switch in this console that stops the entire product.
@@ -63,7 +63,7 @@ export default function MaintenancePage() {
 
   const turnOn = async () => {
     const confirmed = await ask({
-      title: "Take Advent Connect offline?",
+      title: "Take Adventist Super App offline?",
       sub:
         "Every member is locked out within seconds — the ones already inside the " +
         "app too, not just the next person to open it. Nobody can post, message, " +
@@ -121,7 +121,7 @@ export default function MaintenancePage() {
                   : ""}
               </>
             ) : (
-              "Members can use Advent Connect as usual."
+              "Members can use Adventist Super App as usual."
             )}
           </p>
         </div>

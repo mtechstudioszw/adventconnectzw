@@ -495,7 +495,7 @@ class _PostJobScreenState extends State<PostJobScreen>
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: postFormFilledDecoration(
                 icon: Icons.location_on_outlined,
-                hint: 'e.g. Mutare or Remote (Zimbabwe)',
+                hint: 'e.g. Harare, Nairobi, London or Remote',
               ),
             ),
           ),

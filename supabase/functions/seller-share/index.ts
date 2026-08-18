@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   const id = url.searchParams.get("id") ?? "";
 
   let title = "Adventist marketplace seller";
-  let description = "Browse this store on Advent Connect ZW marketplace.";
+  let description = "Browse this store on Adventist Super App marketplace.";
   let image = "";
   let category = "";
   let location = "";
@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
       if (data && data.status === "approved" && data.is_active !== false) {
         title = data.business_name ?? title;
         description = data.description ??
-          `Browse ${title} on Advent Connect ZW marketplace.`;
+          `Browse ${title} on Adventist Super App marketplace.`;
         image = data.cover_photo_url ?? data.profile_photo_url ?? "";
         category = data.category ?? "";
         location = [data.city, data.province].filter(Boolean).join(", ");
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${esc(title)} — Advent Connect ZW</title>
+  <title>${esc(title)} — Adventist Super App</title>
   <meta property="og:type" content="website" />
   <meta property="og:title" content="${esc(title)}" />
   <meta property="og:description" content="${esc(description)}" />
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
   <div class="card">
     <div class="brand">
       <div class="badge">A</div>
-      <div class="name">Advent Connect ZW</div>
+      <div class="name">Adventist Super App</div>
       <div class="tag">SELLER</div>
     </div>
     ${image ? `<img class="cover" src="${esc(image)}" alt="" />` : `<div class="cover"></div>`}
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
         ? `<p class="meta">${esc([category, location].filter(Boolean).join(" • "))}</p>`
         : ""}
       <p>${esc(description)}</p>
-      <a class="btn" href="${esc(appLink)}">Open in Advent Connect ZW</a>
+      <a class="btn" href="${esc(appLink)}">Open in Adventist Super App</a>
       <a class="btn-secondary" href="${esc(DOWNLOAD_URL)}">Don't have the app? Get it here</a>
       <div class="muted">A trusted Adventist seller, verified by community.</div>
     </div>

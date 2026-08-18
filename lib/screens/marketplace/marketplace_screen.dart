@@ -124,7 +124,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     try {
       final shops = await SellerService.fetchApprovedSellers();
       if (!mounted) return;
-      // Your own shop doesn't belong in "Shops on Advent Connect" — this
+      // Your own shop doesn't belong in "Shops in the community" — this
       // rail is for discovering other people's. Yours is one tap away on
       // the seller dashboard, and seeing it here just made the rail
       // shorter for no gain.
@@ -388,7 +388,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
         // No "See all": it pushed the CATEGORY grid, which has nothing to do
         // with shops. The rail already carries every approved seller and
         // scrolls horizontally, so there is nothing hidden behind it.
-        const SectionHeader(title: 'Shops on Advent Connect'),
+        const SectionHeader(title: 'Shops in the community'),
         const SizedBox(height: AppSpace.md),
         SizedBox(
           height: 208,
@@ -598,7 +598,7 @@ Future<void> _showSellerChooser(BuildContext context) {
             ),
             const SizedBox(height: 18),
             Text(
-              'Selling on Advent Connect',
+              'Selling on Adventist Super App',
               style: AppTextStyles.titleLarge.copyWith(
                 fontWeight: FontWeight.w800,
               ),

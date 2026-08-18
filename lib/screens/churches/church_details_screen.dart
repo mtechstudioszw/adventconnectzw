@@ -50,7 +50,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   // "under review" note instead of the claim link.
   bool _myPendingForThis = false;
 
-  /// Advent Connect members whose home church this is. Null until loaded,
+  /// Adventist Super App members whose home church this is. Null until loaded,
   /// or when the count could not be had — the card falls back to the
   /// follower count rather than showing nothing.
   int? _memberCount;

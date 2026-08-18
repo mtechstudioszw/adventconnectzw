@@ -1,4 +1,4 @@
-# Advent Connect ZW — public site
+# Adventist Super App — public site
 
 Static site that ships the legal pages (Terms / Privacy / Community
 Guidelines), an About page, and a Download landing. Hosted on

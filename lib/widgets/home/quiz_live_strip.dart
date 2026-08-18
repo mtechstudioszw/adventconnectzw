@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../services/presence_service.dart';
 import '../../services/quiz_home_signal.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -18,44 +17,50 @@ import '../motion/pressable.dart';
 ///
 /// ## It only appears when it is TRUE
 ///
-/// This renders nothing at all when nobody has challenged you and nobody
-/// is online. That restraint is the point: the lobby tile used to promise
-/// "head to head, same clock" at 3am to an empty arena, so members tapped
-/// it, waited out a search, found no one, and concluded the feature was
-/// broken. An empty arena is the COMMON case here, not the edge one.
+/// This renders nothing at all unless somebody has challenged you or
+/// somebody is actually sitting in the live-match queue. That restraint is
+/// the point: the lobby tile used to promise "head to head, same clock" at
+/// 3am to an empty arena, so members tapped it, waited out a search, found
+/// no one, and concluded the feature was broken. An empty arena is the
+/// COMMON case here, not the edge one.
 ///
-/// So there are exactly two states worth a slot on Home:
-///   * somebody has challenged you — notification-grade, unmissable;
-///   * others are online now — a reason to tap that a static label can
-///     never be.
-/// Anything else, and Home says nothing.
+/// ## The number is the QUEUE, never presence
+///
+/// Founder, 18 Aug 2026: *"the quiz live banner is lying tt some people
+/// online to play quiz live when one will be in the lobby"*.
+///
+/// This strip used to appear whenever anyone had the app open, and say "N
+/// members in the app · challenge one". Every word of that was literally
+/// true and the whole thing still lied, because a green bolt on a strip
+/// that only shows up when people are around reads as *there is a game
+/// here* — and then the arena was empty. Softening the copy had already
+/// been tried twice and could not fix it; the strip was appearing on the
+/// wrong signal.
+///
+/// So it now counts open queue entries ([QuizHomeSignal.waiting],
+/// patch_212) — the exact rows `quiz_match_find` would pair you with. When
+/// nobody is queued, Home says nothing at all about live match rather than
+/// advertising a room with nobody in it.
 class QuizLiveStrip extends StatelessWidget {
   const QuizLiveStrip({super.key, this.viewerId});
 
-  /// The signed-in member's id, so they can be filtered out of the online
-  /// roster. Passed in rather than read from [AuthService] here for the
-  /// same reason `StoriesRail` takes one: reaching into Supabase from a
-  /// leaf widget makes it untestable, and this is the exact number that
-  /// was wrong.
+  /// The signed-in member's id.
+  ///
+  /// Kept for the caller's convenience and for tests; the queue count is
+  /// filtered server-side by `auth.uid()`, so nothing here has to subtract
+  /// the viewer any more — which is where the old count went wrong twice.
   final String? viewerId;
 
   @override
   Widget build(BuildContext context) {
-    // Two sources: the cached invite count and the live presence roster.
     return ValueListenableBuilder<int>(
       valueListenable: QuizHomeSignal.invites,
       builder: (context, invites, _) {
-        return ValueListenableBuilder<Set<String>>(
-          valueListenable: PresenceService.onChange,
-          builder: (context, online, _) {
-            final waiting = invites > 0;
-            // Filter the viewer out by id rather than subtracting one.
-            // Subtracting assumed you are always in the roster, but a
-            // member who turned OFF "show me as online" never joins it —
-            // so for them the count was one short, every time.
-            final others = online.where((id) => id != viewerId).length;
-            if (!waiting && others < 1) return const SizedBox.shrink();
-            return _strip(context, invites: invites, others: others);
+        return ValueListenableBuilder<int>(
+          valueListenable: QuizHomeSignal.waiting,
+          builder: (context, queued, _) {
+            if (invites < 1 && queued < 1) return const SizedBox.shrink();
+            return _strip(context, invites: invites, queued: queued);
           },
         );
       },
@@ -65,7 +70,7 @@ class QuizLiveStrip extends StatelessWidget {
   Widget _strip(
     BuildContext context, {
     required int invites,
-    required int others,
+    required int queued,
   }) {
     final palette = context.palette;
     final waiting = invites > 0;
@@ -129,18 +134,15 @@ class QuizLiveStrip extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      // "in the app", not "in the arena". This count comes
-                      // from the app-wide presence channel, so it includes
-                      // members reading the feed or in a chat. Promising
-                      // "play someone" told people an opponent was queued
-                      // and waiting; they tapped, searched, found nobody,
-                      // and decided live match was broken. Offering a
-                      // challenge is a promise this number can keep.
+                      // "waiting in the arena" is now literally what the
+                      // number is — an open queue entry that a tap will be
+                      // paired with. It may only ever say this because it
+                      // no longer comes from presence.
                       waiting
                           ? 'Tap to join before it expires'
-                          : others == 1
-                          ? '1 member in the app · challenge them'
-                          : '$others members in the app · challenge one',
+                          : queued == 1
+                          ? '1 player waiting in the arena · tap to play'
+                          : '$queued players waiting in the arena',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.labelSmall.copyWith(

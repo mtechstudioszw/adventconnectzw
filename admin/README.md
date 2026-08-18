@@ -1,4 +1,4 @@
-# Advent Connect ZW — Web Admin Console
+# Adventist Super App — Web Admin Console
 
 Next.js 14 (App Router) + Supabase. Replaces the single-file
 `admin-web/index.html`, which stays live and untouched until this is signed

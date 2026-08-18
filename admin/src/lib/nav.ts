@@ -78,7 +78,7 @@ export const PAGE_META: Record<string, { title: string; sub?: string }> = {
   "/church-admins": { title: "Church admins", sub: "Everyone who can already post as a church." },
   "/users": { title: "Members", sub: "Search the membership, notify or ban." },
   "/watch": { title: "Watch channels", sub: "What feeds the Watch tab." },
-  "/analytics": { title: "Analytics", sub: "How Advent Connect is actually being used." },
+  "/analytics": { title: "Analytics", sub: "How Adventist Super App is actually being used." },
   "/insights": { title: "Why they join & leave", sub: "Signup survey and account-deletion reasons." },
   "/broadcast": { title: "Broadcast", sub: "Send a notice to every member, or one province." },
   "/maintenance": { title: "Maintenance", sub: "Take the whole app offline, and bring it back." },

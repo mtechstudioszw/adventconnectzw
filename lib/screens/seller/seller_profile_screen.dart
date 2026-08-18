@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/countries.dart';
 import '../../config/share_config.dart';
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
@@ -211,7 +212,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         ? seller.businessName.trim()
         : 'this seller';
     final shareUrl = sellerShareUrl(seller.authUserId);
-    final text = 'Check out $name on Advent Connect ZW marketplace:\n$shareUrl';
+    final text = 'Check out $name on Adventist Super App marketplace:\n$shareUrl';
     try {
       await Share.share(text, subject: name);
     } catch (_) {
@@ -243,7 +244,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     // asking three questions first.
     final message =
         'Hi ${seller.contactName?.trim().isNotEmpty == true ? seller.contactName!.trim() : seller.businessName}, '
-        "I found ${seller.businessName} on Advent Connect ZW and I'd like to ask about your products."
+        "I found ${seller.businessName} on Adventist Super App and I'd like to ask about your products."
         '\n\n${sellerShareUrl(seller.authUserId)}';
     final uri = Uri.parse(
       'https://wa.me/$digits?text=${Uri.encodeComponent(message)}',
@@ -790,10 +791,18 @@ class _IdentityStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final place = [
+    // Country is appended and flag-led, matching Product.locationLine — a
+    // shop on a worldwide marketplace has to say which country it ships
+    // or hands over in, since the app is never party to the sale.
+    final placeParts = <String?>[
       seller.city,
       seller.province,
+      Countries.nameOf(seller.country),
     ].where((s) => s != null && s.isNotEmpty).join(', ');
+    final placeFlag = Countries.flagOf(seller.country);
+    final place = placeParts.isEmpty
+        ? ''
+        : (placeFlag.isEmpty ? placeParts : '$placeFlag  $placeParts');
     final bits = <Widget>[];
 
     if (seller.ratingCount > 0) {
@@ -1812,7 +1821,7 @@ class _ReportSheetState extends State<_ReportSheet> {
               ),
               const SizedBox(height: AppSpace.xs),
               Text(
-                'Reports are reviewed by the Advent Connect ZW team.',
+                'Reports are reviewed by the Adventist Super App team.',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: context.palette.textMuted,
                 ),

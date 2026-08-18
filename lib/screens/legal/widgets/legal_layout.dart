@@ -105,7 +105,7 @@ class _LegalLayoutState extends State<LegalLayout>
                     const SizedBox(height: 24),
                     Center(
                       child: Text(
-                        '© ${DateTime.now().year} Advent Connect ZW',
+                        '© ${DateTime.now().year} Adventist Super App',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: AppColors.textMuted,
                           fontSize: 11,

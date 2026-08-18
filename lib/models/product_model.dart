@@ -1,3 +1,5 @@
+import '../config/countries.dart';
+
 class Product {
   const Product({
     required this.id,
@@ -16,6 +18,7 @@ class Product {
     this.status = 'available',
     this.subcategory,
     this.condition,
+    this.country,
     this.province,
     this.location,
     this.viewCount = 0,
@@ -41,6 +44,9 @@ class Product {
   // screen used to read. Surfaced on the details screen.
   final String? subcategory;
   final String? condition;
+  /// ISO 3166-1 alpha-2 (patch_213). Marketplace handoff is WhatsApp plus
+  /// local pickup, so the country is the first thing a buyer needs to know.
+  final String? country;
   final String? province;
   final String? location;
   final int viewCount;
@@ -51,13 +57,22 @@ class Product {
   bool get isSold => status == 'sold';
   bool get isReserved => status == 'reserved';
 
-  /// "Harare, Mashonaland East" — whichever parts the seller filled in.
+  /// "🇿🇼 Harare, Zimbabwe" — whichever parts the seller filled in.
+  ///
+  /// The country is appended rather than replacing province/city, and it
+  /// leads with the flag. On a worldwide marketplace "Harare" alone is not
+  /// an answer to "can I actually collect this?" — and since the app never
+  /// handles the transaction, the buyer is the one who has to judge that.
   String? get locationLine {
-    final parts = [
+    final parts = <String?>[
       location?.trim(),
       province?.trim(),
+      Countries.nameOf(country),
     ].where((s) => s != null && s.isNotEmpty).toList();
-    return parts.isEmpty ? null : parts.join(', ');
+    if (parts.isEmpty) return null;
+    final flag = Countries.flagOf(country);
+    final line = parts.join(', ');
+    return flag.isEmpty ? line : '$flag  $line';
   }
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -89,6 +104,7 @@ class Product {
       isAvailable: status == 'available',
       subcategory: json['subcategory'] as String?,
       condition: json['condition'] as String?,
+      country: json['country'] as String?,
       province: json['province'] as String?,
       location: json['location'] as String?,
       viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
@@ -115,6 +131,7 @@ class Product {
         'status': status,
         'subcategory': subcategory,
         'condition': condition,
+        'country': country,
         'province': province,
         'location': location,
         'view_count': viewCount,

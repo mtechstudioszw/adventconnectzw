@@ -145,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen>
   final ScrollController _scroll = ScrollController();
 
   /// True once the greeting has scrolled out of the way, which swaps the
-  /// header to the compact "Advent Connect ZW" bar.
+  /// header to the compact "Adventist Super App" bar.
   ///
   /// Hysteresis on purpose: it turns ON above 190 and OFF below 130, so a
   /// finger resting near the boundary can't flap the title back and forth.
@@ -286,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
         content: Text(
-          'A newer version of Advent Connect is available. You have $window '
+          'A newer version of Adventist Super App is available. You have $window '
           'to update before it becomes required.',
           style: AppTextStyles.bodyMedium.copyWith(
             color: palette.textMuted,
@@ -2352,7 +2352,7 @@ class _HomeScreenState extends State<HomeScreen>
         backgroundColor: ok ? AppColors.successGreen : AppColors.red,
         content: Text(
           ok
-              ? 'Saved to your Advent Connect album.'
+              ? 'Saved to your Adventist Super App album.'
               : 'Could not save the image. Check storage permission and try again.',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
         ),
@@ -3443,7 +3443,7 @@ class _HomeChurchTile extends StatelessWidget {
                             const SizedBox(width: 3),
                             Flexible(
                               child: Text(
-                                church.city.isEmpty ? 'Zimbabwe' : church.city,
+                                church.city.isEmpty ? 'Location not set' : church.city,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.bodySmall.copyWith(
@@ -3845,7 +3845,7 @@ class _DiscoverySlot {
 /// the top news item with cover photo + title + summary and links
 /// out to /news for the full list. Pinned at the very top of the
 /// home feed so members see "what's trending in the Adventist
-/// community in Zimbabwe" before scrolling through user posts.
+/// community worldwide" before scrolling through user posts.
 /// The Marketplace Pick — one product, given real presence.
 ///
 /// This used to be a 104px thumbnail beside two lines of text, which read as

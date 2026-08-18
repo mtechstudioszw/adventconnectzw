@@ -38,7 +38,7 @@ class DonateScreen extends StatelessWidget {
 
   /// **The name EcoCash itself will show.**
   ///
-  /// This used to read "Advent Connect ZW", which is the name of the app and
+  /// This used to read "Adventist Super App", which is the name of the app and
   /// NOT the name the line is registered to. EcoCash displays the registered
   /// account holder at the confirmation step, so a member following these
   /// instructions saw a personal name appear where the app had promised an
@@ -58,7 +58,7 @@ class DonateScreen extends StatelessWidget {
   /// Why that name and not the app's.
   static const String ecoCashNameNote =
       'EcoCash will show this name when you confirm — it is the personal '
-      'line of the developer who builds and pays for Advent Connect ZW.';
+      'line of the developer who builds and pays for Adventist Super App.';
 
   void _snack(BuildContext context, String message, {bool good = true}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -217,7 +217,7 @@ class _GiftHero extends StatelessWidget {
           // the actual bills asks for a share of something real, and the
           // things named here are the ones members can see for themselves.
           Text(
-            'Advent Connect ZW is built and paid for by one person, and every '
+            'Adventist Super App is built and paid for by one person, and every '
             'feature stays free for everyone. There are real bills behind it: '
             'the servers that carry your posts and messages, the storage that '
             'keeps the Bible, the hymnal and Sabbath School working offline, '
@@ -480,12 +480,12 @@ class _TransparencyNote extends StatelessWidget {
           const SizedBox(width: AppSpace.sm),
           Expanded(
             child: Text(
-              'Giving is entirely voluntary. Every feature of Advent Connect '
+              'Giving is entirely voluntary. Every feature of Adventist Super App '
               'ZW stays free and fully available whether or not you give — a '
               'gift unlocks nothing, earns no badge, and is separate from '
               'Premium, so it does not remove ads. Money is sent directly '
               'through EcoCash, outside the app, to the account named above. '
-              'Advent Connect ZW is not a registered charity, so a gift is '
+              'Adventist Super App is not a registered charity, so a gift is '
               'not a tax-deductible donation and is not tithe — give your '
               'tithe to your local church.',
               style: AppTextStyles.caption.copyWith(

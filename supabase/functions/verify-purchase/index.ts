@@ -51,8 +51,8 @@ function receiptBody(expiry: string | null, isRenewal: boolean): string {
     })
     : null;
   const head = isRenewal
-    ? "Your Advent Connect Premium subscription renewed."
-    : "Thank you — your Advent Connect Premium subscription is active.";
+    ? "Your Adventist Super App Premium subscription renewed."
+    : "Thank you — your Adventist Super App Premium subscription is active.";
   return when
     ? `${head} Ads are off, and it renews on ${when}. ` +
       `Google Play has emailed you the payment receipt.`

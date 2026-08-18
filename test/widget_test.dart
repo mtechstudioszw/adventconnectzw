@@ -12,11 +12,11 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: Center(child: Text('Advent Connect ZW')),
+          body: Center(child: Text('Adventist Super App')),
         ),
       ),
     );
 
-    expect(find.text('Advent Connect ZW'), findsOneWidget);
+    expect(find.text('Adventist Super App'), findsOneWidget);
   });
 }

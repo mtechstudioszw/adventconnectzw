@@ -26,8 +26,8 @@ class _SupportSheet extends StatelessWidget {
 
   Future<void> _whatsApp() async {
     final msg = topic.isEmpty
-        ? 'Hi, I need help with Advent Connect ZW.'
-        : 'Hi, I need help with Advent Connect ZW — $topic.';
+        ? 'Hi, I need help with Adventist Super App.'
+        : 'Hi, I need help with Adventist Super App — $topic.';
     final uri = Uri.parse(
         'https://wa.me/$kSupportWhatsApp?text=${Uri.encodeComponent(msg)}');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -35,7 +35,7 @@ class _SupportSheet extends StatelessWidget {
 
   Future<void> _email() async {
     final subject =
-        topic.isEmpty ? 'Advent Connect ZW — help' : 'Advent Connect ZW — $topic';
+        topic.isEmpty ? 'Adventist Super App — help' : 'Adventist Super App — $topic';
     final uri = Uri.parse(
         'mailto:$kSupportEmail?subject=${Uri.encodeComponent(subject)}');
     await launchUrl(uri, mode: LaunchMode.externalApplication);

@@ -13,7 +13,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Advent Connect needs microphone access so you can record voice notes in your private chats.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Advent Connect ZW uses your camera to upload profile and product photos.</string>
+	<string>Adventist Super App uses your camera to upload profile and product photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Advent Connect ZW accesses your photos to upload profile and product images.</string>
 	<!-- `gal` package: saving a post image back to the user's photo
@@ -22,13 +22,13 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Advent Connect ZW saves post images you tap "Save to gallery" on into your Photos library.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Advent Connect ZW uses your location to find SDA churches near you.</string>
+	<string>Adventist Super App uses your location to find SDA churches near you.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Advent Connect ZW uses Face ID to securely unlock your account.</string>
+	<string>Adventist Super App uses Face ID to securely unlock your account.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Advent Connect Zw</string>
+	<string>Adventist Super App</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
   let title = "Job opportunity";
   let description =
-    "A job listing on Advent Connect ZW — the SDA community board for Zimbabwe.";
+    "A job listing on Adventist Super App — the SDA community job board.";
 
   if (id) {
     try {
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
         const cat = data.category ? ` (${data.category})` : "";
         description = data.description
           ? data.description.slice(0, 280)
-          : `${loc ? `${loc} — ` : ""}${title}${cat}. Apply via Advent Connect ZW.`;
+          : `${loc ? `${loc} — ` : ""}${title}${cat}. Apply via Adventist Super App.`;
       }
     } catch (_) { /* fall through with defaults */ }
   }
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${esc(title)} — Advent Connect ZW</title>
+  <title>${esc(title)} — Adventist Super App</title>
   <meta property="og:type" content="website" />
   <meta property="og:title" content="${esc(title)}" />
   <meta property="og:description" content="${esc(description)}" />
@@ -90,16 +90,16 @@ Deno.serve(async (req) => {
   <div class="card">
     <div class="brand">
       <div class="badge">A</div>
-      <div class="name">Advent Connect ZW</div>
-      <div class="tag">ZIMBABWE</div>
+      <div class="name">Adventist Super App</div>
+      <div class="tag">WORLDWIDE</div>
     </div>
     <div class="body">
       <span class="kicker">JOB OPPORTUNITY</span>
       <h1>${esc(title)}</h1>
       <p>${esc(description)}</p>
-      <a class="btn" href="${esc(appLink)}">Open in Advent Connect ZW</a>
+      <a class="btn" href="${esc(appLink)}">Open in Adventist Super App</a>
       <a class="btn-secondary" href="${esc(DOWNLOAD_URL)}">Don't have the app? Get it here</a>
-      <div class="muted">Jobs from the Adventist community in Zimbabwe. Apply directly inside the app.</div>
+      <div class="muted">Jobs from the Adventist community around the globe. Apply directly inside the app.</div>
     </div>
   </div>
   <script>

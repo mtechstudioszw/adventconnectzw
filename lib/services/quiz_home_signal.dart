@@ -32,7 +32,23 @@ class QuizHomeSignal {
   static final ValueNotifier<int> invites = ValueNotifier<int>(0);
 
   /// Members online right now. Straight through to the presence roster.
+  ///
+  /// **Not a live-match signal.** This counts everyone with the app open —
+  /// reading the feed, in a chat, watching a video — and using it to decide
+  /// whether to advertise a live match is what made the strips lie. Use
+  /// [waiting] for that.
   static ValueListenable<Set<String>> get online => PresenceService.onChange;
+
+  /// Players actually sitting in the live-match queue right now.
+  ///
+  /// Founder, 18 Aug 2026: *"the quiz live banner is lying tt some people
+  /// online to play quiz live when one will be in the lobby"*. This is the
+  /// number the strips promise on, and it comes from the queue itself
+  /// (patch_212), so tapping it finds the game it advertised.
+  ///
+  /// Starts at 0 and stays there until a refresh says otherwise: an unknown
+  /// arena must read as an empty one.
+  static final ValueNotifier<int> waiting = ValueNotifier<int>(0);
 
   /// Refreshes no more often than this however many times it is asked.
   ///
@@ -71,11 +87,18 @@ class QuizHomeSignal {
 
   static Future<void> _run() async {
     try {
-      final rows = await QuizMatchService.invites();
+      // Both in one round trip's worth of latency. They are read together
+      // and rendered together, and a strip that knew about an invite but
+      // not about the queue would flicker between two truths.
+      final results = await Future.wait([
+        QuizMatchService.invites(),
+        QuizMatchService.waitingCount(),
+      ]);
       _lastRun = DateTime.now();
       // Assign unconditionally — ValueNotifier already no-ops on an equal
       // value, so this cannot cause a spurious rebuild.
-      invites.value = rows.length;
+      invites.value = (results[0] as List).length;
+      waiting.value = results[1] as int;
     } catch (e) {
       debugPrint('QuizHomeSignal.refresh failed: $e');
     } finally {
@@ -96,5 +119,6 @@ class QuizHomeSignal {
     _lastRun = null;
     _inFlight = null;
     invites.value = 0;
+    waiting.value = 0;
   }
 }

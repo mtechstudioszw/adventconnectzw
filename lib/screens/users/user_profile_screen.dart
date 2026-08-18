@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/countries.dart';
 import '../../models/friendship_model.dart';
 import '../../models/member_directory_model.dart';
 import '../../models/ministry_tag_model.dart';
@@ -774,6 +775,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       const SizedBox(height: 14),
       if ((_profile!.city ?? '').isNotEmpty ||
           (_profile!.province ?? '').isNotEmpty ||
+          (_profile!.country ?? '').isNotEmpty ||
           (_profile!.churchName ?? '').isNotEmpty ||
           _profile!.joinedAt != null)
         Padding(
@@ -788,12 +790,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   icon: Icons.church_outlined,
                   label: _profile!.churchName!,
                 ),
-              if ((_profile!.city ?? '').isNotEmpty)
+              // One location chip, flag-led. The flag replaces the pin
+              // icon rather than sitting beside it — on a global app the
+              // country IS the location signal, and a pin plus a flag is
+              // two marks saying the same thing.
+              //
+              // Province is deliberately dropped from this line. It only
+              // ever appeared next to city, where for most Zimbabwean
+              // members it rendered "Harare, Harare"; the country is the
+              // half that actually tells you something now.
+              if ((_profile!.city ?? '').isNotEmpty ||
+                  (_profile!.country ?? '').isNotEmpty)
                 _InfoChip(
+                  emoji: Countries.flagOf(_profile!.country),
                   icon: Icons.location_on_outlined,
-                  label: [
+                  label: <String?>[
                     _profile!.city,
-                    _profile!.province,
+                    Countries.nameOf(_profile!.country),
                   ].where((s) => (s ?? '').isNotEmpty).join(', '),
                 ),
               if (_profile!.joinedAt != null)
@@ -1058,9 +1071,16 @@ class _SquareButton extends StatelessWidget {
 }
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.label});
+  const _InfoChip({this.icon, this.emoji, required this.label})
+      : assert(icon != null || emoji != null, 'chip needs a leading mark');
 
-  final IconData icon;
+  final IconData? icon;
+
+  /// Leading emoji, used instead of [icon] for the country chip. A flag
+  /// carries the country faster than any icon could, and it means adding
+  /// a country costs no asset — see `Country.flag`.
+  final String? emoji;
+
   final String label;
 
   @override
@@ -1075,7 +1095,10 @@ class _InfoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: AppColors.primaryBlue),
+          if (emoji != null)
+            Text(emoji!, style: const TextStyle(fontSize: 13))
+          else
+            Icon(icon, size: 13, color: AppColors.primaryBlue),
           const SizedBox(width: 6),
           Text(
             label,

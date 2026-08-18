@@ -26,7 +26,7 @@ type Claim = {
  */
 function approvedMessage(name: string, church: string): string {
   return (
-    `Hi ${name || "there"}, you are now an approved admin for ${church || "your church"} on Advent Connect! 🎉\n\n` +
+    `Hi ${name || "there"}, you are now an approved admin for ${church || "your church"} on Adventist Super App! 🎉\n\n` +
     `In your church dashboard you can:\n` +
     `• Post announcements to your members\n` +
     `• Share church updates to the whole app (shown with your church name + verified tick)\n` +
@@ -40,7 +40,7 @@ function approvedMessage(name: string, church: string): string {
 
 function proofMessage(name: string, church: string): string {
   return (
-    `Hi ${name || "there"}, thank you for requesting to manage ${church || "your church"} on Advent Connect. ` +
+    `Hi ${name || "there"}, thank you for requesting to manage ${church || "your church"} on Adventist Super App. ` +
     `Before we can approve you, please send proof of your position at the church (e.g. Elder, Clerk, Pastor) — ` +
     `a photo of an appointment letter or your church ID. Reply here with it and we will review again. Thank you!`
   );

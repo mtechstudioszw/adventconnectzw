@@ -427,7 +427,7 @@ class _QuizResultsScreenState extends State<QuizResultsScreen>
     if (!ok) {
       // Image capture can fail on odd devices — never leave the button dead.
       await Share.share(
-        'I scored ${_result.points} points in the Advent Connect ZW '
+        'I scored ${_result.points} points in the Adventist Super App '
         'Bible Quiz!\n\n$appDownloadUrl',
       );
     }

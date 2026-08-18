@@ -9,6 +9,8 @@ import '../models/message_model.dart';
 import 'analytics_service.dart';
 import 'cache_service.dart';
 import 'connectivity_service.dart';
+import 'e2ee/e2ee_envelope.dart';
+import 'e2ee/e2ee_service.dart';
 
 /// One-shot handoff for opening a chat with a pre-filled draft and an
 /// optional product preview (tester bug #17: "message a seller from a
@@ -232,6 +234,18 @@ class MessagingService {
   static String _typingChannelName(String conversationId) =>
       'chat:$conversationId:typing';
 
+  /// Per-USER typing channel, keyed by the recipient.
+  ///
+  /// The conversation-scoped channel above only helps someone who already
+  /// has that chat open. The inbox needs to know that *any* of its rows is
+  /// being typed in, and it cannot subscribe to one channel per row —
+  /// that is a channel per conversation, against a per-client cap, for a
+  /// decoration. So a sender pings the RECIPIENT's own channel instead:
+  /// one subscription per signed-in user, carrying the conversation id in
+  /// the payload. See [TypingSignal].
+  static String inboxTypingChannelName(String userId) =>
+      'chat:inbox:$userId:typing';
+
   /// Fetches every conversation the current user is a participant in,
   /// including pending message requests. The UI splits the result into
   /// the Inbox / Requests buckets via [Conversation.isIncomingRequestFor].
@@ -275,26 +289,85 @@ class MessagingService {
   /// Full-text search across the caller's message history (patch_130). Each
   /// hit carries the message id + conversation id so the UI can deep-link to
   /// the exact message. Returns newest-first. Best-effort: empty on error.
+  /// Search across the caller's message history.
+  ///
+  /// Two sources, merged, because the app now has two kinds of message:
+  ///
+  ///  * **Server** (`search_my_messages`, patch_130) — Postgres full-text
+  ///    over `messages.content`. Covers every message sent before E2EE
+  ///    and every message from a member who has not upgraded.
+  ///  * **Local** — this device's decrypted cache. The ONLY way an
+  ///    encrypted message can be searched at all: the server holds
+  ///    base64 for those rows and full-text over base64 matches nothing
+  ///    useful (and occasionally matches nonsense).
+  ///
+  /// The local half only sees threads this device has opened, which is
+  /// the accepted trade for encryption and matches every E2EE messenger.
   static Future<List<MessageSearchHit>> searchMessages(String query) async {
     final q = query.trim();
     if (q.length < 2) return const [];
+
+    final hits = <String, MessageSearchHit>{};
+
     try {
       final rows = await _client
           .rpc('search_my_messages', params: {'p_query': q, 'p_limit': 50});
-      return (rows as List).map((r) {
+      for (final r in (rows as List)) {
         final m = Map<String, dynamic>.from(r as Map);
-        return MessageSearchHit(
+        final content = (m['content'] ?? '').toString();
+        // An encrypted row reaching here is base64 that happened to match.
+        // Skip it — the local pass below has the readable copy.
+        if (E2eeEnvelope.isEncrypted(m)) continue;
+        hits[m['message_id'].toString()] = MessageSearchHit(
           messageId: m['message_id'].toString(),
           conversationId: m['conversation_id'].toString(),
-          content: (m['content'] ?? '').toString(),
+          content: content,
           createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ??
               DateTime.now(),
           senderId: m['sender_id']?.toString(),
         );
-      }).toList();
+      }
     } catch (_) {
-      return const [];
+      // Offline, or the RPC failed. The local pass still runs — search
+      // working with no connection is a gain, not a fallback.
     }
+
+    for (final hit in _searchLocal(q)) {
+      hits.putIfAbsent(hit.messageId, () => hit);
+    }
+
+    final out = hits.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return out.length > 50 ? out.sublist(0, 50) : out;
+  }
+
+  /// Substring search over the decrypted message cache.
+  ///
+  /// Deliberately plain `contains`, not the stemming/ranking Postgres
+  /// does: a member typing three letters into a chat search expects the
+  /// three letters, and pretending to match Postgres's behaviour on a
+  /// few hundred cached rows would be a lot of code for a worse result.
+  static List<MessageSearchHit> _searchLocal(String query) {
+    final needle = query.toLowerCase();
+    final out = <MessageSearchHit>[];
+    for (final convo in readCachedInbox()) {
+      for (final m in readCachedMessages(convo.id)) {
+        final content = m.content;
+        if (content.isEmpty) continue;
+        if (content == E2eeEnvelope.placeholder) continue;
+        if (!content.toLowerCase().contains(needle)) continue;
+        out.add(
+          MessageSearchHit(
+            messageId: m.id,
+            conversationId: convo.id,
+            content: content,
+            createdAt: m.sentAt,
+            senderId: m.senderId,
+          ),
+        );
+      }
+    }
+    return out;
   }
 
   /// Latest NON-hidden message per conversation for the current user
@@ -433,6 +506,24 @@ class MessagingService {
             raw['last_message_at'] =
                 pv['sent_at'] ?? pv['created_at'] ?? raw['last_message_at'];
             raw['last_sender_id'] = pv['sender_id'];
+          }
+          // E2EE: an encrypted thread stores a sentinel server-side, so
+          // the readable line only exists on this device. Swap it in
+          // here — before the row is cached — so the inbox, the cached
+          // inbox and search all see the same text.
+          //
+          // This runs on BOTH the shared column and the patch_127
+          // preview: my_inbox_previews reads `messages.content`, which
+          // for an encrypted row is base64, and that must never reach a
+          // tile.
+          final lastMessage = raw['last_message']?.toString() ?? '';
+          final encryptedPreview =
+              E2eeEnvelope.isSentinelPreview(lastMessage) ||
+              (pv != null && E2eeEnvelope.isEncrypted(Map<String, dynamic>.from(pv)));
+          if (encryptedPreview) {
+            raw['last_message'] =
+                E2eeService.cachedPreview(id) ??
+                E2eeEnvelope.previewPlaceholder;
           }
           return raw;
         })
@@ -992,15 +1083,96 @@ class MessagingService {
     } catch (_) {
       return readCachedMessages(conversationId);
     }
-    // Persist for the next offline open. We write the raw rows so a
-    // restore looks exactly like a fresh fetch.
-    unawaited(_writeMessagesCache(
+    // Decrypt BEFORE caching, so the offline cache holds readable text —
+    // the same thing WhatsApp's local database holds, and what makes
+    // offline reading, inbox previews and search work at all once the
+    // server can no longer see message bodies.
+    //
+    // `response` is already oldest-first (it was reversed above), which
+    // this REQUIRES: the Double Ratchet advances per message, so
+    // decrypting a thread newest-first makes the older ones fail.
+    final decrypted = await _decryptRows(
       conversationId,
       response.map((r) => Map<String, dynamic>.from(r as Map)).toList(),
-    ));
-    return response
-        .map((row) => Message.fromJson(row as Map<String, dynamic>))
-        .toList();
+    );
+
+    // Persist for the next offline open. We write the (now plaintext)
+    // rows so a restore looks exactly like a fresh fetch.
+    unawaited(_writeMessagesCache(conversationId, decrypted));
+    return decrypted.map(Message.fromJson).toList();
+  }
+
+  /// Runs a page of raw rows through [E2eeEnvelope].
+  ///
+  /// A no-op — same list, same objects — for any thread with no
+  /// encrypted rows in it, which is every thread today and every legacy
+  /// thread forever.
+  static Future<List<Map<String, dynamic>>> _decryptRows(
+    String conversationId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (!rows.any(E2eeEnvelope.isEncrypted)) return rows;
+    final convo = await fetchConversation(conversationId);
+    final out = await E2eeEnvelope.decryptRows(
+      rows,
+      conversationId: conversationId,
+      isGroup: convo?.isGroup ?? false,
+      myUserId: _client.auth.currentUser?.id,
+    );
+    // Refresh the inbox line while we have the plaintext in hand. Opening
+    // a chat is exactly when the row above it should stop saying
+    // "New message", and the server cannot tell us this.
+    if (out.isNotEmpty) {
+      final newest = out.last['content']?.toString() ?? '';
+      if (newest.isNotEmpty && newest != E2eeEnvelope.placeholder) {
+        unawaited(E2eeService.cachePreview(conversationId, newest));
+      }
+    }
+    return out;
+  }
+
+  /// Encrypts a text body for this conversation, or null when it should
+  /// go in the clear.
+  ///
+  /// Null is the normal answer today: the flag is off. It is also the
+  /// answer when the peer has published no keys (they are on an older
+  /// build) — sending them ciphertext they cannot open would be worse
+  /// than sending plaintext, which is what the app has always done.
+  static Future<EncryptedPayload?> _encryptBodyIfPossible({
+    required String conversationId,
+    required String body,
+    required String messageType,
+  }) async {
+    if (!E2eeService.isEncryptionOn) return null;
+    if (messageType != 'text') return null;
+    if (body.isEmpty) return null;
+    final me = _client.auth.currentUser?.id;
+    if (me == null) return null;
+    try {
+      final convo = await fetchConversation(conversationId);
+      if (convo == null) return null;
+      // Church announcement channels are broadcast, not correspondence —
+      // WhatsApp does not encrypt its Channels either, and doing so here
+      // would mean an admin post no member could read.
+      if (convo.isChurchChannel) return null;
+
+      if (convo.isGroup) {
+        return E2eeService.encryptGroup(
+          conversationId: conversationId,
+          myUserId: me,
+          plaintext: body,
+        );
+      }
+      if (convo.otherUserId.isEmpty) return null;
+      return E2eeService.encryptDirect(
+        recipientUserId: convo.otherUserId,
+        plaintext: body,
+      );
+    } catch (e) {
+      // Encryption must never be the reason a message fails to send.
+      debugPrint('MessagingService._encryptBodyIfPossible: $e');
+      return null;
+    }
   }
 
   static Future<Message> sendMessage({
@@ -1017,10 +1189,31 @@ class MessagingService {
       throw const AuthException('Sign in to send messages.');
     }
     final body = content.trim();
+
+    // E2EE. Only the BODY is encrypted, and only for a plain text
+    // message: a voice note or photo is a storage path, and the media
+    // buckets are already private and RLS'd to the conversation's
+    // participants. Encrypting the path would hide nothing extra and
+    // would break every existing media code path.
+    //
+    // Off by default — see E2eeService.isEncryptionOn. When it is off, or
+    // when the recipient has published no keys, `encrypted` is null and
+    // this sends exactly what every previous build sent.
+    final encrypted = await _encryptBodyIfPossible(
+      conversationId: conversationId,
+      body: body,
+      messageType: messageType,
+    );
+
     final payload = <String, dynamic>{
       'conversation_id': conversationId,
       'sender_id': user.id,
-      'content': body,
+      'content': encrypted?.ciphertext ?? body,
+      if (encrypted != null) ...{
+        'e2ee_version': E2eeService.wireVersion,
+        'sender_device_id': encrypted.senderDeviceId,
+        'ciphertext_type': encrypted.type,
+      },
       // Stamped HERE, at compose time, not by the server on insert.
       //
       // That is the whole of #11. The offline path below stores this exact
@@ -1051,9 +1244,30 @@ class MessagingService {
           .insert(payload)
           .select()
           .single();
-      final message = Message.fromJson(response);
+      var message = Message.fromJson(response);
+
+      if (encrypted != null) {
+        // Keep OUR OWN plaintext. The ratchet cannot decrypt what it
+        // encrypted, so without this the sender's own bubble — and the
+        // inbox preview for their own last message — would read
+        // "Waiting for this message" the moment the screen reloaded.
+        await E2eeService.cachePlaintext(message.id, body);
+        await E2eeService.cachePreview(conversationId, body);
+        // The Message handed back to the UI carries plaintext, not the
+        // base64 we just wrote to the row.
+        message = message.copyWith(content: body);
+      }
+
       await _client.from(_conversationsTable).update({
-        'last_message': message.content,
+        // `last_message` is the ONE place the server would still hold
+        // readable message text: it is denormalised onto a row BOTH
+        // participants can read. Encrypting every body and then copying
+        // the newest one out in the clear would be self-defeating, so an
+        // encrypted send writes a sentinel and the inbox reads the real
+        // line from its own local store.
+        'last_message': encrypted == null
+            ? message.content
+            : E2eeEnvelope.previewSentinel,
         'last_sender_id': user.id,
         // Send time here too, or a thread whose newest message was written
         // offline sorts into the inbox at its flush time instead of where
@@ -1082,9 +1296,17 @@ class MessagingService {
         // it was written in the conversation, not jump to the bottom when
         // the outbox finally flushes it (#11).
         .order('sent_at')
-        .map((rows) {
-          final messages =
-              rows.map((row) => Message.fromJson(row)).toList();
+        // asyncMap, not map: decryption is async, and asyncMap also
+        // serialises the callbacks. That matters — two overlapping
+        // decrypt passes over the same thread would race the ratchet,
+        // and the loser would see DuplicateMessageException and render
+        // placeholders over perfectly good messages.
+        .asyncMap((rows) async {
+          final decrypted = await _decryptRows(
+            conversationId,
+            rows.map((r) => Map<String, dynamic>.from(r)).toList(),
+          );
+          final messages = decrypted.map(Message.fromJson).toList();
           // Keep the cached delivered/read ticks fresh as receipts arrive over
           // realtime, so a cold reopen paints the correct ✓/✓✓ instead of
           // flickering single→double once the next fetch lands ("the ticks
@@ -1328,6 +1550,32 @@ class MessagingService {
       );
     } catch (_) {
       return (churchName: null, mutualFriends: 0);
+    }
+  }
+
+  /// The other person's "Who can message me" setting: `everyone`,
+  /// `friends` or `nobody`. Defaults to `everyone` on any failure.
+  ///
+  /// Read directly off `profiles` rather than through an RPC — patch_192
+  /// grants `authenticated` column-level SELECT on `who_can_message`
+  /// precisely so a client can ask this before composing.
+  ///
+  /// The chat screen needs it to predict `enforce_non_friend_message_cap`
+  /// BEFORE the member types, so the composer can lock itself instead of
+  /// letting them write a message and then bouncing it. Both halves must
+  /// agree; see the gate note in `chat_screen.dart`.
+  static Future<String> fetchWhoCanMessage(String otherUserId) async {
+    if (otherUserId.isEmpty) return 'everyone';
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('who_can_message')
+          .eq('id', otherUserId)
+          .maybeSingle();
+      final v = (row?['who_can_message'] ?? '').toString().trim();
+      return v.isEmpty ? 'everyone' : v;
+    } catch (_) {
+      return 'everyone';
     }
   }
 
@@ -1821,6 +2069,43 @@ class MessagingService {
           'ts': DateTime.now().millisecondsSinceEpoch,
         },
       );
+    } catch (_) {
+      // No-op: typing pings are decorative.
+    }
+  }
+
+  /// Tell [recipientUserId] that we're typing (or recording) in
+  /// [conversationId], so it shows on their INBOX row as well as in the
+  /// chat if they have it open.
+  ///
+  /// Fire-and-forget on a throwaway channel: we are only ever sending,
+  /// never listening, and `sendBroadcastMessage` falls back to the REST
+  /// broadcast endpoint when the channel isn't joined — which is the
+  /// normal case here and is fine. Subscribing just to send would cost a
+  /// socket join per peer.
+  ///
+  /// 1:1 only. A group would mean one send per member every couple of
+  /// seconds; group typing stays on the conversation channel, which the
+  /// open chat already subscribes to.
+  static Future<void> broadcastTypingToInbox({
+    required String recipientUserId,
+    required String conversationId,
+    String kind = 'typing',
+  }) async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null || recipientUserId.isEmpty) return;
+    try {
+      final channel = _client.channel(inboxTypingChannelName(recipientUserId));
+      await channel.sendBroadcastMessage(
+        event: 'typing',
+        payload: {
+          'user_id': me,
+          'conversation_id': conversationId,
+          'kind': kind,
+          'ts': DateTime.now().millisecondsSinceEpoch,
+        },
+      );
+      await _client.removeChannel(channel);
     } catch (_) {
       // No-op: typing pings are decorative.
     }

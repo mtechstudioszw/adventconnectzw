@@ -23,7 +23,7 @@ import '../onboarding/widgets/film_scenes.dart';
 /// That is the argument for spending real design on it: an outage handled
 /// with grace reads as a team in control, and a grey box with a spinner
 /// reads as something broken. It borrows the onboarding film's own
-/// `AmbientPainter` so the moment still looks like Advent Connect rather
+/// `AmbientPainter` so the moment still looks like Adventist Super App rather
 /// than like an error page.
 ///
 /// It polls, so the app comes back on its own when maintenance ends. Nobody

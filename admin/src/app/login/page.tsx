@@ -82,7 +82,7 @@ export default function LoginPage() {
       <div className="login-card">
         <div className="login-mark">AC</div>
         <h1>Admin console</h1>
-        <p className="sub">Sign in with your Advent Connect account.</p>
+        <p className="sub">Sign in with your Adventist Super App account.</p>
 
         <form className="login-form" onSubmit={submit}>
           <div className="field">

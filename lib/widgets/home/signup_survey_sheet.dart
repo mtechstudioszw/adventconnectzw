@@ -150,7 +150,7 @@ class _SignupSurveySheetState extends State<SignupSurveySheet> {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'HOW DID YOU HEAR ABOUT ADVENT CONNECT?',
+                  'HOW DID YOU HEAR ABOUT ADVENTIST SUPER APP?',
                   style: AppTextStyles.labelSmall.copyWith(
                     color: palette.textMuted,
                     fontSize: 10.5,

@@ -469,7 +469,7 @@ class SceneBrandOpen extends StatelessWidget {
               ),
               const SizedBox(height: 30),
               SceneLine(
-                text: 'Zimbabwe’s SDA family,\nin your pocket.',
+                text: 'The worldwide SDA family,\nin your pocket.',
                 enter: lineIn,
                 exit: exit,
                 emphasis: true,

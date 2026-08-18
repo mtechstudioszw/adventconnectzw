@@ -12,12 +12,12 @@ class TermsScreen extends StatelessWidget {
       subtitle: 'The agreement that keeps our community safe and respectful.',
       lastUpdated: '16 August 2026',
       intro:
-          'Welcome to Advent Connect ZW. By creating an account or using our app you agree to these terms. Please take a moment to read them — they explain your rights, our responsibilities and the rules that keep this community a safe place for everyone.',
+          'Welcome to Adventist Super App. By creating an account or using our app you agree to these terms. Please take a moment to read them — they explain your rights, our responsibilities and the rules that keep this community a safe place for everyone.',
       sections: const [
         LegalSection(
           title: 'Acceptance of Terms',
           body:
-              'By signing up or continuing to use Advent Connect ZW you confirm that you have read, understood and accepted these Terms of Service in full. If you do not agree with any part of them, please discontinue use of the app.',
+              'By signing up or continuing to use Adventist Super App you confirm that you have read, understood and accepted these Terms of Service in full. If you do not agree with any part of them, please discontinue use of the app.',
         ),
         LegalSection(
           title: 'User Accounts & Eligibility',
@@ -37,7 +37,7 @@ class TermsScreen extends StatelessWidget {
         LegalSection(
           title: 'Marketplace & Jobs Disclaimer',
           body:
-              'Advent Connect ZW does not process payments and is not a party to any sale, hire or job arrangement made through the app. You connect with other members at your own risk.',
+              'Adventist Super App does not process payments and is not a party to any sale, hire or job arrangement made through the app. You connect with other members at your own risk.',
           bullets: [
             'Always meet in a safe, public place when buying or selling.',
             'Verify items in person before paying.',
@@ -79,17 +79,17 @@ class TermsScreen extends StatelessWidget {
         LegalSection(
           title: 'Limitation of Liability',
           body:
-              'Advent Connect ZW is provided "as is". We work hard to keep the app reliable but cannot guarantee uninterrupted service. To the fullest extent allowed by law, we are not liable for losses arising from your use of the app or interactions with other members.',
+              'Adventist Super App is provided "as is". We work hard to keep the app reliable but cannot guarantee uninterrupted service. To the fullest extent allowed by law, we are not liable for losses arising from your use of the app or interactions with other members.',
         ),
         LegalSection(
           title: 'Governing Law',
           body:
-              'These Terms are governed by the laws of Zimbabwe. Any dispute arising from your use of Advent Connect ZW falls under the exclusive jurisdiction of the courts of Zimbabwe. If any provision of these Terms is found to be unenforceable, the remaining provisions continue in full effect.',
+              'Adventist Super App is operated from Zimbabwe, and these Terms are governed by the laws of Zimbabwe. Any dispute arising from your use of the app falls under the exclusive jurisdiction of the courts of Zimbabwe. You are welcome to use the app from any country, and nothing here removes any right you hold under the mandatory consumer or data-protection law of the country you live in. If any provision of these Terms is found to be unenforceable, the remaining provisions continue in full effect.',
         ),
         LegalSection(
           title: 'Changes to Terms',
           body:
-              'These terms may evolve as the app grows. When we make material changes we will notify you in-app. Continuing to use Advent Connect ZW after changes means you accept the updated terms.',
+              'These terms may evolve as the app grows. When we make material changes we will notify you in-app. Continuing to use Adventist Super App after changes means you accept the updated terms.',
         ),
         LegalSection(
           title: 'Contact',

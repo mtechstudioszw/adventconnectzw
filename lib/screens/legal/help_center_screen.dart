@@ -24,7 +24,7 @@ class HelpCenterScreen extends StatelessWidget {
     return const LegalLayout(
       kicker: 'HELP',
       title: 'How to use the app',
-      subtitle: 'A plain guide to everything in Advent Connect.',
+      subtitle: 'A plain guide to everything in Adventist Super App.',
       lastUpdated: '16 August 2026',
       intro:
           'Written for members rather than developers. If you only read one '
@@ -67,7 +67,7 @@ class HelpCenterScreen extends StatelessWidget {
               'and a suggested book — the hymn alternates between Shona and '
               'English day by day. From Friday sundown to Saturday sundown the '
               'header changes to a warm sundown wash and the greeting '
-              'Sabata rakanaka.',
+              'Happy Sabbath.',
           bullets: [
             'Library shortcuts — the pills under the Today card: Bible, '
                 'Sabbath, Hymnal, Quiz, Music and EGW',
@@ -167,8 +167,9 @@ class HelpCenterScreen extends StatelessWidget {
         LegalSection(
           title: 'Churches',
           body:
-              'A directory of Seventh-day Adventist congregations across '
-              'Zimbabwe — around 2,600 of them. Search by name or city, or '
+              'A directory of Seventh-day Adventist congregations — around '
+              '2,600 listed so far, with Zimbabwe mapped in full and more '
+              'countries being added over time. Search by name or city, or '
               'sort by nearest if you allow location access. Following a '
               'church puts its announcements and events in your feed. If you '
               'lead a congregation, open it and tap the claim link — claims '

@@ -14,6 +14,7 @@ class PublicUserProfile {
     this.profilePhotoUrl,
     this.coverPhotoUrl,
     this.bio,
+    this.country,
     this.province,
     this.city,
     this.dateOfBirth,
@@ -27,6 +28,9 @@ class PublicUserProfile {
   final String? profilePhotoUrl;
   final String? coverPhotoUrl;
   final String? bio;
+  /// ISO 3166-1 alpha-2 (patch_213). Display name and flag come from
+  /// lib/config/countries.dart — never store or compare the display name.
+  final String? country;
   final String? province;
   final String? city;
   final DateTime? dateOfBirth;
@@ -65,6 +69,7 @@ class PublicUserProfile {
       profilePhotoUrl: json['profile_photo_url'] as String?,
       coverPhotoUrl: json['cover_photo_url'] as String?,
       bio: json['bio'] as String?,
+      country: json['country'] as String?,
       province: json['province'] as String?,
       city: json['city'] as String?,
       dateOfBirth: json['date_of_birth'] != null
@@ -95,7 +100,7 @@ class UserProfileService {
         .from('profiles')
         .select(
           'id, full_name, profile_photo_url, cover_photo_url, bio, '
-          'province, city, date_of_birth, created_at, '
+          'country, province, city, date_of_birth, created_at, '
           'is_discoverable, is_verified, is_verified_admin, is_business, show_age, '
           'churches(name)',
         )

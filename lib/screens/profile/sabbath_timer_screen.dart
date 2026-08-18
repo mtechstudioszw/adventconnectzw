@@ -3,7 +3,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../config/countries.dart';
 import '../../models/seller_model.dart';
+import '../../services/sabbath_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -49,10 +51,37 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
     super.dispose();
   }
 
+  String get _countryCode =>
+      (AuthService.currentUser?.userMetadata?['country'] as String?) ??
+      Countries.defaultCode;
+
+  /// True when the member is in Zimbabwe, which is the only country whose
+  /// provinces this screen can offer. Everyone else gets country-level
+  /// sundown and no province chips — offering a Zimbabwean province to a
+  /// member in Kenya is worse than offering nothing.
+  bool get _isZw => _countryCode == 'ZW';
+
   @override
   Widget build(BuildContext context) {
-    final start = _sabbathStart(_now, _province);
-    final end = _sabbathEnd(_now, _province);
+    // Delegates to SabbathService rather than computing sundown here.
+    //
+    // This screen used to carry its OWN copy of the solar equation, its own
+    // province table and its own hardcoded `+120` minutes for UTC+2 — so a
+    // member abroad saw Harare's sundown on the one screen dedicated to
+    // getting it right. Two implementations of the same physics is one
+    // too many; the service is now the only one.
+    final start =
+        SabbathService.nextSabbathStart(
+          from: _now,
+          overrideProvince: _isZw ? _province : null,
+        )!.toLocal();
+    final end =
+        (SabbathService.currentSabbathEnd(
+              from: _now,
+              overrideProvince: _isZw ? _province : null,
+            ) ??
+            start.add(const Duration(hours: 24)).toUtc())
+            .toLocal();
     final inSabbath = _now.isAfter(start) && _now.isBefore(end);
     final target = inSabbath ? end : start;
     final remaining = target.difference(_now);
@@ -109,7 +138,7 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'PROVINCE',
+                            _isZw ? 'PROVINCE' : 'LOCATION',
                             style: AppTextStyles.labelSmall.copyWith(
                               color: context.palette.textMuted,
                               fontSize: 10.5,
@@ -118,25 +147,42 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          SizedBox(
-                            height: 38,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              children: [
-                                for (final p in sellerProvinces) ...[
-                                  _Chip(
-                                    label: p,
-                                    active: _province == p,
-                                    onTap: () => setState(() => _province = p),
-                                  ),
-                                  const SizedBox(width: 8),
+                          // Province chips are Zimbabwe-only. For everyone
+                          // else the location is their profile country, set
+                          // in Edit profile — so this reads it out rather
+                          // than offering a picker that belongs elsewhere.
+                          if (_isZw)
+                            SizedBox(
+                              height: 38,
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                children: [
+                                  for (final p in sellerProvinces) ...[
+                                    _Chip(
+                                      label: p,
+                                      active: _province == p,
+                                      onTap: () =>
+                                          setState(() => _province = p),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
                                 ],
-                              ],
+                              ),
+                            )
+                          else
+                            Text(
+                              Countries.byCode(_countryCode)?.labelWithFlag ??
+                                  'Not set',
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: context.palette.text,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
                           const SizedBox(height: 10),
                           Text(
-                            'Times are an approximation based on average sundown for the province. For exact local times consult a sundown calendar.',
+                            _isZw
+                                ? 'Times are an approximation based on average sundown for the province. For exact local times consult a sundown calendar.'
+                                : 'Times are an approximation based on average sundown for your country, shown in your device\'s time zone. Change your country in Edit profile. For exact local times consult a sundown calendar.',
                             style: AppTextStyles.bodySmall.copyWith(
                               color: context.palette.textMuted,
                               height: 1.5,
@@ -164,103 +210,6 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
     );
   }
 
-  // --- Astronomical helpers -------------------------------------------------
-
-  static const _provinceCoords = <String, ({double lat, double lon})>{
-    'Harare': (lat: -17.83, lon: 31.05),
-    'Bulawayo': (lat: -20.15, lon: 28.58),
-    'Manicaland': (lat: -18.97, lon: 32.67),
-    'Mashonaland Central': (lat: -17.36, lon: 30.95),
-    'Mashonaland East': (lat: -18.20, lon: 31.55),
-    'Mashonaland West': (lat: -17.65, lon: 30.20),
-    'Masvingo': (lat: -20.07, lon: 30.83),
-    'Matabeleland North': (lat: -19.55, lon: 27.50),
-    'Matabeleland South': (lat: -20.85, lon: 28.65),
-    'Midlands': (lat: -19.45, lon: 29.82),
-  };
-
-  /// Returns the next (or current) Friday-sundown for the given province.
-  DateTime _sabbathStart(DateTime ref, String province) {
-    // Walk forward day by day until we land on a Friday whose sundown
-    // is still in the future. Cheap because we only iterate up to 7 times.
-    var d = DateTime(ref.year, ref.month, ref.day);
-    for (var i = 0; i < 8; i++) {
-      final candidate = d.add(Duration(days: i));
-      if (candidate.weekday != DateTime.friday) continue;
-      final sundown = _sundown(candidate, province);
-      if (sundown.isAfter(ref) || _isSameDay(candidate, ref)) {
-        // If today is Friday and sundown already passed, fall through to
-        // next Friday on the following iteration.
-        if (sundown.isAfter(ref)) return sundown;
-      }
-    }
-    return _sundown(d.add(const Duration(days: 7)), province);
-  }
-
-  DateTime _sabbathEnd(DateTime ref, String province) {
-    final start = _sabbathStart(ref, province);
-    // If we're currently inside the Sabbath (after Friday sundown but
-    // before Saturday sundown), `start` is in the future — back up.
-    final candidate = start.subtract(const Duration(days: 1));
-    final inSabbath = ref.isAfter(_sundown(candidate, province));
-    final saturday = inSabbath
-        ? candidate.add(const Duration(days: 1))
-        : start.add(const Duration(days: 1));
-    return _sundown(saturday, province);
-  }
-
-  bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
-  /// Approximate sundown for the given date and Zimbabwean province.
-  ///
-  /// Uses the standard solar-noon + hour-angle formula simplified for
-  /// civil sunset (zenith ≈ 90.83°). Accurate to within a few minutes
-  /// for latitudes in Zimbabwe (-15° to -22°), which is plenty for a
-  /// Sabbath countdown UI.
-  DateTime _sundown(DateTime date, String province) {
-    final coord = _provinceCoords[province] ?? _provinceCoords['Harare']!;
-    final dayOfYear = date.difference(DateTime(date.year, 1, 1)).inDays + 1;
-
-    final lat = coord.lat * math.pi / 180;
-    final lon = coord.lon;
-
-    // Equation of time + solar declination (NOAA simplified).
-    final gamma = 2 * math.pi / 365 * (dayOfYear - 1 + 0.5);
-    final eqTime =
-        229.18 *
-        (0.000075 +
-            0.001868 * math.cos(gamma) -
-            0.032077 * math.sin(gamma) -
-            0.014615 * math.cos(2 * gamma) -
-            0.040849 * math.sin(2 * gamma));
-    final declination =
-        0.006918 -
-        0.399912 * math.cos(gamma) +
-        0.070257 * math.sin(gamma) -
-        0.006758 * math.cos(2 * gamma) +
-        0.000907 * math.sin(2 * gamma) -
-        0.002697 * math.cos(3 * gamma) +
-        0.00148 * math.sin(3 * gamma);
-
-    final zenith = 90.833 * math.pi / 180;
-    final cosH =
-        (math.cos(zenith) - math.sin(lat) * math.sin(declination)) /
-        (math.cos(lat) * math.cos(declination));
-    // Hour angle clamps for latitudes that never see sunset/sunrise —
-    // doesn't happen in Zimbabwe but defend against floating-point
-    // overshoot anyway.
-    final clamped = cosH.clamp(-1.0, 1.0);
-    final hourAngle = math.acos(clamped) * 180 / math.pi;
-
-    // Minutes from UTC midnight to sunset.
-    final sunsetMinutes = 720 - 4 * (lon - hourAngle) - eqTime;
-    // Zimbabwe is UTC+2 year-round (CAT, no DST).
-    final localMinutes = sunsetMinutes + 120;
-    final hours = (localMinutes / 60).floor();
-    final minutes = localMinutes.round() % 60;
-    return DateTime(date.year, date.month, date.day, hours, minutes);
-  }
 }
 
 class _CountdownCard extends StatelessWidget {

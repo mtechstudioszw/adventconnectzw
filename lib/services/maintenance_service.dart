@@ -10,7 +10,7 @@ class MaintenanceState {
   const MaintenanceState({
     required this.active,
     bool? blocked,
-    this.message = 'Advent Connect is down for maintenance.',
+    this.message = 'Adventist Super App is down for maintenance.',
     this.endsAt,
   }) : _blocked = blocked;
 
@@ -127,7 +127,7 @@ class MaintenanceService {
         // Absent on a server older than patch_198; `blocked` then falls back
         // to `active` rather than guessing.
         blocked: row.containsKey('blocked') ? row['blocked'] == true : null,
-        message: (row['message'] ?? 'Advent Connect is down for maintenance.')
+        message: (row['message'] ?? 'Adventist Super App is down for maintenance.')
             .toString(),
         endsAt: DateTime.tryParse(row['ends_at']?.toString() ?? ''),
       );

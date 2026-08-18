@@ -65,7 +65,7 @@ class _MarketplaceGuidelinesScreenState
           '• Occult / horoscope / divination items\n'
           '• Violent or sexually explicit media\n'
           '• Counterfeit / pirated / stolen goods\n'
-          '• Anything illegal under Zimbabwean law',
+          '• Anything illegal where you or your buyer live',
     ),
     _Rule(
       icon: Icons.security_outlined,

@@ -64,7 +64,7 @@
          true would clear the merger and quietly change what leaves the
          phone — the SDK's default is not a reason to change our posture. -->
     <application
-        android:label="Advent Connect ZW"
+        android:label="Adventist Super App"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"

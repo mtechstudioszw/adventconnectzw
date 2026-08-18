@@ -15,13 +15,13 @@ import '../../theme/app_text_styles.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _appName = 'Advent Connect ZW';
-  static const _appTagline = 'Christian community platform for Zimbabwe';
+  static const _appName = 'Adventist Super App';
+  static const _appTagline = 'Connecting SDA people around the globe';
   /// Reads the single source in `app_version.dart`, so this can never
   /// again sit at v1.0.0 through three shipped releases.
   static const _appVersion = 'v$kAppVersionName';
   static const _developerName = 'Tanatswa Michael Mikuwa';
-  static const _studioName = 'MyTech Studios Zw';
+  static const _studioName = 'Tanatswa Michael Mikuwa';
   static const _contactEmail = 'adventconnectzw@gmail.com';
   static const _contactWhatsApp = '+263778092494';
   static const _sponsorEcoCash = '0778 092 494';
@@ -51,12 +51,6 @@ class AboutScreen extends StatelessWidget {
                         value: _developerName,
                       ),
                       const _Divider(),
-                      _InfoTile(
-                        icon: Icons.business_outlined,
-                        label: 'Studio',
-                        value: _studioName,
-                      ),
-                      const _Divider(),
                       _TapTile(
                         icon: Icons.email_outlined,
                         label: 'Contact email',
@@ -78,19 +72,23 @@ class AboutScreen extends StatelessWidget {
                     children: const [
                       _ParagraphTile(
                         text:
-                            'Advent Connect ZW is a community-first platform '
-                            'for the Seventh-day Adventist community across '
-                            'Zimbabwe. Find churches near you, RSVP to '
+                            'Adventist Super App is a community-first platform '
+                            'connecting Seventh-day Adventists around the '
+                            'globe. Find churches near you, RSVP to '
                             'gatherings, lift up prayer requests, support '
                             'each other in marketplace and jobs, and stay '
-                            'connected to your home congregation.',
+                            'connected to your home congregation — wherever '
+                            'in the world that is.',
                       ),
                       _Divider(),
                       _ParagraphTile(
                         text:
-                            'Made independently to serve the Adventist '
-                            'community — not affiliated with the General '
-                            'Conference or any specific local conference.',
+                            'This is an independent app, built to serve the '
+                            'Adventist community. It is not an official '
+                            'Seventh-day Adventist Church product, and it is '
+                            'not affiliated with, endorsed by or operated by '
+                            'the General Conference, any division, union or '
+                            'local conference.',
                       ),
                     ],
                   ),
@@ -280,7 +278,7 @@ class AboutScreen extends StatelessWidget {
     final uri = Uri(
       scheme: 'mailto',
       path: _contactEmail,
-      queryParameters: {'subject': 'Advent Connect ZW'},
+      queryParameters: {'subject': 'Adventist Super App'},
     );
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
@@ -383,7 +381,7 @@ class _SponsorCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Advent Connect ZW is built and run by a small team to serve '
+            'Adventist Super App is built and run by a small team to serve '
             'the Adventist community across Zimbabwe. If the app has '
             'blessed you and you\'d like to help keep it running, you can '
             'send a voluntary gift via EcoCash. Completely optional — '

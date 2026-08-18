@@ -869,7 +869,7 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
         backgroundColor: ok ? AppColors.successGreen : AppColors.red,
         content: Text(
           ok
-              ? 'Saved to your Advent Connect album.'
+              ? 'Saved to your Adventist Super App album.'
               : 'Could not save the image. Check storage permission and try again.',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
         ),
@@ -1520,7 +1520,7 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                 const SizedBox(width: 5),
                 Flexible(
                   child: Text(
-                    'Joined Advent Connect ZW · ${formatJoinDate(_joinedAt()!)}',
+                    'Joined Adventist Super App · ${formatJoinDate(_joinedAt()!)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(

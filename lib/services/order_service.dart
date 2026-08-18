@@ -148,7 +148,7 @@ class OrderService {
   static String handoffMessage(MarketOrder order) {
     final buffer = StringBuffer()
       ..writeln('Hi${order.sellerName == null ? '' : ' ${order.sellerName}'}, '
-          'I\'d like to order this from Advent Connect ZW:')
+          'I\'d like to order this from Adventist Super App:')
       ..writeln();
     for (final line in order.items) {
       buffer.writeln(

@@ -642,7 +642,7 @@ class _SearchScreenState extends State<SearchScreen>
               child: AppSearchField(
                 controller: _controller,
                 focusNode: _focusNode,
-                hint: 'Search Advent Connect',
+                hint: 'Search Adventist Super App',
                 onChanged: _onChanged,
                 onSubmitted: _submit,
                 onClear: () {
@@ -1803,7 +1803,7 @@ class _PersonResultRow extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           _HighlightedText(
-            text: parts.isEmpty ? 'On Advent Connect' : parts.join('  ·  '),
+            text: parts.isEmpty ? 'On Adventist Super App' : parts.join('  ·  '),
             query: query,
             style: AppTextStyles.bodySmall.copyWith(
               color: context.palette.textMuted,

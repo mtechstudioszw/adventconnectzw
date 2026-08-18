@@ -306,7 +306,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
           const SizedBox(height: AppSpace.sm),
           Text(
-            'List products to the SDA community across Zimbabwe. We review '
+            'List products to the SDA community around the globe. We review '
             'applications within 1–3 days.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(

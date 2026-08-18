@@ -204,7 +204,7 @@ class _BiometricLockScreenState extends State<BiometricLockScreen>
     _prompting = true;
     _setStage(_LockStage.sensing);
     final ok = await BiometricService.authenticate(
-      reason: 'Unlock Advent Connect ZW',
+      reason: 'Unlock Adventist Super App',
     );
     _prompting = false;
     if (!mounted) return;

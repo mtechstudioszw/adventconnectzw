@@ -137,7 +137,7 @@ class EgwReaderPrefs {
     final raw = CacheService.readPref(_kTheme);
     return EgwReadingTheme.values.firstWhere(
       (t) => t.name == raw,
-      orElse: () => EgwReadingTheme.day,
+      orElse: () => EgwReadingTheme.sepia,
     );
   }
 
@@ -169,19 +169,26 @@ class EgwReaderPrefs {
 
   /// Resolves the reading ground for a book opened right now.
   ///
-  /// A member who has never touched the setting should not be handed a
-  /// glaring white page inside a dark app — that was the whole "dark mode
-  /// doesn't work in EGW" complaint. So an untouched preference follows the
-  /// app; an explicit choice always wins.
+  /// **Sepia is the default** (founder, 18 Aug 2026: *"in egw make sepia as
+  /// default background when reading the books"*). It is the ground a book
+  /// reader is expected to open on, and warm paper is easier on the eyes
+  /// through a long chapter than the near-white Day page — which is why
+  /// every other reading app defaults to it too.
+  ///
+  /// The one exception is a member whose whole app is in dark mode. Handing
+  /// them a bright page — sepia or white — is the *"dark mode doesn't work
+  /// in EGW"* complaint all over again, and it is the founder's own rule.
+  /// So: sepia by default, night when the app is dark, and an explicit
+  /// choice always wins over both.
   static EgwReadingTheme resolve(BuildContext context) {
     // An in-memory choice counts as explicit even before it has landed on
-    // disk — otherwise the ground would snap back to the app's brightness
-    // on the very next frame after a tap.
+    // disk — otherwise the ground would snap back on the very next frame
+    // after a tap.
     if (_theme != null || CacheService.readPref(_kTheme) != null) {
       return theme();
     }
     return Theme.of(context).brightness == Brightness.dark
         ? EgwReadingTheme.night
-        : EgwReadingTheme.day;
+        : EgwReadingTheme.sepia;
   }
 }

@@ -57,7 +57,7 @@ class UpdateRequiredScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'A newer version of Advent Connect is available. Please '
+                      'A newer version of Adventist Super App is available. Please '
                       'update to continue — your account and chats are safe.',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodyMedium.copyWith(

@@ -203,7 +203,7 @@ export default function StaffPage() {
                             onClick={async () => {
                               const ok = await ask({
                                 title: `Remove ${s.full_name ?? "this person"}?`,
-                                sub: "They lose access to this console immediately. Their Advent Connect account is untouched.",
+                                sub: "They lose access to this console immediately. Their Adventist Super App account is untouched.",
                                 confirmLabel: "Remove access",
                                 tone: "red",
                               });

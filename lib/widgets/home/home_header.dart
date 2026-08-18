@@ -37,7 +37,7 @@ class SabbathStatus {
 
   /// Resolves the current phase.
   ///
-  /// The celebration ("Sabata rakanaka") always shows — being inside the
+  /// The celebration ("Happy Sabbath") always shows — being inside the
   /// Sabbath is the app acknowledging the day, not a widget. The COUNTDOWN
   /// stays gated on the user's Settings opt-in, because that genuinely is
   /// the countdown feature they may have switched off.
@@ -99,7 +99,7 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   /// Scrolled far enough that the greeting is no longer the point.
   ///
-  /// The header then becomes a compact branded bar — "Advent Connect ZW"
+  /// The header then becomes a compact branded bar — "Adventist Super App"
   /// plus search and notifications — the way Facebook's does. "Hello
   /// Tanatswa" is a greeting; it only makes sense on arrival, and it read
   /// as clutter for the rest of the feed.
@@ -136,7 +136,7 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   static const double _expandedBody = 96;
   static const double _collapsedBody = 56;
 
-  /// Height of the status ("Sabata in 2d…" / date) row when fully expanded.
+  /// Height of the status ("Sabbath in 2d…" / date) row when fully expanded.
   static const double _statusBody = 20;
 
   // Branded, the bar is a fixed compact height — there is no greeting left
@@ -410,7 +410,7 @@ class _Background extends StatelessWidget {
 /// The member's name is the constant; only the greeting eyebrow above it
 /// comes and goes.
 ///
-/// This used to crossfade the name out and an "Advent Connect" wordmark in as
+/// This used to crossfade the name out and an "Adventist Super App" wordmark in as
 /// you scrolled. That was wrong twice over: it took the member's own name off
 /// their own home screen the moment they touched it, and it spent the header
 /// telling people which app they had just opened. The name now stays put and
@@ -433,7 +433,7 @@ class _BrandTitle extends StatelessWidget {
         children: [
           Flexible(
             child: Text(
-              'Advent Connect ZW',
+              'Adventist Super App',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.titleLarge.copyWith(
@@ -580,14 +580,14 @@ class _StatusLine extends StatelessWidget {
       SabbathPhase.inSabbath => (
           Icons.auto_awesome_rounded,
           sabbath.sundown == null
-              ? 'Sabata rakanaka'
-              : 'Sabata rakanaka · ends ${_clock(sabbath.sundown!)}',
+              ? 'Happy Sabbath'
+              : 'Happy Sabbath · ends ${_clock(sabbath.sundown!)}',
         ),
       SabbathPhase.approaching => (
           Icons.brightness_3_rounded,
           sabbath.sundown == null
-              ? 'Sabata soon'
-              : 'Sabata in ${_remaining(sabbath.until!)}'
+              ? 'Sabbath soon'
+              : 'Sabbath in ${_remaining(sabbath.until!)}'
                   ' · sundown ${_clock(sabbath.sundown!)}',
         ),
       SabbathPhase.ordinary => (

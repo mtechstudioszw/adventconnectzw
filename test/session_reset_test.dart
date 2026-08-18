@@ -218,5 +218,27 @@ void main() {
         isTrue,
       );
     });
+
+    test('the E2EE identity survives sign-out — wiping it would announce '
+        'a false "security code changed" to every contact and orphan '
+        'every session', () {
+      expect(
+        SecureStorageService.debugIsPreserved('e2ee_identity:user-a'),
+        isTrue,
+      );
+      expect(
+        SecureStorageService.debugIsPreserved('e2ee_regid:user-a'),
+        isTrue,
+      );
+    });
+
+    test('the E2EE identity is namespaced, so a second member on the same '
+        'phone cannot inherit it', () {
+      // The bare, un-namespaced form must NOT be preserved — that is the
+      // exact shape that made biometric unlock a property of the handset
+      // instead of the account.
+      expect(SecureStorageService.debugIsPreserved('e2ee_identity'), isFalse);
+      expect(SecureStorageService.debugIsPreserved('e2ee_regid'), isFalse);
+    });
   });
 }

@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import '../config/countries.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'cache_service.dart';
 import 'connectivity_service.dart';
@@ -32,6 +33,24 @@ class AuthService {
   static User? get currentUser => _client.auth.currentUser;
   static Session? get currentSession => _client.auth.currentSession;
   static bool get isSignedIn => currentSession != null;
+
+  /// The signed-in member's country as an ISO 3166-1 alpha-2 code.
+  ///
+  /// The default for every "where is this listing / church / job" field, so
+  /// posting from home is one less decision. Falls back to ZW, which is what
+  /// patch_213 backfilled every pre-rebrand profile to.
+  ///
+  /// Guarded because it is read from form `initState`, which can run before
+  /// Supabase is ready and must never throw there.
+  static String currentCountry() {
+    try {
+      final code = (currentUser?.userMetadata?['country'] as String?)?.trim();
+      if (code != null && code.isNotEmpty) return code;
+    } catch (_) {
+      // Not initialised — fall through to the default.
+    }
+    return Countries.defaultCode;
+  }
 
   static Stream<AuthState> get authStateChanges =>
       _client.auth.onAuthStateChange;
@@ -935,6 +954,10 @@ class AuthService {
     String? profilePhotoUrl,
     String? coverPhotoUrl,
     bool? showAge,
+    /// ISO 3166-1 alpha-2 (patch_213). Written to BOTH auth metadata and the
+    /// profiles row, like full_name — the profile screen reads metadata on a
+    /// cold start before the row loads, and a mismatch shows the wrong flag.
+    String? country,
     DateTime? dateOfBirth,
   }) async {
     try {
@@ -993,6 +1016,7 @@ class AuthService {
         next['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
       if (showAge != null) next['show_age'] = showAge;
+      if (country != null) next['country'] = country;
       // Mirror DOB into auth metadata too — the profile screen + the
       // "Complete your profile" card read date_of_birth from userMetadata,
       // so without this the card kept asking for an age the user had already
@@ -1020,6 +1044,7 @@ class AuthService {
         dbUpdates['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
       if (showAge != null) dbUpdates['show_age'] = showAge;
+      if (country != null) dbUpdates['country'] = country;
       if (dbUpdates.isNotEmpty) {
         try {
           await _client.from('profiles').upsert({

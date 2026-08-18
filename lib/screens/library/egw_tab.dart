@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -195,10 +196,22 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
 
     EgwBook? book;
     if (item.hasEpub) {
-      // Only show a wait if there IS one — a cached book resolves in the
-      // same frame and must not flash a dialog.
-      final pending = EgwBookService.load(item.epubUrl);
-      book = await _withProgress(item, pending);
+      final result = await _withProgress(item);
+      // Backing out of the wait means exactly that: stay on the shelf.
+      // Pushing a reader — or the PDF — over a member who has just told us
+      // to stop is what made a cancelled open feel like the app acting on
+      // its own. What has downloaded so far is kept, so the next tap picks
+      // up from there rather than starting again.
+      if (result.failure == EgwLoadFailure.cancelled) return;
+      book = result.book;
+      if (!mounted) return;
+      if (book == null && result.failure == EgwLoadFailure.network) {
+        // Say what happened rather than silently handing over a PDF the
+        // member did not ask for and cannot highlight.
+        final retry = await _offerRetry(item);
+        if (!retry || !mounted) return;
+        return _open(item);
+      }
     }
     if (!mounted) return;
 
@@ -220,10 +233,9 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
     if (mounted) setState(() {});
   }
 
-  /// Awaits [pending], showing the book being opened only if there is
-  /// actually a wait. Downloading a book is a real one on a first open;
-  /// reopening one is instant, and a dialog that flashes for 30ms reads as
-  /// a glitch.
+  /// Loads the book, showing the wait only if there IS one. Downloading a
+  /// book is a real wait on a first open; reopening one is instant, and a
+  /// dialog that flashes for 30ms reads as a glitch.
   ///
   /// Founder, 18 Aug 2026: *"put the book thumbnail at the first when u open
   /// book"*. A bare spinner is what made this wait feel broken rather than
@@ -231,27 +243,110 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
   /// book. The cover is already on screen and already cached, so it costs
   /// nothing to carry it into the wait, and it turns an anonymous delay into
   /// a book being opened.
-  Future<EgwBook?> _withProgress(
-    LibraryItem item,
-    Future<EgwBook?> pending,
-  ) async {
+  ///
+  /// It now also carries a real percentage and a way out. *"It loads forever
+  /// but never opens"* was, from the outside, indistinguishable from a slow
+  /// megabyte on mobile data — there was nothing on screen to tell the two
+  /// apart, and no button to end it. A bar that moves answers the first; a
+  /// Cancel that actually detaches answers the second.
+  Future<EgwLoadResult> _withProgress(LibraryItem item) async {
+    final handle = EgwLoadHandle();
+    final progress = ValueNotifier<EgwLoadProgress>(EgwLoadProgress.idle);
+
+    final pending = EgwBookService.load(
+      item.epubUrl,
+      handle: handle,
+      onProgress: (p) => progress.value = p,
+    );
+
     var settled = false;
     unawaited(pending.whenComplete(() => settled = true));
     await Future<void>.delayed(const Duration(milliseconds: 180));
-    if (settled || !mounted) return pending;
+    if (settled || !mounted) {
+      progress.dispose();
+      return pending;
+    }
 
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      // The page's own ground, not a dim over it: this is a screen the book
-      // is opening ON, and a scrim would leave the shelf half-visible behind
-      // the cover it is meant to be lifting.
-      barrierColor: context.palette.scaffoldBg,
-      builder: (_) => _OpeningBook(item: item),
+    // The dialog owns its own route, so the flow below can close exactly
+    // that route and nothing else. The old code popped the root navigator
+    // blind after the await — if the member had already dismissed the
+    // dialog it popped whatever had taken its place instead.
+    final closed = Completer<void>();
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        // The page's own ground, not a dim over it: this is a screen the
+        // book is opening ON, and a scrim would leave the shelf half-visible
+        // behind the cover it is meant to be lifting.
+        barrierColor: context.palette.scaffoldBg,
+        builder: (dialogContext) => _OpeningBook(
+          item: item,
+          progress: progress,
+          onCancel: () {
+            handle.cancel();
+            Navigator.of(dialogContext).pop();
+          },
+        ),
+        // Android back is a cancel, not a way to leave the load running
+        // behind the shelf with nothing to show for it.
+      ).whenComplete(() {
+        handle.cancel();
+        if (!closed.isCompleted) closed.complete();
+      }),
     );
-    final book = await pending;
-    if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    return book;
+
+    final result = await pending;
+    if (!closed.isCompleted && mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    progress.dispose();
+    return result;
+  }
+
+  /// Tells the member the download did not finish, and offers to resume.
+  Future<bool> _offerRetry(LibraryItem item) async {
+    final palette = context.palette;
+    final again = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: palette.card,
+        title: Text(
+          'Could not finish downloading',
+          style: AppTextStyles.titleSmall.copyWith(
+            color: palette.text,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        content: Text(
+          '${item.title} is part-way down. Trying again picks up from '
+          'where it stopped.',
+          style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Not now',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: palette.textMuted,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Try again',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return again ?? false;
   }
 
   @override
@@ -640,7 +735,7 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                   Share.share(
                     '${item.title}'
                     '${(item.author?.isNotEmpty ?? false) ? ' by ${item.author}' : ''}'
-                    '\n\nReading on Advent Connect ZW — get the app:\n'
+                    '\n\nReading on Adventist Super App — get the app:\n'
                     '$appDownloadUrl',
                   );
                 },
@@ -933,9 +1028,20 @@ double _gridAspectRatio(BuildContext context) {
 /// list. The only motion is a slow, shallow breath on the cover: enough to
 /// say the app is alive, not enough to become a thing being watched.
 class _OpeningBook extends StatefulWidget {
-  const _OpeningBook({required this.item});
+  const _OpeningBook({
+    required this.item,
+    required this.progress,
+    required this.onCancel,
+  });
 
   final LibraryItem item;
+
+  /// Where the download has got to. A determinate bar is the difference
+  /// between "this is slow" and "this is broken" — and on a megabyte over
+  /// Zimbabwean mobile data the honest answer is nearly always the former.
+  final ValueListenable<EgwLoadProgress> progress;
+
+  final VoidCallback onCancel;
 
   @override
   State<_OpeningBook> createState() => _OpeningBookState();
@@ -997,19 +1103,74 @@ class _OpeningBookState extends State<_OpeningBook>
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                'Opening…',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: palette.textMuted,
+              ValueListenableBuilder<EgwLoadProgress>(
+                valueListenable: widget.progress,
+                builder: (context, p, _) => _status(context, p),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: widget.onCancel,
+                child: Text(
+                  'Cancel',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: palette.textMuted,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              const SizedBox(height: 18),
-              const BrandSpinner(size: 26),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// The wait, said in the terms the member can act on.
+  ///
+  /// A percentage while bytes are moving; the app's own spinner once the
+  /// bytes are in and the book is being read, because that stage has no
+  /// number and a bar that sat at 100% would look stuck.
+  Widget _status(BuildContext context, EgwLoadProgress p) {
+    final palette = context.palette;
+    final fraction = p.fraction;
+
+    if (p.parsing || fraction == null) {
+      return Column(
+        children: [
+          Text(
+            p.parsing ? 'Preparing the text…' : 'Opening…',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+          ),
+          const SizedBox(height: 18),
+          const BrandSpinner(size: 26),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        Text(
+          'Downloading  ${(fraction * 100).round()}%',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: 156,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: fraction,
+              minHeight: 4,
+              backgroundColor: palette.divider,
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.primaryBlue,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

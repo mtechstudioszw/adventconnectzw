@@ -160,7 +160,7 @@ class MusicPlayerService {
       await JustAudioBackground.init(
         androidNotificationChannelId:
             'com.mtechstudioszw.adventconnect.channel.audio',
-        androidNotificationChannelName: 'Advent Connect audio',
+        androidNotificationChannelName: 'Adventist Super App audio',
         androidNotificationChannelDescription:
             'Playback controls for hymns, worship music and the Audio Bible.',
         // Let the notification be dismissed when paused, so a user who
@@ -270,7 +270,7 @@ class MusicPlayerService {
         title: item.title,
         artist: (item.author?.isNotEmpty ?? false)
             ? item.author
-            : 'Advent Connect ZW',
+            : 'Adventist Super App',
         album: item.kind == 'audio_bible' ? 'Audio Bible' : 'Library',
         artUri: (item.coverUrl?.isNotEmpty ?? false)
             ? Uri.tryParse(item.coverUrl!)

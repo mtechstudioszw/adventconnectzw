@@ -244,7 +244,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             tooltip: 'Share',
             icon: const Icon(Icons.share_outlined),
             onPressed: () => Share.share(
-              '${widget.title}\n\nReading on Advent Connect ZW — get the app:\n$appDownloadUrl',
+              '${widget.title}\n\nReading on Adventist Super App — get the app:\n$appDownloadUrl',
             ),
           ),
           IconButton(

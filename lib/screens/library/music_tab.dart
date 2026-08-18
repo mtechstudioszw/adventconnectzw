@@ -533,7 +533,7 @@ class _MusicTabState extends State<MusicTab>
                           Text(
                             (item.author?.isNotEmpty ?? false)
                                 ? item.author!
-                                : 'Advent Connect ZW',
+                                : 'Adventist Super App',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.bodySmall
@@ -585,7 +585,7 @@ class _MusicTabState extends State<MusicTab>
                   Share.share(
                     '${item.title}'
                     '${(item.author?.isNotEmpty ?? false) ? ' — ${item.author}' : ''}'
-                    '\n\nListening on Advent Connect ZW:\n$appDownloadUrl',
+                    '\n\nListening on Adventist Super App:\n$appDownloadUrl',
                   );
                 },
               ),
@@ -785,7 +785,7 @@ class _TrackRow extends StatelessWidget {
                             child: Text(
                               (item.author?.isNotEmpty ?? false)
                                   ? item.author!
-                                  : 'Advent Connect ZW',
+                                  : 'Adventist Super App',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.bodySmall

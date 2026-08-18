@@ -346,7 +346,7 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Couldn't set that reminder — check notifications "
-              'are allowed for Advent Connect ZW.'),
+              'are allowed for Adventist Super App.'),
         ),
       );
       return;

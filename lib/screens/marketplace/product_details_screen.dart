@@ -10,6 +10,7 @@ import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/cart_service.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/messaging_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -53,6 +54,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   bool _saved = false;
   int _currentImage = 0;
   final _pageController = PageController();
+
+  /// Guards the in-app contact button — creating the conversation is a
+  /// round trip, and a double-tap would open two threads with the seller.
+  bool _openingChat = false;
 
   static const double _sheetOverlap = 24;
 
@@ -149,7 +154,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final shareUrl = productShareUrl(product.id);
     final text =
         '${product.title}\n\n'
-        'For sale on Advent Connect ZW marketplace:\n$shareUrl';
+        'For sale on Adventist Super App marketplace:\n$shareUrl';
     try {
       await Share.share(text, subject: product.title);
     } catch (_) {
@@ -188,7 +193,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final link = product == null ? '' : '\n\n${productShareUrl(product.id)}';
     final message =
         'Hi, I\'m interested in "${product?.title ?? 'your listing'}"'
-        '$priceLine on Advent Connect ZW.$link';
+        '$priceLine on Adventist Super App.$link';
     final waUri = Uri.parse(
       'https://wa.me/$digits?text=${Uri.encodeComponent(message)}',
     );
@@ -212,6 +217,71 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
 
+  /// Message the seller inside the app.
+  ///
+  /// The second contact route, restored. It was removed when the two
+  /// unlabelled speech-bubble glyphs here were collapsed into one — but
+  /// the fix for "which bubble reaches the seller?" is a label, not the
+  /// loss of in-app chat, and a buyer without WhatsApp had no way to ask
+  /// a question at all.
+  ///
+  /// Hands the listing to the chat as a product card rather than as text:
+  /// `ChatLaunchIntent` fills the composer with an editable opener and
+  /// pins the thumbnail/title/price above it, and the first message goes
+  /// out as `message_type='product'` so the seller's bubble is tappable
+  /// straight back to this exact listing. Same primitive as
+  /// [OrderHandoff.viaAdventChat].
+  Future<void> _messageSellerInApp() async {
+    final product = _product;
+    if (product == null || _openingChat) return;
+    if (product.sellerId.isEmpty) {
+      _toast('This seller can\'t be messaged in the app. Try WhatsApp.');
+      return;
+    }
+    setState(() => _openingChat = true);
+    final router = GoRouter.of(context);
+    try {
+      AnalyticsService.marketplaceContact(int.tryParse(widget.productId) ?? 0);
+      final convo = await MessagingService.createConversation(
+        otherUserId: product.sellerId,
+        otherUserName: product.sellerName,
+        source: 'marketplace',
+        isBusiness: true,
+      ).timeout(const Duration(seconds: 15));
+      // No share link in the draft — the product card riding alongside it
+      // already points at the listing, and a raw URL in the opener reads
+      // like spam.
+      ChatLaunchIntent.set(
+        draft:
+            'Hi, I\'m interested in "${product.title}" '
+            '(${product.formatPrice()}). Is it still available?',
+        productId: product.id.toString(),
+        productImageUrl: product.firstImage,
+        productTitle: product.title,
+        productPrice: product.formatPrice(),
+      );
+      if (!mounted) return;
+      router.pushNamed('chat', pathParameters: {'id': convo.id}, extra: convo);
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not open the chat. Try WhatsApp instead.');
+    } finally {
+      if (mounted) setState(() => _openingChat = false);
+    }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.darkNavy,
+        content: Text(
+          message,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final product = _product;
@@ -225,6 +295,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               product: product,
               onAddToCart: _addToCart,
               onWhatsApp: _contactSeller,
+              onAdventChat: _messageSellerInApp,
+              chatBusy: _openingChat,
             ),
     );
   }
@@ -717,11 +789,15 @@ class _ActionBar extends StatelessWidget {
     required this.product,
     required this.onAddToCart,
     required this.onWhatsApp,
+    required this.onAdventChat,
+    required this.chatBusy,
   });
 
   final Product product;
   final VoidCallback onAddToCart;
   final VoidCallback onWhatsApp;
+  final VoidCallback onAdventChat;
+  final bool chatBusy;
 
   @override
   Widget build(BuildContext context) {
@@ -741,67 +817,83 @@ class _ActionBar extends StatelessWidget {
             AppSpace.md,
           ),
           child: unavailable
-              ? _UnavailableBar(product: product, onWhatsApp: onWhatsApp)
-              : Row(
+              ? _UnavailableBar(
+                  product: product,
+                  onWhatsApp: onWhatsApp,
+                  onAdventChat: onAdventChat,
+                  chatBusy: chatBusy,
+                )
+              // Two rows, not one. Both contact routes are back and both
+              // are SPELLED OUT — the reason in-app chat was dropped was
+              // that it and WhatsApp were two near-identical unlabelled
+              // speech bubbles, which is a labelling problem, not a
+              // reason to leave buyers without WhatsApp unable to ask a
+              // question. Three buttons plus a price will not fit on one
+              // row of a 360dp phone without shrinking "Add" to nothing.
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                    Row(
                       children: [
-                        Text(
-                          'Price',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: context.palette.textMuted,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Price',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: context.palette.textMuted,
+                              ),
+                            ),
+                            Text(
+                              product.formatPrice(),
+                              style: AppTextStyles.titleLarge.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          product.formatPrice(),
-                          style: AppTextStyles.titleLarge.copyWith(
-                            fontWeight: FontWeight.w800,
+                        const SizedBox(width: AppSpace.md),
+                        Expanded(
+                          child: Pressable(
+                            onTap: onAddToCart,
+                            haptics: true,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: AppSpace.lg,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: AppColors.primaryGradient,
+                                borderRadius: AppRadius.buttonAll,
+                                boxShadow: AppShadows.glow(context),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.add_shopping_cart_rounded,
+                                    color: AppColors.white,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: AppSpace.sm),
+                                  Text(
+                                    'Add',
+                                    style: AppTextStyles.buttonText.copyWith(
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(width: AppSpace.md),
-                    // One contact route, and it says what it is. There used to
-                    // be two unlabelled glyphs here — a speech bubble for
-                    // in-app chat and a second, near-identical bubble for
-                    // WhatsApp — so the button that actually reaches the
-                    // seller was a coin flip.
-                    _WhatsAppButton(onTap: onWhatsApp),
-                    const SizedBox(width: AppSpace.sm),
-                    Expanded(
-                      child: Pressable(
-                        onTap: onAddToCart,
-                        haptics: true,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpace.lg,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            borderRadius: AppRadius.buttonAll,
-                            boxShadow: AppShadows.glow(context),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.add_shopping_cart_rounded,
-                                color: AppColors.white,
-                                size: 18,
-                              ),
-                              const SizedBox(width: AppSpace.sm),
-                              Text(
-                                'Add',
-                                style: AppTextStyles.buttonText.copyWith(
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    const SizedBox(height: AppSpace.sm),
+                    _ContactRow(
+                      onWhatsApp: onWhatsApp,
+                      onAdventChat: onAdventChat,
+                      chatBusy: chatBusy,
                     ),
                   ],
                 ),
@@ -811,41 +903,137 @@ class _ActionBar extends StatelessWidget {
   }
 }
 
-class _UnavailableBar extends StatelessWidget {
-  const _UnavailableBar({required this.product, required this.onWhatsApp});
+/// The two ways to reach a seller, side by side and equally weighted.
+///
+/// Order is deliberate: Advent Chat first because it always works — every
+/// member has it — and WhatsApp second because it depends on a number the
+/// seller may not have shared and an app the buyer may not have installed.
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({
+    required this.onWhatsApp,
+    required this.onAdventChat,
+    required this.chatBusy,
+  });
 
-  final Product product;
-
-  /// Also WhatsApp, so "ask the shop" means the same thing on a sold listing
-  /// as it does on an available one.
   final VoidCallback onWhatsApp;
+  final VoidCallback onAdventChat;
+  final bool chatBusy;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: _AdventChatButton(onTap: onAdventChat, busy: chatBusy),
+        ),
+        const SizedBox(width: AppSpace.sm),
+        Expanded(child: _WhatsAppButton(onTap: onWhatsApp)),
+      ],
+    );
+  }
+}
+
+/// "Message" — the in-app route, in brand blue.
+///
+/// Solid and 48dp tall to match [_WhatsAppButton] exactly. The point of
+/// this pair is that neither route looks like the afterthought: an
+/// outlined button next to a solid green one reads as "the real button and
+/// the other one", which is the state the founder asked to fix.
+class _AdventChatButton extends StatelessWidget {
+  const _AdventChatButton({required this.onTap, required this.busy});
+
+  final VoidCallback onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Message the seller in Advent Chat',
+      child: Pressable(
+        onTap: busy ? null : onTap,
+        haptics: true,
+        pressedScale: 0.94,
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue,
+            borderRadius: AppRadius.buttonAll,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withValues(alpha: 0.32),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                product.isSold ? 'This item is sold' : 'This item is reserved',
-                style: AppTextStyles.titleSmall.copyWith(
-                  fontWeight: FontWeight.w800,
+              if (busy)
+                const SizedBox(width: 17, height: 17, child: BrandSpinner(size: 17))
+              else
+                const Icon(
+                  Icons.forum_rounded,
+                  color: AppColors.white,
+                  size: 17,
                 ),
-              ),
+              const SizedBox(width: AppSpace.sm - 2),
               Text(
-                'Ask the shop if more are coming.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: context.palette.textMuted,
+                busy ? 'Opening…' : 'Message',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: AppSpace.md),
-        _WhatsAppButton(onTap: onWhatsApp),
+      ),
+    );
+  }
+}
+
+class _UnavailableBar extends StatelessWidget {
+  const _UnavailableBar({
+    required this.product,
+    required this.onWhatsApp,
+    required this.onAdventChat,
+    required this.chatBusy,
+  });
+
+  final Product product;
+
+  /// Both routes, so "ask the shop" means the same thing on a sold listing
+  /// as it does on an available one.
+  final VoidCallback onWhatsApp;
+  final VoidCallback onAdventChat;
+  final bool chatBusy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          product.isSold ? 'This item is sold' : 'This item is reserved',
+          style: AppTextStyles.titleSmall.copyWith(fontWeight: FontWeight.w800),
+        ),
+        Text(
+          'Ask the shop if more are coming.',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: context.palette.textMuted,
+          ),
+        ),
+        const SizedBox(height: AppSpace.sm),
+        _ContactRow(
+          onWhatsApp: onWhatsApp,
+          onAdventChat: onAdventChat,
+          chatBusy: chatBusy,
+        ),
       ],
     );
   }

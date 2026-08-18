@@ -1,5 +1,5 @@
 name: advent_connect_zw
-description: "Advent Connect ZW — Christian community platform for Zimbabwe"
+description: "Adventist Super App — connecting SDA people around the globe"
 publish_to: 'none'
 
 version: 1.3.2+1034
@@ -15,6 +15,14 @@ dependencies:
   supabase_flutter: ^2.5.0
   go_router: ^14.2.0
   flutter_secure_storage: ^9.2.2
+  # End-to-end encryption. The Signal protocol — X3DH + Double Ratchet for
+  # 1:1, Sender Keys for groups — which is what WhatsApp runs. Pure Dart
+  # (no platform channels), so the crypto is unit-testable in `flutter
+  # test` on a machine with no device attached, which is the only way this
+  # gets verified here. Hand-rolling any of this would be malpractice: a
+  # ratchet bug does not throw, it silently makes history unreadable
+  # FOREVER.
+  libsignal_protocol_dart: ^0.8.2
   google_fonts: ^6.2.1
   image_picker: ^1.1.2
 
@@ -203,6 +211,12 @@ dev_dependencies:
   # Run `dart run flutter_launcher_icons` after dropping a 1024x1024
   # icon at assets/icon/app_icon.png to regenerate.
   flutter_launcher_icons: ^0.14.4
+  # Test-only: lets egw_book_download_test swap in a temp directory for the
+  # app cache, so the resume-on-retry download can be exercised for real
+  # against a local server. Transitive via path_provider; named here because
+  # a test that imports it is a first-class dependency on it.
+  path_provider_platform_interface: ^2.1.2
+  plugin_platform_interface: ^2.1.8
 
 flutter:
   uses-material-design: true
@@ -231,10 +245,17 @@ flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
   remove_alpha_ios: true
-  # New brand logo (transparent) on the Dark Navy brand background, so the
-  # launcher icon matches the splash/in-app logo instead of the old mark.
-  image_path: "assets/icon/logo.png"
-  background_color_ios: "#0D1B3E"
-  adaptive_icon_background: "#0D1B3E"
-  adaptive_icon_foreground: "assets/icon/logo.png"
+  # Adventist Super App brand mark. Three files, generated from the founder's
+  # artwork by scripts/build_brand_assets.ps1 — see assets/icon/README.md.
+  #   app_icon.png            full-bleed square, mark on the brand gradient.
+  #                           Full-bleed on purpose: iOS and Play apply their
+  #                           own corner mask, so artwork carrying its own
+  #                           rounded corners ships with black corners.
+  #   app_icon_foreground.png the mark alone, ~60% of the canvas, so Android's
+  #                           round/squircle masks can't clip it.
+  #   logo.png                the mark alone at ~86% — the in-app asset.
+  image_path: "assets/icon/app_icon.png"
+  background_color_ios: "#022171"
+  adaptive_icon_background: "#022171"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
   min_sdk_android: 21

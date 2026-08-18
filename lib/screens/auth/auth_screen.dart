@@ -451,7 +451,7 @@ class _AuthScreenState extends State<AuthScreen>
       if (!mounted) return;
       setState(() {
         _googleBusy = false;
-        _error = 'You must be at least 13 to use Advent Connect.';
+        _error = 'You must be at least 13 to use Adventist Super App.';
       });
       return;
     }
@@ -506,7 +506,7 @@ class _AuthScreenState extends State<AuthScreen>
       if (!mounted) return;
       setState(() {
         _appleBusy = false;
-        _error = 'You must be at least 13 to use Advent Connect.';
+        _error = 'You must be at least 13 to use Adventist Super App.';
       });
       return;
     }

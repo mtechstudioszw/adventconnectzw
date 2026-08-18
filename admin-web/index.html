@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
-<title>Advent Connect ZW — Admin</title>
+<title>Adventist Super App — Admin</title>
 <style>
   :root {
     --navy: #0D1B3E;
@@ -128,7 +128,7 @@
 <!-- ============ LOGIN ============ -->
 <div id="login">
   <form class="login-card" id="loginForm">
-    <h1>Advent Connect ZW</h1>
+    <h1>Adventist Super App</h1>
     <p>Admin dashboard — super admins only.</p>
     <label>Email</label>
     <input type="email" id="email" autocomplete="username" required />
@@ -143,7 +143,7 @@
 <div id="app">
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand">Advent Connect ZW<small>ADMIN CONSOLE</small></div>
+      <div class="brand">Adventist Super App<small>ADMIN CONSOLE</small></div>
       <nav class="nav" id="nav">
         <a data-tab="overview" class="active">📊 Overview</a>
         <a data-tab="sellers">🛍️ Sellers <span class="badge" id="b-sellers" style="display:none"></span></a>
@@ -590,7 +590,7 @@ function waChurch(phone, msg) {
   window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(msg)}`, "_blank");
 }
 function churchApprovedMsg(name, church) {
-  return `Hi ${name || "there"}, you are now an approved admin for ${church || "your church"} on Advent Connect! 🎉\n\n`
+  return `Hi ${name || "there"}, you are now an approved admin for ${church || "your church"} on Adventist Super App! 🎉\n\n`
     + `In your church dashboard you can:\n`
     + `• Post announcements to your members\n`
     + `• Share church updates to the whole app (shown with your church name + verified tick)\n`
@@ -601,7 +601,7 @@ function churchApprovedMsg(name, church) {
     + `Open the app → Settings → your church dashboard. God bless!`;
 }
 function churchProofMsg(name, church) {
-  return `Hi ${name || "there"}, thank you for requesting to manage ${church || "your church"} on Advent Connect. `
+  return `Hi ${name || "there"}, thank you for requesting to manage ${church || "your church"} on Adventist Super App. `
     + `Before we can approve you, please send proof of your position at the church (e.g. Elder, Clerk, Pastor) — `
     + `a photo of an appointment letter or your church ID. Reply here with it and we will review again. Thank you!`;
 }
@@ -767,7 +767,7 @@ async function youtube() {
 }
 
 async function insights() {
-  view().innerHTML = head("User insights", "How members found Advent Connect — from the first-run signup survey.") + loading();
+  view().innerHTML = head("User insights", "How members found Adventist Super App — from the first-run signup survey.") + loading();
   try {
     const summary = await rpc("admin_survey_summary");
     const { data: recent } = await sb
@@ -776,7 +776,7 @@ async function insights() {
       .order("created_at", { ascending: false })
       .limit(100);
     const total = (summary || []).reduce((s, r) => s + Number(r.total || 0), 0);
-    if (!total) { view().innerHTML = head("User insights", "How members found Advent Connect.") + empty("No survey responses yet."); return; }
+    if (!total) { view().innerHTML = head("User insights", "How members found Adventist Super App.") + empty("No survey responses yet."); return; }
     const bars = (summary || []).map(r => {
       const pct = total ? Math.round((Number(r.total) / total) * 100) : 0;
       return `<div style="margin-bottom:12px">
@@ -798,7 +798,7 @@ async function insights() {
 }
 
 async function usage() {
-  view().innerHTML = head("App usage", "How members are actually using Advent Connect.") + loading();
+  view().innerHTML = head("App usage", "How members are actually using Adventist Super App.") + loading();
   try {
     const s = await rpc("admin_usage_stats");
     const tile = (label, val, sub) => `
@@ -811,7 +811,7 @@ async function usage() {
     const sect = (t) => `<div style="font-weight:800;margin:6px 0 10px">${esc(t)}</div>`;
     const stick1 = s.total_users ? Math.round((s.active_1d / s.total_users) * 100) : 0;
     const stick7 = s.total_users ? Math.round((s.active_7d / s.total_users) * 100) : 0;
-    view().innerHTML = head("App usage", "How members are actually using Advent Connect.") +
+    view().innerHTML = head("App usage", "How members are actually using Adventist Super App.") +
       sect("Members") + grid(
         tile("Total members", s.total_users) +
         tile("Active today", s.active_1d, `${stick1}% of members`) +
@@ -858,7 +858,7 @@ async function users() {
               : `<button class="btn red" data-ban="${u.id}">Ban</button>`)}</td>
         </tr>`).join("") + `</tbody></table>`;
       $("ulist").querySelectorAll("[data-notify]").forEach(b => b.onclick = async () => {
-        const title = await ask({ title: `Notify ${b.dataset.name}`, sub: "Step 1 of 2 — the notification TITLE.", placeholder: "e.g. A note from the Advent Connect team", okLabel: "Next" });
+        const title = await ask({ title: `Notify ${b.dataset.name}`, sub: "Step 1 of 2 — the notification TITLE.", placeholder: "e.g. A note from the Adventist Super App team", okLabel: "Next" });
         if (!title) return;
         const msg = await ask({ title: `Notify ${b.dataset.name}`, sub: "Step 2 of 2 — the MESSAGE.", placeholder: "Write the message…", okLabel: "Send" });
         if (!msg) return;

@@ -1411,7 +1411,7 @@ class _VisibilityOption extends StatelessWidget {
                 ),
               ),
               Text(
-                isPublic ? 'Anyone on Advent Connect' : 'Only your friends',
+                isPublic ? 'Anyone on Adventist Super App' : 'Only your friends',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.labelSmall.copyWith(

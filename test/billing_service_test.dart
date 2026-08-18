@@ -47,7 +47,7 @@ class FakeBillingPlatform implements BillingPlatform {
   Future<PremiumOffer?> loadOffer(String productId) async => offerExists
       ? PremiumOffer(
           productId: productId,
-          title: 'Advent Connect Premium',
+          title: 'Adventist Super App Premium',
           description: 'No ads',
           price: 'US\$3.00',
           currencyCode: 'USD',

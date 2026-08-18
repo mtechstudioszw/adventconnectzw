@@ -24,8 +24,8 @@ const poppins = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Advent Connect — Admin",
-  description: "Admin console for Advent Connect ZW.",
+  title: "Adventist Super App — Admin",
+  description: "Admin console for Adventist Super App.",
   // Nothing here should ever reach a search engine.
   robots: { index: false, follow: false },
 };

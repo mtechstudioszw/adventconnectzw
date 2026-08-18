@@ -101,12 +101,12 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         (me?.userMetadata?['full_name'] as String?)?.trim() ?? 'a member';
     final text = Uri.encodeComponent(
       'Hello, I would like to be verified to post announcements for '
-      '"$churchName" on Advent Connect ZW. My name is $myName.',
+      '"$churchName" on Adventist Super App. My name is $myName.',
     );
     final uri = Uri.parse('https://wa.me/$_announcementsWhatsApp?text=$text');
     final ok = await _confirm(
       'Request to post announcements',
-      'To post announcements you must be verified by the Advent Connect '
+      'To post announcements you must be verified by the Adventist Super App '
           'team. This will open WhatsApp so you can send your request — '
           'once verified you\'ll be granted access manually.',
       'Open WhatsApp',
@@ -201,7 +201,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                         onPressed: () {
                           Navigator.pop(ctx);
                           Share.share(
-                            'Join our group on Advent Connect: $link',
+                            'Join our group on Adventist Super App: $link',
                           );
                         },
                         icon: const Icon(Icons.share, size: 18),

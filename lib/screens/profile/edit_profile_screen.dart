@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../config/countries.dart';
+import '../../widgets/country_picker_sheet.dart';
 import '../../utils/name_validator.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
@@ -40,6 +42,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 
   List<Church> _churches = [];
   String? _selectedChurchId;
+  /// ISO alpha-2. Seeded from auth metadata; falls back to ZW, which is what
+  /// patch_213 backfilled every pre-rebrand profile to.
+  String _country = Countries.defaultCode;
   String? _profilePhotoUrl;
   String? _coverPhotoUrl;
   bool _saving = false;
@@ -80,6 +85,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     _profilePhotoUrl = (meta['profile_photo_url'] as String?);
     _coverPhotoUrl = (meta['cover_photo_url'] as String?);
     _showAge = (meta['show_age'] as bool?) ?? true;
+    _country = (meta['country'] as String?) ?? Countries.defaultCode;
     _loadChurches();
     _loadDob();
   }
@@ -204,6 +210,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       profilePhotoUrl: _profilePhotoUrl,
       coverPhotoUrl: _coverPhotoUrl,
       showAge: _showAge,
+      country: _country,
       dateOfBirth: _dob,
     );
     if (!mounted) return;
@@ -633,6 +640,17 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                 icon: Icons.notes_outlined,
                 hint: 'A short line about you',
               ).copyWith(counterText: ''),
+            ),
+          ),
+          const SizedBox(height: 18),
+          // Every pre-rebrand profile was backfilled to Zimbabwe by
+          // patch_213. This row is how those members — and anyone who
+          // moves — correct it.
+          _LabeledField(
+            label: 'Country',
+            child: CountryField(
+              code: _country,
+              onChanged: (c) => setState(() => _country = c.code),
             ),
           ),
           const SizedBox(height: 18),

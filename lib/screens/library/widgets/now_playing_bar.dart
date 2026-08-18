@@ -201,7 +201,7 @@ class NowPlayingBar extends StatelessWidget {
         Text(
           (item.author?.isNotEmpty ?? false)
               ? item.author!
-              : 'Advent Connect ZW',
+              : 'Adventist Super App',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.labelSmall.copyWith(

@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const id = url.searchParams.get("id") ?? "";
 
-  let title = "Advent Connect ZW";
-  let description = "Join the Seventh-day Adventist community in Zimbabwe.";
+  let title = "Adventist Super App";
+  let description = "Join the Seventh-day Adventist community worldwide.";
   let image = "";
 
   if (id) {
@@ -101,16 +101,16 @@ Deno.serve(async (req) => {
   <div class="card">
     <div class="brand">
       <div class="badge">A</div>
-      <div class="name">Advent Connect ZW</div>
-      <div class="tag">ZIMBABWE</div>
+      <div class="name">Adventist Super App</div>
+      <div class="tag">WORLDWIDE</div>
     </div>
     ${image ? `<img class="cover" src="${esc(image)}" alt="" />` : `<div class="cover"></div>`}
     <div class="body">
       <h1>${esc(title)}</h1>
       <p>${esc(description)}</p>
-      <a class="btn" href="${esc(appLink)}">Open in Advent Connect ZW</a>
+      <a class="btn" href="${esc(appLink)}">Open in Adventist Super App</a>
       <a class="btn-secondary" href="${esc(DOWNLOAD_URL)}">Don't have the app? Get it here</a>
-      <div class="muted">The Christian community app for Zimbabwe. Connect with members, find churches, share prayers and events.</div>
+      <div class="muted">Connecting SDA people around the globe — find churches, join events, share prayers and meet members.</div>
     </div>
   </div>
   <script>

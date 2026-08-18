@@ -256,7 +256,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               const SizedBox(height: 4),
               Text(
-                'Reach the Advent Connect ZW team for support, '
+                'Reach the Adventist Super App team for support, '
                 'feedback, or partnership.',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.textMuted,
@@ -271,7 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 onTap: () async {
                   final url = Uri.parse(
                     'https://wa.me/${_supportWhatsApp.replaceAll(RegExp(r"[^0-9+]"), "")}'
-                    '?text=${Uri.encodeComponent("Hi Advent Connect ZW team — ")}',
+                    '?text=${Uri.encodeComponent("Hi Adventist Super App team — ")}',
                   );
                   Navigator.of(ctx).pop();
                   await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -287,7 +287,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   final url = Uri(
                     scheme: 'mailto',
                     path: _supportEmail,
-                    queryParameters: {'subject': 'Advent Connect ZW — Support'},
+                    queryParameters: {'subject': 'Adventist Super App — Support'},
                   );
                   Navigator.of(ctx).pop();
                   await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -555,7 +555,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         'App',
         Icons.info_outline,
         AppColors.primaryBlue,
-        'version credits mtech',
+        'version credits developer',
         () => context.pushNamed('about'),
       ),
     ];
@@ -1129,7 +1129,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       const SizedBox(height: 24),
                       Center(
                         child: Text(
-                          'Made with care • MyTech Studios Zw',
+                          'Made with care • Tanatswa Michael Mikuwa',
                           style: AppTextStyles.labelSmall.copyWith(
                             color: AppColors.textMuted,
                             fontSize: 11,
@@ -1286,7 +1286,7 @@ class _DonationCard extends StatelessWidget {
                     Text(
                       'Every feature here is free, and the servers are not. '
                       'A voluntary EcoCash gift of any size helps keep '
-                      'Advent Connect running for the whole community.',
+                      'Adventist Super App running for the whole community.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.white.withValues(alpha: 0.85),
                         fontSize: 12.5,
@@ -1777,7 +1777,7 @@ class _ThemeSheet extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Choose how Advent Connect looks. Match system follows your '
+                'Choose how Adventist Super App looks. Match system follows your '
                 'phone\'s light or dark setting.',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: AppColors.textMuted,

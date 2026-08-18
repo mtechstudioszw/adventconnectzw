@@ -104,7 +104,7 @@ class _MemberDirectoryScreenState extends State<MemberDirectoryScreen> {
                 title: 'Member directory',
                 tagline: 'Find your community',
                 subtitle:
-                    'Doctors, teachers, builders, ministers — opt-in members across Zimbabwe.',
+                    'Doctors, teachers, builders, ministers — opt-in members around the globe.',
                 fallbackRoute: 'profile',
               ),
               Padding(

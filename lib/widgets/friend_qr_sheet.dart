@@ -20,7 +20,7 @@ import '../theme/app_text_styles.dart';
 ///
 /// **ON.** A phone camera only follows a custom scheme if some installed app
 /// claims it, so a scanned code did precisely nothing — silently — on a
-/// phone without Advent Connect, which is the exact case a shared code is
+/// phone without Adventist Super App, which is the exact case a shared code is
 /// most useful for. The https page tries the app first and falls through to
 /// the Play Store, so handing someone your code now works whether or not
 /// they have joined.
@@ -200,7 +200,7 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
 
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png')],
-        text: 'Scan my Advent Connect ZW friend code to open my profile.\n'
+        text: 'Scan my Adventist Super App friend code to open my profile.\n'
             '$name\n${friendQrPayload(userId)}',
       );
     } catch (_) {
@@ -208,7 +208,7 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
       // useful, so fall back rather than telling them it didn't work.
       try {
         await Share.share(
-          'Scan my Advent Connect ZW friend code to open my profile.\n'
+          'Scan my Adventist Super App friend code to open my profile.\n'
           '$name\n${friendQrPayload(userId)}',
         );
       } catch (_) {
@@ -374,7 +374,10 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
                         ),
                       ),
                       Text(
-                        'Advent Connect ZW',
+                        'Adventist Super App',
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.labelSmall.copyWith(
                           color: AppColors.textMuted,
                           letterSpacing: 1.1,
@@ -486,7 +489,7 @@ class _ScanFriendScreenState extends State<ScanFriendScreen> {
       // generated them has been updated.
       final id = friendIdFromScan(raw);
       if (id == null) {
-        setState(() => _message = 'That isn\'t an Advent Connect friend code.');
+        setState(() => _message = 'That isn\'t an Adventist Super App friend code.');
         continue;
       }
       _handled = true;

@@ -125,27 +125,30 @@ class _VerseShareSheetState extends State<VerseShareSheet> {
 
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png')],
-        text: '${widget.reference} — Advent Connect ZW\n$appDownloadUrl',
+        text: '${widget.reference} — Adventist Super App\n$appDownloadUrl',
       );
     } catch (_) {
       if (!mounted) return;
       // Falling back to text is strictly better than telling the user it
       // failed — they still get to share the verse.
-      await Share.share(
-        '"${widget.text}"\n— ${widget.reference} (KJV)\n\n'
-        'Shared from Advent Connect ZW:\n$appDownloadUrl',
-      );
+      await Share.share(_plainText);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _shareText() async {
-    await Share.share(
-      '"${widget.text}"\n— ${widget.reference} (KJV)\n\n'
-      'Shared from Advent Connect ZW:\n$appDownloadUrl',
-    );
-  }
+  Future<void> _shareText() => Share.share(_plainText);
+
+  /// The quote as plain text, credited to whoever actually said it.
+  ///
+  /// The credit used to be the literal string `(KJV)` in both places, which
+  /// was right when the Bible was the only caller and became wrong the day
+  /// [VerseShareSheet.attribution] was added for Sabbath School and EGW: a
+  /// shared Ellen White quote went out attributed to the King James Bible.
+  /// The CARD had always been right; only the text share was lying.
+  String get _plainText =>
+      '"${widget.text}"\n— ${widget.reference} (${widget.attribution})\n\n'
+      'Shared from Adventist Super App:\n$appDownloadUrl';
 
   @override
   Widget build(BuildContext context) {
@@ -320,6 +323,14 @@ class _VerseShareSheetState extends State<VerseShareSheet> {
                         'assets/icon/logo.png',
                         width: 16,
                         height: 16,
+                        // The mark is a WHITE silhouette, and this is the one
+                        // place it is drawn with no navy tile behind it. On
+                        // the paper style (#F7F1E3) white-on-cream is
+                        // invisible, so tint it to the card's own foreground
+                        // — white on the navy/blue/dark cards, dark brown on
+                        // paper. srcIn keeps the mark's alpha edges.
+                        color: style.foreground,
+                        colorBlendMode: BlendMode.srcIn,
                         filterQuality: FilterQuality.high,
                         // Never let a missing asset break the card — it is
                         // rendered to an image, so a broken-image glyph
@@ -329,7 +340,7 @@ class _VerseShareSheetState extends State<VerseShareSheet> {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      'Advent Connect ZW',
+                      'Adventist Super App',
                       style: AppTextStyles.labelSmall.copyWith(
                         color: style.foreground.withValues(alpha: 0.55),
                         fontSize: 10,

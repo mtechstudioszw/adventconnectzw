@@ -230,7 +230,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
   Future<void> _share(YoutubeVideo v) async {
     await Share.share(
-      '${v.title}\n\nWatch on Advent Connect ZW:\n'
+      '${v.title}\n\nWatch on Adventist Super App:\n'
       'https://www.youtube.com/watch?v=${v.videoId}',
     );
   }

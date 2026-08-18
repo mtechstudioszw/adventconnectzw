@@ -238,7 +238,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
                 Text(
                   (item.author?.isNotEmpty ?? false)
                       ? item.author!
-                      : 'Advent Connect ZW',
+                      : 'Adventist Super App',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -507,7 +507,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
             onTap: () => Share.share(
               '${item.title}'
               '${(item.author?.isNotEmpty ?? false) ? ' — ${item.author}' : ''}'
-              '\n\nListening on Advent Connect ZW:\n$appDownloadUrl',
+              '\n\nListening on Adventist Super App:\n$appDownloadUrl',
             ),
           ),
         ],
@@ -708,7 +708,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
                           subtitle: Text(
                             (track.author?.isNotEmpty ?? false)
                                 ? track.author!
-                                : 'Advent Connect ZW',
+                                : 'Adventist Super App',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.labelSmall.copyWith(

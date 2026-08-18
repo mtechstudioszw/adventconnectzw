@@ -1,7 +1,7 @@
 import 'app_version.dart';
 
 /// Public Play Store listing for the app. Appended to shared content (Bible
-/// verses, etc.) so whoever receives it can install Advent Connect ZW.
+/// verses, etc.) so whoever receives it can install Adventist Super App.
 String get appDownloadUrl =>
     'https://play.google.com/store/apps/details?id=$kAndroidPackageId';
 

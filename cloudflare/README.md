@@ -1,4 +1,4 @@
-# Advent Connect ZW — Share / Open Graph Worker
+# Adventist Super App — Share / Open Graph Worker
 
 > **Redeploy this worker before publishing 1.3.2.** The release adds `/u/<id>`
 > for friend QR codes. The currently deployed worker does not have that route,

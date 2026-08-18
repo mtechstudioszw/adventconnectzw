@@ -143,10 +143,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   /// (WhatsApp, SMS, etc.). The OS share sheet lets them pick WhatsApp.
   Future<void> _inviteMembers() async {
     await Share.share(
-      'Join ${widget.role.churchName} on Advent Connect ZW — '
+      'Join ${widget.role.churchName} on Adventist Super App — '
       'church announcements, events and our community in one app.\n\n'
       'Download it here: $appDownloadUrl',
-      subject: 'Join us on Advent Connect ZW',
+      subject: 'Join us on Adventist Super App',
     );
   }
 

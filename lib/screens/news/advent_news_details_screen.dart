@@ -270,7 +270,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
     const appUrl =
         'https://play.google.com/store/apps/details?id=io.supabase.adventconnectzw.advent_connect_zw';
     final body =
-        '${item.title}\n\n${item.summary}\n\nRead more on Advent Connect ZW: $appUrl';
+        '${item.title}\n\n${item.summary}\n\nRead more on Adventist Super App: $appUrl';
     try {
       await Share.share(body, subject: item.title);
     } catch (_) {

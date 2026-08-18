@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../services/presence_service.dart';
 import '../../../models/quiz_match.dart';
 import '../../../models/quiz_question_model.dart';
 import '../../../models/quiz_round.dart';
@@ -304,6 +303,13 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     QuizChallengeService.incoming().then((list) {
       if (mounted) setState(() => _incomingChallenges = list.length);
     });
+    // Who is ACTUALLY queued for a live match. Same reasoning as the invite
+    // count above — set outside any mounted check, because it is true for
+    // Home whether or not the lobby is still on the tree, and Home does not
+    // re-bootstrap when the member comes back out of the arena.
+    QuizMatchService.waitingCount().then(
+      (count) => QuizHomeSignal.waiting.value = count,
+    );
   }
 
   Future<void> _resume(Map<String, dynamic> session) async {
@@ -813,10 +819,10 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
   /// was one of six identical tiles — which is most of why only ~11 members
   /// have ever played one. The strip keeps the tile's hard-won honesty
   /// about an empty arena (see [_LiveMatchStrip]).
-  /// The live-match strip, rebuilt whenever the presence roster changes.
+  /// The live-match strip, rebuilt whenever the arena queue changes.
   ///
-  /// Two things were wrong here and both read to the founder as the strip
-  /// lying (18 Aug 2026):
+  /// Three things were wrong here and all of them read to the founder as
+  /// the strip lying (18 Aug 2026):
   ///
   ///  1. **It counted the member reading it.** The presence channel is
   ///     created with `self: true`, so you are always in your own roster.
@@ -824,16 +830,17 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
   ///  2. **It never updated.** `onlineUsers.length` was read once at build
   ///     time with nothing listening, so the number froze at whatever it
   ///     was when the lobby was opened.
-  ///
-  /// The third problem is in the wording, not the number — see
-  /// [_LiveMatchStrip].
+  ///  3. **It was the wrong number entirely.** Presence counts everyone
+  ///     with the app open. Fixing 1 and 2 made it an accurate count of
+  ///     people who are not playing — *"lying tt some people online to play
+  ///     quiz live when one will be in the lobby"*. It now reads the queue
+  ///     itself, via [QuizHomeSignal.waiting] / patch_212.
   Widget _buildLiveStrip() {
-    final me = QuizMatchService.uid;
-    return ValueListenableBuilder<Set<String>>(
-      valueListenable: PresenceService.onChange,
-      builder: (context, roster, _) => _LiveMatchStrip(
+    return ValueListenableBuilder<int>(
+      valueListenable: QuizHomeSignal.waiting,
+      builder: (context, queued, _) => _LiveMatchStrip(
         invites: _liveInvites,
-        online: roster.where((id) => id != me).length,
+        waitingInArena: queued,
         onTap: _openLiveMatch,
       ),
     );
@@ -1188,34 +1195,31 @@ class _ModeRow extends StatelessWidget {
 class _LiveMatchStrip extends StatelessWidget {
   const _LiveMatchStrip({
     required this.invites,
-    required this.online,
+    required this.waitingInArena,
     required this.onTap,
   });
 
   final int invites;
 
-  /// **Other** members with the app open right now — the caller already
-  /// removed the viewer from the roster.
+  /// **Other players sitting in the live-match queue right now.**
   ///
-  /// This is NOT "players waiting in the arena", and the copy below must
-  /// never imply that it is. It comes from the app-wide `online_users`
-  /// presence channel, so it counts people reading the news feed, in a
-  /// chat, or watching a video just the same. Saying "N online now · play
-  /// someone" told members an opponent was queued and ready; they tapped,
-  /// searched, found nobody, and concluded live match was broken. What is
-  /// actually true is that those people are reachable — [QuizMatchService.invite]
-  /// works on any member with a quiz profile — so the strip offers a
-  /// challenge, which is a promise it can keep.
+  /// This used to be the app-wide presence count, and the doc comment here
+  /// said in as many words that it was NOT "players waiting in the arena"
+  /// and that the copy must never imply it was. Two rewrites of the copy
+  /// later the founder still read it as a lie, and he was right to: a strip
+  /// that lights up because somebody is reading the news feed is claiming
+  /// there is a game on. The answer was the server-side queue count that
+  /// same comment asked for — `quiz_arena_waiting()`, patch_212 — which
+  /// counts the exact rows `quiz_match_find` will pair the caller with.
   ///
-  /// A real "N waiting in the arena" needs a server-side count of open
-  /// queue entries; see TODO.md. Do not fake it from this number.
-  final int online;
+  /// So the strip may now say "waiting", because it finally knows.
+  final int waitingInArena;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final waiting = invites > 0;
-    final live = online > 0;
+    final live = waitingInArena > 0;
     // Three states, three colours: someone is waiting (green, glowing),
     // people are around (green), nobody is (faint).
     final accent = waiting || live
@@ -1283,13 +1287,10 @@ class _LiveMatchStrip extends StatelessWidget {
                       waiting
                           ? 'Join before it expires'
                           : live
-                          // "in the app", not "in the arena" — see [online].
-                          // The strip may not promise a queued opponent it
-                          // has no way to know about.
-                          ? (online == 1
-                                ? '1 member in the app · challenge them'
-                                : '$online members in the app · challenge one')
-                          : 'Quiet right now — challenge someone instead',
+                          ? (waitingInArena == 1
+                                ? '1 player waiting · tap to play them'
+                                : '$waitingInArena players waiting to play')
+                          : 'Nobody in the arena — challenge someone instead',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.labelSmall.copyWith(

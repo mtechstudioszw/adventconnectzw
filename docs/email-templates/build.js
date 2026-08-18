@@ -1,4 +1,4 @@
-// Advent Connect ZW — transactional auth email templates.
+// Adventist Super App — transactional auth email templates.
 //
 // One layout, four emails (confirm signup, reset password, sign-in code,
 // email change). Run `node docs/email-templates/build.js` to regenerate the
@@ -77,7 +77,7 @@ function layout(o) {
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="x-apple-disable-message-reformatting" />
-<title>Advent Connect ZW</title>
+<title>Adventist Super App</title>
 </head>
 <body style="margin:0;padding:0;background:${BG};">
 
@@ -96,12 +96,12 @@ function layout(o) {
         <table role="presentation" cellpadding="0" cellspacing="0" border="0">
           <tr>
             <td style="width:48px;vertical-align:middle;">
-              <img src="${LOGO_URL}" width="48" height="48" alt="Advent Connect ZW"
+              <img src="${LOGO_URL}" width="48" height="48" alt="Adventist Super App"
                    style="display:block;width:48px;height:48px;border:0;outline:none;text-decoration:none;border-radius:12px;" />
             </td>
             <td style="padding-left:14px;font-family:${FONT};">
-              <div style="font-size:17px;font-weight:bold;color:#ffffff;line-height:1.3;">Advent Connect ZW</div>
-              <div style="font-size:11px;color:${GOLD};letter-spacing:1.4px;text-transform:uppercase;padding-top:2px;">Faith &bull; Community &bull; Zimbabwe</div>
+              <div style="font-size:17px;font-weight:bold;color:#ffffff;line-height:1.3;">Adventist Super App</div>
+              <div style="font-size:11px;color:${GOLD};letter-spacing:1.4px;text-transform:uppercase;padding-top:2px;">Faith &bull; Community &bull; Worldwide</div>
             </td>
           </tr>
         </table>
@@ -155,10 +155,10 @@ function layout(o) {
     <tr>
       <td style="background:${BG};padding:20px 28px;font-family:${FONT};border-top:1px solid ${BORDER};">
         <div style="font-size:12px;line-height:1.6;color:${MUTED};">
-          Advent Connect ZW &mdash; a home for Seventh-day Adventists in Zimbabwe.
+          Adventist Super App &mdash; a home for Seventh-day Adventists worldwide.
         </div>
         <div style="font-size:11px;line-height:1.6;color:#8A93A2;padding-top:6px;">
-          This is an automated message, so replies are not monitored. Never share this code with anyone &mdash; not even someone claiming to be from Advent Connect.
+          This is an automated message, so replies are not monitored. Never share this code with anyone &mdash; not even someone claiming to be from Adventist Super App.
         </div>
       </td>
     </tr>
@@ -173,26 +173,26 @@ function layout(o) {
 
 const TEMPLATES = {
   confirmation: {
-    subject: "Your Advent Connect ZW verification code",
+    subject: "Your Adventist Super App verification code",
     html: layout({
       preheader: "Your 6-digit code to finish creating your account.",
-      heading: "Welcome to Advent Connect",
+      heading: "Welcome to Adventist Super App",
       intro:
         "You're one step from joining the community. Enter this code in the app to verify your email address.",
       codeLabel: "Verification code",
       outro:
-        "Once you're in you can follow your church, join the conversation, read the Bible and Sabbath School lessons offline, and connect with Adventists across Zimbabwe.",
+        "Once you're in you can follow your church, join the conversation, read the Bible and Sabbath School lessons offline, and connect with Adventists around the globe.",
       footnote:
-        "If you didn't create an Advent Connect account, you can safely ignore this email &mdash; nothing has been set up.",
+        "If you didn't create an Adventist Super App account, you can safely ignore this email &mdash; nothing has been set up.",
     }),
   },
   recovery: {
-    subject: "Your Advent Connect ZW password reset code",
+    subject: "Your Adventist Super App password reset code",
     html: layout({
       preheader: "Your 6-digit code to reset your password.",
       heading: "Reset your password",
       intro:
-        "We received a request to reset the password for your Advent Connect account. Enter this code in the app to choose a new one.",
+        "We received a request to reset the password for your Adventist Super App account. Enter this code in the app to choose a new one.",
       codeLabel: "Password reset code",
       outro:
         "For your security this code can only be used once, and only on the device that asked for it.",
@@ -201,10 +201,10 @@ const TEMPLATES = {
     }),
   },
   magic_link: {
-    subject: "Your Advent Connect ZW sign-in code",
+    subject: "Your Adventist Super App sign-in code",
     html: layout({
       preheader: "Your 6-digit code to sign in.",
-      heading: "Sign in to Advent Connect",
+      heading: "Sign in to Adventist Super App",
       intro: "Enter this code in the app to sign in to your account.",
       codeLabel: "Sign-in code",
       outro:
@@ -214,12 +214,12 @@ const TEMPLATES = {
     }),
   },
   email_change: {
-    subject: "Confirm your new Advent Connect ZW email",
+    subject: "Confirm your new Adventist Super App email",
     html: layout({
       preheader: "Your 6-digit code to confirm your new email address.",
       heading: "Confirm your new email",
       intro:
-        "Enter this code in the app to confirm {{ .Email }} as the email address for your Advent Connect account.",
+        "Enter this code in the app to confirm {{ .Email }} as the email address for your Adventist Super App account.",
       codeLabel: "Confirmation code",
       outro:
         "Until you confirm, your account keeps using its previous email address.",

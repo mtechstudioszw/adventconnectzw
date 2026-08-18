@@ -64,7 +64,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   ScreenHero(
                     title: isPremium ? 'Your Premium' : 'Go Premium',
                     tagline: isPremium
-                        ? 'Thank you for supporting Advent Connect'
+                        ? 'Thank you for supporting Adventist Super App'
                         : null,
                     fallbackRoute: '/profile',
                   ),
@@ -271,7 +271,7 @@ class _AdCostCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   since == null
-                      ? 'ads shown to you in Advent Connect.'
+                      ? 'ads shown to you in Adventist Super App.'
                       : 'ads shown to you since '
                           '${_formatDate(since)}.',
                   style: TextStyle(
@@ -304,7 +304,7 @@ class _AdCostCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Premium removes every ad in Advent Connect — banners, '
+                  'Premium removes every ad in Adventist Super App — banners, '
                   'full-screen ads, the one when you open the app. It also '
                   'stops the app requesting them at all, so it uses less '
                   'data and less battery.',

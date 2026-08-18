@@ -310,7 +310,7 @@ Deno.serve(async (req: Request) => {
 
   const row = payload.record;
   const userId = row.user_id as string | undefined;
-  const title = (row.title as string | undefined) ?? "Advent Connect ZW";
+  const title = (row.title as string | undefined) ?? "Adventist Super App";
   const body = (row.body as string | undefined) ?? "";
   const referenceId = (row.reference_id as string | null) ?? "";
   const referenceType = (row.reference_type as string | null) ?? "";
@@ -394,15 +394,32 @@ Deno.serve(async (req: Request) => {
   // stay system-rendered.
   const isConversation = referenceType === "conversation" && !!referenceId;
   let senderPhoto = "";
+  // E2EE: the id + wire version of the message this push is about.
+  //
+  // The `body` above comes from the notification row, which the trigger
+  // built from `messages.content` — and for an encrypted message that is
+  // base64. The server CANNOT fix that; it has no key. So we ship the
+  // message id and the version instead, and the DEVICE rebuilds the
+  // preview from the plaintext it already decrypted and cached.
+  //
+  // That is exactly how WhatsApp still shows message previews under E2EE:
+  // the push never carries the text, the phone fills it in. See
+  // `_renderIncomingChat` in lib/services/push_service.dart.
+  let messageId = "";
+  let e2eeVersion = "";
   if (isConversation) {
     try {
       const { data: lastMsg } = await supabase
         .from("messages")
-        .select("sender_id")
+        .select("id, sender_id, e2ee_version")
         .eq("conversation_id", Number(referenceId))
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (lastMsg?.id != null) messageId = String(lastMsg.id);
+      if (lastMsg?.e2ee_version != null) {
+        e2eeVersion = String(lastMsg.e2ee_version);
+      }
       if (lastMsg?.sender_id) {
         const { data: sp } = await supabase
           .from("profiles")
@@ -457,7 +474,18 @@ Deno.serve(async (req: Request) => {
         reference_id: referenceId,
         reference_type: referenceType,
         type: notifType,
-        ...(isConversation ? { sender_photo: senderPhoto } : {}),
+        ...(isConversation
+          ? {
+              sender_photo: senderPhoto,
+              // Only sent when non-empty: an absent e2ee_version is what
+              // tells the client "plaintext, use the body you were given",
+              // which keeps every older push working unchanged.
+              ...(messageId ? { message_id: messageId } : {}),
+              ...(e2eeVersion && e2eeVersion !== "0"
+                ? { e2ee_version: e2eeVersion }
+                : {}),
+            }
+          : {}),
       },
     });
   } catch (e) {

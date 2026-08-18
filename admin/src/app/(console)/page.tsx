@@ -81,7 +81,7 @@ export default function OverviewPage() {
             <span className="pulse" />
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="maint-title">Advent Connect is offline</div>
+            <div className="maint-title">Adventist Super App is offline</div>
             <p className="meta">
               Every member sees the maintenance screen and no content can be
               written. Only you can put it back.

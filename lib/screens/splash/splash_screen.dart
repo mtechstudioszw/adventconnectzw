@@ -519,7 +519,7 @@ class _SplashScreenState extends State<SplashScreen>
                             _buildProgressBar(),
                             const SizedBox(height: 18),
                             Text(
-                              'MYTECH STUDIOS ZW',
+                              'TANATSWA MICHAEL MIKUWA',
                               style: AppTextStyles.labelSmall.copyWith(
                                 color: AppColors.text.withValues(alpha: 0.35),
                                 fontSize: 10,
@@ -659,7 +659,12 @@ class _SplashScreenState extends State<SplashScreen>
               _wordmarkSlide.value + _blossomWordmarkLift.value,
             ),
             child: Text(
-              'Advent Connect ZW',
+              // Two deliberate lines. At 32px w700 the name measures ~370px,
+              // wider than a 360dp screen, so a single Text auto-wraps to a
+              // broken "Adventist Super / App". Stacked, it reads as a
+              // proper wordmark lockup under the emblem.
+              'Adventist\nSuper App',
+              textAlign: TextAlign.center,
               style: AppTextStyles.displayMedium.copyWith(
                 // Navy on the light canvas; white on the dark-navy canvas —
                 // hard-coded darkNavy was invisible navy-on-navy in dark mode.
@@ -685,7 +690,7 @@ class _SplashScreenState extends State<SplashScreen>
         return Opacity(
           opacity: _taglineOpacity.value * (1 - _blossomTaglineFade.value),
           child: Text(
-            'COMMUNITY  •  FAITH  •  ZIMBABWE',
+            'COMMUNITY  •  FAITH  •  WORLDWIDE',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.primaryBlue.withValues(alpha: 0.75),
               fontSize: 12,

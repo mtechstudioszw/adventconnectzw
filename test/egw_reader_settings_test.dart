@@ -119,18 +119,24 @@ void main() {
   });
 
   group('the reading ground answers the finger', () {
-    testWidgets('tapping Sepia changes the page on the next frame', (t) async {
+    testWidgets('tapping Day changes the page on the next frame', (t) async {
+      // Was "tapping Sepia", which stopped proving anything the day sepia
+      // became the DEFAULT ground (founder, 18 Aug 2026) — the page was
+      // already sepia before the tap, so the assertion would have passed
+      // whether or not the tap did a thing. The bug under test is that the
+      // page must not wait on a Hive write to change ground, and any swatch
+      // that is not the current one exercises it.
       await t.pumpWidget(_host());
       await t.pumpAndSettle();
-      expect(_pageGround(t), EgwReadingPalette.day.page);
+      expect(_pageGround(t), EgwReadingPalette.sepia.page);
 
       await _openSettings(t);
-      await t.tap(find.text('Sepia'));
+      await t.tap(find.text('Day'));
       await t.pump();
 
       expect(
         _pageGround(t),
-        EgwReadingPalette.sepia.page,
+        EgwReadingPalette.day.page,
         reason: 'the page must not wait on a disk write to change ground',
       );
     });

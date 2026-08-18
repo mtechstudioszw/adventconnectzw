@@ -306,7 +306,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
       tagline: 'Admin',
       subtitle: _isEdit
           ? 'Refine your story — readers will see the new version.'
-          : 'Editorial coverage of the SDA community in Zimbabwe.',
+          : 'Editorial coverage of the worldwide SDA community.',
       fallbackRoute: 'news',
     );
   }

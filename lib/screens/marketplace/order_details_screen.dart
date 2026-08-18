@@ -355,7 +355,7 @@ class _StatusCard extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Text(
             'Payment and delivery are arranged directly between buyer and '
-            'seller. Advent Connect ZW is not a party to the transaction.',
+            'seller. Adventist Super App is not a party to the transaction.',
             style: AppTextStyles.bodySmall.copyWith(
               color: context.palette.textMuted,
               height: 1.45,

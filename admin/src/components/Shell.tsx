@@ -19,7 +19,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // just asked for.
   useEffect(() => setOpen(false), [pathname]);
 
-  const meta = PAGE_META[pathname] ?? { title: "Advent Connect" };
+  const meta = PAGE_META[pathname] ?? { title: "Adventist Super App" };
   const visible = NAV.filter((item) => atLeast(role, item.min));
 
   return (
@@ -28,7 +28,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="brand">
           <div className="brand-mark">AC</div>
           <div style={{ minWidth: 0 }}>
-            <div className="brand-name">Advent Connect</div>
+            <div className="brand-name">Adventist Super App</div>
             <div className="brand-sub">Admin</div>
           </div>
         </div>
@@ -86,7 +86,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="main">
         {/* Follows you onto every page. Turning the app off is the kind of
             thing that gets forgotten the moment you switch tabs, and the cost
-            of forgetting is that nobody can use Advent Connect. */}
+            of forgetting is that nobody can use Adventist Super App. */}
         {maintenance.active ? (
           <div className="maint-banner">
             <span className="pulse" />

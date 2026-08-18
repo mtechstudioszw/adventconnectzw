@@ -162,9 +162,9 @@ class _PostCardState extends State<PostCard>
         ? postShareUrl(post.id)
         : 'https://play.google.com/store/apps/details?id=$kAndroidPackageId';
     final body = text.isEmpty
-        ? '$author shared a post on Advent Connect.\n$link'
-        : '"$text"\n\n— $author on Advent Connect\n$link';
-    await Share.share(body, subject: 'Advent Connect');
+        ? '$author shared a post on Adventist Super App.\n$link'
+        : '"$text"\n\n— $author on Adventist Super App\n$link';
+    await Share.share(body, subject: 'Adventist Super App');
   }
 
   @override

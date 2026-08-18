@@ -849,7 +849,7 @@ class _PersonCard extends StatelessWidget {
                         ? churchName
                         : online
                         ? 'Online now'
-                        : 'Advent Connect member',
+                        : 'Adventist Super App member',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.labelSmall.copyWith(

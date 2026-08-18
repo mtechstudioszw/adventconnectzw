@@ -718,7 +718,7 @@ class _HymnReaderScreenState extends State<HymnReaderScreen> {
             icon: const Icon(Icons.ios_share_rounded),
             onPressed: () => Share.share(
               '${h.displayTitle}\n\n${h.lyrics}\n\n'
-              'Shared from Advent Connect ZW',
+              'Shared from Adventist Super App',
             ),
           ),
         ],

@@ -241,6 +241,30 @@ class QuizMatchService {
     } catch (_) {}
   }
 
+  /// How many OTHER players are sitting in the live-match queue right now.
+  ///
+  /// This is the only honest source for "someone is waiting to play". The
+  /// app-wide presence roster is NOT — it counts everyone with the app open,
+  /// which is what made the live strips claim an opponent was queued when
+  /// the arena was empty (founder, 18 Aug 2026: *"the quiz live banner is
+  /// lying tt some people online to play quiz live when one will be in the
+  /// lobby"*). patch_212 counts the same rows `quiz_match_find` would
+  /// actually pair the caller with, so the strip's promise is one the tap
+  /// can keep.
+  ///
+  /// Returns 0 on any failure — an unknown arena must read as an empty one,
+  /// never as a busy one.
+  static Future<int> waitingCount() async {
+    try {
+      final value = await _client.rpc('quiz_arena_waiting');
+      if (value is int) return value;
+      return int.tryParse('$value') ?? 0;
+    } catch (e) {
+      debugPrint('QuizMatchService.waitingCount failed: $e');
+      return 0;
+    }
+  }
+
   // ---- Realtime -----------------------------------------------------------
 
   static RealtimeChannel? _channel;

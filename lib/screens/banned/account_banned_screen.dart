@@ -58,13 +58,13 @@ class _AccountBannedScreenState extends State<AccountBannedScreen> {
 
   Future<void> _contactWhatsApp() async {
     final uri = Uri.parse(
-        'https://wa.me/$_whatsApp?text=${Uri.encodeComponent('Hi, about my Advent Connect account…')}');
+        'https://wa.me/$_whatsApp?text=${Uri.encodeComponent('Hi, about my Adventist Super App account…')}');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _contactEmail() async {
     final uri = Uri.parse(
-        'mailto:$_email?subject=${Uri.encodeComponent('Advent Connect account')}');
+        'mailto:$_email?subject=${Uri.encodeComponent('Adventist Super App account')}');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
@@ -103,7 +103,7 @@ class _AccountBannedScreenState extends State<AccountBannedScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Advent Connect is no longer available on this account. '
+                      'Adventist Super App is no longer available on this account. '
                       'If you think this is a mistake, contact support.',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodyMedium.copyWith(

@@ -441,7 +441,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
                       Text(
                         total == 0
                             ? 'Find a congregation near you.'
-                            : '$total congregations across Zimbabwe.',
+                            : '$total congregations listed.',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(

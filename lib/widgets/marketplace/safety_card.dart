@@ -17,7 +17,7 @@ class MarketplaceSafetyCard extends StatelessWidget {
 
   static const text =
       'Meet in a public place. Inspect items before paying. Never send money '
-      'in advance to people you don\'t trust. Advent Connect ZW is not a '
+      'in advance to people you don\'t trust. Adventist Super App is not a '
       'party to any transaction.';
 
   @override

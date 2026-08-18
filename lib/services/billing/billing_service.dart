@@ -276,7 +276,7 @@ class BillingService {
 
       final message = switch (code) {
         'already_claimed' => 'That subscription is already linked to '
-            'another Advent Connect account.',
+            'another Adventist Super App account.',
         'invalid_purchase' => "That purchase doesn't look valid to Google "
             'Play. If you were charged, tap Restore or contact support.',
         'unauthenticated' =>

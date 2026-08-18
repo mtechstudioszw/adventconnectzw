@@ -82,8 +82,8 @@ void main() {
       await t.pump(const Duration(milliseconds: 1400));
 
       expect(t.takeException(), isNull);
-      expect(find.text('Advent Connect ZW'), findsOneWidget);
-      expect(find.text('MYTECH STUDIOS ZW'), findsOneWidget);
+      expect(find.text('Adventist\nSuper App'), findsOneWidget);
+      expect(find.text('TANATSWA MICHAEL MIKUWA'), findsOneWidget);
     });
   }
 
@@ -91,7 +91,7 @@ void main() {
     await t.pumpWidget(_wrap(_splash, theme: AppTheme.dark));
     await t.pump(const Duration(milliseconds: 600));
     expect(t.takeException(), isNull);
-    expect(find.text('Advent Connect ZW'), findsOneWidget);
+    expect(find.text('Adventist\nSuper App'), findsOneWidget);
   });
 
   testWidgets('honours "remove animations": the light field holds still',
@@ -102,6 +102,6 @@ void main() {
     // The brand entrance lands whole rather than playing over 1800ms, and
     // the ambient loop must not be left running — a never-ending
     // controller here would hold vsync through the whole cold start.
-    expect(find.text('Advent Connect ZW'), findsOneWidget);
+    expect(find.text('Adventist\nSuper App'), findsOneWidget);
   });
 }

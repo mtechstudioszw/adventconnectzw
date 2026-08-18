@@ -13,6 +13,7 @@ class Seller {
     required this.phone,
     required this.status,
     this.description,
+    this.country,
     this.province,
     this.city,
     this.suburb,
@@ -44,6 +45,8 @@ class Seller {
   final String businessName;
   final String category;
   final String? description;
+  /// ISO 3166-1 alpha-2 (patch_213).
+  final String? country;
   final String? province;
   final String? city;
   final String? suburb;
@@ -103,6 +106,7 @@ class Seller {
       businessName: (json['business_name'] ?? '') as String,
       category: (json['category'] ?? '') as String,
       description: json['description'] as String?,
+      country: json['country'] as String?,
       province: json['province'] as String?,
       city: json['city'] as String?,
       suburb: json['suburb'] as String?,

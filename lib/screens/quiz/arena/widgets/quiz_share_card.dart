@@ -47,7 +47,7 @@ class QuizShareCard {
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png')],
         text: '${_headline(result)}\n\n'
-            'Play the Bible Quiz on Advent Connect ZW:\n$appDownloadUrl',
+            'Play the Bible Quiz on Adventist Super App:\n$appDownloadUrl',
       );
       return true;
     } catch (_) {
@@ -58,11 +58,11 @@ class QuizShareCard {
   static String _headline(QuizRoundResult result) {
     if (result.mode == QuizMode.survival) {
       return 'I survived ${result.correctCount} questions in the '
-          'Advent Connect Bible Quiz!';
+          'Adventist Super App Bible Quiz!';
     }
     return 'I scored ${result.points} points '
         '(${result.correctCount}/${result.total}) in the '
-        'Advent Connect Bible Quiz!';
+        'Adventist Super App Bible Quiz!';
   }
 
   /// Rasterises [child] at [cardSize] without ever attaching it to the
@@ -166,7 +166,7 @@ class _ShareCardView extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'ADVENT CONNECT ZW',
+                    'ADVENTIST SUPER APP',
                     style: AppTextStyles.labelMedium.copyWith(
                       color: ArenaTheme.gold,
                       fontSize: 26,

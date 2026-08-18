@@ -1,17 +1,29 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../screens/onboarding/widgets/film_scenes.dart' show AmbientPainter;
+import '../theme/app_palette.dart';
 
-/// Branded chat wallpaper — the WhatsApp/Telegram trick that makes a
-/// conversation feel like a *place* instead of a list on a grey page.
+/// The chat's background — the *same* light the splash screen opens on.
 ///
-/// A faint, deterministic doodle field (rings, crosses, sparkles, dots
-/// and little arcs in brand navy — or white in dark mode) over a whisper
-/// of blue gradient. Painted once into its own layer (RepaintBoundary +
-/// shouldRepaint false), so it costs nothing while messages scroll
-/// above it.
+/// This used to be a bespoke doodle field (rings, crosses, sparkles) drawn
+/// only behind the message list, so it began under the header and ended
+/// above the composer: two hard seams across the screen, which is the
+/// reported "cut off". It is now [AmbientPainter] — the field the splash,
+/// the onboarding film, AuthShell, maintenance and the create sheet all
+/// share — painted edge to edge behind the entire chat, header and
+/// composer included.
+///
+/// `film: 0` is the painter's opening position, which is exactly the frame
+/// the splash holds while the gold ring closes. Opening a chat therefore
+/// lands on light the member has already seen on this launch.
+///
+/// **Deliberately static.** The other five surfaces drive `loop` from a
+/// ~14s controller, but they are all short-lived or have nothing scrolling
+/// over them. A chat stays open for minutes with a list being flung above
+/// it, and a full-screen animated CustomPaint underneath that is a repaint
+/// of the whole viewport every frame. One fixed frame is visually identical
+/// to the splash's and costs nothing — the `shouldRepaint` below is `false`
+/// except on a theme flip.
 class ChatWallpaper extends StatelessWidget {
   const ChatWallpaper({super.key, required this.child});
 
@@ -20,115 +32,46 @@ class ChatWallpaper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: RepaintBoundary(
-            child: CustomPaint(painter: _WallpaperPainter(dark: dark)),
+    return DecoratedBox(
+      // The painter draws light ONTO a ground; it has no opaque base of
+      // its own. Without this the field would sit on whatever is behind
+      // the Scaffold and read as washed-out grey.
+      decoration: BoxDecoration(color: context.palette.scaffoldBg),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  painter: _ChatAmbient(dark: dark),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
           ),
-        ),
-        child,
-      ],
+          child,
+        ],
+      ),
     );
   }
 }
 
-class _WallpaperPainter extends CustomPainter {
-  _WallpaperPainter({required this.dark});
+/// Thin wrapper that pins [AmbientPainter] to a single frame and reports
+/// `shouldRepaint` only when the palette flips.
+class _ChatAmbient extends CustomPainter {
+  _ChatAmbient({required this.dark});
 
   final bool dark;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    // A breath of brand blue so the canvas isn't dead-flat grey.
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            AppColors.primaryBlue.withValues(alpha: dark ? 0.05 : 0.035),
-            AppColors.primaryBlue.withValues(alpha: 0.0),
-            AppColors.goldAccent.withValues(alpha: dark ? 0.035 : 0.025),
-          ],
-        ).createShader(Offset.zero & size),
-    );
-
-    final ink = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.1
-      ..strokeCap = StrokeCap.round
-      ..color = (dark ? AppColors.white : AppColors.darkNavy).withValues(
-        alpha: dark ? 0.045 : 0.05,
-      );
-    final fill = Paint()..color = ink.color;
-
-    // Deterministic doodle grid: every ~56px cell gets one small shape,
-    // jittered and rotated by a cheap integer hash so the field looks
-    // hand-scattered but never changes between frames.
-    const cell = 56.0;
-    final cols = (size.width / cell).ceil() + 1;
-    final rows = (size.height / cell).ceil() + 1;
-    for (var r = 0; r < rows; r++) {
-      for (var c = 0; c < cols; c++) {
-        final h = _hash(c * 73856093 ^ r * 19349663);
-        final jx = ((h & 0xFF) / 255 - 0.5) * cell * 0.6;
-        final jy = (((h >> 8) & 0xFF) / 255 - 0.5) * cell * 0.6;
-        final center = Offset(c * cell + jx, r * cell + jy);
-        final angle = ((h >> 16) & 0xFF) / 255 * math.pi;
-
-        canvas.save();
-        canvas.translate(center.dx, center.dy);
-        canvas.rotate(angle);
-        switch ((h >> 24) % 6) {
-          case 0: // ring
-            canvas.drawCircle(Offset.zero, 5.5, ink);
-          case 1: // cross
-            canvas.drawLine(const Offset(-4, 0), const Offset(4, 0), ink);
-            canvas.drawLine(const Offset(0, -4), const Offset(0, 4), ink);
-          case 2: // sparkle
-            for (var i = 0; i < 4; i++) {
-              final a = i * math.pi / 2 + math.pi / 4;
-              canvas.drawLine(
-                Offset(math.cos(a) * 2, math.sin(a) * 2),
-                Offset(math.cos(a) * 5.5, math.sin(a) * 5.5),
-                ink,
-              );
-            }
-          case 3: // dot
-            canvas.drawCircle(Offset.zero, 1.6, fill);
-          case 4: // open arc (little smile)
-            canvas.drawArc(
-              Rect.fromCircle(center: Offset.zero, radius: 6),
-              0.4,
-              1.8,
-              false,
-              ink,
-            );
-          case 5: // tiny diamond
-            final path = Path()
-              ..moveTo(0, -4.5)
-              ..lineTo(3.5, 0)
-              ..lineTo(0, 4.5)
-              ..lineTo(-3.5, 0)
-              ..close();
-            canvas.drawPath(path, ink);
-        }
-        canvas.restore();
-      }
-    }
-  }
-
-  /// Cheap deterministic integer hash (xorshift-flavoured).
-  int _hash(int x) {
-    var h = x;
-    h = (h ^ (h >> 16)) * 0x45d9f3b;
-    h = (h ^ (h >> 16)) * 0x45d9f3b;
-    h = h ^ (h >> 16);
-    return h & 0x7fffffff;
-  }
+  late final AmbientPainter _inner = AmbientPainter(
+    loop: 0,
+    film: 0,
+    dark: dark,
+  );
 
   @override
-  bool shouldRepaint(_WallpaperPainter old) => old.dark != dark;
+  void paint(Canvas canvas, Size size) => _inner.paint(canvas, size);
+
+  @override
+  bool shouldRepaint(_ChatAmbient old) => old.dark != dark;
 }

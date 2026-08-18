@@ -198,7 +198,7 @@ class BiometricService {
   /// Prompt the user without changing the stored flag. Used at app
   /// resume when biometric_enabled is already true.
   static Future<bool> authenticate({
-    String reason = 'Unlock Advent Connect ZW',
+    String reason = 'Unlock Adventist Super App',
   }) async {
     try {
       return await _auth.authenticate(

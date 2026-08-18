@@ -238,9 +238,9 @@ Deno.serve(async (req) => {
       user_id: existing.user_id,
       title: "Subscription renewed",
       body: when
-        ? `Your Advent Connect Premium renewed. Ads stay off until ${when}. ` +
+        ? `Your Adventist Super App Premium renewed. Ads stay off until ${when}. ` +
           `Google Play has emailed you the payment receipt.`
-        : `Your Advent Connect Premium renewed. ` +
+        : `Your Adventist Super App Premium renewed. ` +
           `Google Play has emailed you the payment receipt.`,
       type: "payment_receipt",
       reference_type: "subscription",

@@ -69,7 +69,7 @@ function recordSent(email) {
 }
 
 const SENDER = "adventconnectzw@gmail.com";
-const SENDER_NAME = "Advent Connect ZW";
+const SENDER_NAME = "Adventist Super App";
 const SUPABASE_URL = "https://eqbyvasteolqyktbqbem.supabase.co";
 const PLAY_URL =
   "https://play.google.com/store/apps/details?id=io.supabase.adventconnectzw.advent_connect_zw";
@@ -77,12 +77,12 @@ const LOGO_URL = `${SUPABASE_URL}/storage/v1/object/public/library/branding/logo
 
 /* ---- the message ------------------------------------------------------- */
 
-const SUBJECT = "A new Advent Connect is here — please update";
+const SUBJECT = "A new version of Adventist Super App is here — please update";
 
 const PREHEADER =
   "Version 1.3.2 is on the Play Store. Update to keep using the app.";
 
-const HEADING = "Advent Connect just got better";
+const HEADING = "Adventist Super App just got better";
 
 const INTRO =
   "We've released version 1.3.2. It's on the Play Store now, and updating " +
@@ -158,11 +158,11 @@ function render(firstName) {
         <table role="presentation" cellpadding="0" cellspacing="0" border="0">
           <tr>
             <td style="width:48px;vertical-align:middle;">
-              <img src="${LOGO_URL}" width="48" height="48" alt="Advent Connect ZW"
+              <img src="${LOGO_URL}" width="48" height="48" alt="Adventist Super App"
                    style="display:block;width:48px;height:48px;border:0;outline:none;text-decoration:none;border-radius:12px;" />
             </td>
             <td style="padding-left:14px;font-family:${FONT};">
-              <div style="font-size:17px;font-weight:bold;color:#ffffff;line-height:1.3;">Advent Connect ZW</div>
+              <div style="font-size:17px;font-weight:bold;color:#ffffff;line-height:1.3;">Adventist Super App</div>
               <div style="font-size:11px;color:${GOLD};letter-spacing:1.4px;text-transform:uppercase;padding-top:2px;">Version 1.3.2</div>
             </td>
           </tr>
@@ -209,10 +209,10 @@ function render(firstName) {
     <tr>
       <td style="background:${BG};padding:20px 28px;font-family:${FONT};border-top:1px solid ${BORDER};">
         <div style="font-size:12px;line-height:1.6;color:${MUTED};">
-          Advent Connect ZW &mdash; a home for Seventh-day Adventists in Zimbabwe.
+          Adventist Super App &mdash; a home for Seventh-day Adventists worldwide.
         </div>
         <div style="font-size:11px;line-height:1.6;color:#8A93A2;padding-top:6px;">
-          You are receiving this because you have an Advent Connect account.
+          You are receiving this because you have an Adventist Super App account.
         </div>
       </td>
     </tr>
@@ -239,7 +239,7 @@ function renderText(firstName) {
     "",
     CLOSING,
     "",
-    "Advent Connect ZW",
+    "Adventist Super App",
   ].join("\n");
 }
 

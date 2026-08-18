@@ -22,8 +22,8 @@ class InviteFriendsCard extends StatelessWidget {
   // shares — events/products/etc. — use the *-share Edge Functions that
   // deep-link into the app first, then fall back here.)
   static const _inviteMessage =
-      'Join me on Advent Connect ZW — the Adventist community app '
-      'for Zimbabwe. Connect with members, find churches, share '
+      'Join me on Adventist Super App — connecting SDA people around '
+      'the globe. Connect with members, find churches, share '
       'updates, and chat with friends. Download it here: '
       'https://play.google.com/store/apps/details?id=io.supabase.adventconnectzw.advent_connect_zw';
 

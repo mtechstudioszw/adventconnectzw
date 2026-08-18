@@ -86,11 +86,11 @@ class ChurchService {
     return (response as List).map((row) => row['church_id'].toString()).toSet();
   }
 
-  /// Advent Connect members whose HOME CHURCH is [churchId].
+  /// Adventist Super App members whose HOME CHURCH is [churchId].
   ///
   /// Not the same as `follower_count`, which is what the card used to show
   /// (founder, 17 Aug: "verify the member count is actually the number of
-  /// Advent Connect members in that church"). Membership is
+  /// Adventist Super App members in that church"). Membership is
   /// `profiles.church_id`; following is a separate act. Measured against
   /// production the two agree for 115 of 117 churches today — but they are
   /// different sets, and the gap only widens as people follow churches they

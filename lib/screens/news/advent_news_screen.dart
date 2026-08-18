@@ -99,7 +99,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
     return const ScreenHero(
       title: 'Advent News',
       tagline: 'News',
-      subtitle: 'What\'s trending in the Adventist community in Zimbabwe.',
+      subtitle: 'What\'s trending in the Adventist community worldwide.',
       fallbackRoute: 'home',
     );
   }
@@ -176,7 +176,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
                   Text(
                     _activeCategory == null
                         ? 'Check back soon. Editorial coverage of the '
-                              'Adventist community in Zimbabwe will start '
+                              'Adventist community around the globe will start '
                               'landing here.'
                         : 'No stories in this category yet. Try another '
                               'category or check back later.',

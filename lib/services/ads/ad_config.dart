@@ -12,7 +12,7 @@ import 'package:flutter/foundation.dart';
 class AdConfig {
   AdConfig._();
 
-  /// The Appodeal App Key for Advent Connect ZW (Android + iOS share it).
+  /// The Appodeal App Key for Adventist Super App (Android + iOS share it).
   ///
   /// **This is not a secret.** It ships inside every APK by design — it
   /// identifies the app to the ad server the same way a bundle id does.

@@ -1,11 +1,11 @@
 {
-    "name": "advent_connect_zw",
-    "short_name": "advent_connect_zw",
+    "name": "Adventist Super App",
+    "short_name": "Adventist Super App",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Connecting SDA people around the globe.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

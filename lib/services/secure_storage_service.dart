@@ -72,6 +72,16 @@ class SecureStorageService {
   /// choice when it signs back in on the same phone.
   static const preservedKeyPrefixes = <String>{
     'biometric_enabled:',
+    // E2EE identity. Signing out is NOT a reinstall, so it must not
+    // regenerate the identity key: that would announce a false "security
+    // code changed" to every contact AND orphan every session in the
+    // Hive store, making the whole message history unreadable for no
+    // reason. Namespaced by user id like the biometric flag above, so a
+    // second member on the same phone reads a different key, finds
+    // nothing, and generates their own.
+    'e2ee_identity:',
+    'e2ee_deviceid:',
+    'e2ee_regid:',
   };
 
   static bool _isPreserved(String key) =>

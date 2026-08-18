@@ -46,13 +46,49 @@ class PresenceService {
   // this in either direction without tearing the channel down.
   static bool _isTracked = false;
 
+  /// Everyone in a block relationship with the signed-in user, either
+  /// direction (patch_210). Treated as permanently offline.
+  ///
+  /// Presence is a realtime channel, not a table, so no RLS policy can
+  /// reach it — blocking someone took away their access to your profile,
+  /// photo, about, cover and last seen, and left them your live green
+  /// dot. This is the only place that hole can be closed, and closing it
+  /// HERE rather than at each call site means the inbox, the chat header,
+  /// the contact sheet, church cards and anything added later all get it
+  /// without having to remember.
+  static final Set<String> _hidden = <String>{};
+
   /// True when the given user id is currently subscribed to the
   /// presence channel — i.e. has the app open in the foreground.
-  static bool isOnline(String userId) => _onlineUserIds.contains(userId);
+  static bool isOnline(String userId) =>
+      !_hidden.contains(userId) && _onlineUserIds.contains(userId);
 
   /// Read-only view of who is currently online. Listen to [onChange]
   /// for updates.
-  static Set<String> get onlineUsers => Set.unmodifiable(_onlineUserIds);
+  static Set<String> get onlineUsers =>
+      Set.unmodifiable(_onlineUserIds.difference(_hidden));
+
+  /// Reloads the block set. Called on [start], and again whenever the
+  /// viewer blocks or unblocks someone so the dot goes immediately
+  /// instead of at the next launch.
+  static Future<void> refreshHidden() async {
+    try {
+      final rows = await _client.rpc('presence_hidden_ids');
+      if (rows is! List) return;
+      final next = rows
+          .map((r) => r is Map ? (r['id'] ?? '').toString() : r.toString())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      _hidden
+        ..clear()
+        ..addAll(next);
+      // Republish so anything already listening drops the dots now.
+      _notifier.value = Set.unmodifiable(_onlineUserIds.difference(_hidden));
+    } catch (_) {
+      // Best-effort. Failing open here shows a dot that should be
+      // hidden, which is the pre-patch behaviour, not a regression.
+    }
+  }
 
   /// Rebuilds whenever the online roster changes. Tile widgets in the
   /// inbox and the chat-screen header listen on this.
@@ -83,6 +119,10 @@ class PresenceService {
     // Fire-and-forget initial heartbeat so the user shows online to
     // others within a second of sign-in, not 30s later.
     unawaited(_touchLastActive());
+    // Load the block set alongside. Not awaited: a slow RPC must not
+    // delay joining the channel, and the first sync republishes through
+    // the same filter once it lands.
+    unawaited(refreshHidden());
 
     final channel = _client.channel(
       _channelName,
@@ -104,7 +144,8 @@ class PresenceService {
       _onlineUserIds
         ..clear()
         ..addAll(ids);
-      _notifier.value = Set.unmodifiable(_onlineUserIds);
+      // Blocked either way never publishes as online — see _hidden.
+      _notifier.value = Set.unmodifiable(_onlineUserIds.difference(_hidden));
     });
 
     // Decide whether to announce ourselves INSIDE the callback, never
@@ -197,6 +238,9 @@ class PresenceService {
     if (clearRoster) {
       _onlineUserIds.clear();
       _notifier.value = const <String>{};
+      // Statics outlive a sign-out. One member's block list must not
+      // silently keep hiding people from the next member on the phone.
+      _hidden.clear();
     }
   }
 

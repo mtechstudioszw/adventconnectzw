@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../config/countries.dart';
+import '../../widgets/country_picker_sheet.dart';
 import '../../models/church_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
@@ -55,6 +57,10 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
   final _surnameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _bioController = TextEditingController();
+  /// Pre-selected from the device locale so most people just tap Continue.
+  /// This step is the choke point BOTH email and Google signups pass through,
+  /// which is why country is collected here and not on the signup form.
+  String _country = Countries.detect().code;
   String? _profilePhotoUrl;
   String? _coverPhotoUrl;
   bool _uploadingPhoto = false;
@@ -199,6 +205,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
         username: username.isNotEmpty ? username : null,
         profilePhotoUrl: _profilePhotoUrl ?? '',
         coverPhotoUrl: _coverPhotoUrl ?? '',
+        country: _country,
       );
       if (username.isNotEmpty) {
         await _writeMetadata({'username': username});
@@ -343,6 +350,8 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
         surnameController: _surnameController,
         usernameController: _usernameController,
         bioController: _bioController,
+        country: _country,
+        onCountryChanged: (c) => setState(() => _country = c.code),
         photoUrl: _profilePhotoUrl,
         coverUrl: _coverPhotoUrl,
         uploadingPhoto: _uploadingPhoto,
@@ -797,7 +806,9 @@ class _WelcomePage extends StatelessWidget {
           ),
           const SizedBox(height: 36),
           Text(
-            'Welcome to\nAdvent Connect ZW',
+            // Stacked on three lines: at 30px w800 the name alone is ~350px,
+            // and this Column only has 304px between its 28px side paddings.
+            'Welcome to\nAdventist\nSuper App',
             textAlign: TextAlign.center,
             style: AppTextStyles.displayLarge.copyWith(
               color: context.palette.text,
@@ -836,6 +847,8 @@ class _ProfilePage extends StatelessWidget {
     required this.surnameController,
     required this.usernameController,
     required this.bioController,
+    required this.country,
+    required this.onCountryChanged,
     required this.photoUrl,
     required this.coverUrl,
     required this.uploadingPhoto,
@@ -850,6 +863,8 @@ class _ProfilePage extends StatelessWidget {
   final TextEditingController surnameController;
   final TextEditingController usernameController;
   final TextEditingController bioController;
+  final String country;
+  final ValueChanged<Country> onCountryChanged;
   final String? photoUrl;
   final String? coverUrl;
   final bool uploadingPhoto;
@@ -928,6 +943,14 @@ class _ProfilePage extends StatelessWidget {
             controller: usernameController,
             icon: Icons.alternate_email,
             hint: 'Username (optional)',
+          ),
+          const SizedBox(height: 14),
+          // Country sits above the bio, not below it: it is required and
+          // pre-filled, so it belongs with the identity fields rather than
+          // in the optional tail where people stop reading.
+          CountryField(
+            code: country,
+            onChanged: onCountryChanged,
           ),
           const SizedBox(height: 14),
           _GlowField(

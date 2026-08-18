@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_bootstrap.dart';
+import 'e2ee/e2ee_envelope.dart';
+import 'e2ee/e2ee_service.dart';
 import 'messaging_service.dart';
 import 'notification_service.dart';
 
@@ -133,6 +135,18 @@ Future<AndroidBitmap<Object>?> _largeIconFromUrl(String? url) async {
   }
 }
 
+/// Whether a chat push refers to an encrypted message.
+///
+/// The Edge Function that builds these pushes stamps `e2ee_version`
+/// alongside the body. Absent or 0 means a plaintext message — every push
+/// sent before this feature, and every one from a member on an older
+/// build — and those keep their server-built preview untouched.
+bool _looksEncrypted(Map<String, dynamic> data) {
+  final raw = '${data['e2ee_version'] ?? ''}';
+  final version = int.tryParse(raw) ?? 0;
+  return version > 0;
+}
+
 /// Render an incoming chat push (foreground or background isolate) with the
 /// inline Reply action and the sender's photo as the large icon. Handles
 /// both notification-carrying and data-only payloads.
@@ -145,8 +159,26 @@ Future<void> _renderIncomingChat(
   final refType = '${data['reference_type'] ?? ''}';
   final refId = '${data['reference_id'] ?? ''}';
   final isConversation = refType == 'conversation' && refId.isNotEmpty;
-  final title = notif?.title ?? '${data['title'] ?? 'Advent Connect ZW'}';
-  final body = notif?.body ?? '${data['body'] ?? ''}';
+  final title = notif?.title ?? '${data['title'] ?? 'Adventist Super App'}';
+  var body = notif?.body ?? '${data['body'] ?? ''}';
+
+  // E2EE: the server builds this push from `messages.content`, which for
+  // an encrypted row is base64 — so the notification would read like a
+  // wall of random characters. The DEVICE has the plaintext (it decrypted
+  // and cached it when the message arrived over realtime), so rebuild the
+  // preview here.
+  //
+  // This is how WhatsApp keeps message previews at all under E2EE: the
+  // push itself never carries the text, the phone fills it in. If we have
+  // not decrypted it yet — the app was killed, or the row landed while
+  // offline — fall back to a neutral line rather than showing ciphertext.
+  if (isConversation && _looksEncrypted(data)) {
+    final messageId = '${data['message_id'] ?? ''}';
+    final local = messageId.isEmpty
+        ? null
+        : E2eeService.cachedPlaintext(messageId);
+    body = local ?? E2eeEnvelope.previewPlaceholder;
+  }
   final largeIcon = isConversation
       ? await _largeIconFromUrl('${data['sender_photo'] ?? ''}')
       : null;

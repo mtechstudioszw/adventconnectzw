@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'presence_service.dart';
+
 /// Reads/writes for Table 26 (blocked_users). RLS keeps each user's
 /// block list private.
 class BlockService {
@@ -46,6 +48,11 @@ class BlockService {
       'blocker_id': user.id,
       'blocked_id': userId,
     });
+    // Presence is a realtime channel with no RLS behind it, so blocking
+    // does not take the green dot away on its own — the client has to be
+    // told (patch_210). Without this the person you just blocked keeps
+    // showing as "Online" until the next launch.
+    await PresenceService.refreshHidden();
   }
 
   static Future<void> unblock(String userId) async {
@@ -56,6 +63,7 @@ class BlockService {
         .delete()
         .eq('blocker_id', user.id)
         .eq('blocked_id', userId);
+    await PresenceService.refreshHidden();
   }
 }
 

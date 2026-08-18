@@ -907,7 +907,7 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
                 Navigator.of(sheetContext).pop();
                 Share.share(
                   '${widget.lessonTitle} — ${day.title}\n\n'
-                  'Sabbath School on Advent Connect ZW:\n$appDownloadUrl',
+                  'Sabbath School on Adventist Super App:\n$appDownloadUrl',
                 );
               },
             ),

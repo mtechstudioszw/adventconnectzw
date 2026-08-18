@@ -132,12 +132,18 @@ void main() {
       expect(scaffold.backgroundColor, EgwReadingPalette.night.page);
     });
 
-    testWidgets('a light app opens on the day ground', (t) async {
+    testWidgets('a light app opens on the SEPIA ground', (t) async {
+      // Founder, 18 Aug 2026: *"in egw make sepia as default background when
+      // reading the books"*. Warm paper is what a book reader opens on, and
+      // it is easier on the eyes through a long chapter than near-white.
+      //
+      // Day is still one tap away in the settings sheet; it is just no
+      // longer what an untouched preference resolves to.
       await t.pumpWidget(_host(dark: false));
       await t.pump();
 
       final scaffold = t.widget<Scaffold>(find.byType(Scaffold).first);
-      expect(scaffold.backgroundColor, EgwReadingPalette.day.page);
+      expect(scaffold.backgroundColor, EgwReadingPalette.sepia.page);
     });
   });
 

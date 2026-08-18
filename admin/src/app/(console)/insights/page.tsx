@@ -56,7 +56,7 @@ export default function InsightsPage() {
       >
         <div className="card card-pad">
           <div className="section-title">
-            How they found Advent Connect
+            How they found Adventist Super App
             {joined > 0 ? <span className="count">{fmtNum(joined)} answers</span> : null}
           </div>
           {loading && !data ? (

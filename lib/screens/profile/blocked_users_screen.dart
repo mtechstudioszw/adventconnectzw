@@ -84,7 +84,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,

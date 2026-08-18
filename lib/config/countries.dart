@@ -91,6 +91,133 @@ abstract final class Countries {
     ];
   }
 
+  /// The ISO 4217 currency a seller in [code] would price in, or null when
+  /// we do not know.
+  ///
+  /// **Null, never a guess.** Defaulting an unknown country to USD would
+  /// put the wrong currency on a real listing and a buyer would act on it;
+  /// the picker shows USD alone in that case, which is at least honest. Add
+  /// a row here rather than inventing one at the call site.
+  ///
+  /// Africa is covered thoroughly because that is where the members are;
+  /// the rest is the diaspora destinations that actually appear. A country
+  /// missing from this map is a one-line fix, not a redesign.
+  static String? currencyOf(String? code) =>
+      code == null ? null : _currencyByCode[code.toUpperCase()];
+
+  static const Map<String, String> _currencyByCode = {
+    // --- Africa ---------------------------------------------------------
+    'AO': 'AOA', 'BF': 'XOF', 'BI': 'BIF', 'BJ': 'XOF', 'BW': 'BWP',
+    'CD': 'CDF', 'CF': 'XAF', 'CG': 'XAF', 'CI': 'XOF', 'CM': 'XAF',
+    'CV': 'CVE', 'DJ': 'DJF', 'DZ': 'DZD', 'EG': 'EGP', 'ER': 'ERN',
+    'ET': 'ETB', 'GA': 'XAF', 'GH': 'GHS', 'GM': 'GMD', 'GN': 'GNF',
+    'GQ': 'XAF', 'GW': 'XOF', 'KE': 'KES', 'KM': 'KMF', 'LR': 'LRD',
+    'LS': 'LSL', 'LY': 'LYD', 'MA': 'MAD', 'MG': 'MGA', 'ML': 'XOF',
+    'MR': 'MRU', 'MU': 'MUR', 'MW': 'MWK', 'MZ': 'MZN', 'NA': 'NAD',
+    'NE': 'XOF', 'NG': 'NGN', 'RW': 'RWF', 'SC': 'SCR', 'SD': 'SDG',
+    'SL': 'SLE', 'SN': 'XOF', 'SO': 'SOS', 'SS': 'SSP', 'ST': 'STN',
+    'SZ': 'SZL', 'TD': 'XAF', 'TG': 'XOF', 'TN': 'TND', 'TZ': 'TZS',
+    'UG': 'UGX', 'ZA': 'ZAR', 'ZM': 'ZMW',
+    // Zimbabwe is USD-first in practice; ZWL and ZAR are added alongside
+    // it by the marketplace form, which is the only place it matters.
+    'ZW': 'USD',
+    // --- Diaspora -------------------------------------------------------
+    'AE': 'AED', 'AR': 'ARS', 'AT': 'EUR', 'AU': 'AUD', 'BB': 'BBD',
+    'BD': 'BDT', 'BE': 'EUR', 'BG': 'BGN', 'BH': 'BHD', 'BR': 'BRL',
+    'CA': 'CAD', 'CH': 'CHF', 'CL': 'CLP', 'CN': 'CNY', 'CO': 'COP',
+    'CY': 'EUR', 'CZ': 'CZK', 'DE': 'EUR', 'DK': 'DKK', 'EE': 'EUR',
+    'ES': 'EUR', 'FI': 'EUR', 'FR': 'EUR', 'GB': 'GBP', 'GR': 'EUR',
+    'GY': 'GYD', 'HK': 'HKD', 'HU': 'HUF', 'ID': 'IDR', 'IE': 'EUR',
+    'IL': 'ILS', 'IN': 'INR', 'IT': 'EUR', 'JM': 'JMD', 'JP': 'JPY',
+    'KR': 'KRW', 'KW': 'KWD', 'LK': 'LKR', 'LT': 'EUR', 'LU': 'EUR',
+    'LV': 'EUR', 'MT': 'EUR', 'MX': 'MXN', 'MY': 'MYR', 'NL': 'EUR',
+    'NO': 'NOK', 'NZ': 'NZD', 'OM': 'OMR', 'PE': 'PEN', 'PH': 'PHP',
+    'PK': 'PKR', 'PL': 'PLN', 'PT': 'EUR', 'QA': 'QAR', 'RO': 'RON',
+    'RU': 'RUB', 'SA': 'SAR', 'SE': 'SEK', 'SG': 'SGD', 'SI': 'EUR',
+    'SK': 'EUR', 'TH': 'THB', 'TR': 'TRY', 'TT': 'TTD', 'TW': 'TWD',
+    'UA': 'UAH', 'US': 'USD', 'VN': 'VND',
+  };
+
+  /// The currency codes the marketplace should offer a seller in [code],
+  /// best first.
+  ///
+  /// USD is always present and always last-resort: it is what the whole
+  /// existing catalogue is priced in, it is what Zimbabwe actually trades
+  /// in, and a diaspora buyer understands it. The local currency leads
+  /// where we know it.
+  ///
+  /// Zimbabwe additionally keeps ZWL and ZAR — the three the form has
+  /// always offered, and the two neighbours' currencies people genuinely
+  /// quote in. Nowhere else inherits those; a Kenyan seller has no use for
+  /// a ZWL option and it only invites a mis-tap.
+  static List<String> currencyChoices(String? code) {
+    final iso = (code ?? '').toUpperCase();
+    if (iso == defaultCode) return const ['USD', 'ZWL', 'ZAR'];
+    final local = currencyOf(iso);
+    return <String>[
+      if (local != null && local != 'USD') local,
+      'USD',
+    ];
+  }
+
+  /// A locally-typed phone number as the digits `wa.me` needs, or null if
+  /// there is nothing usable in [raw].
+  ///
+  /// Every WhatsApp handoff in the app used to do `raw.replaceAll(RegExp(
+  /// r'\D'), '')` and hand the result straight to `wa.me`. That silently
+  /// required every seller to type a full international number: someone who
+  /// wrote their number the way they say it out loud — `0778 092 494` —
+  /// produced `wa.me/0778092494`, which opens an error page. It was never a
+  /// Zimbabwe-only bug, but it becomes a worse one now that sellers outside
+  /// Zimbabwe exist, because there is no single code left to assume.
+  ///
+  /// [countryCode] is the ISO-2 of whoever owns the number — the seller's
+  /// country, not the viewer's. Omit it and national-format numbers are
+  /// passed through untouched rather than guessed at: a wrong country code
+  /// dials a stranger, which is worse than a link that does not open.
+  ///
+  /// Handles, in order:
+  ///  * `+263 77 …` / `00263 77 …` — already international, kept as-is.
+  ///  * `0778 …` with a known country — trunk `0` dropped, dial code added.
+  ///  * `263778 …` — already starts with the dial code, left alone.
+  ///  * anything else with a known country — dial code prefixed.
+  static String? toWhatsAppDigits(String raw, {String? countryCode}) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+
+    // `00` is the other way of writing `+`, and plenty of people do.
+    final isInternational =
+        trimmed.startsWith('+') || trimmed.startsWith('00');
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return null;
+
+    if (isInternational) {
+      // Drop the `00` prefix; a leading `+` left no digits behind anyway.
+      final out = trimmed.startsWith('00') ? digits.substring(2) : digits;
+      return out.isEmpty ? null : out;
+    }
+
+    final dial = byCode(countryCode)?.dialCode.replaceAll(RegExp(r'\D'), '');
+    // No country to reason with: hand back exactly what the old code did,
+    // so this can never make an already-working number worse.
+    if (dial == null || dial.isEmpty) return digits;
+
+    if (digits.startsWith('0')) {
+      final national = digits.replaceFirst(RegExp(r'^0+'), '');
+      return national.isEmpty ? null : '$dial$national';
+    }
+    if (digits.startsWith(dial)) return digits;
+    return '$dial$digits';
+  }
+
+  /// The placeholder to show in a "phone number" field for [countryCode] —
+  /// `+254 77 123 4567` for Kenya, not the hard-coded `+263` every one of
+  /// these fields used to display regardless of who was typing.
+  static String phoneHint(String? countryCode) {
+    final dial = byCode(countryCode)?.dialCode ?? fallback.dialCode;
+    return '$dial 77 123 4567';
+  }
+
   /// Best guess at the user's country from the device locale, used to
   /// pre-select the picker during onboarding so most people just tap
   /// Continue.

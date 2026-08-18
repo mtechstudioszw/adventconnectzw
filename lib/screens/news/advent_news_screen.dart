@@ -63,7 +63,7 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       // Open to any signed-in member (patch_030). Tap "+" to open the
       // composer; if a story was published, refresh the feed so the
       // new card shows up at the top without a manual pull.

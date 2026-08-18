@@ -166,13 +166,13 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: Column(
         children: [
           const ScreenHero(
             title: 'Chat privacy',
             tagline: 'Chat',
-            subtitle: 'Who sees you, and who can reach you.',
+            subtitle: 'Who sees you, and who can reach you — in every chat.',
             fallbackRoute: 'settings',
           ),
           Expanded(child: _buildBody()),
@@ -199,6 +199,8 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
+        const _ScopeNote(),
+        const SizedBox(height: 16),
         _SectionLabel('Who can message me'),
         const SizedBox(height: 8),
         ScreenCard(
@@ -271,6 +273,51 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// States plainly that nothing on this screen is per-conversation.
+///
+/// Every setting here is a column on `profiles`, so it applies to every
+/// chat at once — but the screen is most often reached from *inside* one
+/// conversation, where "Chat privacy" reads as "privacy for this chat".
+/// A member turning read receipts off from Alice's thread to avoid Alice
+/// would otherwise turn them off for everyone and never know. The scope
+/// has to be on the screen, not only in the docs.
+class _ScopeNote extends StatelessWidget {
+  const _ScopeNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.chipBg,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.public, size: 16, color: palette.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              // Kept to one line's worth of meaning. This screen already
+              // carries the most wrappable text in the app and is swept at
+              // 2.5x text scale; a paragraph here pushes the first real
+              // control off a 360dp phone.
+              'Applies to every chat, not just the one you opened this from.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.textMuted,
+                fontSize: 11.5,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

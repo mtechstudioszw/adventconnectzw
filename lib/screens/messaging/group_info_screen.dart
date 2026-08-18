@@ -477,7 +477,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     final group = _group;
     final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: _loading
           ? const Center(child: BrandSpinner(size: 30))
           : ListView(

@@ -73,7 +73,15 @@ void main() {
       await _pump(t, textScale: scale);
 
       expect(t.takeException(), isNull);
+      // Scroll to the option rather than assuming it starts on screen.
+      // At 2.5x on a 360dp phone the scope note and section label push it
+      // past the fold, and a ListView does not build what it does not
+      // show — so a bare find.text would report "missing" for something
+      // that is merely below. The overflow sweep is what this test is
+      // for, and it is asserted on both sides of the scroll.
+      await t.scrollUntilVisible(find.text('Everyone'), 120);
       expect(find.text('Everyone'), findsOneWidget);
+      expect(t.takeException(), isNull);
     });
   }
 }

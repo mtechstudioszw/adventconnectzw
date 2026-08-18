@@ -213,7 +213,7 @@ class _ChurchAdminApprovalsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: AppColors.white,

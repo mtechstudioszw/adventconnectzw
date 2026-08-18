@@ -37,7 +37,7 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: ValueListenableBuilder<int>(
         valueListenable: CartService.revision,
         builder: (context, revision, child) {

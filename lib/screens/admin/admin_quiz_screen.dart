@@ -87,7 +87,7 @@ class _AdminQuizScreenState extends State<AdminQuizScreen> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           'Manage Quiz',
@@ -290,7 +290,7 @@ class _QuizEditorScreenState extends State<_QuizEditorScreen> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           widget.question == null ? 'New question' : 'Edit question',

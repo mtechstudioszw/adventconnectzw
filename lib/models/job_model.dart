@@ -6,6 +6,8 @@ class Job {
     required this.company,
     required this.createdAt,
     this.posterName = 'Member',
+    this.country,
+    this.province,
     this.location,
     this.type,
     this.salaryMin,
@@ -28,6 +30,17 @@ class Job {
   final String posterName;
   final String title;
   final String company;
+
+  /// ISO 3166-1 alpha-2 (patch_213). Carried so the edit form can show the
+  /// country the job was actually posted under — without it the picker
+  /// defaults to the poster's own country and quietly rewrites the row.
+  final String? country;
+
+  /// Zimbabwean province for ZW rows, free-text region elsewhere. Same
+  /// reason as [country]: the edit form used to start blank and force the
+  /// poster to re-pick, so an edit could move the job by accident.
+  final String? province;
+
   final String? location;
   final String? type;
   final double? salaryMin;
@@ -101,6 +114,8 @@ class Job {
           (postType == 'seeking' ? 'Job seeker' : 'Recruiter')) as String,
       title: (json['title'] ?? '') as String,
       company: (json['company'] ?? '') as String,
+      country: json['country'] as String?,
+      province: json['province'] as String?,
       location: json['location'] as String?,
       // DB uses `job_type`; old payloads sometimes used `type`. Accept both.
       type: (json['job_type'] ?? json['type']) as String?,
@@ -131,6 +146,8 @@ class Job {
         'poster_name': posterName,
         'title': title,
         'company': company,
+        'country': country,
+        'province': province,
         'location': location,
         'job_type': type,
         'salary_min': salaryMin,

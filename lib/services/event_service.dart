@@ -151,6 +151,11 @@ class EventService {
     String? description,
     String? venue,
     String? address,
+    /// ISO 3166-1 alpha-2 (patch_213). Always send it — `events.country`
+    /// DEFAULTs to 'ZW', so an event posted from Nairobi without this is
+    /// filed under Zimbabwe.
+    String? country,
+    /// Province for ZW, free-text region elsewhere.
     String? province,
     String? city,
     String? category,
@@ -175,6 +180,7 @@ class EventService {
       'end_time': ?endTime,
       'venue': venue?.trim(),
       'address': address?.trim(),
+      'country': country,
       'province': province?.trim(),
       'city': city?.trim(),
       'category': category,
@@ -220,6 +226,8 @@ class EventService {
     String? description,
     String? venue,
     String? city,
+    /// ISO 3166-1 alpha-2 (patch_213). Travels with [province].
+    String? country,
     String? province,
     String? category,
     int? capacity,
@@ -243,6 +251,10 @@ class EventService {
       'end_time': endTime,
       'venue': venue?.trim(),
       'city': city?.trim(),
+      // Written as a pair, province included when null — the same rule the
+      // other update paths follow, so moving an event to Kenya clears the
+      // stale Zimbabwean province instead of stranding it.
+      'country': ?country,
       'province': province?.trim(),
       'category': category,
       'capacity': capacity,

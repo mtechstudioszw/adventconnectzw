@@ -63,7 +63,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   Widget build(BuildContext context) {
     final AppPalette palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Channels'),
       ),

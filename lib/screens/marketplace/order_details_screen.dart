@@ -104,7 +104,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   Widget build(BuildContext context) {
     final order = _order;
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: _loading && order == null
           ? const Center(child: BrandSpinner(size: 32))
           : order == null

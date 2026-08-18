@@ -5,7 +5,14 @@ import 'cached_image.dart';
 
 /// Generic full-screen image viewer used app-wide for tap-to-expand:
 /// avatars, cover photos, product images, event flyers, news covers,
-/// etc. Pinch-to-zoom via InteractiveViewer; tap or back to dismiss.
+/// etc. Pinch-to-zoom via InteractiveViewer; the ✕ button or system back
+/// dismisses.
+///
+/// **Tapping the photo deliberately does nothing.** It used to pop the
+/// route, which meant every attempt to steady a zoomed photo, or any stray
+/// touch while reading a chat image, threw you out of the viewer. Zoom and
+/// dismiss are different intents and a bare tap is far too easy to trigger
+/// by accident to be wired to the destructive one.
 ///
 /// Unlike PostImageViewer this needs no Hero tag — call
 /// [FullImageViewer.show] with just a URL from anywhere.
@@ -36,38 +43,36 @@ class FullImageViewer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: () => Navigator.of(context).maybePop(),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Center(
-                child: InteractiveViewer(
-                  minScale: 1,
-                  maxScale: 4,
-                  child: CachedImage(
-                    imageUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Center(
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: AppColors.white,
-                        size: 56,
-                      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: CachedImage(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: AppColors.white,
+                      size: 56,
                     ),
                   ),
                 ),
               ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.white),
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: AppColors.white),
+                onPressed: () => Navigator.of(context).maybePop(),
+                tooltip: 'Close',
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

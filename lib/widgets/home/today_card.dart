@@ -145,16 +145,38 @@ class _TodayCardState extends State<TodayCard> {
     }
   }
 
+  /// ORDER IS LOAD-BEARING: it must match the Library chip row exactly —
+  /// Bible, Quiz, EGW, Sabbath School, Hymn, Music (founder, 18 Aug 2026).
+  ///
+  /// The card and the chips are two views of the same six things, and they
+  /// used to disagree (the card ran Bible, Quiz, Sabbath School, Hymn,
+  /// Music, EGW). Swiping the card then scanning the chips meant
+  /// re-finding your place in a different sequence every time. If a chip
+  /// is ever added, moved or removed, move the matching slide in the same
+  /// commit.
+  ///
+  /// The devotion stays first for the same reason it always did: it is why
+  /// most people open the app in the morning, and it happens to be the
+  /// Bible chip's slot too.
   List<_Slide> _slides() => [
         if (widget.devotion != null)
           _Slide(accent: 0.06, child: _DevotionPage(devotion: widget.devotion!)),
         // The Daily Challenge, on the founder's call (17 Aug). Streaks are
         // what make a daily quiz sticky, and nothing on Home said one was
         // waiting — the quiz was a pill in a row of six with no state.
-        //
-        // Second, not first: the devotion is the reason most people open
-        // the app on a given morning, and the quiz should not displace it.
         const _Slide(accent: 0.40, child: _DailyQuizPage()),
+        if (_book != null)
+          _Slide(
+            accent: 0.28,
+            child: _LibraryPickPage(
+              item: _book!,
+              label: 'EGW READ OF THE DAY',
+              icon: Icons.auto_stories_outlined,
+              fallbackIcon: Icons.menu_book_rounded,
+              openLabel: 'Open the book',
+              tabIndex: 3,
+            ),
+          ),
         if (_quarterly != null)
           _Slide(accent: 0.22, child: _LessonPage(quarterly: _quarterly!)),
         if (_hymn != null) _Slide(accent: 0.34, child: _HymnPage(hymn: _hymn!)),
@@ -169,18 +191,6 @@ class _TodayCardState extends State<TodayCard> {
               openLabel: 'Play this track',
               tabIndex: 4,
               playOnOpen: true,
-            ),
-          ),
-        if (_book != null)
-          _Slide(
-            accent: 0.28,
-            child: _LibraryPickPage(
-              item: _book!,
-              label: 'EGW READ OF THE DAY',
-              icon: Icons.auto_stories_outlined,
-              fallbackIcon: Icons.menu_book_rounded,
-              openLabel: 'Open the book',
-              tabIndex: 3,
             ),
           ),
       ];

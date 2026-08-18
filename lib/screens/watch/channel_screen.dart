@@ -119,7 +119,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     final c = _channel;
 
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: CustomScrollView(
         controller: _scroll,
         slivers: [

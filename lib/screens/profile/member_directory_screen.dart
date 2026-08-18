@@ -78,7 +78,7 @@ class _MemberDirectoryScreenState extends State<MemberDirectoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await context.pushNamed('my_directory_profile');

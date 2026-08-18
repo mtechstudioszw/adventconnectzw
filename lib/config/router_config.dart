@@ -174,10 +174,60 @@ void attachUsageTracking() {
   });
 }
 
+/// Maps a custom-scheme share link onto a real route, or null if it isn't
+/// one of ours.
+///
+/// `io.supabase.adventconnect://seller/<id>` carries the content TYPE in
+/// the host and the id in the path, which no `GoRoute` pattern can match —
+/// so if one of these ever reaches the router it lands on the "Route not
+/// found" screen. That is what every shared product and seller link did
+/// until `flutter_deeplinking_enabled=false` was added to the Android
+/// manifest, because the engine was delivering the link to go_router at the
+/// same time app_links delivered it to [DeepLinkService].
+///
+/// This is the belt to that manifest's braces: Android is fixed at the
+/// source, but iOS opts in separately and engine defaults have changed
+/// before. A shared link is the app's main growth path — it must never be
+/// one platform-default away from opening an error page.
+String? _shareLinkRedirect(GoRouterState state) {
+  if (state.uri.scheme != 'io.supabase.adventconnect') return null;
+  // Owned by supabase_flutter — swallow it rather than erroring on it.
+  if (state.uri.host == 'login-callback') return '/splash';
+
+  final id = state.uri.pathSegments.isNotEmpty
+      ? state.uri.pathSegments.first
+      : '';
+  if (id.isEmpty) return '/splash';
+
+  // Same host → route mapping as DeepLinkService, deliberately duplicated
+  // rather than shared: that one PUSHES onto a live stack, this one
+  // REPLACES a location the router is already trying to open.
+  final (String name, String param)? target = switch (state.uri.host) {
+    'event' => ('event_details', 'id'),
+    'product' => ('product_details', 'id'),
+    'job' => ('job_details', 'id'),
+    'video' => ('watch_video', 'id'),
+    'seller' => ('seller_profile', 'userId'),
+    'user' => ('user_profile', 'userId'),
+    _ => null,
+  };
+  if (target == null) return '/splash';
+
+  try {
+    return appRouter.namedLocation(
+      target.$1,
+      pathParameters: {target.$2: id},
+    );
+  } catch (_) {
+    return '/splash';
+  }
+}
+
 final GoRouter appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: '/splash',
   debugLogDiagnostics: false,
+  redirect: (context, state) => _shareLinkRedirect(state),
   routes: [
     GoRoute(
       path: '/splash',

@@ -111,7 +111,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
     final p = _playlist;
 
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: CustomScrollView(
         controller: _scroll,
         slivers: [

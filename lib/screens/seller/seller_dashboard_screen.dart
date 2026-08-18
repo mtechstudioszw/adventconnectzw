@@ -83,7 +83,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Widget build(BuildContext context) {
     final seller = _seller;
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,

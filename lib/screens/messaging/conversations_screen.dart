@@ -906,7 +906,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       // Advent Chat is a top-level tab now (it replaced Churches), so the
       // inbox carries the island like every other tab destination — and
       // hides it on scroll the way the others do.

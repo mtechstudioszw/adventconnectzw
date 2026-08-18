@@ -328,13 +328,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        backgroundColor: context.palette.scaffoldBg,
+        backgroundColor: Colors.transparent,
         body: const Center(child: BrandSpinner(size: 30)),
       );
     }
     if (_error != null || _profile == null) {
       return Scaffold(
-        backgroundColor: context.palette.scaffoldBg,
+        backgroundColor: Colors.transparent,
         appBar: AppBar(),
         body: Center(
           child: Text(
@@ -345,7 +345,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

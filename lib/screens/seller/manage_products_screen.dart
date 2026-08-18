@@ -183,7 +183,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await context.pushNamed('add_product');

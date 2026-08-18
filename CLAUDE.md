@@ -122,6 +122,29 @@ Success Green:  #2E7D32  // Status badges ONLY
 
 \- \*\*SafeArea:\*\* Every scaffold must wrap content in SafeArea (iOS notch)
 
+\- \*\*Scaffolds are TRANSPARENT (18 Aug 2026). Do not "fix" them back.\*\*
+  The splash's drifting particle field now sits behind the whole app —
+  `lib/widgets/ambient\_background.dart`, installed once in
+  `MaterialApp.builder`. It paints the opaque ground, so 91 Scaffolds across
+  83 files carry `backgroundColor: Colors.transparent`. A Scaffold that
+  paints `palette.scaffoldBg` again punches an opaque hole in the field.
+
+  \- \*\*`palette.scaffoldBg` itself is NOT retired.\*\* Headers rely on it to
+    occlude content scrolling under them (the flat-header rule above), and
+    modal sheets and dialogs need it to be opaque. Only the \*Scaffold\*
+    background changed.
+
+  \- \*\*Five screens keep an opaque Scaffold on purpose\*\* because they paint
+    this same field themselves: `auth\_shell`, `onboarding\_flow\_screen`,
+    `onboarding\_screen`, `maintenance\_screen`, and `chat\_screen` (via
+    `ChatWallpaper`). Transparent there stacks two fields.
+
+  \- \*\*It runs at ~15fps behind a RepaintBoundary, not 60.\*\* See
+    `AmbientBackground.frameInterval` and the note on `ChatWallpaper`: a
+    full-screen animated CustomPaint under a flung list repaints the
+    viewport every frame, and this one is under every screen for the whole
+    session. Raise the interval before shortening the loop.
+
 
 
 \## CRITICAL TECHNICAL RULES

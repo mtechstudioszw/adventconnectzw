@@ -55,8 +55,14 @@ class JobService {
     required String title,
     required String description,
     required String category,
-    required String province,
     required String location,
+    /// ISO 3166-1 alpha-2 (patch_213). Always send it — the column DEFAULTs
+    /// to 'ZW', so a Nairobi vacancy posted without it reads as Zimbabwean.
+    String? country,
+    /// Province for ZW, free-text region elsewhere. Optional as of
+    /// patch_213, which dropped the NOT NULL that made every non-Zimbabwean
+    /// job listing impossible to insert.
+    String? province,
     String? company,
     String? requirements,
     String jobType = 'full_time',
@@ -85,7 +91,8 @@ class JobService {
         'post_type': postType,
         'level': level,
         'salary_range': salaryRange?.trim(),
-        'province': province.trim(),
+        'country': country,
+        'province': province?.trim(),
         'location': location.trim(),
         'sabbath_friendly': sabbathFriendly,
         'is_sda_institution': isSdaInstitution,
@@ -110,6 +117,8 @@ class JobService {
     String? jobType,
     String? level,
     String? salaryRange,
+    /// ISO 3166-1 alpha-2 (patch_213). Travels with [province].
+    String? country,
     String? province,
     String? location,
     bool? sabbathFriendly,
@@ -130,7 +139,12 @@ class JobService {
       'job_type': ?jobType,
       'level': ?level,
       'salary_range': ?salaryRange?.trim(),
-      'province': ?province?.trim(),
+      // Written as a pair. Note the asymmetry: country uses `?` because
+      // omitting it means "not editing location", but province is guarded
+      // on COUNTRY and written even when null — `?province` would skip the
+      // null and strand a Zimbabwean province on a job just moved to Kenya.
+      'country': ?country,
+      if (country != null) 'province': province?.trim(),
       'location': ?location?.trim(),
       'sabbath_friendly': ?sabbathFriendly,
       'is_sda_institution': ?isSdaInstitution,

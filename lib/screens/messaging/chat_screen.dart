@@ -4681,11 +4681,22 @@ class _SecurityCodeChanged extends StatelessWidget {
   }
 }
 
-/// "Messages are end-to-end encrypted. Learn more."
+/// "Text messages are end-to-end encrypted — photos and voice notes are
+/// not. Learn more."
 ///
 /// The "Learn more" is a real tap target into the privacy policy, not
 /// decoration — a member told their messages are encrypted deserves
 /// somewhere to read what that means and what the app still can see.
+///
+/// **The photo/voice-note carve-out is not a caveat we can drop for
+/// brevity.** `MessagingService.sendMessage` encrypts the BODY of a text
+/// message only; a photo or voice note is sent as a storage path, and
+/// while those buckets are private and RLS'd, the server can still read
+/// the file. Saying "your messages are encrypted, nobody outside this chat
+/// can read them" next to a photo picker is a false security promise, and
+/// a member could reasonably send something sensitive on the strength of
+/// it. If media ever does get encrypted, change this copy in the same
+/// commit — not after.
 class _EncryptedLine extends StatelessWidget {
   const _EncryptedLine({required this.otherName});
 
@@ -4704,9 +4715,10 @@ class _EncryptedLine extends StatelessWidget {
         children: [
           TextSpan(
             text:
-                'Messages to $otherName are end-to-end encrypted. Nobody '
-                'outside this chat — not even Adventist Super App — can read '
-                'them. ',
+                'Text messages to $otherName are end-to-end encrypted — '
+                'nobody outside this chat, not even Adventist Super App, can '
+                'read them. Photos and voice notes are not end-to-end '
+                'encrypted and are stored on our servers. ',
           ),
           TextSpan(
             text: 'Learn more',

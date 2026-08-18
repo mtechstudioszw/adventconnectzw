@@ -133,7 +133,7 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       // No island: Jobs is pushed from Home, not a tab. It used to light
       // the Marketplace pill — the same lie Prayer told with the Profile
       // pill. Its ScreenHero already carries the back button.

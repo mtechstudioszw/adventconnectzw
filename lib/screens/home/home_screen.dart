@@ -1145,7 +1145,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       // The nav is a floating island now, so the feed runs full-height and
       // scrolls UNDER its frosted glass. The last sliver reserves 96dp so
       // nothing important ends up trapped beneath it.
@@ -1493,6 +1493,27 @@ class _HomeScreenState extends State<HomeScreen>
     return raw;
   }
 
+  /// The member's home church name, or null when they have not set one.
+  ///
+  /// Mirrors the same getter on ProfileScreen: `profiles.church_id` is
+  /// mirrored into auth metadata, and the followed set is by the app's own
+  /// rule exactly that one church — so match on the id when metadata has
+  /// it, else fall back to the single followed church.
+  String? get _homeChurchName {
+    final id = AuthService.currentUser?.userMetadata?['church_id']
+        ?.toString()
+        .trim();
+    if (id != null && id.isNotEmpty) {
+      for (final c in _churches) {
+        if (c.id == id) return c.name;
+      }
+    }
+    for (final c in _churches) {
+      if (_followedChurchIds.contains(c.id)) return c.name;
+    }
+    return null;
+  }
+
   Widget _buildQuickStats() {
     final upcomingForUser = _events
         .where((e) => _rsvpedEventIds.contains(e.id))
@@ -1504,8 +1525,10 @@ class _HomeScreenState extends State<HomeScreen>
           Expanded(
             child: _CompactStatTile(
               icon: Icons.church_outlined,
-              value: '${_followedChurchIds.length}',
-              label: 'Churches',
+              // The name, not a count — see _CompactStatTile.label. You
+              // belong to exactly one home church, so "1 Churches" told
+              // the member nothing; which church does.
+              value: _homeChurchName ?? 'Set home church',
               // Pushed, not `go`n: Churches is no longer a nav tab, so it
               // needs a back stack to return to Home.
               onTap: () => context.pushNamed('churches'),
@@ -2332,28 +2355,54 @@ class _HomeScreenState extends State<HomeScreen>
         child: child);
   }
 
+  /// Saves EVERY photo on the post, not just the first.
+  ///
+  /// This used to save `post.imageUrl` alone, so "Save to gallery" on a
+  /// nine-photo album quietly produced one file and a success message —
+  /// the member had no way to tell the other eight had been skipped.
   Future<void> _savePostImage(Post post) async {
-    final url = post.imageUrl;
-    if (url == null || url.isEmpty) return;
+    final urls = post.imageUrls.isNotEmpty
+        ? post.imageUrls
+        : [if (post.imageUrl != null && post.imageUrl!.isNotEmpty) post.imageUrl!];
+    if (urls.isEmpty) return;
+    final many = urls.length > 1;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppColors.darkNavy,
-        duration: const Duration(seconds: 2),
+        // Long enough to still be up while a multi-photo save runs; a
+        // 2s toast on a nine-photo album vanishes before the first file.
+        duration: Duration(seconds: many ? 6 : 2),
         content: Text(
-          'Saving image to gallery…',
+          many
+              ? 'Saving ${urls.length} photos to gallery…'
+              : 'Saving image to gallery…',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
         ),
       ),
     );
-    final ok = await GalleryService.saveImageFromUrl(url);
+
+    final saved = await GalleryService.saveImagesFromUrls(urls);
     if (!mounted) return;
+    final all = saved == urls.length;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: ok ? AppColors.successGreen : AppColors.red,
+        backgroundColor: saved == 0
+            ? AppColors.red
+            : (all ? AppColors.successGreen : AppColors.goldAccent),
         content: Text(
-          ok
-              ? 'Saved to your Adventist Super App album.'
-              : 'Could not save the image. Check storage permission and try again.',
+          switch ((saved, all)) {
+            (0, _) => many
+                ? 'Could not save the photos. Check storage permission and try again.'
+                : 'Could not save the image. Check storage permission and try again.',
+            // Partial is reported honestly rather than as a flat success —
+            // the member can retry knowing some already landed.
+            (_, false) => '$saved of ${urls.length} photos saved to your '
+                'Adventist Super App album.',
+            _ => many
+                ? 'All ${urls.length} photos saved to your Adventist Super App album.'
+                : 'Saved to your Adventist Super App album.',
+          },
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
         ),
       ),
@@ -3693,13 +3742,19 @@ class _CompactStatTile extends StatelessWidget {
   const _CompactStatTile({
     required this.icon,
     required this.value,
-    required this.label,
     required this.onTap,
+    this.label,
   });
 
   final IconData icon;
   final String value;
-  final String label;
+
+  /// The noun after the figure — "Events", "Going". **Null means [value]
+  /// is the whole story**, which is how the home-church tile works: a
+  /// church NAME needs the full width and has no unit to append. "1
+  /// Churches" was grammatical nonsense anyway, and since a member can
+  /// only belong to one home church the number was always 1.
+  final String? label;
   final VoidCallback onTap;
 
   @override
@@ -3723,28 +3778,46 @@ class _CompactStatTile extends StatelessWidget {
               children: [
                 Icon(icon, size: 18, color: AppColors.primaryBlue),
                 const SizedBox(width: 8),
-                Text(
-                  value,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: context.palette.text,
-                    height: 1.0,
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: context.palette.textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                if (label == null)
+                  // Name-only: it takes the whole tile and ellipsises,
+                  // rather than being squeezed next to a redundant count.
+                  Flexible(
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.palette.text,
+                        height: 1.0,
+                      ),
+                    ),
+                  )
+                else ...[
+                  Text(
+                    value,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: context.palette.text,
+                      height: 1.0,
                     ),
                   ),
-                ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      label!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: context.palette.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -32,6 +32,7 @@ import 'services/push_service.dart';
 import 'services/theme_service.dart';
 import 'theme/app_text_styles.dart';
 import 'theme/app_theme.dart';
+import 'widgets/ambient_background.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/global_media_bars.dart';
 import 'widgets/voice_mini_bar.dart';
@@ -607,7 +608,14 @@ class _AdventConnectAppState extends State<AdventConnectApp>
           themeAnimationDuration: const Duration(milliseconds: 400),
           themeAnimationCurve: Curves.easeInOut,
           routerConfig: appRouter,
-          builder: (context, child) => Stack(
+          // AmbientBackground wraps EVERYTHING, so the drifting field sits
+          // under the router's Navigator and every overlay above it. Page
+          // transitions then slide over a field that stays put, instead of
+          // each screen carrying its own copy. It also paints the opaque
+          // ground that Scaffolds no longer paint for themselves — see the
+          // widget's doc comment before making any Scaffold opaque again.
+          builder: (context, child) => AmbientBackground(
+            child: Stack(
             children: [
               OfflineBanner(child: child ?? const SizedBox.shrink()),
               // The bars below sit ABOVE the router's Navigator, so they
@@ -647,6 +655,7 @@ class _AdventConnectAppState extends State<AdventConnectApp>
                 ),
               ),
             ],
+            ),
           ),
         );
       },

@@ -141,7 +141,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
   Widget build(BuildContext context) {
     final length = _contentController.text.length;
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         child: Column(
           children: [

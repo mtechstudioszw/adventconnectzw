@@ -21,6 +21,7 @@ class MarketOrder {
     this.items = const [],
     this.sellerName,
     this.sellerPhone,
+    this.sellerCountry,
   });
 
   final String id;
@@ -40,6 +41,11 @@ class MarketOrder {
   /// Hydrated from the sellers table for display — not an orders column.
   final String? sellerName;
   final String? sellerPhone;
+
+  /// The seller's ISO-2 country, hydrated alongside the phone. Needed to
+  /// normalise [sellerPhone] for `wa.me`: a number typed in national form
+  /// is meaningless without knowing whose country it belongs to.
+  final String? sellerCountry;
 
   bool get isPending => status == 'pending';
   bool get isConfirmed => status == 'confirmed';
@@ -79,6 +85,10 @@ class MarketOrder {
     items: items ?? this.items,
     sellerName: sellerName,
     sellerPhone: sellerPhone,
+    // Carried, not dropped: copyWith is how a status change is applied, and
+    // losing the country here would leave the WhatsApp handoff unable to
+    // dial the seller from the moment the order is confirmed.
+    sellerCountry: sellerCountry,
   );
 
   factory MarketOrder.fromJson(Map<String, dynamic> json) {
@@ -105,6 +115,7 @@ class MarketOrder {
           : const [],
       sellerName: json['seller_name'] as String?,
       sellerPhone: json['seller_phone'] as String?,
+      sellerCountry: json['seller_country'] as String?,
     );
   }
 

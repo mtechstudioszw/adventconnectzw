@@ -69,9 +69,8 @@ class _SsLessonListScreenState extends State<SsLessonListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: FutureBuilder<List<SsLesson>>(
         future: _future,
         builder: (context, snap) {
@@ -614,10 +613,9 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final day = _day;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

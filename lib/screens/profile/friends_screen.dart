@@ -179,7 +179,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final palette = context.palette;
     final visible = _visible;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,

@@ -966,7 +966,8 @@ class AuthService {
         return AuthResult.failure('Sign in to update your profile.');
       }
 
-      // Home church change is gated by a 90-day cooldown (patch_069). Do
+      // Home church change is gated by a 14-day cooldown (patch_069, cut
+      // from 90 days by patch_215; country carries the same gate). Do
       // it FIRST in its own statement so a rejected change surfaces the
       // exact message and we DON'T desync auth metadata / other fields
       // (which the later upsert's catch would otherwise swallow).

@@ -247,7 +247,7 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: _checking
           ? _buildChecking(context)
           : _block != null

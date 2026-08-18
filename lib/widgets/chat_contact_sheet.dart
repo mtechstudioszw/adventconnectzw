@@ -78,12 +78,38 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
   /// where `presence` is built.
   bool _isFriend = false;
 
+  /// The 60-digit security code for this pair, once computed.
+  ///
+  /// Null means "no code to show" — either still computing, or this
+  /// device has never held their identity key. [_securityCodeLoading]
+  /// tells those two apart, because they read very differently to
+  /// someone checking whether they are being intercepted.
+  String? _securityCode;
+  bool _securityCodeLoading = true;
+
   bool get _hasStory => _stories.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // Deliberately NOT awaited inside _load: the fingerprint is 5200
+    // SHA-512 rounds per side, and the sheet must not wait on it to show
+    // a photo and a name.
+    _loadSecurityCode();
+  }
+
+  Future<void> _loadSecurityCode() async {
+    if (!E2eeService.isEncryptionOn) {
+      if (mounted) setState(() => _securityCodeLoading = false);
+      return;
+    }
+    final code = await E2eeService.securityCode(widget.userId);
+    if (!mounted) return;
+    setState(() {
+      _securityCode = code;
+      _securityCodeLoading = false;
+    });
   }
 
   Future<void> _load() async {
@@ -511,7 +537,11 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
               // are deciding whether to trust someone, which is exactly
               // when "who else can read this" is the live question.
               if (E2eeService.isEncryptionOn && !unavailable)
-                const _EncryptionFooter(),
+                _EncryptionFooter(
+                  otherName: name,
+                  securityCode: _securityCode,
+                  loading: _securityCodeLoading,
+                ),
             ],
           ),
         ),
@@ -520,54 +550,164 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
   }
 }
 
-/// "Messages are end-to-end encrypted" + a real link to the policy.
+/// The encryption block: what is (and is not) encrypted, this pair's
+/// security code, and a real link to the policy.
 ///
 /// Gated on [E2eeService.isEncryptionOn] at the call site, never shown
 /// unconditionally: it is a security claim, and it must not appear on a
 /// thread that is still going out in the clear.
 class _EncryptionFooter extends StatelessWidget {
-  const _EncryptionFooter();
+  const _EncryptionFooter({
+    required this.otherName,
+    required this.securityCode,
+    required this.loading,
+  });
+
+  final String otherName;
+
+  /// The 60 digits, pre-grouped by [E2eeService.securityCode]. Null when
+  /// there is no key to compare against yet.
+  final String? securityCode;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final base = AppTextStyles.bodySmall.copyWith(
-      color: context.palette.textMuted,
+      color: palette.textMuted,
       fontSize: 11.5,
       height: 1.45,
     );
+    final first = otherName.trim().split(RegExp(r'\s+')).first;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.lock_outline, size: 14, color: context.palette.textMuted),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                style: base,
-                children: [
-                  const TextSpan(
-                    text:
-                        'Messages are end-to-end encrypted. Nobody outside '
-                        'this chat — not even Adventist Super App — can read '
-                        'them. ',
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.lock_outline, size: 14, color: palette.textMuted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text.rich(
                   TextSpan(
-                    text: 'Learn more',
-                    style: base.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w700,
-                      decoration: TextDecoration.underline,
-                      decorationColor: AppColors.primaryBlue,
-                    ),
-                    recognizer: TapGestureRecognizer()
-                      ..onTap = () => context.pushNamed('privacy'),
+                    style: base,
+                    children: [
+                      const TextSpan(
+                        text:
+                            'Text messages are end-to-end encrypted — nobody '
+                            'outside this chat, not even Adventist Super App, '
+                            'can read them. Photos and voice notes are not '
+                            'end-to-end encrypted and are stored on our '
+                            'servers. ',
+                      ),
+                      TextSpan(
+                        text: 'Learn more',
+                        style: base.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppColors.primaryBlue,
+                        ),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () => context.pushNamed('privacy'),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _SecurityCodeBlock(
+            firstName: first,
+            code: securityCode,
+            loading: loading,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The pair's 60-digit security code, or an honest explanation of why
+/// there isn't one yet.
+///
+/// Shown rather than hidden behind a menu because a code nobody can find
+/// is a code nobody compares, and comparing it is the only thing that
+/// turns "trust us, it's encrypted" into something a member can check for
+/// themselves.
+class _SecurityCodeBlock extends StatelessWidget {
+  const _SecurityCodeBlock({
+    required this.firstName,
+    required this.code,
+    required this.loading,
+  });
+
+  final String firstName;
+  final String? code;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final label = AppTextStyles.labelSmall.copyWith(
+      color: palette.textMuted,
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.2,
+    );
+    final helper = AppTextStyles.bodySmall.copyWith(
+      color: palette.textMuted,
+      fontSize: 11,
+      height: 1.45,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: palette.chipBg,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('SECURITY CODE', style: label),
+          const SizedBox(height: 10),
+          if (loading)
+            Text('Checking…', style: helper)
+          else if (code == null)
+            Text(
+              'Not available yet — it appears once you and $firstName have '
+              'exchanged a message on your current devices.',
+              style: helper,
+            )
+          else ...[
+            Text(
+              code!,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.text,
+                fontSize: 14,
+                height: 1.7,
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.w600,
+                // Poppins stays (founder rule), but digits go tabular so
+                // the three rows line up into columns. A security code
+                // read aloud from ragged rows is read aloud wrong.
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-          ),
+            const SizedBox(height: 10),
+            Text(
+              'Compare these digits with $firstName in person or on a call. '
+              'If they match, nobody is reading this chat. The code changes '
+              'when either of you reinstalls the app or switches phone.',
+              style: helper,
+            ),
+          ],
         ],
       ),
     );

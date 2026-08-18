@@ -289,11 +289,13 @@ class _PostCardState extends State<PostCard>
               onDelete: widget.onDelete,
               onToggleVisibility: widget.onToggleVisibility,
               onSaveImage: _images.isNotEmpty ? widget.onSaveImage : null,
+              photoCount: _images.length,
             )
           else if (widget.onReport != null)
             _ViewerMenu(
               onReport: widget.onReport!,
               onSaveImage: _images.isNotEmpty ? widget.onSaveImage : null,
+              photoCount: _images.length,
             ),
         ],
       ),
@@ -1033,6 +1035,7 @@ class _OwnerMenu extends StatelessWidget {
     required this.onDelete,
     required this.onToggleVisibility,
     this.onSaveImage,
+    this.photoCount = 0,
   });
 
   final bool isFriendsOnly;
@@ -1040,6 +1043,11 @@ class _OwnerMenu extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onToggleVisibility;
   final VoidCallback? onSaveImage;
+
+  /// Drives the label only. Save has always applied to the whole post, so
+  /// on an album the menu has to say so — "Save to gallery" next to nine
+  /// photos reads as saving the one on screen.
+  final int photoCount;
 
   @override
   Widget build(BuildContext context) {
@@ -1097,17 +1105,21 @@ class _OwnerMenu extends StatelessWidget {
             ),
           ),
         if (onSaveImage != null)
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'save',
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.download_outlined,
                   size: 18,
                   color: AppColors.primaryBlue,
                 ),
-                SizedBox(width: 10),
-                Text('Save to gallery'),
+                const SizedBox(width: 10),
+                Text(
+                  photoCount > 1
+                      ? 'Save all $photoCount photos'
+                      : 'Save to gallery',
+                ),
               ],
             ),
           ),
@@ -1128,10 +1140,17 @@ class _OwnerMenu extends StatelessWidget {
 }
 
 class _ViewerMenu extends StatelessWidget {
-  const _ViewerMenu({required this.onReport, this.onSaveImage});
+  const _ViewerMenu({
+    required this.onReport,
+    this.onSaveImage,
+    this.photoCount = 0,
+  });
 
   final VoidCallback onReport;
   final VoidCallback? onSaveImage;
+
+  /// Label only — see [_OwnerMenu.photoCount].
+  final int photoCount;
 
   @override
   Widget build(BuildContext context) {
@@ -1153,17 +1172,21 @@ class _ViewerMenu extends StatelessWidget {
       },
       itemBuilder: (ctx) => [
         if (onSaveImage != null)
-          const PopupMenuItem(
+          PopupMenuItem(
             value: 'save',
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.download_outlined,
                   size: 18,
                   color: AppColors.primaryBlue,
                 ),
-                SizedBox(width: 10),
-                Text('Save image to gallery'),
+                const SizedBox(width: 10),
+                Text(
+                  photoCount > 1
+                      ? 'Save all $photoCount photos'
+                      : 'Save image to gallery',
+                ),
               ],
             ),
           ),

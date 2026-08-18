@@ -607,7 +607,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     // nowhere near the cap) and letterboxes gracefully in landscape.
     final maxPlayerHeight = MediaQuery.sizeOf(context).height * 0.6;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       // No top SafeArea — the player runs full-bleed under the status bar
       // (YouTube-style) so it isn't "cut" by a navy strip. The back button
       // respects the status-bar inset.

@@ -196,6 +196,10 @@ class MarketplaceService {
     String? subcategory,
     List<String>? imageUrls,
     String? condition,
+    /// ISO 3166-1 alpha-2 (patch_213). Always send it: the column DEFAULTs
+    /// to 'ZW', so omitting it silently brands a Kenyan listing Zimbabwean.
+    String? country,
+    /// Province for ZW, free-text region elsewhere. Optional either way.
     String? province,
     String? location,
   }) async {
@@ -215,6 +219,7 @@ class MarketplaceService {
         'subcategory': subcategory?.trim(),
         'image_urls': imageUrls ?? const [],
         'condition': condition,
+        'country': country,
         'province': province?.trim(),
         'location': location?.trim(),
       }).select('id').single(),

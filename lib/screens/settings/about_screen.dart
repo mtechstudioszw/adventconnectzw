@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_version.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Settings → About. Surfaces app metadata, developer credit, and
@@ -30,7 +29,7 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         child: Column(
           children: [

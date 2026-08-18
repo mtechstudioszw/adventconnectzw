@@ -34,7 +34,7 @@ class OrderPlacedScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final multi = orders.length > 1;
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: ListView(
         padding: EdgeInsets.zero,
         children: [

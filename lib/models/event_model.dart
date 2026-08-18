@@ -9,6 +9,8 @@ class Event {
     this.endTime,
     this.description,
     this.location,
+    this.country,
+    this.province,
     this.churchId,
     this.churchName,
     this.churchPhotoUrl,
@@ -31,6 +33,15 @@ class Event {
   /// Optional end time in `HH:mm`. Null means open-ended.
   final String? endTime;
   final String? location;
+
+  /// ISO 3166-1 alpha-2 (patch_213). Carried so the edit form can show the
+  /// country the event was actually posted under — without it the picker
+  /// defaults to the organiser's own country and quietly rewrites the row.
+  final String? country;
+
+  /// Zimbabwean province for ZW rows, free-text region elsewhere. Distinct
+  /// from [location], which is a display string composed from venue + city.
+  final String? province;
   final String? churchId;
 
   /// Name of the church that posted this event (when church-hosted). Drives
@@ -146,6 +157,8 @@ class Event {
       endDate: endDate,
       endTime: endTime,
       location: resolvedLocation,
+      country: json['country'] as String?,
+      province: json['province'] as String?,
       churchId: json['church_id']?.toString(),
       churchName: churchMap?['name'] as String?,
       churchPhotoUrl: churchMap?['profile_photo_url'] as String?,
@@ -174,6 +187,8 @@ class Event {
         if (endDate != null) 'end_date': _formatDate(endDate!),
         if (endTime != null) 'end_time': endTime,
         'location': location,
+        'country': country,
+        'province': province,
         'church_id': churchId,
         'organizer_id': organizerId,
         'contact_phone': contactPhone,
@@ -196,6 +211,11 @@ class Event {
       endDate: endDate,
       endTime: endTime,
       location: location,
+      // Carried, not dropped: copyWith is how an RSVP count change is
+      // applied, and losing these would blank the edit form's country the
+      // moment someone RSVPs.
+      country: country,
+      province: province,
       churchId: churchId,
       organizerId: organizerId,
       organizerName: organizerName,

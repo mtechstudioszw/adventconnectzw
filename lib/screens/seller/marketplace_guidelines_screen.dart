@@ -79,7 +79,7 @@ class _MarketplaceGuidelinesScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Column(
           children: [

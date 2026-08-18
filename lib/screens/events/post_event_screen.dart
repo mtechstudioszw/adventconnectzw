@@ -2,14 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/countries.dart';
 import '../../models/event_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
+import '../../services/auth_service.dart';
 import '../../services/event_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/country_picker_sheet.dart';
 import '../../widgets/event_card.dart';
 import '../../widgets/preview_sheet.dart';
 import '../widgets/post_form_widgets.dart';
@@ -40,6 +43,10 @@ class _PostEventScreenState extends State<PostEventScreen>
   final _descriptionController = TextEditingController();
   final _venueController = TextEditingController();
   final _cityController = TextEditingController();
+
+  /// Free-text region for non-ZW events. Shares the `province` column with
+  /// [_province]; see [_regionValue].
+  final _regionController = TextEditingController();
   final _capacityController = TextEditingController();
   final _contactNameController = TextEditingController();
   final _contactPhoneController = TextEditingController();
@@ -52,6 +59,10 @@ class _PostEventScreenState extends State<PostEventScreen>
   TimeOfDay? _startTime;
   DateTime? _endDate;
   TimeOfDay? _endTime;
+
+  /// ISO 3166-1 alpha-2. Never null in practice — seeded in [initState]
+  /// from the event being edited, else from the poster's own profile.
+  String? _country;
   String? _province;
   String _category = 'community';
   String? _coverPhotoUrl;
@@ -109,6 +120,37 @@ class _PostEventScreenState extends State<PostEventScreen>
         _endTime = _parseTime(existing.endTime!);
       }
     }
+    // Country first, then whichever location control hangs off it. Edit
+    // mode used to leave province blank, so re-saving an event moved it to
+    // whatever the organiser happened to re-pick.
+    _country = existing?.country ?? AuthService.currentCountry();
+    if (_isZimbabwe) {
+      _province = existing?.province;
+    } else {
+      _regionController.text = existing?.province ?? '';
+    }
+  }
+
+  /// Zimbabwe is the one country with a real province list in this app
+  /// (`_provinces`). Everywhere else the same column takes free text.
+  bool get _isZimbabwe => _country == 'ZW';
+
+  /// What goes in the `province` column: the dropdown in Zimbabwe, the
+  /// free-text region anywhere else, null when neither is filled.
+  String? get _regionValue {
+    if (_isZimbabwe) return _province;
+    final typed = _regionController.text.trim();
+    return typed.isEmpty ? null : typed;
+  }
+
+  /// Changing country invalidates whichever location control is showing,
+  /// so the old value is dropped rather than carried across.
+  void _onCountryPicked(Country picked) {
+    setState(() {
+      _country = picked.code;
+      _province = null;
+      _regionController.clear();
+    });
   }
 
   TimeOfDay? _parseTime(String value) {
@@ -127,6 +169,7 @@ class _PostEventScreenState extends State<PostEventScreen>
     _descriptionController.dispose();
     _venueController.dispose();
     _cityController.dispose();
+    _regionController.dispose();
     _capacityController.dispose();
     _contactNameController.dispose();
     _contactPhoneController.dispose();
@@ -267,7 +310,8 @@ class _PostEventScreenState extends State<PostEventScreen>
               ? null
               : _descriptionController.text,
           venue: _venueController.text.isEmpty ? null : _venueController.text,
-          province: _province,
+          country: _country,
+          province: _regionValue,
           city: _cityController.text.isEmpty ? null : _cityController.text,
           category: _category,
           capacity: int.tryParse(_capacityController.text),
@@ -291,7 +335,8 @@ class _PostEventScreenState extends State<PostEventScreen>
               ? null
               : _descriptionController.text,
           venue: _venueController.text.isEmpty ? null : _venueController.text,
-          province: _province,
+          country: _country,
+          province: _regionValue,
           city: _cityController.text.isEmpty ? null : _cityController.text,
           category: _category,
           capacity: int.tryParse(_capacityController.text),
@@ -332,7 +377,7 @@ class _PostEventScreenState extends State<PostEventScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -658,19 +703,48 @@ class _PostEventScreenState extends State<PostEventScreen>
           ),
           const SizedBox(height: 18),
           PostFormLabeledField(
-            label: 'Province',
-            child: _Dropdown<String?>(
-              icon: Icons.map_outlined,
-              hint: 'Choose a province',
-              value: _province,
-              items: [
-                const DropdownMenuItem(value: null, child: Text('Not specified')),
-                for (final p in _provinces)
-                  DropdownMenuItem(value: p, child: Text(p)),
-              ],
-              onChanged: (v) => setState(() => _province = v),
+            label: 'Country',
+            child: CountryFormField(
+              code: _country,
+              decoration: postFormFilledDecoration(
+                icon: Icons.public,
+                hint: 'Choose a country',
+              ),
+              onChanged: _onCountryPicked,
             ),
           ),
+          const SizedBox(height: 18),
+          // Province is a Zimbabwean administrative unit — offer the list
+          // only where it means something, free text everywhere else.
+          if (_isZimbabwe)
+            PostFormLabeledField(
+              label: 'Province',
+              child: _Dropdown<String?>(
+                icon: Icons.map_outlined,
+                hint: 'Choose a province',
+                value: _province,
+                items: [
+                  const DropdownMenuItem(
+                      value: null, child: Text('Not specified')),
+                  for (final p in _provinces)
+                    DropdownMenuItem(value: p, child: Text(p)),
+                ],
+                onChanged: (v) => setState(() => _province = v),
+              ),
+            )
+          else
+            PostFormLabeledField(
+              label: 'State or region (optional)',
+              child: TextFormField(
+                controller: _regionController,
+                textCapitalization: TextCapitalization.words,
+                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                decoration: postFormFilledDecoration(
+                  icon: Icons.map_outlined,
+                  hint: 'e.g. Nairobi County',
+                ),
+              ),
+            ),
           const SizedBox(height: 18),
           PostFormLabeledField(
             label: 'Capacity (optional)',
@@ -720,7 +794,7 @@ class _PostEventScreenState extends State<PostEventScreen>
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: postFormFilledDecoration(
                 icon: Icons.phone_outlined,
-                hint: '+263 77 123 4567',
+                hint: Countries.phoneHint(_country),
               ),
             ),
           ),

@@ -3,12 +3,15 @@ import '../../widgets/screen_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/countries.dart';
 import '../../models/seller_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/country_picker_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 /// The "Open a store" form. Self-serve as of patch_022 — anyone
@@ -41,6 +44,10 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
   final _paymentMethodsController = TextEditingController();
   final _deliveryAreaController = TextEditingController();
   final _deliveryFeeController = TextEditingController();
+
+  /// Free-text region for non-ZW stores. Shares the `province` column with
+  /// [_selectedProvince]; see [_regionValue].
+  final _regionController = TextEditingController();
   final _sabbathNoticeController = TextEditingController(
     text:
         '🕊️ This seller observes the Sabbath. Response times may be slower Friday sundown to Saturday sundown.',
@@ -51,6 +58,11 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
   late final Animation<double> _slide;
 
   String? _selectedCategory;
+
+  /// ISO 3166-1 alpha-2, seeded from the applicant's own profile. This is
+  /// the field that decides which country every product this store lists
+  /// will be filed under, so getting it right here is the whole point.
+  String? _country = AuthService.currentCountry();
   String? _selectedProvince;
   String? _photoUrl;
   String? _coverUrl;
@@ -74,6 +86,28 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
     );
   }
 
+  /// Zimbabwe is the one country with a real province list in this app
+  /// (`sellerProvinces`). Everywhere else the same column takes free text.
+  bool get _isZimbabwe => _country == 'ZW';
+
+  /// What goes in the `province` column: the dropdown in Zimbabwe, the
+  /// free-text region anywhere else, null when neither is filled.
+  String? get _regionValue {
+    if (_isZimbabwe) return _selectedProvince;
+    final typed = _regionController.text.trim();
+    return typed.isEmpty ? null : typed;
+  }
+
+  /// Changing country invalidates whichever location control is showing,
+  /// so the old value is dropped rather than carried across.
+  void _onCountryPicked(Country picked) {
+    setState(() {
+      _country = picked.code;
+      _selectedProvince = null;
+      _regionController.clear();
+    });
+  }
+
   @override
   void dispose() {
     _entrance.dispose();
@@ -88,6 +122,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
     _paymentMethodsController.dispose();
     _deliveryAreaController.dispose();
     _deliveryFeeController.dispose();
+    _regionController.dispose();
     _sabbathNoticeController.dispose();
     super.dispose();
   }
@@ -162,7 +197,10 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
       setState(() => _error = 'Pick a category for your store.');
       return;
     }
-    if (_selectedProvince == null) {
+    // Province stays mandatory in Zimbabwe, where the dropdown makes it one
+    // tap and every existing store has one. Elsewhere the region is
+    // optional — a Nairobi store has no Zimbabwean province to give.
+    if (_isZimbabwe && _selectedProvince == null) {
       setState(() => _error = 'Pick a province.');
       return;
     }
@@ -175,7 +213,8 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
         phone: _phoneController.text,
         termsVersion: widget.termsVersion,
         description: _descriptionController.text,
-        province: _selectedProvince,
+        country: _country,
+        province: _regionValue,
         city: _cityController.text,
         suburb: _suburbController.text,
         address: _addressController.text,
@@ -218,7 +257,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -307,17 +346,45 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
                       _SectionCard(
                         title: 'Location',
                         subtitle:
-                            'Buyers see your province + city on listings.',
+                            'Buyers see your country + city on listings.',
                         child: Column(
                           children: [
                             _LabeledField(
-                              label: 'Province',
-                              child: _ProvincePicker(
-                                selected: _selectedProvince,
-                                onChanged: (v) =>
-                                    setState(() => _selectedProvince = v),
+                              label: 'Country',
+                              helper: 'Where you trade',
+                              child: CountryFormField(
+                                code: _country,
+                                decoration: _filledDecoration(
+                                  icon: Icons.public,
+                                  hint: 'Choose a country',
+                                ),
+                                onChanged: _onCountryPicked,
                               ),
                             ),
+                            const SizedBox(height: 18),
+                            // Province is a Zimbabwean administrative unit —
+                            // offer the list only where it means something,
+                            // free text everywhere else.
+                            if (_isZimbabwe)
+                              _LabeledField(
+                                label: 'Province',
+                                child: _ProvincePicker(
+                                  selected: _selectedProvince,
+                                  onChanged: (v) =>
+                                      setState(() => _selectedProvince = v),
+                                ),
+                              )
+                            else
+                              _LabeledField(
+                                label: 'State or region (optional)',
+                                child: _Input(
+                                  controller: _regionController,
+                                  hint: 'e.g. Nairobi County',
+                                  icon: Icons.map_outlined,
+                                  textCapitalization:
+                                      TextCapitalization.words,
+                                ),
+                              ),
                             const SizedBox(height: 18),
                             _LabeledField(
                               label: 'City / town',
@@ -374,7 +441,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
                               label: 'Phone number',
                               child: _Input(
                                 controller: _phoneController,
-                                hint: '+263 77 123 4567',
+                                hint: Countries.phoneHint(_country),
                                 icon: Icons.phone_outlined,
                                 keyboardType: TextInputType.phone,
                                 validator: _validatePhone,
@@ -390,7 +457,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
                               label: 'WhatsApp number (optional)',
                               child: _Input(
                                 controller: _whatsappController,
-                                hint: '+263 77 123 4567',
+                                hint: Countries.phoneHint(_country),
                                 icon: Icons.chat_bubble_outline,
                                 keyboardType: TextInputType.phone,
                                 inputFormatters: [

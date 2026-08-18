@@ -463,7 +463,7 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: NotificationListener<UserScrollNotification>(
         onNotification: handleNavScroll,
         child: BrandedRefreshIndicator(
@@ -532,6 +532,24 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
   /// data, churches from the followed set. "Prayers" is deliberately
   /// absent — nothing in this screen's data tells us how many prayers the
   /// user has posted, and a fabricated stat is worse than a missing one.
+  /// The member's home church name, or null if they haven't set one.
+  ///
+  /// `profiles.church_id` is mirrored into auth metadata, and the app's own
+  /// rule is that the followed set IS the home church (you cannot follow
+  /// others) — so match on the id where the metadata has it and fall back
+  /// to the single followed church when it doesn't.
+  String? get _homeChurchName {
+    final id = AuthService.currentUser?.userMetadata?['church_id']
+        ?.toString()
+        .trim();
+    if (id != null && id.isNotEmpty) {
+      for (final c in _myChurches) {
+        if (c.id == id) return c.name;
+      }
+    }
+    return _myChurches.isEmpty ? null : _myChurches.first.name;
+  }
+
   Widget _buildInlineStats() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -551,9 +569,13 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
               onTap: () => setState(() => _tabIndex = 0),
             ),
             _StatDivider(),
-            _StatCell(
-              value: _churchesFollowed,
-              label: _churchesFollowed == 1 ? 'Church' : 'Churches',
+            // The NAME, not a count. "Churches: 1" was true and useless —
+            // you can only belong to one home church, so the number was
+            // always 1 or 0 and told the member nothing they didn't know.
+            // Which church they are part of is the thing worth showing.
+            _StatCell.text(
+              text: _homeChurchName ?? 'Not set',
+              label: 'Church',
               onTap: () => setState(() => _tabIndex = 3),
             ),
             _StatDivider(),
@@ -1873,14 +1895,27 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
 /// its label beneath. [onTap] is null where no destination exists, and
 /// the cell then renders identically but inert.
 class _StatCell extends StatelessWidget {
-  const _StatCell({required this.value, required this.label, this.onTap});
+  const _StatCell({required this.value, required this.label, this.onTap})
+    : text = null;
+
+  /// A cell whose figure is a word rather than a number — the home church
+  /// name. Set smaller and over two lines, because "Avondale SDA Church"
+  /// in a quarter of a phone's width has nowhere near the room a count
+  /// needs, and truncating it to "Avo…" would defeat the point of showing
+  /// it at all.
+  const _StatCell.text({required this.text, required this.label, this.onTap})
+    : value = 0;
 
   final int value;
+
+  /// When non-null this is rendered instead of [value].
+  final String? text;
   final String label;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final isText = text != null;
     return Expanded(
       child: Material(
         color: Colors.transparent,
@@ -1892,12 +1927,15 @@ class _StatCell extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  '$value',
+                  isText ? text! : '$value',
+                  textAlign: TextAlign.center,
+                  maxLines: isText ? 2 : 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.headlineMedium.copyWith(
                     color: context.palette.text,
                     fontWeight: FontWeight.w800,
-                    fontSize: 19,
-                    height: 1.1,
+                    fontSize: isText ? 11.5 : 19,
+                    height: isText ? 1.25 : 1.1,
                   ),
                 ),
                 const SizedBox(height: 3),

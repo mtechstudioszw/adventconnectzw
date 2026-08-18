@@ -322,7 +322,7 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: _loading
           ? Column(
               children: [

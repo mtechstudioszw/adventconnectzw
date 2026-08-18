@@ -101,7 +101,7 @@ class _LibraryBootScreenState extends State<LibraryBootScreen> {
     final palette = context.palette;
     return Scaffold(
       key: const ValueKey('library_boot'),
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Center(
           child: Padding(

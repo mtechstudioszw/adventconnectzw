@@ -173,8 +173,13 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
   }
 }
 
-/// The tappable "Country" row used on forms. Mirrors the look of the
-/// surrounding text fields so it doesn't read as a different kind of input.
+/// The tappable "Country" row used on the account screens (onboarding step
+/// 1, Edit profile). Paints its own box on `palette.inputFill`.
+///
+/// For a *post* form — add product, post job, open a store, suggest a church
+/// — use [CountryFormField] instead: those columns are `InputDecoration`
+/// fields with a border and a blue leading icon, and this plain box reads as
+/// a different kind of control next to them.
 class CountryField extends StatelessWidget {
   const CountryField({
     super.key,
@@ -225,6 +230,80 @@ class CountryField extends StatelessWidget {
                   color: country == null ? palette.textMuted : palette.text,
                   fontWeight: FontWeight.w500,
                 ),
+              ),
+            ),
+            Icon(Icons.expand_more, color: palette.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The "Country" row for the listing forms, drawn inside the caller's own
+/// [decoration] so it matches the fields above and below it exactly.
+///
+/// Every post form builds its inputs from a local decoration helper
+/// (`postFormFilledDecoration`, `_filledDecoration`, `_dec`) and they do not
+/// agree — some fill with `palette.inputFill`, others with
+/// `AppColors.surfaceMuted`. Rather than pick one and look wrong on three
+/// screens, this takes the decoration as a parameter and renders through
+/// `InputDecorator`, the same way `DropdownButtonFormField` does. Pass the
+/// screen's own helper and the country row is indistinguishable from a text
+/// field.
+///
+/// [onChanged] fires only on an actual selection — dismissing the sheet
+/// leaves the current value alone, it never clears it.
+class CountryFormField extends StatelessWidget {
+  const CountryFormField({
+    super.key,
+    required this.code,
+    required this.decoration,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final String? code;
+  final InputDecoration decoration;
+  final ValueChanged<Country> onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final country = Countries.byCode(code);
+
+    return InkWell(
+      onTap: enabled
+          ? () async {
+              final picked = await showCountryPicker(
+                context,
+                selectedCode: code,
+              );
+              if (picked != null) onChanged(picked);
+            }
+          : null,
+      borderRadius: BorderRadius.circular(14),
+      child: InputDecorator(
+        decoration: decoration,
+        // Lets the caller's own `hintText` show through while nothing is
+        // picked, exactly like the province dropdown this sits above.
+        isEmpty: country == null,
+        child: Row(
+          children: [
+            if (country != null) ...[
+              Text(country.flag, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(
+                // Empty rather than absent when unknown: the Text still
+                // occupies its line height, so the row doesn't shrink and
+                // jump when a country is chosen.
+                country?.name ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               ),
             ),
             Icon(Icons.expand_more, color: palette.textMuted),

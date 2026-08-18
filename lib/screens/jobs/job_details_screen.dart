@@ -561,7 +561,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: _buildBody(),
       bottomNavigationBar: const SafeArea(
         top: false,

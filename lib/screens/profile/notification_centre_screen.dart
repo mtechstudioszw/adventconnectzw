@@ -270,7 +270,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   Widget build(BuildContext context) {
     final hasUnread = _items.any((n) => !n.isRead);
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _load,

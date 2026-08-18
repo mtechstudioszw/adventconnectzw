@@ -95,7 +95,7 @@ class _SabbathTimerScreenState extends State<SabbathTimerScreen> {
         .toDouble();
 
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(

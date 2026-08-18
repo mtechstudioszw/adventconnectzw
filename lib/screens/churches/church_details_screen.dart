@@ -41,7 +41,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   String? _error;
   // The signed-in user's mandatory home church (profiles.church_id). You
   // can't unfollow it, and you can't follow OTHER churches — you change your
-  // home church (3-month cooldown) from your profile instead.
+  // home church (2-week cooldown, patch_215) from your profile instead.
   String? _homeChurchId;
   // The signed-in user's APPROVED admin role for this church (if any) →
   // shows the "Manage this church" button instead of the claim link.
@@ -128,12 +128,12 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     final church = _church;
     if (church == null) return;
 
-    // You can't unfollow your HOME church — you change it (every 3 months)
+    // You can't unfollow your HOME church — you change it (every 2 weeks)
     // from your profile, not by unfollowing here.
     if (_isFollowing && _isHomeChurch) {
       _churchToast(
         'This is your home church. Change it from your profile — '
-        'you can switch once every 3 months.',
+        'you can switch once every 2 weeks.',
       );
       return;
     }
@@ -195,7 +195,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(child: _buildBody()),
     );
   }

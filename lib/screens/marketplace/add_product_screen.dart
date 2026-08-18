@@ -2,15 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/countries.dart';
 import '../../models/seller_model.dart';
 import '../../models/product_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
+import '../../services/auth_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/country_picker_sheet.dart';
 import '../../widgets/marketplace/product_tile.dart';
 import '../../widgets/preview_sheet.dart';
 import '../widgets/post_form_widgets.dart';
@@ -38,6 +41,11 @@ class _AddProductScreenState extends State<AddProductScreen>
   final _subcategoryController = TextEditingController();
   final _locationController = TextEditingController();
 
+  /// Free-text region for non-ZW listings — a "state / region" is the only
+  /// honest equivalent of a Zimbabwean province once you leave Zimbabwe.
+  /// Shares the `province` column with [_province]; see [_regionValue].
+  final _regionController = TextEditingController();
+
   late final AnimationController _entrance;
   late final Animation<double> _fade;
   late final Animation<double> _slide;
@@ -45,6 +53,10 @@ class _AddProductScreenState extends State<AddProductScreen>
   String _category = 'other';
   String _currency = 'USD';
   String _condition = 'new';
+
+  /// ISO 3166-1 alpha-2. Never null in practice — seeded in [initState]
+  /// from the listing being edited, else from the seller's own profile.
+  String? _country;
   String? _province;
   bool _saving = false;
   bool _uploadingPhotos = false;
@@ -64,7 +76,21 @@ class _AddProductScreenState extends State<AddProductScreen>
     'other': 'Other',
   };
 
-  static const _currencies = ['USD', 'ZWL', 'ZAR'];
+  /// What the currency dropdown offers, driven by the country picked above
+  /// it. Zimbabwe keeps USD/ZWL/ZAR; everyone else gets their own currency
+  /// plus USD. The DB stopped enforcing the old three-value list in
+  /// patch_217, so this is now the only thing deciding what a seller sees.
+  ///
+  /// The current selection is always included, even when the country would
+  /// not suggest it. `DropdownButtonFormField` asserts when its value is
+  /// absent from its items, so an existing listing priced in something the
+  /// seller's country no longer offers has to stay renderable — the edit
+  /// screen must open, not crash, on a listing made under other rules.
+  List<String> get _currencyChoices {
+    final choices = Countries.currencyChoices(_country);
+    if (choices.contains(_currency)) return choices;
+    return <String>[_currency, ...choices];
+  }
 
   static const _conditions = <String, String>{
     'new': 'New',
@@ -112,6 +138,46 @@ class _AddProductScreenState extends State<AddProductScreen>
       _currency = p.currency;
       if (p.imageUrls.isNotEmpty) _photoUrls.addAll(p.imageUrls);
     }
+    // Country first, then the province/region that hangs off it. Editing
+    // keeps whatever the listing already says; a new listing starts on the
+    // seller's own country so most people never open the picker.
+    _country = p?.country ?? AuthService.currentCountry();
+    if (_isZimbabwe) {
+      _province = p?.province;
+    } else {
+      _regionController.text = p?.province ?? '';
+    }
+  }
+
+  /// Zimbabwe is the one country this app has a real administrative list
+  /// for, and `_provinces` is that list. Everywhere else gets free text —
+  /// shipping a half-remembered county list for 200 countries would be
+  /// worse than a text box.
+  bool get _isZimbabwe => _country == 'ZW';
+
+  /// What actually goes in the `province` column: the dropdown in Zimbabwe,
+  /// the free-text region anywhere else, null when neither is filled.
+  String? get _regionValue {
+    if (_isZimbabwe) return _province;
+    final typed = _regionController.text.trim();
+    return typed.isEmpty ? null : typed;
+  }
+
+  /// Swapping country invalidates whichever location control is on screen,
+  /// so the old value is dropped rather than carried across. "Harare" must
+  /// not survive a switch to Kenya — that is the bad data this form is
+  /// here to stop.
+  void _onCountryPicked(Country picked) {
+    setState(() {
+      _country = picked.code;
+      _province = null;
+      _regionController.clear();
+      // Follow the country with the currency. Someone switching to Kenya
+      // means KES, not the USD left over from the default — and leaving a
+      // stale ZWL selected on a Kenyan listing is the same class of wrong
+      // data as leaving "Harare" in the province.
+      _currency = Countries.currencyChoices(picked.code).first;
+    });
   }
 
   Future<void> _loadSeller() async {
@@ -136,6 +202,7 @@ class _AddProductScreenState extends State<AddProductScreen>
     _priceController.dispose();
     _subcategoryController.dispose();
     _locationController.dispose();
+    _regionController.dispose();
     super.dispose();
   }
 
@@ -160,7 +227,8 @@ class _AddProductScreenState extends State<AddProductScreen>
       imageUrls: List.unmodifiable(_photoUrls),
       createdAt: DateTime.now(),
       condition: _condition,
-      province: _province,
+      country: _country,
+      province: _regionValue,
       location: _locationController.text.trim().isEmpty
           ? null
           : _locationController.text.trim(),
@@ -205,6 +273,8 @@ class _AddProductScreenState extends State<AddProductScreen>
               ? null
               : _descriptionController.text,
           imageUrls: List.unmodifiable(_photoUrls),
+          country: _country,
+          province: _regionValue,
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -229,7 +299,8 @@ class _AddProductScreenState extends State<AddProductScreen>
               ? null
               : _subcategoryController.text,
           condition: _condition,
-          province: _province,
+          country: _country,
+          province: _regionValue,
           location: _locationController.text.isEmpty
               ? null
               : _locationController.text,
@@ -263,7 +334,7 @@ class _AddProductScreenState extends State<AddProductScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -479,7 +550,7 @@ class _AddProductScreenState extends State<AddProductScreen>
                     icon: Icons.attach_money,
                     hint: 'USD',
                     value: _currency,
-                    items: _currencies
+                    items: _currencyChoices
                         .map(
                           (c) => DropdownMenuItem(
                             value: c,
@@ -573,22 +644,52 @@ class _AddProductScreenState extends State<AddProductScreen>
           ),
           const SizedBox(height: 18),
           PostFormLabeledField(
-            label: 'Province',
-            child: _Dropdown<String?>(
-              icon: Icons.map_outlined,
-              hint: 'Choose a province',
-              value: _province,
-              items: [
-                const DropdownMenuItem(
-                  value: null,
-                  child: Text('Not specified'),
-                ),
-                for (final p in _provinces)
-                  DropdownMenuItem(value: p, child: Text(p)),
-              ],
-              onChanged: (v) => setState(() => _province = v),
+            label: 'Country',
+            helper: 'Where buyers collect',
+            child: CountryFormField(
+              code: _country,
+              decoration: postFormFilledDecoration(
+                icon: Icons.public,
+                hint: 'Choose a country',
+              ),
+              onChanged: _onCountryPicked,
             ),
           ),
+          const SizedBox(height: 18),
+          // Province is a Zimbabwean administrative unit, so it only makes
+          // sense on Zimbabwean listings. Everywhere else the same column
+          // takes free text.
+          if (_isZimbabwe)
+            PostFormLabeledField(
+              label: 'Province',
+              child: _Dropdown<String?>(
+                icon: Icons.map_outlined,
+                hint: 'Choose a province',
+                value: _province,
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('Not specified'),
+                  ),
+                  for (final p in _provinces)
+                    DropdownMenuItem(value: p, child: Text(p)),
+                ],
+                onChanged: (v) => setState(() => _province = v),
+              ),
+            )
+          else
+            PostFormLabeledField(
+              label: 'State or region (optional)',
+              child: TextFormField(
+                controller: _regionController,
+                textCapitalization: TextCapitalization.words,
+                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                decoration: postFormFilledDecoration(
+                  icon: Icons.map_outlined,
+                  hint: 'e.g. Nairobi County',
+                ),
+              ),
+            ),
           const SizedBox(height: 18),
           PostFormLabeledField(
             label: 'City or area',
@@ -598,7 +699,10 @@ class _AddProductScreenState extends State<AddProductScreen>
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: postFormFilledDecoration(
                 icon: Icons.location_on_outlined,
-                hint: 'e.g. Harare CBD',
+                // Not "e.g. Harare CBD" — the hint is read as an example of
+                // what belongs here, and a Zimbabwean city named to a Kenyan
+                // seller reads as the app expecting Zimbabwean listings.
+                hint: 'e.g. city centre or suburb',
               ),
             ),
           ),

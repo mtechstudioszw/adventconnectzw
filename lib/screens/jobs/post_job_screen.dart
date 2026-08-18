@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/countries.dart';
 import '../../models/job_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
+import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/country_picker_sheet.dart';
 import '../widgets/post_form_widgets.dart';
 
 class PostJobScreen extends StatefulWidget {
@@ -34,6 +37,10 @@ class _PostJobScreenState extends State<PostJobScreen>
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
 
+  /// Free-text region for non-ZW postings. Shares the `province` column
+  /// with [_province]; see [_regionValue].
+  final _regionController = TextEditingController();
+
   late final AnimationController _entrance;
   late final Animation<double> _fade;
   late final Animation<double> _slide;
@@ -45,6 +52,10 @@ class _PostJobScreenState extends State<PostJobScreen>
   // matching and helps applicants self-select. Defaults to 'mid' so
   // the post matches the most common case.
   String _level = 'mid';
+
+  /// ISO 3166-1 alpha-2. Never null in practice — seeded in [initState]
+  /// from the job being edited, else from the poster's own profile.
+  String? _country;
   String? _province;
   bool _sabbathFriendly = false;
   bool _isSdaInstitution = false;
@@ -115,6 +126,37 @@ class _PostJobScreenState extends State<PostJobScreen>
       _postType = ex.postType;
       _level = ex.level;
     }
+    // Country first, then the province/region hanging off it. Edit mode
+    // used to leave both blank, so re-saving a job silently moved it to
+    // whatever province the poster happened to re-pick.
+    _country = ex?.country ?? AuthService.currentCountry();
+    if (_isZimbabwe) {
+      _province = ex?.province;
+    } else {
+      _regionController.text = ex?.province ?? '';
+    }
+  }
+
+  /// Zimbabwe is the one country with a real province list in this app
+  /// (`_provinces`). Everywhere else the same column takes free text.
+  bool get _isZimbabwe => _country == 'ZW';
+
+  /// What goes in the `province` column: the dropdown in Zimbabwe, the
+  /// free-text region anywhere else, null when neither is filled.
+  String? get _regionValue {
+    if (_isZimbabwe) return _province;
+    final typed = _regionController.text.trim();
+    return typed.isEmpty ? null : typed;
+  }
+
+  /// Changing country invalidates whichever location control is showing,
+  /// so the old value is dropped rather than carried across.
+  void _onCountryPicked(Country picked) {
+    setState(() {
+      _country = picked.code;
+      _province = null;
+      _regionController.clear();
+    });
   }
 
   @override
@@ -128,13 +170,18 @@ class _PostJobScreenState extends State<PostJobScreen>
     _locationController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _regionController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
-    if (_province == null) {
+    // Province stays mandatory in Zimbabwe, where the dropdown makes it one
+    // tap and every existing listing has one. Elsewhere the region is
+    // optional — patch_213 dropped the NOT NULL precisely because a Nairobi
+    // vacancy has no Zimbabwean province to give.
+    if (_isZimbabwe && _province == null) {
       setState(() => _error = 'Select a province.');
       return;
     }
@@ -146,7 +193,8 @@ class _PostJobScreenState extends State<PostJobScreen>
           title: _titleController.text,
           description: _descriptionController.text,
           category: _category,
-          province: _province!,
+          country: _country,
+          province: _regionValue,
           location: _locationController.text,
           company:
               _companyController.text.isEmpty ? null : _companyController.text,
@@ -176,7 +224,8 @@ class _PostJobScreenState extends State<PostJobScreen>
           jobType: _jobType,
           level: _level,
           salaryRange: _salaryController.text,
-          province: _province!,
+          country: _country,
+          province: _regionValue,
           location: _locationController.text,
           sabbathFriendly: _sabbathFriendly,
           isSdaInstitution: _isSdaInstitution,
@@ -212,7 +261,7 @@ class _PostJobScreenState extends State<PostJobScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -470,18 +519,46 @@ class _PostJobScreenState extends State<PostJobScreen>
       child: Column(
         children: [
           PostFormLabeledField(
-            label: 'Province',
-            child: _Dropdown<String?>(
-              icon: Icons.map_outlined,
-              hint: 'Choose a province',
-              value: _province,
-              items: [
-                for (final p in _provinces)
-                  DropdownMenuItem(value: p, child: Text(p)),
-              ],
-              onChanged: (v) => setState(() => _province = v),
+            label: 'Country',
+            child: CountryFormField(
+              code: _country,
+              decoration: postFormFilledDecoration(
+                icon: Icons.public,
+                hint: 'Choose a country',
+              ),
+              onChanged: _onCountryPicked,
             ),
           ),
+          const SizedBox(height: 18),
+          // Province is a Zimbabwean administrative unit — offer the list
+          // only where it means something, free text everywhere else.
+          if (_isZimbabwe)
+            PostFormLabeledField(
+              label: 'Province',
+              child: _Dropdown<String?>(
+                icon: Icons.map_outlined,
+                hint: 'Choose a province',
+                value: _province,
+                items: [
+                  for (final p in _provinces)
+                    DropdownMenuItem(value: p, child: Text(p)),
+                ],
+                onChanged: (v) => setState(() => _province = v),
+              ),
+            )
+          else
+            PostFormLabeledField(
+              label: 'State or region (optional)',
+              child: TextFormField(
+                controller: _regionController,
+                textCapitalization: TextCapitalization.words,
+                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                decoration: postFormFilledDecoration(
+                  icon: Icons.map_outlined,
+                  hint: 'e.g. Nairobi County',
+                ),
+              ),
+            ),
           const SizedBox(height: 18),
           PostFormLabeledField(
             label: 'Location',
@@ -544,7 +621,7 @@ class _PostJobScreenState extends State<PostJobScreen>
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: postFormFilledDecoration(
                 icon: Icons.phone_outlined,
-                hint: '+263 77 123 4567',
+                hint: Countries.phoneHint(_country),
               ),
             ),
           ),

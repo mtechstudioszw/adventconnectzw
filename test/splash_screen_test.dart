@@ -83,7 +83,13 @@ void main() {
 
       expect(t.takeException(), isNull);
       expect(find.text('Adventist\nSuper App'), findsOneWidget);
-      expect(find.text('TANATSWA MICHAEL MIKUWA'), findsOneWidget);
+      // The founder's name used to sit here. It is the mission now (18 Aug
+      // 2026): the last line read before the app opens should say what the
+      // app is for, not who built it.
+      expect(
+        find.text('Connecting Adventists all over the world'),
+        findsOneWidget,
+      );
     });
   }
 

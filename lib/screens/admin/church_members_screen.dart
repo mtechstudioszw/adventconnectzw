@@ -69,7 +69,7 @@ class _ChurchMembersScreenState extends State<ChurchMembersScreen> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           'Members',

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/countries.dart';
 import '../../models/order_model.dart';
 import '../../services/messaging_service.dart';
 import '../../services/order_service.dart';
@@ -36,8 +37,29 @@ class OrderHandoff {
       );
       return;
     }
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    // Normalised against the seller's own country — see
+    // Countries.toWhatsAppDigits. A seller who typed `0778 092 494` used to
+    // produce wa.me/0778092494, which opens an error page, and this handoff
+    // IS the transaction: a link that does not open loses the sale.
+    final digits = Countries.toWhatsAppDigits(
+      phone,
+      countryCode: order.sellerCountry,
+    );
     final message = OrderService.handoffMessage(order);
+    if (digits == null || digits.isEmpty) {
+      await Clipboard.setData(ClipboardData(text: message));
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.darkNavy,
+          content: Text(
+            'That number looks incomplete. Order details copied — send them '
+            'to $phone yourself.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+        ),
+      );
+      return;
+    }
     final uri = Uri.parse(
       'https://wa.me/$digits?text=${Uri.encodeComponent(message)}',
     );

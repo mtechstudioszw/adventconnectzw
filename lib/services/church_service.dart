@@ -204,7 +204,14 @@ class ChurchService {
   /// to nominate a new SDA church for the directory.
   static Future<void> suggestChurch({
     required String name,
-    required String province,
+    /// ISO 3166-1 alpha-2 (patch_214 adds the column here — patch_213
+    /// covered `churches` but missed this review inbox). Always send it:
+    /// the column DEFAULTs to 'ZW', and a suggestion filed under the wrong
+    /// country is one an admin will approve into the wrong directory.
+    String? country,
+    /// Province for ZW, free-text region elsewhere. Was required; the
+    /// column has always been nullable and a Kenyan church has no province.
+    String? province,
     String? city,
     String? suburb,
     String? pastorName,
@@ -217,7 +224,8 @@ class ChurchService {
     await _client.from('church_suggestions').insert({
       'suggested_by': user.id,
       'church_name': name.trim(),
-      'province': province,
+      'country': ?country,
+      'province': ?province,
       'city': ?city?.trim(),
       'suburb': ?suburb?.trim(),
       'pastor_name': ?pastorName?.trim(),

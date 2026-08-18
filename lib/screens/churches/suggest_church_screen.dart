@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/countries.dart';
 import '../../models/seller_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/church_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/country_picker_sheet.dart';
 import '../../widgets/screen_shell.dart';
 
 /// Lets users propose a new SDA church for the directory. Inserts into
@@ -26,9 +29,38 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
   final _pastorController = TextEditingController();
   final _phoneController = TextEditingController();
 
+  /// Free-text region for non-ZW churches. Shares the `province` column
+  /// with [_province]; see [_regionValue].
+  final _regionController = TextEditingController();
+
+  /// ISO 3166-1 alpha-2, seeded from the suggester's own profile — the
+  /// church they know about is almost always in their own country.
+  String? _country = AuthService.currentCountry();
   String? _province;
   bool _saving = false;
   String? _error;
+
+  /// Zimbabwe is the one country with a real province list in this app.
+  /// Everywhere else the same column takes free text.
+  bool get _isZimbabwe => _country == 'ZW';
+
+  /// What goes in the `province` column: the dropdown in Zimbabwe, the
+  /// free-text region anywhere else, null when neither is filled.
+  String? get _regionValue {
+    if (_isZimbabwe) return _province;
+    final typed = _regionController.text.trim();
+    return typed.isEmpty ? null : typed;
+  }
+
+  /// Changing country invalidates whichever location control is showing,
+  /// so the old value is dropped rather than carried across.
+  void _onCountryPicked(Country picked) {
+    setState(() {
+      _country = picked.code;
+      _province = null;
+      _regionController.clear();
+    });
+  }
 
   @override
   void dispose() {
@@ -37,13 +69,17 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
     _suburbController.dispose();
     _pastorController.dispose();
     _phoneController.dispose();
+    _regionController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
-    if (_province == null) {
+    // Province stays mandatory in Zimbabwe, where the dropdown makes it one
+    // tap. Elsewhere it is optional — a Kenyan church has no Zimbabwean
+    // province, and demanding one is what kept this form ZW-only.
+    if (_isZimbabwe && _province == null) {
       setState(() => _error = 'Pick the province.');
       return;
     }
@@ -51,7 +87,8 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
     try {
       await ChurchService.suggestChurch(
         name: _nameController.text,
-        province: _province!,
+        country: _country,
+        province: _regionValue,
         city: _cityController.text,
         suburb: _suburbController.text,
         pastorName: _pastorController.text,
@@ -79,7 +116,7 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -119,37 +156,66 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                             ),
                           ),
                           const SizedBox(height: 18),
-                          _Label(text: 'Province'),
+                          _Label(text: 'Country'),
                           const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            initialValue: _province,
-                            isExpanded: true,
-                            icon:  Icon(
-                              Icons.expand_more,
-                              color: AppColors.textMuted,
+                          CountryFormField(
+                            code: _country,
+                            decoration: _dec(
+                              hint: 'Choose a country',
+                              icon: Icons.public,
                             ),
-                            style: AppTextStyles.bodyLarge
-                                .copyWith(fontSize: 15),
-                            hint: Text(
-                              'Choose a province',
-                              style: AppTextStyles.bodyLarge.copyWith(
+                            onChanged: _onCountryPicked,
+                          ),
+                          const SizedBox(height: 18),
+                          // Province is a Zimbabwean administrative unit —
+                          // offer the list only where it means something,
+                          // free text everywhere else.
+                          if (_isZimbabwe) ...[
+                            _Label(text: 'Province'),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              initialValue: _province,
+                              isExpanded: true,
+                              icon:  Icon(
+                                Icons.expand_more,
                                 color: AppColors.textMuted,
-                                fontSize: 15,
+                              ),
+                              style: AppTextStyles.bodyLarge
+                                  .copyWith(fontSize: 15),
+                              hint: Text(
+                                'Choose a province',
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: AppColors.textMuted,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              items: [
+                                for (final p in sellerProvinces)
+                                  DropdownMenuItem<String>(
+                                    value: p,
+                                    child: Text(p),
+                                  ),
+                              ],
+                              decoration: _dec(
+                                hint: 'Choose a province',
+                                icon: Icons.map_outlined,
+                              ),
+                              onChanged: (v) => setState(() => _province = v),
+                            ),
+                          ] else ...[
+                            _Label(text: 'State or region (optional)'),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _regionController,
+                              textCapitalization: TextCapitalization.words,
+                              style: AppTextStyles.bodyLarge
+                                  .copyWith(fontSize: 15),
+                              decoration: _dec(
+                                hint: 'e.g. Nairobi County',
+                                icon: Icons.map_outlined,
                               ),
                             ),
-                            items: [
-                              for (final p in sellerProvinces)
-                                DropdownMenuItem<String>(
-                                  value: p,
-                                  child: Text(p),
-                                ),
-                            ],
-                            decoration: _dec(
-                              hint: 'Choose a province',
-                              icon: Icons.map_outlined,
-                            ),
-                            onChanged: (v) => setState(() => _province = v),
-                          ),
+                          ],
                           const SizedBox(height: 18),
                           _Label(text: 'City / town'),
                           const SizedBox(height: 8),
@@ -216,7 +282,7 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                             style: AppTextStyles.bodyLarge
                                 .copyWith(fontSize: 15),
                             decoration: _dec(
-                              hint: '+263 77 123 4567',
+                              hint: Countries.phoneHint(_country),
                               icon: Icons.phone_outlined,
                             ),
                           ),

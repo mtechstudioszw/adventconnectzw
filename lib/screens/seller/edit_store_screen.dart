@@ -3,12 +3,14 @@ import '../../widgets/screen_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/countries.dart';
 import '../../models/seller_model.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/country_picker_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/motion/brand_spinner.dart';
 
@@ -43,11 +45,20 @@ class _EditStoreScreenState extends State<EditStoreScreen>
   final _deliveryFeeController = TextEditingController();
   final _sabbathNoticeController = TextEditingController();
 
+  /// Free-text region for non-ZW stores. Shares the `province` column with
+  /// [_selectedProvince]; see [_regionValue].
+  final _regionController = TextEditingController();
+
   late final AnimationController _entrance;
   late final Animation<double> _fade;
   late final Animation<double> _slide;
 
   Seller? _seller;
+
+  /// ISO 3166-1 alpha-2. This screen is the ONLY way an existing seller can
+  /// correct the 'ZW' that patch_213 backfilled onto every pre-rebrand
+  /// store, so it has to be editable here, not just at signup.
+  String? _country;
   String? _selectedProvince;
   String? _photoUrl;
   String? _coverUrl;
@@ -60,6 +71,28 @@ class _EditStoreScreenState extends State<EditStoreScreen>
   bool _saving = false;
   bool _deleting = false;
   String? _error;
+
+  /// Zimbabwe is the one country with a real province list in this app
+  /// (`sellerProvinces`). Everywhere else the same column takes free text.
+  bool get _isZimbabwe => _country == 'ZW';
+
+  /// What goes in the `province` column: the dropdown in Zimbabwe, the
+  /// free-text region anywhere else, null when neither is filled.
+  String? get _regionValue {
+    if (_isZimbabwe) return _selectedProvince;
+    final typed = _regionController.text.trim();
+    return typed.isEmpty ? null : typed;
+  }
+
+  /// Changing country invalidates whichever location control is showing,
+  /// so the old value is dropped rather than carried across.
+  void _onCountryPicked(Country picked) {
+    setState(() {
+      _country = picked.code;
+      _selectedProvince = null;
+      _regionController.clear();
+    });
+  }
 
   @override
   void initState() {
@@ -91,6 +124,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
     _deliveryAreaController.dispose();
     _deliveryFeeController.dispose();
     _sabbathNoticeController.dispose();
+    _regionController.dispose();
     super.dispose();
   }
 
@@ -125,7 +159,13 @@ class _EditStoreScreenState extends State<EditStoreScreen>
       _sabbathNoticeController.text =
           seller.sabbathNoticeText ??
           '🕊️ This seller observes the Sabbath. Response times may be slower Friday sundown to Saturday sundown.';
-      _selectedProvince = seller.province;
+      // Country first, then whichever location control hangs off it.
+      _country = seller.country ?? Countries.defaultCode;
+      if (_isZimbabwe) {
+        _selectedProvince = seller.province;
+      } else {
+        _regionController.text = seller.province ?? '';
+      }
       _photoUrl = seller.profilePhotoUrl;
       _coverUrl = seller.coverPhotoUrl;
       _offersDelivery = seller.offersDelivery;
@@ -243,7 +283,10 @@ class _EditStoreScreenState extends State<EditStoreScreen>
     setState(() => _error = null);
     if (_seller == null) return;
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedProvince == null) {
+    // Province stays mandatory in Zimbabwe, where the dropdown makes it one
+    // tap. Elsewhere the region is optional — a Nairobi store has no
+    // Zimbabwean province to give.
+    if (_isZimbabwe && _selectedProvince == null) {
       setState(() => _error = 'Pick a province.');
       return;
     }
@@ -255,7 +298,8 @@ class _EditStoreScreenState extends State<EditStoreScreen>
         sellerId: _seller!.id,
         businessName: _businessNameController.text,
         description: _descriptionController.text,
-        province: _selectedProvince,
+        country: _country,
+        province: _regionValue,
         city: _cityController.text,
         suburb: _suburbController.text,
         address: _addressController.text,
@@ -346,7 +390,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -440,16 +484,42 @@ class _EditStoreScreenState extends State<EditStoreScreen>
           const SizedBox(height: 16),
           _SectionCard(
             title: 'Location',
-            subtitle: 'Buyers see your province + city on listings.',
+            subtitle: 'Buyers see your country + city on listings.',
             child: Column(
               children: [
                 _LabeledField(
-                  label: 'Province',
-                  child: _ProvincePicker(
-                    selected: _selectedProvince,
-                    onChanged: (v) => setState(() => _selectedProvince = v),
+                  label: 'Country',
+                  helper: 'Where you trade',
+                  child: CountryFormField(
+                    code: _country,
+                    decoration: _filledDecoration(
+                      icon: Icons.public,
+                      hint: 'Choose a country',
+                    ),
+                    onChanged: _onCountryPicked,
                   ),
                 ),
+                const SizedBox(height: 18),
+                // Province is a Zimbabwean administrative unit — offer the
+                // list only where it means something, free text elsewhere.
+                if (_isZimbabwe)
+                  _LabeledField(
+                    label: 'Province',
+                    child: _ProvincePicker(
+                      selected: _selectedProvince,
+                      onChanged: (v) => setState(() => _selectedProvince = v),
+                    ),
+                  )
+                else
+                  _LabeledField(
+                    label: 'State or region (optional)',
+                    child: _Input(
+                      controller: _regionController,
+                      hint: 'e.g. Nairobi County',
+                      icon: Icons.map_outlined,
+                      textCapitalization: TextCapitalization.words,
+                    ),
+                  ),
                 const SizedBox(height: 18),
                 _LabeledField(
                   label: 'City / town',
@@ -504,7 +574,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
                   label: 'Phone number',
                   child: _Input(
                     controller: _phoneController,
-                    hint: '+263 77 123 4567',
+                    hint: Countries.phoneHint(_country),
                     icon: Icons.phone_outlined,
                     keyboardType: TextInputType.phone,
                     validator: _validatePhone,
@@ -518,7 +588,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
                   label: 'WhatsApp number (optional)',
                   child: _Input(
                     controller: _whatsappController,
-                    hint: '+263 77 123 4567',
+                    hint: Countries.phoneHint(_country),
                     icon: Icons.chat_bubble_outline,
                     keyboardType: TextInputType.phone,
                     inputFormatters: [

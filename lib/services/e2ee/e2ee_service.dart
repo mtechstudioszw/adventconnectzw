@@ -473,6 +473,108 @@ class E2eeService {
     await _store?.clearIdentityChange(peerUserId);
   }
 
+  /// Signal's iteration count for the numeric fingerprint.
+  ///
+  /// NOT a tunable. The digits are the output of this many SHA-512
+  /// rounds, so changing it changes every security code in the app — two
+  /// members on different app versions would compare codes, see a
+  /// mismatch, and conclude they were being intercepted when they were
+  /// not. It matches Signal's 5200 so the numbers are comparable with
+  /// every other implementation of the same spec.
+  static const int _fingerprintIterations = 5200;
+
+  /// Version tag baked into the *scannable* (QR) half of the fingerprint.
+  /// The 60 digits do not depend on it; kept separate from [wireVersion]
+  /// so bumping the message wire format cannot silently move it.
+  static const int _fingerprintVersion = 1;
+
+  /// The security code for the conversation with [peerUserId] — 60 digits,
+  /// grouped for reading aloud — or null when there is nothing to compare.
+  ///
+  /// This is Signal's "safety number": a hash over BOTH identity public
+  /// keys. Both phones derive the same digits because the generator sorts
+  /// the two halves, which is the whole point — the members read it to
+  /// each other over a channel an attacker does not control, and a
+  /// mismatch means somebody is sitting in the middle re-encrypting.
+  ///
+  /// Returns null rather than a placeholder string when this device has
+  /// never held the peer's identity key. A code shown in that state would
+  /// be derived from our own key alone and would never match theirs, so
+  /// the UI must say "not available yet" — a wrong code is worse than no
+  /// code, because members are told to act on a mismatch.
+  ///
+  /// Async and not cheap (5200 SHA-512 rounds per side): call it once and
+  /// hold the result, never from `build`.
+  static Future<String?> securityCode(String peerUserId) async {
+    final store = _store;
+    if (store == null || peerUserId.isEmpty) return null;
+    try {
+      final remote = await _peerIdentityKey(store, peerUserId);
+      if (remote == null) return null;
+      final local = (await store.getIdentityKeyPair()).getPublicKey();
+      final fingerprint = NumericFingerprintGenerator(_fingerprintIterations)
+          .createFor(
+            _fingerprintVersion,
+            Uint8List.fromList(utf8.encode(store.userId)),
+            local,
+            Uint8List.fromList(utf8.encode(peerUserId)),
+            remote,
+          );
+      return _groupDigits(
+        fingerprint.displayableFingerprint.getDisplayText(),
+      );
+    } catch (e, st) {
+      debugPrint('E2eeService.securityCode failed: $e\n$st');
+      return null;
+    }
+  }
+
+  /// The peer's identity public key, preferring the one we have actually
+  /// been talking to over whatever the directory currently advertises.
+  ///
+  /// That order matters: a session's stored identity is the key this
+  /// device has been encrypting to, so it is the one a mismatch would
+  /// expose. Reading the directory first would paper over exactly the
+  /// swap the security code exists to reveal. The directory is only a
+  /// fallback so the code is visible before the first message is sent.
+  static Future<IdentityKey?> _peerIdentityKey(
+    E2eeStore store,
+    String peerUserId,
+  ) async {
+    final devices = await store.getSubDeviceSessions(peerUserId);
+    for (final deviceId in devices) {
+      final known = await store.getIdentity(_address(peerUserId, deviceId));
+      if (known != null) return known;
+    }
+    try {
+      final row = await _client
+          .from('e2ee_devices')
+          .select('identity_key')
+          .eq('user_id', peerUserId)
+          .order('device_id')
+          .limit(1)
+          .maybeSingle();
+      final encoded = row?['identity_key']?.toString() ?? '';
+      if (encoded.isEmpty) return null;
+      return IdentityKey.fromBytes(base64Decode(encoded), 0);
+    } catch (e) {
+      debugPrint('E2eeService._peerIdentityKey: $e');
+      return null;
+    }
+  }
+
+  /// 60 digits → four groups of five per line, three lines. Signal's
+  /// layout, and the reason is legibility under pressure: nobody reads a
+  /// 60-digit run aloud correctly, and this is read aloud by design.
+  static String _groupDigits(String digits) {
+    final out = StringBuffer();
+    for (var i = 0; i < digits.length; i += 5) {
+      if (i > 0) out.write(i % 20 == 0 ? '\n' : '  ');
+      out.write(digits.substring(i, min(i + 5, digits.length)));
+    }
+    return out.toString();
+  }
+
   /// The inbox preview for [conversationId], decrypted, from this
   /// device's own store.
   ///

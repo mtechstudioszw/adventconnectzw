@@ -95,6 +95,11 @@ class SellerService {
     required String phone,
     required String termsVersion,
     String? description,
+    /// ISO 3166-1 alpha-2 (patch_213). Always send it — the column DEFAULTs
+    /// to 'ZW', so a store opened from Nairobi without this is filed under
+    /// Zimbabwe and every product it lists inherits the mistake.
+    String? country,
+    /// Province for ZW, free-text region elsewhere. Nullable since 213.
     String? province,
     String? city,
     String? suburb,
@@ -119,6 +124,7 @@ class SellerService {
       'business_name': businessName.trim(),
       'category': category,
       'description': description?.trim(),
+      'country': country,
       'province': province,
       'city': city?.trim(),
       'suburb': suburb?.trim(),
@@ -169,6 +175,10 @@ class SellerService {
     required String sellerId,
     String? businessName,
     String? description,
+    /// ISO 3166-1 alpha-2 (patch_213). Also the only way an existing seller
+    /// can correct the 'ZW' the backfill gave them.
+    String? country,
+    /// Province for ZW, free-text region elsewhere. Travels with [country].
     String? province,
     String? city,
     String? suburb,
@@ -195,7 +205,13 @@ class SellerService {
     final updates = <String, dynamic>{
       'business_name': ?businessName?.trim(),
       'description': ?description?.trim(),
-      'province': ?province,
+      // Country and province are written as a pair. Note the asymmetry:
+      // country uses `?` because omitting it means "not editing location",
+      // but province is guarded on COUNTRY and goes in even when null —
+      // `?province` would skip the null and leave "Harare" on a store that
+      // just moved to Kenya. Callers not touching location pass neither.
+      'country': ?country,
+      if (country != null) 'province': province,
       'city': ?city?.trim(),
       'suburb': ?suburb?.trim(),
       'address': ?address?.trim(),
@@ -265,6 +281,12 @@ class SellerService {
     required String category,
     String? description,
     List<String>? imageUrls,
+    /// ISO 3166-1 alpha-2 (patch_213). The edit form shows a country
+    /// picker, so it has to be able to save one — without this the picker
+    /// would silently discard the change.
+    String? country,
+    /// Province for ZW, free-text region elsewhere.
+    String? province,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -281,6 +303,13 @@ class SellerService {
       'description': description?.trim(),
       // ignore: use_null_aware_elements
       if (imageUrls != null) 'image_urls': imageUrls,
+      // Location goes in as a pair. Note the asymmetry: country uses `?`
+      // because omitting it means "not editing location", but province is
+      // guarded on COUNTRY and written even when null — `?province` would
+      // skip the null and leave "Harare" sitting on a listing the seller
+      // just moved to Kenya, the exact bad data the picker exists to stop.
+      'country': ?country,
+      if (country != null) 'province': province?.trim(),
     };
     final updated = await _client
         .from(_productsTable)

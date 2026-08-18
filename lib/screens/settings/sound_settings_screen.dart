@@ -82,7 +82,7 @@ class _SoundSettingsScreenState extends State<SoundSettingsScreen> {
     final effectsOn = !QuizSfx.muted;
 
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         top: false,
         child: Column(

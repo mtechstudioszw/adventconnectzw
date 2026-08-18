@@ -12,6 +12,39 @@ import 'package:gal/gal.dart';
 class GalleryService {
   GalleryService._();
 
+  /// Ask once, not once per photo.
+  ///
+  /// Pulled out of [saveImageFromUrl] for [saveImagesFromUrls]: prompting
+  /// inside the loop would put a permission dialog between every pair of
+  /// photos in a nine-photo post.
+  static Future<bool> _ensureAccess() async {
+    if (await Gal.hasAccess(toAlbum: true)) return true;
+    return Gal.requestAccess(toAlbum: true);
+  }
+
+  /// Save every URL in [imageUrls], returning how many landed.
+  ///
+  /// Sequential on purpose. These are full-resolution photos off Supabase
+  /// Storage and a post can carry nine of them; firing them all at once on
+  /// the kind of mobile connection this app is mostly used on makes every
+  /// one of them slower and more likely to time out.
+  ///
+  /// Partial success is a real outcome and is reported as a count rather
+  /// than a bool — "3 of 5 saved" is something the member can act on,
+  /// where a bare failure after three successful writes is a lie.
+  static Future<int> saveImagesFromUrls(List<String> imageUrls) async {
+    final urls = imageUrls.where((u) => u.trim().isNotEmpty).toList();
+    if (urls.isEmpty) return 0;
+    // Checked up front so a denied permission costs one dialog, not N.
+    if (!await _ensureAccess()) return 0;
+
+    var saved = 0;
+    for (final url in urls) {
+      if (await saveImageFromUrl(url)) saved++;
+    }
+    return saved;
+  }
+
   /// Download [imageUrl] into the user's gallery under an album named
   /// "Adventist Super App". The album folder makes it easy to find later
   /// and keeps saved posts grouped together.
@@ -21,13 +54,9 @@ class GalleryService {
   /// auth, so a barebones client is enough.
   static Future<bool> saveImageFromUrl(String imageUrl) async {
     if (imageUrl.trim().isEmpty) return false;
+    if (!await _ensureAccess()) return false;
     HttpClient? client;
     try {
-      final hasAccess = await Gal.hasAccess(toAlbum: true);
-      if (!hasAccess) {
-        final granted = await Gal.requestAccess(toAlbum: true);
-        if (!granted) return false;
-      }
       final uri = Uri.parse(imageUrl);
       client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 15);

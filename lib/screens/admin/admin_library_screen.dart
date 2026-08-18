@@ -33,9 +33,8 @@ class _AdminLibraryScreenState extends State<AdminLibraryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           'Manage Library',
@@ -292,7 +291,7 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           widget.hymn == null ? 'New hymn' : 'Edit hymn',

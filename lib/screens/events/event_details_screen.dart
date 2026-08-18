@@ -160,7 +160,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: _buildBody(),
     );
   }

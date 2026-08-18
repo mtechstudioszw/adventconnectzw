@@ -31,7 +31,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   late final Animation<double> _slide;
 
   NotificationCategoryPrefs _categoryPrefs = NotificationCategoryPrefs.defaults;
-  String _language = 'English';
   bool _sabbathEnabled = SabbathService.isEnabled();
   bool _sabbathMode = SabbathService.sabbathModeEnabled();
   String _sabbathProvince = SabbathService.province() ?? 'Harare';
@@ -320,17 +319,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     await context.pushNamed('donate');
   }
 
-  Future<void> _pickLanguage() async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _LanguageSheet(selected: _language),
-    );
-    if (picked != null && mounted) {
-      setState(() => _language = picked);
-    }
-  }
-
   // Theme picker — kept available for the v1.1 dark-mode update.
   // The Settings row that triggers it is hidden in build() until
   // the remaining ~45 screens are migrated to context.palette.
@@ -474,14 +462,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         AppColors.primaryBlue,
         'theme dark light mode display',
         () => _pickTheme(),
-      ),
-      _SettingsEntry(
-        'Language',
-        'Preferences',
-        Icons.translate,
-        AppColors.primaryBlue,
-        'shona english translate locale',
-        () => _pickLanguage(),
       ),
       _SettingsEntry(
         'Sabbath province',
@@ -719,7 +699,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -919,13 +899,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                             onTap: _pickTheme,
                           ),
                           const _Divider(),
-                          _NavRow(
-                            icon: Icons.language,
-                            label: 'Language',
-                            trailing: _language,
-                            onTap: _pickLanguage,
-                          ),
-                          const _Divider(),
+                          // The app-language switcher is gone (18 Aug 2026).
+                          // It offered English / Shona / Ndebele and changed
+                          // nothing — the app has no translations, so it was
+                          // a setting that persisted a preference no screen
+                          // ever read. It also read as a promise the app
+                          // could not keep now that members outside Zimbabwe
+                          // are signing up. The Bible translation, Sabbath
+                          // School language (~90) and Hymnal language
+                          // pickers are separate and stay.
                           _ToggleRow(
                             icon: Icons.brightness_3,
                             label: 'Sabbath countdown',
@@ -1833,88 +1815,6 @@ class _ThemeSheet extends StatelessWidget {
                                   ),
                                 ),
                               ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LanguageSheet extends StatelessWidget {
-  const _LanguageSheet({required this.selected});
-  final String selected;
-
-  static const _options = ['English', 'Shona', 'Ndebele'];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Choose language',
-                style: AppTextStyles.headlineSmall.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-              for (final opt in _options) ...[
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => Navigator.pop(context, opt),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            opt == selected
-                                ? Icons.radio_button_checked
-                                : Icons.radio_button_unchecked,
-                            color: opt == selected
-                                ? AppColors.primaryBlue
-                                : AppColors.textMuted,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 14),
-                          Text(
-                            opt,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],

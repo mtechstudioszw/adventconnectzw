@@ -234,8 +234,13 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     final number = seller.whatsapp?.trim().isNotEmpty == true
         ? seller.whatsapp!
         : seller.phone;
-    final digits = number.replaceAll(RegExp(r'\D'), '');
-    if (digits.isEmpty) return;
+    // Normalised against the SELLER's country, not the buyer's — a Kenyan
+    // shop's `07…` has to become +254, whoever is looking at it.
+    final digits = Countries.toWhatsAppDigits(
+      number,
+      countryCode: seller.country,
+    );
+    if (digits == null || digits.isEmpty) return;
     // Open WhatsApp with the enquiry already written.
     //
     // This used to be a bare wa.me/<number> — the seller received a blank
@@ -410,7 +415,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
   Widget build(BuildContext context) {
     final seller = _seller;
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,
         onRefresh: _bootstrap,

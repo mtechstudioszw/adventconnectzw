@@ -236,7 +236,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       bottomNavigationBar: HideOnScroll(
         visible: navVisible,
         child: const Column(

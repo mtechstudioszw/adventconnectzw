@@ -42,7 +42,7 @@ class _UserInsightsScreenState extends State<UserInsightsScreen> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: Text(
           'User insights',

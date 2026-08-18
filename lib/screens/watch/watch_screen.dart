@@ -377,7 +377,7 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: NotificationListener<UserScrollNotification>(
         onNotification: handleNavScroll,
         child: ContentReveal(

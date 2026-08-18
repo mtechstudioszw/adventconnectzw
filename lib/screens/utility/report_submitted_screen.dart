@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../theme/app_colors.dart';
-import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
 /// Confirmation screen shown after submitting a report. Used by the
@@ -14,7 +13,7 @@ class ReportSubmittedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Center(
           child: Padding(

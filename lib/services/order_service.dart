@@ -106,7 +106,10 @@ class OrderService {
     try {
       final rows = await _client
           .from('sellers')
-          .select('auth_user_id, business_name, phone, whatsapp')
+          // `country` rides along so the WhatsApp handoff can turn a
+          // locally-typed number into something wa.me will open. Without
+          // it a Kenyan seller's `07…` is unreachable from the order.
+          .select('auth_user_id, business_name, phone, whatsapp, country')
           .inFilter('auth_user_id', ids);
       final byId = <String, Map<String, dynamic>>{
         for (final r in (rows as List))
@@ -134,6 +137,7 @@ class OrderService {
           sellerPhone: whatsapp?.isNotEmpty == true
               ? whatsapp
               : seller['phone'] as String?,
+          sellerCountry: seller['country'] as String?,
         );
       }).toList();
     } catch (_) {

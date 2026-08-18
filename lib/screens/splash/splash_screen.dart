@@ -518,13 +518,19 @@ class _SplashScreenState extends State<SplashScreen>
                             // and part of the "busy / AI-generated" feel).
                             _buildProgressBar(),
                             const SizedBox(height: 18),
+                            // The mission, not the maker. This line is the
+                            // last thing read before the app opens, and a
+                            // personal name there tells a new member
+                            // nothing about what they just installed.
+                            // Founder's call, 18 Aug 2026.
                             Text(
-                              'TANATSWA MICHAEL MIKUWA',
+                              'Connecting Adventists all over the world',
+                              textAlign: TextAlign.center,
                               style: AppTextStyles.labelSmall.copyWith(
-                                color: AppColors.text.withValues(alpha: 0.35),
-                                fontSize: 10,
+                                color: AppColors.text.withValues(alpha: 0.45),
+                                fontSize: 11,
                                 fontWeight: FontWeight.w500,
-                                letterSpacing: 2.0,
+                                letterSpacing: 0.3,
                               ),
                             ),
                           ],

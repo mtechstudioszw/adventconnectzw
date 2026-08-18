@@ -87,6 +87,24 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Deep links are handled by app_links (DeepLinkService), NOT
+                 by Flutter's built-in Router integration. Both were active,
+                 so every shared link was delivered TWICE: DeepLinkService
+                 pushed the right screen while the engine simultaneously
+                 handed go_router the raw
+                 `io.supabase.adventconnect://seller/<id>` as a location.
+                 go_router cannot match that — the type is in the HOST and
+                 the path is just the id — so it fell through to
+                 errorBuilder, and the "Route not found" page won the race.
+                 Every shared product and seller link opened to an error.
+
+                 Turning the engine's copy off leaves exactly one handler.
+                 Supabase's own login-callback is unaffected: supabase_flutter
+                 listens through app_links too, not through the Router. -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

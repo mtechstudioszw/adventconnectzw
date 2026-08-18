@@ -1,9 +1,10 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/countries.dart';
 import '../../config/share_config.dart';
 import '../../models/product_model.dart';
 import '../../services/analytics_service.dart';
@@ -184,7 +185,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       return;
     }
     AnalyticsService.marketplaceContact(int.tryParse(widget.productId) ?? 0);
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    // The listing's own country, which is the seller's — a `07…` typed by a
+    // Kenyan seller has to dial +254, not the buyer's code.
+    final digits = Countries.toWhatsAppDigits(
+      phone,
+      countryCode: _product?.country,
+    );
+    if (digits == null || digits.isEmpty) return;
     // Tag the actual listing, not just its title. A seller with forty
     // products and two called "Church shoes" can't act on a name alone —
     // the link opens the exact one, with its price and photos.
@@ -286,7 +293,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Widget build(BuildContext context) {
     final product = _product;
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       body: _buildBody(),
       bottomNavigationBar: product == null

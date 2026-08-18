@@ -5,7 +5,6 @@ import '../../services/hymn_service.dart';
 import '../../services/music_player_service.dart';
 import '../../services/usage_analytics.dart';
 import '../../theme/app_colors.dart';
-import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'bible_tab.dart';
 import 'egw_tab.dart';
@@ -75,9 +74,8 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     return Scaffold(
-      backgroundColor: palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       // No ads anywhere in the Library. It's devotional content — Bible,
       // Sabbath School, hymns, EGW writings and worship music — so it stays
       // ad-free like the prayer screens (the tester reported the bottom

@@ -284,13 +284,13 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
     final item = _item;
     if (item == null && _loading) {
       return Scaffold(
-        backgroundColor: context.palette.scaffoldBg,
+        backgroundColor: Colors.transparent,
         body: const Center(child: BrandSpinner(size: 30)),
       );
     }
     if (item == null) {
       return Scaffold(
-        backgroundColor: context.palette.scaffoldBg,
+        backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           leading: IconButton(
@@ -306,7 +306,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: context.palette.scaffoldBg,
+      backgroundColor: Colors.transparent,
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(child: _buildHero(item, context)),

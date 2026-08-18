@@ -2,7 +2,7 @@
 # How to install on your phone:
 #   1. Open https://github.com/mtechstudioszw/adventconnectzw/releases
 #   2. Find the "Latest debug build" release (auto-updated each push)
-#   3. Tap the `advent-connect-debug.apk` asset on your phone
+#   3. Tap the `adventist-super-app-debug.apk` asset on your phone
 #   4. Open the downloaded file → install. No extraction needed.
 #
 # To trigger a manual build without a code push:
@@ -129,7 +129,7 @@ jobs:
         run: |
           mkdir -p release
           cp build/app/outputs/flutter-apk/app-debug.apk \
-             release/advent-connect-debug.apk
+             release/adventist-super-app-debug.apk
 
       # NOTE: artifact upload removed in May 2026 — the free GitHub
       # plan caps Actions storage at 0.5 GB, and every retained APK
@@ -153,11 +153,11 @@ jobs:
             commit is what you're running.
 
             **Install on your phone:**
-            Tap `advent-connect-debug.apk` below to download → open it
+            Tap `adventist-super-app-debug.apk` below to download → open it
             from the notifications shade → install.
             (You may need to allow "Install unknown apps" for your
             browser the first time.)
-          files: release/advent-connect-debug.apk
+          files: release/adventist-super-app-debug.apk
           prerelease: true
           make_latest: false
 

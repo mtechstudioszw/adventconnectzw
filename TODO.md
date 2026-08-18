@@ -12,6 +12,29 @@ diagnosed or has a stated unknown — nothing is a guess.
       confirmed on **18 Aug that it has NOT been rotated** — both are still
       live and both are burned. No DB or Management-API work was done in
       the 18 Aug ads session for this reason; none was needed.
+- [ ] **Appodeal "Publish App" is at 67% — three gates, NONE of them code.**
+      Dashboard, 19 Aug: Privacy Policy, app-ads.txt, CMP.
+      - **CMP** — *"CMP not integrated yet. No valid consent string detected
+        in SDK requests from GDPR/CCPA zones."* This almost certainly means
+        **"no traffic yet"**, not a bug: no build containing the Appodeal
+        SDK has ever run, so the SDK has made zero requests and there is no
+        consent string for Appodeal to have seen. The code side is
+        deliberate — Stack Consent Manager ships INSIDE SDK 3.0+ and
+        gathers consent during `initialize()`, which is exactly why our own
+        UMP flow was DELETED (running both double-prompts the same user).
+        **Do not "fix" this by adding a second consent flow.** It can only
+        be confirmed by shipping a build and watching the dashboard.
+        - **Raise with Appodeal support BEFORE shipping:** their Google-CMP
+          guide expects a UMP privacy message, and UMP messages are
+          configured in the **AdMob** console — which is disapproved. If
+          Stack Consent Manager needs an AdMob-side message we may be
+          blocked on the appeal. Ask; do not assume either way.
+      - **Privacy Policy** — already published at
+        `mtechstudioszw.github.io/adventconnect-legal/privacy.html` (the URL
+        the Play listing points at). Likely just needs entering in the
+        Appodeal dashboard.
+      - **app-ads.txt** — the entry below. A publishing problem, not a
+        content problem.
 - [ ] **`app-ads.txt` IS NOT PUBLISHED. Revenue is still blocked.**
       The file is right and complete in the repo — 2,505 records in both
       `docs/app-ads.txt` and `legal-site/app-ads.txt`. **It is not what is

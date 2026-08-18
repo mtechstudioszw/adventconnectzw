@@ -110,6 +110,18 @@ class MarketplaceService {
   static Future<List<Product>> fetchProducts({
     String? search,
     String? category,
+    /// ISO 3166-1 alpha-2. Null means worldwide.
+    ///
+    /// The marketplace is country-scoped by default (founder, 18 Aug 2026)
+    /// because this app never handles the sale: handoff is WhatsApp plus
+    /// local pickup, so a listing in another country is one the buyer
+    /// cannot act on. Showing it is not generosity, it is noise — and it
+    /// mixes currencies in the grid for no reachable listing.
+    ///
+    /// Worldwide stays one tap away rather than being removed: the
+    /// diaspora genuinely does buy from home, and a member whose profile
+    /// country is wrong needs an escape hatch that is not "edit profile".
+    String? country,
   }) async {
     final approvedIds = await _fetchApprovedSellerIds();
     if (approvedIds.isEmpty) return const [];
@@ -119,6 +131,10 @@ class MarketplaceService {
         .select()
         .eq('status', 'available')
         .inFilter('seller_id', approvedIds.toList());
+
+    if (country != null && country.isNotEmpty) {
+      query = query.eq('country', country);
+    }
 
     if (category != null && category.isNotEmpty && category != 'all') {
       query = query.eq('category', category);

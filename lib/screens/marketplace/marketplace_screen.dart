@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/product_model.dart';
 import '../../models/seller_model.dart';
+import '../../config/countries.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/country_scope_toggle.dart';
 import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/marketplace_service.dart';
@@ -63,6 +65,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   List<Seller> _shops = const [];
   Set<String> _savedIds = <String>{};
   String _selectedCategory = 'all';
+
+  /// The marketplace shows the member's own country unless they ask for
+  /// worldwide. Handoff is WhatsApp plus local pickup, so a listing from
+  /// another country is one nobody can act on.
+  bool _worldwide = false;
+  final String _country = AuthService.currentCountry();
+
   String _query = '';
   bool _loading = true;
   String? _error;
@@ -153,13 +162,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
     try {
       final list = await MarketplaceService.fetchProducts(
         category: _selectedCategory,
+        country: _worldwide ? null : _country,
       );
       if (!mounted) return;
       setState(() {
         _products = list;
         _loading = false;
       });
-      if (_selectedCategory == 'all') unawaited(_writeCache(list));
+      // Scope counts as a filter for caching: a cached worldwide grid would
+      // greet the member with another country's listings on next launch.
+      if (_selectedCategory == 'all' && !_worldwide) {
+        unawaited(_writeCache(list));
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -311,6 +325,25 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               // only job was a grid of the same categories the chips below
               // already offer inline — a second way to do the same thing, one
               // navigation deeper.
+            ),
+          ),
+        ),
+        // Scope sits above the category chips and does NOT pin: it is a
+        // set-once decision, unlike categories which get flicked between
+        // while browsing. Pinning both would eat a third of a small screen.
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: CountryScopeToggle(
+                countryCode: _country,
+                worldwide: _worldwide,
+                onChanged: (v) {
+                  setState(() => _worldwide = v);
+                  _loadProducts();
+                },
+              ),
             ),
           ),
         ),
@@ -474,6 +507,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
 
   Widget _buildEmptyState() {
     final searching = _query.isNotEmpty;
+    // Empty *because of the country filter*, which is a different problem
+    // from an empty marketplace and needs a different way out.
+    final scoped = !_worldwide;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpace.xxl,
@@ -498,7 +534,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           ),
           const SizedBox(height: AppSpace.xl),
           Text(
-            searching ? 'Nothing matches "$_query"' : 'No products yet',
+            searching
+                ? 'Nothing matches "$_query"'
+                : scoped
+                ? 'Nothing listed in ${Countries.nameOf(_country)} yet'
+                : 'No products yet',
             textAlign: TextAlign.center,
             style: AppTextStyles.headlineMedium.copyWith(
               fontWeight: FontWeight.w700,
@@ -508,6 +548,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           Text(
             searching
                 ? 'Try a different word, or browse a category.'
+                : scoped
+                // Without this the first seller in a new country opens the
+                // marketplace, sees nothing, and concludes the app is
+                // broken — when in fact it is working exactly as intended
+                // and every existing listing is simply in Zimbabwe.
+                ? 'The marketplace shows your country by default. Switch to '
+                      'Worldwide above to see listings from everywhere.'
                 : 'Know an SDA business owner? Tell them about us.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
@@ -515,6 +562,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
               height: 1.5,
             ),
           ),
+          if (!searching && scoped) ...[
+            const SizedBox(height: AppSpace.xl),
+            TextButton.icon(
+              onPressed: () {
+                setState(() => _worldwide = true);
+                _loadProducts();
+              },
+              icon: const Icon(Icons.public, size: 18),
+              label: const Text('Browse worldwide'),
+            ),
+          ],
           if (!searching) ...[
             const SizedBox(height: AppSpace.xl),
             _BecomeSellerButton(onTap: () => _onBecomeSellerTapped(context)),

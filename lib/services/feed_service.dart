@@ -71,6 +71,20 @@ class FeedService {
     Set<String> friendIds = const {},
     Set<String> followedChurchIds = const {},
     DateTime? before,
+    /// The viewer's ISO 3166-1 alpha-2 country. Used to RANK, not to
+    /// filter: posts from here rise, posts from elsewhere still appear.
+    /// See the countryBoost note in [_personalisedScore].
+    String? viewerCountry,
+
+    /// Hard country filter — a deliberate "show me only my country", not
+    /// the default.
+    ///
+    /// Nothing in the app passes this today; the feed shows everyone and
+    /// leans local through [viewerCountry]. It exists because the founder
+    /// may want an explicit local-only view, and because the query shape
+    /// (an indexed `posts.country`, patch_218) should be proven before it
+    /// is needed rather than after.
+    String? onlyCountry,
   }) async {
     final viewer = _viewerId;
     // Over-fetch so the re-rank has actual signal to work with.
@@ -82,6 +96,9 @@ class FeedService {
           'post_likes(user_id, reaction), '
           'post_comments(id)',
         );
+    if (onlyCountry != null && onlyCountry.isNotEmpty) {
+      query = query.eq('country', onlyCountry);
+    }
     if (before != null) {
       query = query.lt('created_at', before.toUtc().toIso8601String());
     }
@@ -102,6 +119,7 @@ class FeedService {
           refreshNonce,
           friendIds: friendIds,
           followedChurchIds: followedChurchIds,
+          viewerCountry: viewerCountry,
         );
     posts.sort((a, b) => score(b).compareTo(score(a)));
     return _diversify(posts).take(limit).toList();
@@ -140,6 +158,7 @@ class FeedService {
     int nonce, {
     Set<String> friendIds = const {},
     Set<String> followedChurchIds = const {},
+    String? viewerCountry,
   }) {
     final ageHours =
         DateTime.now().difference(p.createdAt).inHours.toDouble();
@@ -164,6 +183,21 @@ class FeedService {
     // to almost any unseen post, but a seen post with real engagement can
     // still resurface — which is what you want when a thread gets busy after
     // you first saw it.
+    // Country is a BOOST, never a filter.
+    //
+    // The obvious implementation was to scope the feed to the viewer's
+    // country the way the marketplace is scoped. It is wrong here, and the
+    // difference is worth stating: a sofa in Harare genuinely cannot be
+    // collected from Boston, but a post from Harare reads perfectly well
+    // there. Scoping the feed would cut a Zimbabwean in Texas off from the
+    // exact people they installed this app to stay near — and with every
+    // post today coming from Zimbabwe, it would greet every new overseas
+    // member with an empty Home.
+    //
+    // 0.30 sits below churchBoost (0.35) and friendBoost (0.50) on purpose:
+    // someone you know abroad still outranks a stranger next door.
+    final countryBoost =
+        (viewerCountry != null && p.country == viewerCountry) ? 0.30 : 0.0;
     final seenPenalty = seenPostIdsCached().contains(p.id) ? -0.70 : 0.0;
     // Including the nonce in the seed means a fresh refresh hands
     // the user a different jittered order, even on identical content.
@@ -176,6 +210,7 @@ class FeedService {
         engagement +
         friendBoost +
         churchBoost +
+        countryBoost +
         jitter +
         seenPenalty +
         ownPenalty;

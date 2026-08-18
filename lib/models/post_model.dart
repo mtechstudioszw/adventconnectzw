@@ -43,6 +43,7 @@ class Post {
     this.authorPhotoUrl,
     this.authorIsVerified = false,
     this.churchId,
+    this.country,
     this.churchName,
     this.churchPhotoUrl,
     this.body,
@@ -65,6 +66,13 @@ class Post {
   /// When set, this post is branded as a church update (patch_141) — shows the
   /// church's name + gold tick instead of the individual author.
   final String? churchId;
+
+  /// Where the author was when they posted (patch_218 stamps it from their
+  /// profile). Used to RANK the feed, not to filter it — see
+  /// `FeedService._personalisedScore`. A post is readable from anywhere, so
+  /// hiding one because of a border would cut the diaspora off from home,
+  /// which is the opposite of what this app is for.
+  final String? country;
   final String? churchName;
 
   /// The church's logo (profile photo). Replaces the church icon on church
@@ -191,6 +199,7 @@ class Post {
       authorIsVerified: authorMap?['is_verified'] == true ||
           authorMap?['is_verified_admin'] == true,
       churchId: json['church_id']?.toString(),
+      country: json['country'] as String?,
       churchName: (json['churches'] is Map<String, dynamic>)
           ? (json['churches'] as Map<String, dynamic>)['name'] as String?
           : json['church_name'] as String?,
@@ -225,6 +234,7 @@ class Post {
           'is_verified_admin': authorIsVerified,
         },
         'church_id': churchId,
+        'country': country,
         if (churchName != null) 'church_name': churchName,
         'body': body,
         'image_url': imageUrl,

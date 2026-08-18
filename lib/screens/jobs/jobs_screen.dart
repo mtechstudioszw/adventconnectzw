@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/countries.dart';
 import '../../models/job_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/job_service.dart';
@@ -12,6 +14,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/ads/ad_banner.dart';
+import '../../widgets/country_scope_toggle.dart';
 import '../../widgets/job_card.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
@@ -40,6 +43,12 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
   /// patch_039: 'all' | 'entry' | 'mid' | 'senior'. Second-row filter
   /// strip under categories so applicants can self-select tier.
   String _selectedLevel = 'all';
+
+  /// Jobs are scoped to the member's own country unless they ask for
+  /// worldwide. Off by default because almost every posting here is a
+  /// local role with a phone number attached.
+  bool _worldwide = false;
+  final String _country = AuthService.currentCountry();
   bool _loading = true;
   String? _error;
 
@@ -93,6 +102,7 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
         search: _searchController.text,
         category: _selectedCategory,
         level: _selectedLevel == 'all' ? null : _selectedLevel,
+        country: _worldwide ? null : _country,
       );
       if (!mounted) return;
       setState(() {
@@ -100,10 +110,14 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
         _loading = false;
       });
       // Cache the unfiltered list (no search, no category filter) so
-      // the cache represents the full feed users land on first.
+      // the cache represents the full feed users land on first. Scope is
+      // part of "unfiltered": caching a worldwide list would show the
+      // member another country's jobs on their next cold start, before
+      // the network reply lands.
       if (_searchController.text.isEmpty &&
           _selectedCategory == 'all' &&
-          _selectedLevel == 'all') {
+          _selectedLevel == 'all' &&
+          !_worldwide) {
         unawaited(_writeCache(list));
       }
     } catch (_) {
@@ -151,6 +165,7 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
               _buildHero(),
               _buildSearchBar(),
               const _ShopJobsSegment(active: _Section.jobs),
+              _buildCountryScope(),
               _buildCategoryStrip(),
               const SizedBox(height: 6),
               _buildLevelStrip(),
@@ -201,6 +216,26 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
           filled: true,
           fillColor: context.palette.inputFill,
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
+        ),
+      ),
+    );
+  }
+
+  /// Sits ABOVE the category chips on purpose: scope is a bigger decision
+  /// than category — it changes what the category counts even mean — and a
+  /// member seeing an empty Jobs list needs to find this first.
+  Widget _buildCountryScope() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: CountryScopeToggle(
+          countryCode: _country,
+          worldwide: _worldwide,
+          onChanged: (v) {
+            setState(() => _worldwide = v);
+            _loadJobs();
+          },
         ),
       ),
     );
@@ -343,7 +378,9 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'No jobs posted yet',
+                    _worldwide
+                        ? 'No jobs posted yet'
+                        : 'No jobs in ${Countries.nameOf(_country)} yet',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.headlineMedium.copyWith(
                       fontWeight: FontWeight.w700,
@@ -351,13 +388,30 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Be the first to post an opportunity for the community.',
+                    _worldwide
+                        ? 'Be the first to post an opportunity for the community.'
+                        // Otherwise the first member in a new country reads
+                        // an empty list as a broken app, when every posting
+                        // so far is simply in Zimbabwe.
+                        : 'Jobs show your country by default. Switch to '
+                              'Worldwide to see postings from everywhere.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: AppColors.textMuted,
                       height: 1.5,
                     ),
                   ),
+                  if (!_worldwide) ...[
+                    const SizedBox(height: 20),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() => _worldwide = true);
+                        _loadJobs();
+                      },
+                      icon: const Icon(Icons.public, size: 18),
+                      label: const Text('Browse worldwide'),
+                    ),
+                  ],
                 ],
               ),
             ),

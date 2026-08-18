@@ -106,6 +106,12 @@ class _HomeScreenState extends State<HomeScreen>
   Set<String> _rsvpedEventIds = <String>{};
   int _unreadNotifications = 0;
   List<Post> _posts = [];
+
+  /// Passed to the feed ranking so posts from home surface first. It is a
+  /// BOOST, never a filter — the feed is worldwide for everyone, because a
+  /// Zimbabwean in Texas installed this app precisely to keep seeing home.
+  final String _country = AuthService.currentCountry();
+
   List<Story> _stories = [];
   Set<String> _viewedStoryIds = const {};
   List<Product> _products = const [];
@@ -510,6 +516,9 @@ class _HomeScreenState extends State<HomeScreen>
           refreshNonce: DateTime.now().millisecondsSinceEpoch,
           friendIds: friendIds,
           followedChurchIds: followedChurchIds,
+          // Ranking hint, not a filter: posts from home rise to the top,
+          // but an American member still sees Zimbabwe's feed.
+          viewerCountry: _country,
         ),
         FeedService.fetchStories(),
         FeedService.fetchMyViewedStoryIds(),
@@ -679,6 +688,7 @@ class _HomeScreenState extends State<HomeScreen>
         friendIds: friendIds,
         followedChurchIds: _followedChurchIds,
         before: oldest,
+        viewerCountry: _country,
       );
       if (!mounted) return;
       final existing = _posts.map((p) => p.id).toSet();
@@ -1988,6 +1998,11 @@ class _HomeScreenState extends State<HomeScreen>
     // appended at the end so the user always sees the full set even
     // when the post backlog is short.
     final children = <Widget>[];
+    // NO country toggle here, deliberately. The feed shows everyone and
+    // simply ranks posts from the member's own country higher — see the
+    // countryBoost note in FeedService. Marketplace and Jobs DO carry the
+    // toggle, because a listing in another country is one you cannot act
+    // on; a post is not.
     if (cachedAt != null) {
       children.add(const SizedBox(height: 4));
       children.add(

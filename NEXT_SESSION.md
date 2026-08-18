@@ -208,11 +208,48 @@ this before touching any of them:
 
 ---
 
+## Country filtering — BUILT, and the feed is deliberately different
+
+**Marketplace and Jobs are country-scoped by default**, with a
+`CountryScopeToggle` ("🇿🇼 Zimbabwe | Worldwide") above the category chips.
+Both empty states name the country and offer a "Browse worldwide" button,
+because every listing in the database today is `ZW` — without that, the
+first seller in a new country opens an empty screen and concludes the app
+is broken. Scope counts as a filter for caching: a worldwide list is never
+written to the offline cache, or it would greet the member with another
+country's listings on next launch.
+
+**The feed is NOT filtered, and this was a corrected mistake.** It was built
+scoped like the others; the founder asked "so an American user can't see Zim
+posts?" and was right. The difference:
+
+> A sofa in Harare genuinely cannot be collected from Boston. A *post* from
+> Harare reads perfectly well there.
+
+Scoping the feed would cut a Zimbabwean in Texas off from the exact people
+they installed the app to stay near — against the app's own tagline — and,
+with all 41 posts currently from Zimbabwe, would show every new overseas
+member an empty Home. So `posts.country` (patch_218) drives a **ranking
+boost, not a filter**: `countryBoost = 0.30` in
+`FeedService._personalisedScore`, below `churchBoost` (0.35) and
+`friendBoost` (0.50), so someone you know abroad still outranks a stranger
+next door. Home passes `viewerCountry:`; there is no toggle on Home.
+
+`FeedService.fetchFeed` also takes `onlyCountry:` — a hard filter nothing
+calls yet, kept because the query shape should be proven before it is
+needed.
+
+**patch_218** adds `posts.country`, backfills it from each author's profile,
+and stamps it on insert with a BEFORE INSERT trigger rather than trusting
+the client — a post's country is simply where its author is, so asking every
+insert path to remember would re-create the silent-`ZW` bug. It is a
+snapshot: moving abroad does not retro-move your old posts.
+
+---
+
 ## Then, in rough priority order
 
 **Country, remaining**
-- Feed: country-first with a "Worldwide" toggle (decided, not built).
-- Marketplace / Jobs: country *filtering* (capture + display are done now).
 - Church directory + events country UI; member-directory country filter.
 - Every posting form now captures country — `post_event_screen` was the last
   one and got its picker this session, so nothing is defaulting to `'ZW'`

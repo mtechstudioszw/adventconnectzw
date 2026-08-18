@@ -14,6 +14,14 @@ class JobService {
     String? search,
     String? category,
     String? level,
+    /// ISO 3166-1 alpha-2. Null means worldwide.
+    ///
+    /// Jobs are country-scoped by default for the same reason as the
+    /// marketplace: almost every posting here is a local role with a phone
+    /// number attached, and a vacancy in another country is one the reader
+    /// cannot take. "Remote" is the exception the Worldwide toggle exists
+    /// for.
+    String? country,
   }) async {
     // Hide expired rows from the public feed. patch_039's pg_cron
     // also flips status='expired' once a day, but filtering by
@@ -24,6 +32,9 @@ class JobService {
         .eq('status', 'open')
         .gt('expires_at', DateTime.now().toUtc().toIso8601String());
 
+    if (country != null && country.isNotEmpty) {
+      query = query.eq('country', country);
+    }
     if (category != null && category.isNotEmpty && category != 'all') {
       query = query.eq('category', category);
     }

@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/zimbabwe_cities.dart';
+import '../../config/countries.dart';
 import '../../models/church_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
 import '../../services/connectivity_service.dart';
@@ -13,6 +15,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/church_card.dart';
+import '../../widgets/country_scope_toggle.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../widgets/main_scaffold.dart';
@@ -52,6 +55,14 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   // Active city filter (null = all cities) + verified-only toggle.
   String? _cityFilter;
   bool _verifiedOnly = false;
+
+  /// The directory shows the member's own country unless they ask for
+  /// worldwide. Unlike the marketplace this is not about reachability — a
+  /// church elsewhere is interesting to read about — but a member in Kenya
+  /// scrolling 2,600 Zimbabwean churches to find nothing of theirs is the
+  /// clearest way to tell them this app is not for them.
+  bool _worldwide = false;
+  final String _country = AuthService.currentCountry();
 
   // "Near me" by real distance: the device location + a flag to rank churches
   // (that have coordinates) nearest-first.
@@ -335,13 +346,17 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     try {
       final list = await ChurchService.fetchChurches(
         search: _searchController.text,
+        country: _worldwide ? null : _country,
       );
       if (!mounted) return;
       setState(() {
         _churches = list;
         _loading = false;
       });
-      if (_searchController.text.isEmpty) {
+      // Scope counts as a filter for caching, same rule as the marketplace:
+      // a cached worldwide list would greet the member with another
+      // country's churches on next launch, before the network replies.
+      if (_searchController.text.isEmpty && !_worldwide) {
         unawaited(_writeCache(list));
       }
       unawaited(_loadFriendCounts(list));
@@ -390,6 +405,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         children: [
           _buildHeader(),
           _buildSearchBar(),
+          _buildCountryScope(),
           _buildFilterChips(),
           if (_cityFilter != null) _buildCityBanner(),
           if (_locationError != null) _buildLocationErrorBanner(),
@@ -679,6 +695,32 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   /// City-based filter row: All / Verified, the biggest cities as quick
   /// chips, and a "More cities" entry that opens a searchable picker. The
   /// 📍 Near me FAB resolves the device location to the nearest city.
+  /// Above the city chips, because scope decides what those chips even
+  /// contain — `_topCities()` derives them from whatever list is loaded, so
+  /// they follow the country rather than being fixed.
+  Widget _buildCountryScope() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: CountryScopeToggle(
+          countryCode: _country,
+          worldwide: _worldwide,
+          onChanged: (v) {
+            setState(() {
+              _worldwide = v;
+              // A city from the previous country will not appear in the
+              // new list, so leaving the filter set would silently show an
+              // empty directory that looks like a failed load.
+              _cityFilter = null;
+            });
+            _loadChurches();
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterChips() {
     final top = _topCities();
     return SizedBox(
@@ -813,19 +855,43 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'No churches found',
+                    _worldwide
+                        ? 'No churches found'
+                        : 'No churches in '
+                              '${Countries.nameOf(_country)} yet',
+                    textAlign: TextAlign.center,
                     style: AppTextStyles.titleMedium.copyWith(
                       color: AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Try a different search or city.',
+                    _worldwide
+                        ? 'Try a different search or city.'
+                        // The directory is Zimbabwe-only until the global
+                        // import lands, so this is the ordinary case for a
+                        // new country, not an error.
+                        : 'The directory shows your country by default. '
+                              'Switch to Worldwide above, or add yours.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodySmall.copyWith(
                       color: AppColors.textMuted,
                     ),
                   ),
+                  if (!_worldwide) ...[
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _worldwide = true;
+                          _cityFilter = null;
+                        });
+                        _loadChurches();
+                      },
+                      icon: const Icon(Icons.public, size: 18),
+                      label: const Text('Browse worldwide'),
+                    ),
+                  ],
                 ],
               ),
             ),

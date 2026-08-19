@@ -3,7 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/countries.dart';
 import '../../models/event_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/event_service.dart';
@@ -11,6 +13,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/country_scope_toggle.dart';
 import '../../widgets/event_card.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/offline_inline_notice.dart';
@@ -39,6 +42,11 @@ class _EventsScreenState extends State<EventsScreen>
   List<Event> _past = [];
   Set<String> _rsvpedIds = <String>{};
   DateTimeRange? _dateRange;
+  /// Events are scoped to the member's own country unless they ask for
+  /// worldwide. A camp meeting on another continent is not an invitation.
+  bool _worldwide = false;
+  final String _country = AuthService.currentCountry();
+
   bool _loadingUpcoming = true;
   bool _loadingPast = false;
   String? _error;
@@ -129,6 +137,7 @@ class _EventsScreenState extends State<EventsScreen>
       final list = await EventService.fetchEvents(
         search: _searchController.text,
         upcomingOnly: true,
+        country: _worldwide ? null : _country,
         from: _dateRange?.start,
         to: _dateRange?.end,
       );
@@ -140,7 +149,7 @@ class _EventsScreenState extends State<EventsScreen>
       // Cache the unfiltered "fresh" list. Only persist when there's
       // no search / date filter so the cache reflects the full upcoming
       // feed users land on first.
-      if (_searchController.text.isEmpty && _dateRange == null) {
+      if (_searchController.text.isEmpty && _dateRange == null && !_worldwide) {
         unawaited(_writeUpcomingCache(list));
       }
     } catch (_) {
@@ -158,6 +167,7 @@ class _EventsScreenState extends State<EventsScreen>
       final list = await EventService.fetchEvents(
         search: _searchController.text,
         upcomingOnly: false,
+        country: _worldwide ? null : _country,
         from: _dateRange?.start,
         to: _dateRange?.end,
       );
@@ -229,6 +239,7 @@ class _EventsScreenState extends State<EventsScreen>
         child: Column(
           children: [
             _buildSearchBar(),
+            _buildCountryScope(),
             _buildDateFilter(),
             _buildPillTabs(),
             const SizedBox(height: 4),
@@ -242,6 +253,28 @@ class _EventsScreenState extends State<EventsScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Above the date filter and the Upcoming/Past tabs: scope decides what
+  /// those are counting, so it reads top-down as "where, then when".
+  Widget _buildCountryScope() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: CountryScopeToggle(
+          countryCode: _country,
+          worldwide: _worldwide,
+          onChanged: (v) {
+            setState(() => _worldwide = v);
+            // Both tabs, or Past keeps the other scope's results until the
+            // member happens to pull-to-refresh it.
+            _loadUpcoming();
+            if (_past.isNotEmpty || _tabController.index == 1) _loadPast();
+          },
         ),
       ),
     );
@@ -492,6 +525,29 @@ class _EventsScreenState extends State<EventsScreen>
                       color: context.palette.textMuted,
                     ),
                   ),
+                  // Says WHY it is empty. Every event in the database is
+                  // Zimbabwean today, so for a member anywhere else this is
+                  // the normal case, not a failure.
+                  if (!_worldwide) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'in ${Countries.nameOf(_country)}',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() => _worldwide = true);
+                        _loadUpcoming();
+                        _loadPast();
+                      },
+                      icon: const Icon(Icons.public, size: 18),
+                      label: const Text('Browse worldwide'),
+                    ),
+                  ],
                 ],
               ),
             ),

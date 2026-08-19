@@ -16,6 +16,13 @@ class EventService {
     bool upcomingOnly = true,
     DateTime? from,
     DateTime? to,
+    /// ISO 3166-1 alpha-2. Null means worldwide.
+    ///
+    /// Events are country-scoped by default for the same reason as the
+    /// marketplace: a camp meeting is something you attend, and one on
+    /// another continent is not an invitation, it is clutter above the
+    /// ones you could actually reach.
+    String? country,
   }) async {
     final today = _dateOnly(DateTime.now());
 
@@ -28,6 +35,10 @@ class EventService {
         // ones under Profile → My events). This is the approval gate the
         // tester found missing — posts were going live unreviewed.
         .eq('status', 'approved');
+
+    if (country != null && country.isNotEmpty) {
+      query = query.eq('country', country);
+    }
 
     if (upcomingOnly) {
       query = query.gte('start_date', _formatDate(today));

@@ -276,7 +276,31 @@ snapshot: moving abroad does not retro-move your old posts.
 ## Then, in rough priority order
 
 **Country, remaining**
-- Church directory + events country UI; member-directory country filter.
+- **Member directory: LEAVE IT ALONE** (founder, 19 Aug 2026). It has no
+  country filter and it does not need one, because it shows nothing at all.
+
+  Measured: `member_directory` has **0 rows**, 0 visible — while 213
+  profiles are `is_discoverable`. The screen lists only members who
+  explicitly opted in via "My directory profile", and nobody ever has, so it
+  renders an empty list every time. It is routed and reachable from Home.
+
+  Two ways out, and the second has a catch worth knowing before anyone
+  reaches for it: surface the opt-in (consent stays explicit, fills slowly),
+  or point the screen at `DirectoryService.fetchAllDiscoverableProfiles()`
+  which returns all 213 immediately. **Nothing in the app ever lets a member
+  set `is_discoverable`** — it is read in five places and written in none,
+  so it is a database default that happens to be true for everyone.
+  Publishing 213 people's name, photo, bio and a message button on the
+  strength of a flag they were never shown is a privacy change, not a bug
+  fix. If that route is taken, ask people first.
+
+  Founder's call for now: leave as is.
+- Church directory and Events are DONE — both carry `CountryScopeToggle`
+  with country-by-default, a "Browse worldwide" button in the empty state,
+  and scope excluded from the offline cache (a cached worldwide list would
+  otherwise greet the member with another country's rows on next launch).
+  Events scoping had to reload BOTH tabs, or Past keeps the previous
+  scope's results until someone happens to pull-to-refresh it.
 - Every posting form now captures country — `post_event_screen` was the last
   one and got its picker this session, so nothing is defaulting to `'ZW'`
   silently any more.
@@ -363,6 +387,13 @@ this app is more authoritative about its own existence than a directory is.
 **Still client-side, and next to break:** `churches_screen` sorts
 nearest-first in Dart, so it needs the rows. That wants a real geo query
 (earthdistance/PostGIS) and is pointless until the rows exist.
+
+**"📍 Near me" is Zimbabwe-only.** It calls `nearestZimbabweCity()`, which
+snaps the device GPS to the closest *Zimbabwean* city — so for a member in
+Nairobi it resolves to somewhere in Zimbabwe and filters to it. The country
+scope toggle now bounds the damage (the list is their own country by
+default), but the feature itself needs real coordinates on `churches` plus a
+distance sort before it means anything abroad. Same geo work as above.
 
 ### ⚠️ The first member in a new country cannot set a home church
 

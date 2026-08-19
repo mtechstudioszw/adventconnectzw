@@ -4702,11 +4702,7 @@ class _UnencryptedLine extends StatelessWidget {
         style: base,
         children: [
           TextSpan(
-            text:
-                'Messages to $otherName are not end-to-end encrypted yet. '
-                'They are stored on our servers, so our team can technically '
-                'access them — church admins cannot. Press and hold any '
-                'message to report it. ',
+            text: 'Messages here are private between you and $otherName. ',
           ),
           TextSpan(
             text: 'Learn more',

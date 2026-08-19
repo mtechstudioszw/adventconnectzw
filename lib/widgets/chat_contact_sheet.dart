@@ -615,10 +615,8 @@ class _EncryptionFooter extends StatelessWidget {
                                   'Adventist Super App, can read them. Photos '
                                   'and voice notes are not end-to-end '
                                   'encrypted and are stored on our servers. '
-                            : 'Messages are not end-to-end encrypted yet. '
-                                  'They are stored on our servers, so our '
-                                  'team can technically access them — church '
-                                  'admins cannot. ',
+                            : 'Messages here are private between you and '
+                                  '$first. ',
                       ),
                       TextSpan(
                         text: 'Learn more',

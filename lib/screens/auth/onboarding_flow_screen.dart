@@ -137,7 +137,13 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
 
   Future<void> _loadChurches() async {
     try {
-      final list = await ChurchService.fetchChurches();
+      // The FIRST PAGE only, scoped to the member's country — not the whole
+      // directory. `searchChurches` with no query is an alphabetical top-N;
+      // typing then re-queries the server. Before this, onboarding
+      // downloaded every church in the database to filter locally, which
+      // the OrgMast import would have turned into a multi-megabyte wait on
+      // the signup path.
+      final list = await ChurchService.searchChurches(country: _country);
       if (!mounted) return;
       setState(() {
         _allChurches = list;
@@ -351,7 +357,18 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
         usernameController: _usernameController,
         bioController: _bioController,
         country: _country,
-        onCountryChanged: (c) => setState(() => _country = c.code),
+        // Changing country in step 1 changes which churches step 2 should
+        // offer. Without this reload, someone who picks Kenya is still
+        // shown the Zimbabwean list a screen later.
+        onCountryChanged: (c) {
+          if (c.code == _country) return;
+          setState(() {
+            _country = c.code;
+            _allChurches = const [];
+            _churchesLoading = true;
+          });
+          _loadChurches();
+        },
         photoUrl: _profilePhotoUrl,
         coverUrl: _coverPhotoUrl,
         uploadingPhoto: _uploadingPhoto,
@@ -365,6 +382,7 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
         churches: _allChurches,
         selectedId: _homeChurchId,
         loading: _churchesLoading,
+        country: _country,
         onChanged: (id) => setState(() => _homeChurchId = id),
       ),
       _PersonalizationPage(
@@ -1155,12 +1173,19 @@ class _ChurchPage extends StatefulWidget {
     required this.selectedId,
     required this.loading,
     required this.onChanged,
+    required this.country,
   });
 
+  /// The first page of churches, already fetched by the parent. Used until
+  /// the member types — not as the pool to filter.
   final List<Church> churches;
   final String? selectedId;
   final bool loading;
   final ValueChanged<String?> onChanged;
+
+  /// Scopes the search. The picker is asking "which church do YOU attend",
+  /// which is a question about where the member is.
+  final String country;
 
   @override
   State<_ChurchPage> createState() => _ChurchPageState();
@@ -1170,24 +1195,69 @@ class _ChurchPageState extends State<_ChurchPage> {
   final _searchController = TextEditingController();
   String _query = '';
 
+  /// Results for the current query. Null until a search has run, which is
+  /// how build() knows to fall back to [widget.churches].
+  List<Church>? _results;
+  bool _searching = false;
+  Timer? _debounce;
+
+  /// Rejects stale replies. Typing "har" fires three searches and they can
+  /// come back out of order; without this the list can settle on the
+  /// results for "ha" while the box reads "har".
+  int _searchSeq = 0;
+
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  List<Church> get _filtered {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return widget.churches;
-    return widget.churches.where((c) {
-      return c.name.toLowerCase().contains(q) ||
-          c.city.toLowerCase().contains(q);
-    }).toList();
+  /// Searches on the SERVER rather than filtering a preloaded list.
+  ///
+  /// This used to be `widget.churches.where(...)` over every church in the
+  /// country. That is affordable over Zimbabwe's ~2,600 rows and is not
+  /// affordable over the 185,000 the OrgMast import brings: the member
+  /// would wait for a multi-megabyte download on mobile data before they
+  /// could type a letter. See `ChurchService.searchChurches`.
+  void _onQueryChanged(String value) {
+    setState(() => _query = value);
+    _debounce?.cancel();
+    final term = value.trim();
+    if (term.isEmpty) {
+      // Back to the parent's first page; no request needed.
+      setState(() {
+        _results = null;
+        _searching = false;
+      });
+      return;
+    }
+    setState(() => _searching = true);
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      final seq = ++_searchSeq;
+      try {
+        final list = await ChurchService.searchChurches(
+          query: term,
+          country: widget.country,
+        );
+        if (!mounted || seq != _searchSeq) return;
+        setState(() {
+          _results = list;
+          _searching = false;
+        });
+      } catch (_) {
+        if (!mounted || seq != _searchSeq) return;
+        setState(() {
+          _results = const [];
+          _searching = false;
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
+    final filtered = _results ?? widget.churches;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       child: Column(
@@ -1205,11 +1275,11 @@ class _ChurchPageState extends State<_ChurchPage> {
             controller: _searchController,
             icon: Icons.search,
             hint: 'Search by name or city',
-            onChanged: (v) => setState(() => _query = v),
+            onChanged: _onQueryChanged,
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: widget.loading
+            child: widget.loading || _searching
                 ? const Center(child: BrandSpinner(size: 30))
                 : filtered.isEmpty
                 ? Center(

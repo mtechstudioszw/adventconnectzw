@@ -564,7 +564,10 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       final results = await Future.wait([
         EventService.fetchEvents(upcomingOnly: true),
-        ChurchService.fetchChurches(),
+        // A discovery rail, not the directory: it shuffles this pool and
+        // shows a handful. Scoped and capped so the OrgMast import cannot
+        // turn Home's second-tier load into a 185,000-row download.
+        ChurchService.fetchChurches(country: _country, limit: 60),
         EventService.fetchUserRsvpedEventIds(),
         // 18, not 8: the feed shows TWO people rails now (#13) and they draw
         // from disjoint slices of this pool. Eight would have left the

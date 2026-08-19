@@ -15,12 +15,29 @@ class ChurchService {
   static const _table = 'churches';
   static const _followsTable = 'church_followers';
 
+  /// The whole directory, for screens that genuinely need a list.
+  ///
+  /// **[limit] is a real ceiling, not a formality.** It defaults to 5000
+  /// against ~2,600 Zimbabwean rows today, which is why nobody has noticed
+  /// it. The OrgMast import is 106,936 churches + 78,061 companies, and on
+  /// that day this silently returns the alphabetical first 5,000 and every
+  /// caller believes it has the directory. Pass a real limit, or use
+  /// [searchChurches] — which is what a picker should have been doing all
+  /// along.
   static Future<List<Church>> fetchChurches({
     String? search,
     String? city,
+    /// ISO 3166-1 alpha-2. The single most effective filter once the
+    /// directory is global: it turns 185,000 rows into a few thousand
+    /// before anything else runs.
+    String? country,
     int limit = 5000,
   }) async {
     var query = _client.from(_table).select();
+
+    if (country != null && country.isNotEmpty) {
+      query = query.eq('country', country);
+    }
 
     if (city != null && city.isNotEmpty) {
       query = query.eq('city', city);
@@ -38,6 +55,67 @@ class ChurchService {
     // change" the user reported.
     final response = await query.order('name', ascending: true).limit(limit);
 
+    return (response as List)
+        .map((row) => Church.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// What a church PICKER should call: one small, indexed query per
+  /// keystroke instead of the whole directory held in memory.
+  ///
+  /// The onboarding picker and Edit profile both used to call
+  /// [fetchChurches] with no arguments and filter the result with
+  /// `.where(...)` on every keystroke. Over 2,600 Zimbabwean rows that is
+  /// merely wasteful; over the 185,000 the OrgMast import brings it is a
+  /// multi-megabyte download on mobile data before the member can type,
+  /// and a list rebuild per character after.
+  ///
+  /// Scoped to [country] by default because a picker is answering "which
+  /// church do YOU attend" — a question about where the member is, not a
+  /// worldwide search. Pass null to search everywhere.
+  ///
+  /// [limit] is small on purpose: nobody scrolls past forty results, they
+  /// type another letter. Backed by the pg_trgm indexes in patch_219, so
+  /// the leading-wildcard match this sends is an index lookup rather than
+  /// a sequential scan.
+  static Future<List<Church>> searchChurches({
+    String? query,
+    String? country,
+    int limit = 40,
+  }) async {
+    var q = _client.from(_table).select();
+
+    if (country != null && country.isNotEmpty) {
+      q = q.eq('country', country);
+    }
+
+    final term = query?.trim() ?? '';
+    if (term.isNotEmpty) {
+      final like = '%$term%';
+      q = q.or('name.ilike.$like,city.ilike.$like');
+    }
+
+    final response = await q.order('name', ascending: true).limit(limit);
+    return (response as List)
+        .map((row) => Church.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Exactly the churches in [ids], in one query.
+  ///
+  /// Profile screens want "the churches this member follows", which is
+  /// typically two or three rows. The old shape was to fetch the ENTIRE
+  /// directory and `.where((c) => followed.contains(c.id))` on the client —
+  /// downloading 2,600 rows to keep 3, and 185,000 to keep 3 after the
+  /// OrgMast import. Ask for the three.
+  static Future<List<Church>> fetchChurchesByIds(Iterable<String> ids) async {
+    final list = ids.where((e) => e.trim().isNotEmpty).toSet().toList();
+    if (list.isEmpty) return const [];
+    final response = await _client
+        .from(_table)
+        .select()
+        .inFilter('id', list)
+        .order('name', ascending: true);
     return (response as List)
         .map((row) => Church.fromJson(row as Map<String, dynamic>))
         .toList();

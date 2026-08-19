@@ -117,7 +117,7 @@ class E2eeService {
       _deviceId = await _resolveDeviceId(userId);
       await _publishDevice(userId);
       await _topUpPrekeys(userId);
-      await _readFlag();
+      await _readFlag(userId);
     } catch (e, st) {
       // Never let key setup take the app down. Without it, sending falls
       // back to plaintext, which is exactly the behaviour of every build
@@ -160,7 +160,30 @@ class E2eeService {
   /// Reads `app_config.e2ee_enabled`. Fails CLOSED — any error leaves
   /// encryption off, because sending ciphertext a recipient's build
   /// cannot open is worse than sending plaintext the way we always have.
-  static Future<void> _readFlag() async {
+  ///
+  /// Three accepted values, and the third one is the important one:
+  ///
+  ///   `0` / `false` / empty  — off for everyone. The shipping default.
+  ///   `1` / `true`           — on for everyone.
+  ///   a list of user ids     — on ONLY for those accounts.
+  ///
+  /// The list exists because turning this on is otherwise a catch-22:
+  /// the standing instruction is "flip it only after a real send and
+  /// receive on two handsets", but with the flag off there is no way to
+  /// perform that test — encryption never runs. The honest options were to
+  /// flip it globally and hope, or to test on real devices with only your
+  /// own account exposed. This is the second one.
+  ///
+  /// **Why it matters that this is not a global switch.** A failure here
+  /// does not look like a broken screen. It writes ciphertext nobody holds
+  /// a key for, and those messages are unreadable *forever* — there is no
+  /// repair, no migration, no support ticket that recovers them. An
+  /// allowlist bounds that blast radius to the accounts you name.
+  ///
+  /// Put the founder's user id in, send and receive between two handsets
+  /// signed into two allowlisted accounts, confirm the bubbles read
+  /// correctly on BOTH and survive a force-quit, and only then set `1`.
+  static Future<void> _readFlag(String userId) async {
     try {
       final row = await _client
           .from('app_config')
@@ -168,8 +191,24 @@ class E2eeService {
           .eq('key', 'e2ee_enabled')
           .maybeSingle()
           .timeout(const Duration(seconds: 4));
-      final value = (row?['value'] ?? '').toString().trim().toLowerCase();
-      _enabled = value == '1' || value == 'true';
+      final raw = (row?['value'] ?? '').toString().trim();
+      final value = raw.toLowerCase();
+      if (value == '1' || value == 'true') {
+        _enabled = true;
+        return;
+      }
+      if (value.isEmpty || value == '0' || value == 'false') {
+        _enabled = false;
+        return;
+      }
+      // Anything else is an allowlist. Split on commas/whitespace so the
+      // value can be pasted from the dashboard in whatever shape is handy.
+      final allowed = raw
+          .split(RegExp(r'[\s,]+'))
+          .map((e) => e.trim().toLowerCase())
+          .where((e) => e.isNotEmpty)
+          .toSet();
+      _enabled = allowed.contains(userId.trim().toLowerCase());
     } catch (_) {
       _enabled = false;
     }

@@ -217,21 +217,23 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
         // Own posts newest-first (profile order), NOT the home feed's
         // personalised order.
         FeedService.fetchPostsByAuthor(AuthService.currentUser?.id ?? ''),
-        ChurchService.fetchChurches(),
         FeedService.fetchMyFriendships(),
       ]);
       if (!mounted) return;
       final followed = results[0] as Set<String>;
       final allPosts = results[2] as List<Post>;
-      final allChurches = results[3] as List<Church>;
       final friends =
-          (results[4] as List<Friendship>).where((f) => f.isAccepted).length;
+          (results[3] as List<Friendship>).where((f) => f.isAccepted).length;
       final myPosts = viewerId == null
           ? const <Post>[]
           : allPosts.where((p) => p.authorId == viewerId).toList();
-      final myChurches = allChurches
-          .where((c) => followed.contains(c.id))
-          .toList();
+      // Fetch the two or three churches this member follows, by id.
+      // This used to download the ENTIRE directory and filter it down to
+      // those few — 2,600 rows to keep 3 today, 185,000 after the OrgMast
+      // import. It also had to wait for that download before the profile
+      // could paint.
+      final myChurches = await ChurchService.fetchChurchesByIds(followed);
+      if (!mounted) return;
       setState(() {
         _churchesFollowed = followed.length;
         _eventsGoing = (results[1] as Set).length;

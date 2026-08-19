@@ -1,0 +1,70 @@
+-- =====================================================================
+--  PATCH 224 — app_config is READ-ONLY for clients
+--
+--  Found 19 Aug 2026 while investigating why a force update did not fire.
+--  The force update was fine; this was not.
+--
+--  `anon` and `authenticated` held INSERT, UPDATE, DELETE, TRUNCATE,
+--  REFERENCES and TRIGGER on public.app_config — the table holding every
+--  remote kill switch in the app:
+--
+--    e2ee_enabled          — whether messages encrypt at all
+--    min_build_android     — the force-update floor
+--    latest_build_android  — the update nudge
+--    update_grace_days
+--
+--  RLS was masking it. The table has RLS enabled with a single SELECT
+--  policy, so an INSERT/UPDATE/DELETE from a client is denied for want of
+--  a matching policy, and nothing looked wrong from the outside.
+--
+--  **TRUNCATE is the exception, and it is the reason this is a finding
+--  rather than untidiness.** TRUNCATE is NOT subject to row-level
+--  security — Postgres checks the table privilege and nothing else. A
+--  role holding TRUNCATE can empty a table however many policies guard
+--  its rows. Emptying app_config would silently disable the force-update
+--  gate and every other switch, and the app FAILS OPEN on a config read
+--  it cannot satisfy (ForceUpdateService returns UpdateCheck.none on any
+--  error), so the failure would be invisible.
+--
+--  PostgREST does not expose TRUNCATE, so there was no known route to it
+--  from the app — this is defence in depth, not an incident. But the
+--  grant should never have been there, and "RLS will catch it" is exactly
+--  the assumption TRUNCATE breaks.
+--
+--  Clients only ever READ this table. That is now all they can do.
+--
+--  Writes continue to work for `service_role` and `postgres`, which is
+--  how the switches are actually changed (Supabase dashboard, the
+--  Management API, edge functions).
+--
+--  IDEMPOTENT: yes — REVOKE then GRANT is safe to re-run.
+-- =====================================================================
+
+REVOKE ALL ON public.app_config FROM anon, authenticated;
+GRANT SELECT ON public.app_config TO anon, authenticated;
+
+-- ---------------------------------------------------------------------
+--  Verification
+-- ---------------------------------------------------------------------
+-- SELECT grantee,
+--        string_agg(privilege_type, ', ' ORDER BY privilege_type) AS privs
+--   FROM information_schema.role_table_grants
+--  WHERE table_schema='public' AND table_name='app_config'
+--    AND grantee IN ('anon','authenticated')
+--  GROUP BY grantee;
+--   -- expect: SELECT only, for both roles
+--
+-- SELECT key, value FROM public.app_config ORDER BY key;
+--   -- expect: every switch still present and unchanged
+--
+--  WHILE YOU ARE HERE — the same audit should be run on every other table
+--  that looks read-only to clients. This one was wrong for long enough
+--  that it is unlikely to be the only one:
+--
+--    SELECT table_name, grantee,
+--           string_agg(privilege_type, ', ' ORDER BY privilege_type) AS privs
+--      FROM information_schema.role_table_grants
+--     WHERE table_schema='public' AND grantee IN ('anon','authenticated')
+--       AND privilege_type IN ('TRUNCATE','DELETE')
+--     GROUP BY table_name, grantee
+--     ORDER BY table_name;

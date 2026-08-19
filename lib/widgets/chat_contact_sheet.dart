@@ -536,9 +536,16 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
               // in the thread. This is the sheet a member opens when they
               // are deciding whether to trust someone, which is exactly
               // when "who else can read this" is the live question.
-              if (E2eeService.isEncryptionOn && !unavailable)
+              // Shown whether or not encryption is on. It used to be gated
+              // on `isEncryptionOn`, which meant that while encryption
+              // ships dark this sheet said NOTHING about privacy at all —
+              // and "nothing" is the one thing a member deciding whether
+              // to trust someone cannot act on. The copy tells the truth
+              // either way; only the security code needs real encryption.
+              if (!unavailable)
                 _EncryptionFooter(
                   otherName: name,
+                  encrypted: E2eeService.isEncryptionOn,
                   securityCode: _securityCode,
                   loading: _securityCodeLoading,
                 ),
@@ -559,11 +566,17 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
 class _EncryptionFooter extends StatelessWidget {
   const _EncryptionFooter({
     required this.otherName,
+    required this.encrypted,
     required this.securityCode,
     required this.loading,
   });
 
   final String otherName;
+
+  /// Whether this thread is ACTUALLY encrypted right now. Drives the
+  /// wording and nothing else is allowed to — see the same note on
+  /// `_PrivacyNotice.encrypted` in chat_screen.dart.
+  final bool encrypted;
 
   /// The 60 digits, pre-grouped by [E2eeService.securityCode]. Null when
   /// there is no key to compare against yet.
@@ -595,13 +608,17 @@ class _EncryptionFooter extends StatelessWidget {
                   TextSpan(
                     style: base,
                     children: [
-                      const TextSpan(
-                        text:
-                            'Text messages are end-to-end encrypted — nobody '
-                            'outside this chat, not even Adventist Super App, '
-                            'can read them. Photos and voice notes are not '
-                            'end-to-end encrypted and are stored on our '
-                            'servers. ',
+                      TextSpan(
+                        text: encrypted
+                            ? 'Text messages are end-to-end encrypted — '
+                                  'nobody outside this chat, not even '
+                                  'Adventist Super App, can read them. Photos '
+                                  'and voice notes are not end-to-end '
+                                  'encrypted and are stored on our servers. '
+                            : 'Messages are not end-to-end encrypted yet. '
+                                  'They are stored on our servers, so our '
+                                  'team can technically access them — church '
+                                  'admins cannot. ',
                       ),
                       TextSpan(
                         text: 'Learn more',
@@ -620,12 +637,18 @@ class _EncryptionFooter extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _SecurityCodeBlock(
-            firstName: first,
-            code: securityCode,
-            loading: loading,
-          ),
+          // Only when there is real encryption to verify. A "security
+          // code" on an unencrypted thread would be a number with nothing
+          // behind it — worse than absent, because members are told to act
+          // on a mismatch.
+          if (encrypted) ...[
+            const SizedBox(height: 14),
+            _SecurityCodeBlock(
+              firstName: first,
+              code: securityCode,
+              loading: loading,
+            ),
+          ],
         ],
       ),
     );

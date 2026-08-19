@@ -469,7 +469,11 @@ class SceneBrandOpen extends StatelessWidget {
               ),
               const SizedBox(height: 30),
               SceneLine(
-                text: 'The worldwide SDA family,\nin your pocket.',
+                // The opening line, so it is the first thing a new member
+                // reads. Says the promise outright rather than implying it
+                // — and matches the splash ("Connecting Adventists all over
+                // the world"), so the first two screens tell one story.
+                text: 'Connect with Adventists\nall over the world.',
                 enter: lineIn,
                 exit: exit,
                 emphasis: true,
@@ -647,7 +651,22 @@ class SceneChurch extends StatelessWidget {
               ),
               const SizedBox(height: 34),
               SceneLine(
-                text: 'Find your church —\n2,600+ congregations.',
+                // Was "2,600+ congregations" — the Zimbabwe-only row count,
+                // and the one line in this reel that told a member in
+                // Nairobi the app was not for them.
+                //
+                // "wherever you worship" replaced it and was still wrong,
+                // just less obviously: outside Zimbabwe the directory is
+                // EMPTY, so it promised a search that returns nothing at
+                // the exact moment a new member is deciding whether this
+                // app is real. Same mistake as the old "you can follow
+                // other churches anytime" line.
+                //
+                // "or put it on the map" is true in both worlds — find
+                // yours among the 2,600, or add it — and it primes the
+                // member for the "Add my church" button that the picker's
+                // empty state now offers them.
+                text: 'Find your church —\nor put it on the map.',
                 enter: lineIn,
                 exit: exit,
               ),

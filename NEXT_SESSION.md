@@ -9,6 +9,134 @@ baseline; nothing new).
 
 ---
 
+## Pre-production round (19 Aug 2026) — v1.4.0
+
+Founder's "small things before production" list, plus what looking into it
+turned up. **The biggest find was not on the list.**
+
+### 🔴 YouTube notifications were spamming every member (patch_222)
+
+Reported as "I can't see YouTube notifications being sent". They were being
+sent — 23 per member per day.
+
+```
+110,366  youtube_live notifications ever   |  107,191 still unread
+  4,872  in the last 24h, to all 213 members
+    844  for ONE video (213 members x 4 rounds)
+  1,481  for one channel (2CBN TV) in 24h
+     51 MB  notifications table
+```
+
+Nobody "saw" them because at that rate Android collapses and throttles them.
+`youtube_fanout_notification` had **no de-duplication at all** — every call
+inserted a row per profile. The only guard was in the edge function
+(`videoId !== channel.live_notified_video_id`), which remembers just the LAST
+video per channel, so a channel flapping between two live ids ping-pongs past
+it forever — and the live cron runs **every minute**.
+
+patch_222 adds `youtube_live_notified` (video_id PRIMARY KEY) and makes the
+RPC claim the id with `ON CONFLICT DO NOTHING` *before* sending. Whoever wins
+the claim notifies; everyone else returns 0. Verified: re-notifying an
+already-sent video now returns 0. Seeded with the last 30 days so it did not
+fire one final round on deploy.
+
+**Still to do:** ~107k unread junk notifications are still in members'
+notification centres. Deleting them is a data change nobody has authorised
+yet — ask before running it.
+
+### 🔴 Two flows leaked the founder's phone number
+
+Both "reported" by opening WhatsApp to `263778092494` with a pre-filled
+message. Both are now proper in-app flows:
+
+- **Report a seller** (`seller_profile_screen`) → `ReportService.submit(...)`,
+  which already existed and already listed `'seller'` as a content type.
+- **Request to post announcements** (`group_info_screen`) → the real
+  `claim_church` flow → `church_admins` → the approvals dashboard.
+
+Why this mattered beyond the phone number: WhatsApp lets the sender **edit
+the pre-filled text before sending**, so the seller id, reason and reporter
+id were all attacker-controlled by the time they arrived — the reports could
+not be trusted. And if the member never pressed send, nothing was recorded
+anywhere while the app behaved as though it had been.
+
+The founder's number REMAINS in About, Settings and the banned-account
+screen. That is deliberate — it is the published support channel, and a
+banned member has no in-app route left.
+
+### Cooldown bug I introduced in patch_215 (fixed by patch_221)
+
+Both cooldown triggers stamped the clock on the FIRST set, so onboarding
+spent it: pick a country at signup, spot a typo a minute later, locked out
+for 14 days. Now only a change *from an existing value* starts the clock, so
+everyone keeps one free correction. The repair released a wrongly-locked
+member (church locks 25 → 24).
+
+### The rest of the list
+
+- **`updateProfile` swallowed every database error** into "Could not update
+  profile." It now surfaces the real message (`PostgrestException.message`),
+  which is what every guard on `profiles` writes for members to read. This is
+  why the reported edit-profile failure could not be diagnosed from the
+  report — the app knew and threw the answer away.
+- **Edit profile no longer needs a church to save anything else.** It used to
+  refuse the whole save with no church selected, locking anyone who skipped
+  that step out of their own name, bio, photo and country. Only *clearing* an
+  existing church is blocked now.
+- **Onboarding**: country moved to the TOP of step 1 and labelled "WHERE ARE
+  YOU?" with "we guessed from your phone" — being pre-filled was making it
+  invisible, and everything downstream hangs off it. "Skip for now" removed
+  from step 1 only (**it must stay on step 2 — it is the only way past the
+  church step without picking one**).
+- **The church step no longer lies.** It promised "you can still follow other
+  churches anytime"; `church_details_screen` refuses to follow anything that
+  is not your home church, by design. It now states the truth and the 2-week
+  cooldown.
+- **Intro film**: opener is now "Connect with Adventists all over the world"
+  (matches the splash), and "2,600+ congregations" — the Zimbabwe-only count,
+  and the one line telling a Kenyan the app was not for them — became "Find
+  your church, wherever you worship".
+- **Chat privacy notice** now tells the truth in BOTH states. The off-state
+  used to say "church admins cannot read private chats", which invites the
+  reader to conclude nobody can, while the backend runs on a privileged
+  credential. Both states end in a real "Learn more" into the policy, and the
+  mini-profile block is no longer hidden when encryption is off.
+- **Version 1.4.0** (feature release — the app now works outside Zimbabwe).
+  `feedback_service` had hardcoded `'1.0.0+1'`, so **every feedback report
+  ever filed was stamped with a version that stopped existing before 1.1** —
+  it reads the shared constant now.
+
+### Security audit
+
+Clean, with one finding that was mine. Checked: RLS coverage, policies with
+`USING (true)`, SECURITY DEFINER functions without `search_path`, per-column
+grants on `profiles`, committed secrets, storage policies.
+
+- **Fixed:** `youtube_live_notified` (created earlier the same day) had no
+  RLS. Enabled, and revoked from `anon`/`authenticated`.
+- **Not findings:** the 9 tables with RLS-but-no-policies are internal
+  (audit log, sessions, throttle, quiz internals, staff) — deny-all to
+  clients with service_role bypassing is the correct pattern.
+  `churches_select_all USING (true)` is a public directory. The committed
+  anon key and `google-services.json` API key are public by design.
+  `fcm_token` has **no SELECT** for clients, as CLAUDE.md requires.
+  `reports` are readable only by their author; `messages` only by
+  conversation participants; `chat_media` is participant-scoped in a private
+  bucket. Admin gating is server-side RLS, with the client flag only hiding
+  menu items.
+
+### Answered, not built
+
+- **Google signup cannot supply date of birth.** Google's OAuth returns name,
+  email and picture; birthday needs `user.birthday.read`, a sensitive scope
+  requiring app review, and is usually not public even then. The age prompt
+  has to stay — the ≥16 rule depends on it. The **profile picture** IS
+  available (`avatar_url`) and is worth prefilling.
+- **Ad placements** — deliberately not added without a decision. See the
+  founder conversation; more inventory is a retention cost, not free revenue.
+
+---
+
 ## Database patches applied THIS session
 
 All applied to project `adventconnectzw` (ref `eqbyvasteolqyktbqbem`) via the
@@ -22,6 +150,11 @@ Supabase Management API and verified by reading the output, not by assuming
 | **215** (new) | church cooldown 90d → **14d**; same 14d gate on `country` |
 | **216** (new) | birthday notifications: once per day, from 08:00 local |
 | **217** (new) | `products.price_currency`: ISO 4217 **shape** check, not a 3-value list |
+| **218** (new) | `posts.country`, backfilled from the author, stamped by trigger |
+| **219** (new) | pg_trgm + GIN indexes so church search survives 185k rows |
+| **220** (new) | `churches.astr_id` — the import must ADOPT, not duplicate |
+| **221** (new) | cooldown fix: the FIRST choice no longer spends the 14 days |
+| **222** (new) | YouTube live fan-out de-duplication (was 23 pushes/member/day) |
 
 ### patch_213 was the cause of three "app bugs"
 

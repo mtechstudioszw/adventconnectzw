@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/church_service.dart';
 import '../../services/directory_service.dart';
 import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
@@ -90,30 +90,46 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
   }
 
-  // Founder's WhatsApp number for announcement-admin verification.
-  // Country code first, NO '+' or spaces.
-  static const String _announcementsWhatsApp = '263778092494';
-
+  /// Sends the member into the real claim-church flow.
+  ///
+  /// This used to open WhatsApp to the founder's personal number with a
+  /// pre-filled "please verify me" message. Same problems as the seller
+  /// report it mirrored: it published the founder's phone number to every
+  /// member who tapped it, it collected the member's number in return, the
+  /// text was editable before sending, and — worst — if they never pressed
+  /// send, NOTHING was recorded. The app had told them their request was on
+  /// its way while no request existed.
+  ///
+  /// `claim_church` already does this properly: a contact form that writes
+  /// to `church_admins` as a pending row, which surfaces in the admin
+  /// approvals screen. It is reviewed, auditable, and does not require
+  /// anyone to hand out a phone number.
   Future<void> _claimAdmin() async {
-    final churchName = _group?.otherUserName ?? 'my church';
-    final me = AuthService.currentUser;
-    final myName =
-        (me?.userMetadata?['full_name'] as String?)?.trim() ?? 'a member';
-    final text = Uri.encodeComponent(
-      'Hello, I would like to be verified to post announcements for '
-      '"$churchName" on Adventist Super App. My name is $myName.',
-    );
-    final uri = Uri.parse('https://wa.me/$_announcementsWhatsApp?text=$text');
+    final churchId = _group?.churchId;
+    // No church attached to this channel — send them to the directory,
+    // where every church has its own Claim button.
+    if (churchId == null || churchId.isEmpty) {
+      if (!mounted) return;
+      context.pushNamed('churches');
+      return;
+    }
     final ok = await _confirm(
       'Request to post announcements',
-      'To post announcements you must be verified by the Adventist Super App '
-          'team. This will open WhatsApp so you can send your request — '
-          'once verified you\'ll be granted access manually.',
-      'Open WhatsApp',
+      'Only verified church leaders can post announcements. The next screen '
+          'takes a few details and sends them to our team for review.',
+      'Continue',
     );
     if (ok != true) return;
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (mounted) _toast('Could not open WhatsApp.', error: true);
+    try {
+      final church = await ChurchService.fetchChurchById(churchId);
+      if (!mounted) return;
+      if (church == null) {
+        context.pushNamed('churches');
+        return;
+      }
+      context.pushNamed('claim_church', extra: church);
+    } catch (_) {
+      if (mounted) _toast('Could not open the claim form.', error: true);
     }
   }
 

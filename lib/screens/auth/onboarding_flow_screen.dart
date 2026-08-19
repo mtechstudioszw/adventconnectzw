@@ -101,7 +101,18 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
         : '';
     _usernameController.text = (meta['username'] as String?) ?? '';
     _bioController.text = (meta['bio'] as String?) ?? '';
-    _profilePhotoUrl = meta['profile_photo_url'] as String?;
+    // Prefer a photo the member has already set here; otherwise fall back
+    // to the one Google gave us at sign-in.
+    //
+    // Supabase stores the provider's picture under `avatar_url` (and some
+    // providers use `picture`), and it was simply being ignored — so a
+    // member who signed in WITH a profile picture was still shown an empty
+    // avatar and asked to upload one. It is pre-filled now and they can
+    // replace or remove it like any other.
+    _profilePhotoUrl = (meta['profile_photo_url'] as String?)?.trim().isNotEmpty ==
+            true
+        ? meta['profile_photo_url'] as String?
+        : ((meta['avatar_url'] ?? meta['picture']) as String?);
     _coverPhotoUrl = meta['cover_photo_url'] as String?;
     _homeChurchId = meta['church_id'] as String?;
     _loadChurches();
@@ -476,7 +487,17 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
                     onNext: (_index == 2 && _homeChurchId == null)
                         ? null
                         : _saveAndNext,
-                    onSkip: () => _go(_index + 1),
+                    // No "Skip for now" on the PROFILE step (index 1).
+                    // Everything it collects — name, country, photo — is
+                    // either required or pre-filled, so the escape hatch
+                    // only invited people to skip past a country picker
+                    // they had not noticed and land in the wrong one.
+                    //
+                    // It stays on the CHURCH step, where it is load-bearing:
+                    // `onNext` is null there until a church is picked, so
+                    // removing Skip would trap anyone whose church is not
+                    // in the directory yet.
+                    onSkip: _index == 1 ? null : () => _go(_index + 1),
                   ),
               ],
             ),
@@ -908,6 +929,39 @@ class _ProfilePage extends StatelessWidget {
             subtitle:
                 'A photo, cover, and a name help others recognise you in the community.',
           ),
+          const SizedBox(height: 20),
+          // COUNTRY FIRST, and labelled.
+          //
+          // It used to sit between the username and the bio, where it was
+          // missed — and being pre-filled from the device locale made that
+          // worse, not better: a filled field reads as one already dealt
+          // with. Everything downstream hangs off this answer (which
+          // marketplace, jobs, churches and events you see; how your phone
+          // number is dialled; which currency you sell in), so it is asked
+          // first and labelled as a question rather than presented as a
+          // completed field.
+          Text(
+            'WHERE ARE YOU?',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: context.palette.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'We guessed from your phone — change it if that is not right.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.palette.textMuted,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          CountryField(
+            code: country,
+            onChanged: onCountryChanged,
+          ),
           const SizedBox(height: 24),
           // Cover strip on top — uploads to the same profile_photos
           // storage bucket as the avatar. Tappable to pick / replace;
@@ -961,14 +1015,6 @@ class _ProfilePage extends StatelessWidget {
             controller: usernameController,
             icon: Icons.alternate_email,
             hint: 'Username (optional)',
-          ),
-          const SizedBox(height: 14),
-          // Country sits above the bio, not below it: it is required and
-          // pre-filled, so it belongs with the identity fields rather than
-          // in the optional tail where people stop reading.
-          CountryField(
-            code: country,
-            onChanged: onCountryChanged,
           ),
           const SizedBox(height: 14),
           _GlowField(
@@ -1267,8 +1313,16 @@ class _ChurchPageState extends State<_ChurchPage> {
             tagline: 'Step 2',
             title: 'Pick your home church',
             subtitle:
-                'This is the one you\'ll follow by default. You can still '
-                'follow other churches anytime.',
+                // The old line promised "you can still follow other
+                // churches anytime". You cannot — church_details_screen
+                // refuses to follow anything that is not your home church,
+                // by design. Saying otherwise set people up to go looking
+                // for a feature that does not exist. This states what is
+                // actually true, including the cooldown, so the limit is
+                // known before it is hit rather than discovered as a
+                // refusal two weeks later.
+                'You follow one church at a time. You can change it later, '
+                'once every 2 weeks.',
           ),
           const SizedBox(height: 16),
           _GlowField(

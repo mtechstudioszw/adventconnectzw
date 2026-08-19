@@ -2,16 +2,22 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/app_version.dart';
+
 class FeedbackService {
   FeedbackService._();
 
   static final SupabaseClient _client = Supabase.instance.client;
   static const _table = 'feedback';
 
-  // Keep in sync with pubspec.yaml `version:`. Hardcoded because
-  // package_info_plus isn't installed and pub get is off-limits on
-  // the user's connection. Bump on each release.
-  static const String _appVersion = '1.0.0+1';
+  // Read from the ONE version constant, not a copy.
+  //
+  // This said '1.0.0+1' — a value that stopped being true before 1.1
+  // shipped. Every feedback report since has been stamped with it, so the
+  // one field that answers "which build was this reported against?" has
+  // been wrong on every row in the table. That is worse than absent: it
+  // sends you looking for a bug in a version nobody is running.
+  static const String _appVersion = '$kAppVersionName+$kAppBuildNumber';
 
   static Future<void> submit({
     required String category,

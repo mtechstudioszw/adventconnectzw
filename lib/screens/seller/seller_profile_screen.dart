@@ -20,6 +20,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/full_image_viewer.dart';
+import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/section_header.dart';
 import '../../widgets/marketplace/cart_badge_button.dart';
 import '../../widgets/marketplace/product_tile.dart';
@@ -29,7 +30,6 @@ import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/rate_seller_sheet.dart';
-import '../../widgets/screen_shell.dart';
 
 /// Public storefront.
 ///
@@ -340,76 +340,37 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     }
   }
 
+  /// Files the report into the `reports` table, like every other report in
+  /// the app.
+  ///
+  /// It used to open WhatsApp to the founder's personal number with a
+  /// pre-filled message. That was wrong in four separate ways:
+  ///
+  ///   * it handed the reporter the founder's phone number, and handed the
+  ///     founder the reporter's — reporting a seller should not introduce
+  ///     you to anyone;
+  ///   * the body carried the reporter's user id into a message the
+  ///     reporter could read;
+  ///   * WhatsApp lets the sender EDIT that text before sending, so the
+  ///     seller id, the reason and the reporter id were all attacker-
+  ///     controlled by the time they arrived — the report could not be
+  ///     trusted at all;
+  ///   * if they never pressed send, nothing was recorded anywhere, while
+  ///     the app behaved as though it had been.
+  ///
+  /// `ReportService` already exists, already lists 'seller' as a content
+  /// type, and already feeds the moderation queue.
   void _showReport() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: context.palette.sheet,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.sheetTop),
-      // Without this the sheet is capped at 9/16 of the screen, and the
-      // five reasons plus the header and button do not fit inside that —
-      // hence "BOTTOM OVERFLOWED BY 3.7 PIXELS". The sheet itself also
-      // scrolls now, so a small phone or a large system font can't
-      // reintroduce it.
-      isScrollControlled: true,
-      builder: (ctx) => _ReportSheet(
-        sellerName: _seller?.businessName ?? 'this seller',
-        onSubmit: (reason) async {
-          Navigator.pop(ctx);
-          await _sendReportToAdmin(reason);
-        },
-      ),
-    );
-  }
-
-  /// Reports route to the admin's WhatsApp (email fallback) until the
-  /// admin dashboard ships.
-  Future<void> _sendReportToAdmin(String reason) async {
     final seller = _seller;
     if (seller == null) return;
-    final me = AuthService.currentUser;
-    final body =
-        'Report: ${seller.businessName}\nReason: $reason\n'
-        'Seller id: ${seller.authUserId}\nReporter: ${me?.id ?? 'anonymous'}';
-
-    const adminPhone = '263778092494';
-    const adminEmail = 'adventconnectzw@gmail.com';
-
-    try {
-      final ok = await launchUrl(
-        Uri.parse(
-          'https://wa.me/$adminPhone?text=${Uri.encodeComponent(body)}',
-        ),
-        mode: LaunchMode.externalApplication,
-      );
-      if (ok) return;
-    } catch (_) {}
-
-    try {
-      final ok = await launchUrl(
-        Uri(
-          scheme: 'mailto',
-          path: adminEmail,
-          queryParameters: {
-            'subject': 'Marketplace report: ${seller.businessName}',
-            'body': body,
-          },
-        ),
-        mode: LaunchMode.externalApplication,
-      );
-      if (ok) return;
-    } catch (_) {}
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.darkNavy,
-        content: Text(
-          'Could not open WhatsApp or email. Reach us at +263 778 092 494.',
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-        ),
-      ),
+    showReportSheet(
+      context,
+      contentType: 'seller',
+      contentId: seller.authUserId,
+      contentLabel: seller.businessName,
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -1768,133 +1729,5 @@ class _ReviewRow extends StatelessWidget {
     if (diff.inHours >= 1) return '${diff.inHours}h ago';
     if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
     return 'just now';
-  }
-}
-
-class _ReportSheet extends StatefulWidget {
-  const _ReportSheet({required this.sellerName, required this.onSubmit});
-
-  final String sellerName;
-  final void Function(String reason) onSubmit;
-
-  @override
-  State<_ReportSheet> createState() => _ReportSheetState();
-}
-
-class _ReportSheetState extends State<_ReportSheet> {
-  static const _reasons = [
-    'Scam or fraud',
-    'Counterfeit goods',
-    'Inappropriate content',
-    'Harassment or abuse',
-    'Doesn\'t belong on the marketplace',
-    'Other',
-  ];
-
-  String? _selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: ConstrainedBox(
-        // Never taller than most of the screen; scrolls beyond that.
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: context.palette.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpace.lg),
-              Text(
-                'Report ${widget.sellerName}',
-                style: AppTextStyles.headlineSmall.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpace.xs),
-              Text(
-                'Reports are reviewed by the Adventist Super App team.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: context.palette.textMuted,
-                ),
-              ),
-              const SizedBox(height: 18),
-              for (final r in _reasons)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.sm),
-                  child: Pressable(
-                    onTap: () => setState(() => _selected = r),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpace.lg,
-                        vertical: AppSpace.md + 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _selected == r
-                            ? AppColors.primaryBlue.withValues(alpha: 0.08)
-                            : context.palette.chipBg,
-                        borderRadius: AppRadius.buttonAll,
-                        border: Border.all(
-                          color: _selected == r
-                              ? AppColors.primaryBlue
-                              : Colors.transparent,
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _selected == r
-                                ? Icons.radio_button_checked
-                                : Icons.radio_button_off,
-                            color: _selected == r
-                                ? AppColors.primaryBlue
-                                : context.palette.textMuted,
-                            size: 20,
-                          ),
-                          const SizedBox(width: AppSpace.md),
-                          Expanded(
-                            child: Text(
-                              r,
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: _selected == r
-                                    ? AppColors.primaryBlue
-                                    : context.palette.text,
-                                fontWeight: _selected == r
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: AppSpace.sm),
-              PrimaryGradientButton(
-                label: 'Submit report',
-                onTap: _selected == null
-                    ? null
-                    : () => widget.onSubmit(_selected!),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

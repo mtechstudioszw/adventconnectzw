@@ -4589,16 +4589,7 @@ class _PrivacyNotice extends StatelessWidget {
             Expanded(
               child: encrypted
                   ? _EncryptedLine(otherName: first)
-                  : Text(
-                      'Messages here are between you and $first. Church '
-                      'admins cannot read private chats. Press and hold any '
-                      'message to report it.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.palette.textMuted,
-                        fontSize: 11.5,
-                        height: 1.45,
-                      ),
-                    ),
+                  : _UnencryptedLine(otherName: first),
             ),
           ],
         ),
@@ -4676,6 +4667,59 @@ class _SecurityCodeChanged extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// What the notice says while encryption is OFF.
+///
+/// The old copy was "Messages here are between you and X. Church admins
+/// cannot read private chats." Both sentences are true and together they
+/// mislead: naming church admins as the party who cannot read invites the
+/// reader to conclude that nobody can, when this app's own backend runs on
+/// a privileged credential and staff technically can — which the privacy
+/// policy states plainly. A member could send something sensitive on the
+/// strength of that impression.
+///
+/// So this says what is actually the case, and links to the policy rather
+/// than paraphrasing it. When `e2ee_enabled` is switched on this is
+/// replaced by [_EncryptedLine] and the claim becomes a real one.
+class _UnencryptedLine extends StatelessWidget {
+  const _UnencryptedLine({required this.otherName});
+
+  final String otherName;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = AppTextStyles.bodySmall.copyWith(
+      color: context.palette.textMuted,
+      fontSize: 11.5,
+      height: 1.45,
+    );
+    return Text.rich(
+      TextSpan(
+        style: base,
+        children: [
+          TextSpan(
+            text:
+                'Messages to $otherName are not end-to-end encrypted yet. '
+                'They are stored on our servers, so our team can technically '
+                'access them — church admins cannot. Press and hold any '
+                'message to report it. ',
+          ),
+          TextSpan(
+            text: 'Learn more',
+            style: base.copyWith(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w700,
+              decoration: TextDecoration.underline,
+              decorationColor: AppColors.primaryBlue,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => context.pushNamed('privacy'),
+          ),
+        ],
       ),
     );
   }

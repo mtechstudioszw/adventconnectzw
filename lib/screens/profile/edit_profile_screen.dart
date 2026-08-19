@@ -177,9 +177,25 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   Future<void> _save() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
-    // Home church is MANDATORY — block saving with none selected so an
-    // account can never end up with "no church".
-    if (_selectedChurchId == null || _selectedChurchId!.isEmpty) {
+    // Home church can no longer be CLEARED, but its absence no longer
+    // blocks everything else.
+    //
+    // This used to refuse the whole save whenever no church was selected,
+    // which meant a member who had never picked one — anyone who skipped
+    // that onboarding step, and now anyone in a country whose church is
+    // not in the directory yet — could not change their name, bio, photo
+    // or country either. They were locked out of their own profile by a
+    // field they could not satisfy.
+    //
+    // The original intent still holds: an account that HAS a church must
+    // not end up with none. So only block the clearing case.
+    final hadChurch = (AuthService.currentUser
+                ?.userMetadata?['church_id'] as String?)
+            ?.isNotEmpty ==
+        true;
+    final clearingChurch =
+        _selectedChurchId == null || _selectedChurchId!.isEmpty;
+    if (hadChurch && clearingChurch) {
       setState(() => _error = 'Please choose your home church.');
       return;
     }

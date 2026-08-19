@@ -1076,7 +1076,25 @@ class AuthService {
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
       return AuthResult.failure(e.message);
-    } catch (_) {
+    } on PostgrestException catch (e) {
+      // SURFACE the database's own message instead of a generic one.
+      //
+      // Every guard on `profiles` explains itself in the exception it
+      // raises — "You can only change your country once every 2 weeks",
+      // "must be at least 16", a missing column grant. Collapsing all of
+      // that into "Could not update profile." is why a founder-reported
+      // edit-profile bug could not be diagnosed from the report: the app
+      // knew exactly what was wrong and threw the answer away.
+      //
+      // These messages are written for members to read, so they are safe
+      // to show. Anything without one falls through to the generic line
+      // below rather than leaking a raw Postgres error.
+      final msg = e.message.trim();
+      return AuthResult.failure(
+        msg.isEmpty ? 'Could not update profile.' : msg,
+      );
+    } catch (e, st) {
+      debugPrint('AuthService.updateProfile failed: $e\n$st');
       return AuthResult.failure('Could not update profile.');
     }
   }

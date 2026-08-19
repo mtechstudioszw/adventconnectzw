@@ -364,6 +364,28 @@ this app is more authoritative about its own existence than a directory is.
 nearest-first in Dart, so it needs the rows. That wants a real geo query
 (earthdistance/PostGIS) and is pointless until the rows exist.
 
+### ⚠️ The first member in a new country cannot set a home church
+
+The onboarding picker's empty state now names the country and offers "Add my
+church", which routes to `suggest_church`. But a suggestion lands in
+`church_suggestions` **for admin review** — it does not appear in the picker,
+so that member finishes onboarding with no home church and has to come back
+via Edit profile once someone approves it.
+
+That is survivable today (step 2 is optional, and the copy says "we'll
+verify it") and it is deliberately not auto-created: letting any signup
+write straight into `churches` is how a directory fills with duplicates and
+junk. But note the review queue has **1 announcement and 9 admins, all
+Zimbabwean** — nobody is watching it for Kenya. Before any real push into a
+new country, either:
+
+  * give the suggester a provisional church they can select immediately,
+    flagged unverified and merged on approval; or
+  * make sure someone actually works the queue.
+
+Otherwise the first member in each new country hits a dead end that looks
+like the app not supporting their country.
+
 **Global church directory**
 - **Do NOT scrape `adventistdirectory.org`** — robots.txt names
   `ClaudeBot: Disallow: /` and every `adventist.org` host 403s.

@@ -1285,14 +1285,49 @@ class _ChurchPageState extends State<_ChurchPage> {
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text(
-                        _query.isEmpty
-                            ? 'No churches available right now.'
-                            : 'No matches for "$_query".',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: context.palette.textMuted,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            // Names the country, because "no churches
+                            // available" reads as a broken app while
+                            // "none in Kenya yet" reads as a fact — and
+                            // the second one has an obvious answer.
+                            _query.isEmpty
+                                ? 'No churches listed in '
+                                      '${Countries.nameOf(widget.country)} yet.'
+                                : 'No matches for "$_query" in '
+                                      '${Countries.nameOf(widget.country)}.',
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: context.palette.textMuted,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          // The way out. The directory outside Zimbabwe is
+                          // sparse and will stay sparse until members fill
+                          // it, so the first person from a new country has
+                          // to be able to add their own church HERE —
+                          // making them abandon signup to hunt for a
+                          // "suggest a church" screen loses them.
+                          Text(
+                            'Add yours below — we\'ll verify it and put it '
+                            'on the map for everyone else.',
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.palette.textMuted,
+                              height: 1.45,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          TextButton.icon(
+                            onPressed: () =>
+                                context.pushNamed('suggest_church'),
+                            icon: const Icon(Icons.add_location_alt_outlined,
+                                size: 18),
+                            label: const Text('Add my church'),
+                          ),
+                        ],
                       ),
                     ),
                   )

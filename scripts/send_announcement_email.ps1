@@ -121,6 +121,21 @@ if (-not $resp) {
 
 $recipients = $recipients | Sort-Object -Unique
 
+# Drop Google Play's pre-launch test accounts. Play's automated crawler
+# signs into the app with @cloudtestlabaccounts.com addresses; they are
+# robots, the mailboxes are not read by anyone, and 4 of the 213
+# "confirmed" accounts were these. Mailing them achieves nothing and dents
+# the open rate you will judge this send by.
+$excludedDomains = @('cloudtestlabaccounts.com')
+$before = $recipients.Count
+$recipients = $recipients | Where-Object {
+  $domain = ($_ -split '@')[1]
+  $excludedDomains -notcontains $domain
+}
+if ($before -ne $recipients.Count) {
+  Write-Host ("Excluded {0} test account(s): {1}" -f ($before - $recipients.Count), ($excludedDomains -join ', ')) -ForegroundColor DarkGray
+}
+
 # Skip anyone already mailed by a previous run.
 $already = @()
 if (Test-Path $SentLog) { $already = Get-Content $SentLog | Where-Object { $_ } }

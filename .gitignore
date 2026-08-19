@@ -68,3 +68,7 @@ node_modules/
 # Broadcast send log — who has already received the current campaign.
 scripts/.broadcast-sent.log
 scripts/*.tmp.*
+
+# Recipient log written by scripts/send_announcement_email.ps1.
+# Contains real member email addresses - PII. Never commit it.
+scripts/.announcement-sent.log

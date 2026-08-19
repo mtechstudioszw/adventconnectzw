@@ -49,7 +49,13 @@ BEGIN
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
      WHERE n.nspname = 'public'
-       AND c.relkind IN ('r', 'p')   -- ordinary + partitioned tables
+       -- r/p = ordinary + partitioned tables, which is where the real risk
+       -- is. 'v' (views) are included only so the verification query below
+       -- can return a clean zero: Postgres cannot TRUNCATE a view at all,
+       -- so those grants were inert — but leaving four stragglers behind
+       -- makes the check look like it half-worked, and the next person to
+       -- run it has to re-derive why.
+       AND c.relkind IN ('r', 'p', 'v')
      ORDER BY c.relname
   LOOP
     EXECUTE format(

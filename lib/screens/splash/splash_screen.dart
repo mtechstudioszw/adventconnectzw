@@ -552,7 +552,21 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    if (!facts.hasSeenOnboarding) {
+    // Resolve it properly if the prefetch did not finish. Reaching here
+    // means the member is NOT signed in, so this is either a first launch or
+    // a signed-out one — and a first launch is precisely when the keystore
+    // read is slowest and the answer matters most. The brand animation is
+    // over by now, so a moment spent getting this right costs nothing the
+    // member is waiting on, and guessing wrong costs them onboarding
+    // entirely. Falls back to false (show the intro) if even this fails:
+    // seeing the intro twice is a nuisance, never seeing it is a bug.
+    final hasSeenOnboarding = facts.hasSeenOnboarding ??
+        await SecureStorageService.read(OnboardingScreen.onboardingFlagKey)
+            .then((v) => v == 'true')
+            .catchError((_) => false);
+    if (!mounted) return;
+
+    if (!hasSeenOnboarding) {
       // First launch ever — celebrate it with the blossom hand-off
       // instead of the plain fade used for warm starts.
       await _blossomOutThen(() => context.goNamed('onboarding'));
@@ -869,24 +883,47 @@ class _RoutingFacts {
 
   /// What we assume when the reads could not finish inside the brand window.
   ///
-  /// Every field is the SAFE answer, not the likely one:
+  /// The three booleans are the SAFE answer, not the likely one:
   ///   - no token -> login, which a signed-in member escapes by retrying;
   ///   - not banned -> main.dart's ban guard re-checks within seconds;
   ///   - no biometric -> the lock screen is skipped, and the app's own
-  ///     resume handler re-arms it on the next backgrounding;
-  ///   - onboarding seen -> a returning member is not shown the intro again.
+  ///     resume handler re-arms it on the next backgrounding.
   ///
-  /// The one case this gets wrong is a brand-new install whose very first
-  /// keystore read times out, which then sees login instead of onboarding.
-  /// That is recoverable in one tap; the alternatives are not.
+  /// [hasSeenOnboarding] is NULL here, and that is the whole point.
+  ///
+  /// It used to default to `true`, with a comment claiming the only cost was
+  /// "a brand-new install whose very first keystore read times out, which
+  /// then sees login instead of onboarding — recoverable in one tap".
+  ///
+  /// Both halves of that were wrong, and it shipped as a bug (founder,
+  /// 23 Aug 2026: "when you open the app for the first time it doesn't load
+  /// the onboarding slides, it goes straight to sign up").
+  ///
+  ///  * It is not the rare case. A brand-new install is EXACTLY the launch
+  ///    where the read is slowest: the first flutter_secure_storage access
+  ///    in a process unlocks the Android Keystore and builds
+  ///    EncryptedSharedPreferences, which is the 1-3s cost main.dart already
+  ///    documents. A fresh install times out close to always on a mid-range
+  ///    phone, not rarely.
+  ///
+  ///  * It is not recoverable in one tap. Nothing in the app routes back to
+  ///    the intro, and the flag is never written, so the member simply never
+  ///    sees onboarding at all — on the one launch it exists for.
+  ///
+  /// So this field refuses to guess. `null` means "not known yet", and the
+  /// caller reads it properly before deciding. That costs a moment on the
+  /// one path where the brand animation is already over and correctness
+  /// matters more than milliseconds.
   const _RoutingFacts.unknown()
     : hasPersistedToken = false,
       bannedLocally = false,
       biometricEnabled = false,
-      hasSeenOnboarding = true;
+      hasSeenOnboarding = null;
 
   final bool hasPersistedToken;
   final bool bannedLocally;
   final bool biometricEnabled;
-  final bool hasSeenOnboarding;
+
+  /// Null when the read did not finish in time — resolve it, don't assume.
+  final bool? hasSeenOnboarding;
 }

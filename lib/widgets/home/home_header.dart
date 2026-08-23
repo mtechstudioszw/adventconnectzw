@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
+import '../ambient_background.dart';
 import '../cached_image.dart';
 import '../motion/pressable.dart';
 
@@ -339,14 +340,25 @@ class _Background extends StatelessWidget {
     // scrolled away. The blur only engaged past t > 0.05, so at rest
     // there wasn't even frosting to justify the translucency.
     //
-    // Opaque scaffoldBg means header, chips and feed are one continuous
-    // colour, and content passing under the bar is simply hidden.
-    // Always opaque, always the page's own colour. Sabbath adds warmth
-    // ON TOP of it rather than replacing it, so the header and the feed
-    // are still one continuous surface either way.
-    final Widget surface = DecoratedBox(
-      decoration: BoxDecoration(color: palette.scaffoldBg),
-    );
+    // Opaque means header, chips and feed are one continuous surface, and
+    // content passing under the bar is simply hidden. Always opaque.
+    // Sabbath adds warmth ON TOP of it rather than replacing it.
+    //
+    // WHAT it paints changed (23 Aug 2026). It was flat `scaffoldBg`, and
+    // that flat slab is why the founder still reported the ambient field
+    // "cut off at the top, not full screen" on Home after every ordinary
+    // header had been made transparent. This one could not be: it floats,
+    // the feed scrolls under it, and a see-through floating header smears
+    // the list — the exact regression the paragraph above describes fixing.
+    //
+    // AmbientFill resolves that rather than trading one bug for the other.
+    // It is still fully opaque, so it occludes exactly as before, but it
+    // paints the app's own ambient field instead of a flat colour — sized
+    // to the whole screen and clipped to this box, so what shows is the
+    // literal top strip of the field behind the page, in the same place at
+    // the same scale, driven by the same clock. The header becomes a window
+    // onto the background instead of a lid over it.
+    const Widget surface = AmbientFill();
 
     return ClipRect(
       child: Stack(

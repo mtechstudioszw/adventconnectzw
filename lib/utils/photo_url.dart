@@ -32,6 +32,12 @@ String photoUrlAtSize(String? url, int px) {
   if (raw.isEmpty) return raw;
   // Clamp: below 96 there is nothing to gain over what Google already sent,
   // and above 1024 we are downloading more than any screen here can show.
+  //
+  // The clamp also absorbs a nonsense request rather than propagating it.
+  // The caller is responsible for not handing us the result of
+  // `(double.infinity * dpr).round()` — that throws before it ever reaches
+  // this function — but a caller that computes 0, or something absurd from
+  // a collapsed layout, gets a usable size instead of a broken URL.
   final size = px.clamp(96, 1024);
 
   // Google (lh3.googleusercontent.com, plus the lh4/lh5/… shards).

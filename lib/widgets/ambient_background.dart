@@ -72,6 +72,24 @@ class AmbientBackground extends StatefulWidget {
   /// hands over without the motion changing speed.
   static const Duration loopDuration = Duration(seconds: 14);
 
+  /// The field's position in its cycle, shared so other surfaces can paint
+  /// a matching one.
+  ///
+  /// A PINNED header cannot be transparent — content scrolls under it and
+  /// would smear (see the class doc). But it does not have to paint flat
+  /// `scaffoldBg` either, and that flat slab is why the founder still saw
+  /// the field "cut off at the top" on Home after the ScreenHero fix: Home's
+  /// header is a floating `SliverPersistentHeaderDelegate`, so it was
+  /// correctly left opaque and correctly still looked like a lid.
+  ///
+  /// [AmbientFill] paints the same field, sized to the whole screen and
+  /// clipped to whatever box it is given, so the strip behind the header is
+  /// literally the top strip of the field behind the page. Driving both from
+  /// this one notifier is what keeps them in step — two independent timers
+  /// would drift apart within seconds and the seam would be worse than the
+  /// slab it replaced.
+  static final ValueNotifier<double> loop = ValueNotifier<double>(0);
+
   @override
   State<AmbientBackground> createState() => _AmbientBackgroundState();
 }
@@ -80,7 +98,10 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
   /// Drives the painter. A ValueNotifier + ValueListenableBuilder rather
   /// than setState so only the CustomPaint rebuilds, never [widget.child]
   /// — which is the entire app.
-  final ValueNotifier<double> _loop = ValueNotifier<double>(0);
+  ///
+  /// This is [AmbientBackground.loop], not a private instance field, so
+  /// [AmbientFill] can paint a field that stays in step with this one.
+  ValueNotifier<double> get _loop => AmbientBackground.loop;
   Timer? _timer;
 
   /// Frozen for "reduce motion". Read in [didChangeDependencies], not in
@@ -112,7 +133,10 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
   @override
   void dispose() {
     _timer?.cancel();
-    _loop.dispose();
+    // NOT disposed: [AmbientBackground.loop] is static and shared with
+    // AmbientFill. This widget is installed once in MaterialApp.builder and
+    // lives for the whole session, but disposing a static notifier would
+    // leave any surviving listener calling a dead object.
     super.dispose();
   }
 
@@ -154,6 +178,81 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
         ),
         widget.child,
       ],
+    );
+  }
+}
+
+/// An opaque surface that paints the app's ambient field instead of a flat
+/// colour, aligned to the field behind the page.
+///
+/// ## Why this exists
+///
+/// The particle field sits behind the whole app, and the fix for "the
+/// background is cut off at the top" was to stop headers painting an opaque
+/// `scaffoldBg` slab over it. That works for headers in the normal flow.
+///
+/// It does NOT work for a pinned or floating `SliverPersistentHeaderDelegate`
+/// — Home's header is one — because content genuinely scrolls underneath and
+/// a transparent header would smear the feed through itself. So those were
+/// left opaque, and on Home the field still stopped dead below the header.
+///
+/// This resolves the conflict rather than trading one bug for the other: the
+/// surface stays fully opaque, so it occludes exactly as before, but what it
+/// paints is the field itself.
+///
+/// ## The alignment trick
+///
+/// [AmbientPainter] lays its blobs out relative to the canvas it is given, so
+/// painting it into a 160px-tall header would show the *whole* field squashed
+/// into that strip — a visibly different image from the one behind the page,
+/// which is worse than the slab.
+///
+/// Instead the painter is given the FULL SCREEN height, top-aligned, and the
+/// whole thing is clipped to this widget's own box. What shows is therefore
+/// the literal top strip of the same field, in the same place, at the same
+/// scale — so the header reads as a window onto the background rather than a
+/// separate surface sitting on it.
+///
+/// Both are driven by [AmbientBackground.loop], so they never drift apart.
+class AmbientFill extends StatelessWidget {
+  const AmbientFill({super.key, this.child});
+
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // The screen, not this widget's box — see the alignment note above.
+    final screen = MediaQuery.sizeOf(context);
+
+    return ClipRect(
+      child: Stack(
+        children: [
+          // The opaque ground, so this surface still occludes whatever
+          // scrolls beneath it. Without this the ClipRect would show the
+          // feed through the gaps between blobs.
+          Positioned.fill(child: ColoredBox(color: palette.scaffoldBg)),
+          Positioned(
+            top: 0,
+            left: 0,
+            width: screen.width,
+            height: screen.height,
+            child: IgnorePointer(
+              child: RepaintBoundary(
+                child: ValueListenableBuilder<double>(
+                  valueListenable: AmbientBackground.loop,
+                  builder: (context, loop, _) => CustomPaint(
+                    painter: AmbientPainter(loop: loop, film: 0, dark: dark),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          ?child,
+        ],
+      ),
     );
   }
 }

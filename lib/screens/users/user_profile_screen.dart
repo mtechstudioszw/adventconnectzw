@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/countries.dart';
+import '../../utils/photo_url.dart';
 import '../../models/friendship_model.dart';
 import '../../models/member_directory_model.dart';
 import '../../models/ministry_tag_model.dart';
@@ -431,60 +433,68 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     Positioned(
                       bottom: 0,
-                      child: Container(
-                        width: 118,
-                        height: 118,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: context.palette.cardMuted,
-                          border: Border.all(
-                            color: context.palette.scaffoldBg,
-                            width: 5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.10),
-                              blurRadius: 18,
-                              offset: const Offset(0, 6),
+                      // Painted as a DecorationImage, NOT as a clipped child.
+                      //
+                      // This is the pattern edit_profile_screen already uses,
+                      // and it is the one that actually produces a circle.
+                      // A decoration paints its image THROUGH its own shape,
+                      // so the result is a mathematically exact circle with
+                      // the photo filling it edge to edge.
+                      //
+                      // The previous version put the image inside as a child
+                      // and relied on `clipBehavior: Clip.antiAlias` on the
+                      // Container to round it off. That clip only
+                      // APPROXIMATES the curve — with a 5px border over it,
+                      // the straight segments show, which is the founder's
+                      // "it looks like a pentagon with sides" — and anywhere
+                      // the child did not exactly fill the box, the
+                      // Container's own colour showed through as the dark
+                      // gaps in the corners.
+                      //
+                      // The initials stay as the CHILD. A DecorationImage
+                      // paints over its child, so the initials show while the
+                      // photo loads and remain if it never does — which also
+                      // replaces the errorBuilder this pattern cannot take.
+                      child: GestureDetector(
+                        onTap: (_profile!.profilePhotoUrl ?? '').isNotEmpty
+                            ? () => FullImageViewer.show(
+                                context,
+                                _profile!.profilePhotoUrl,
+                              )
+                            : null,
+                        child: Container(
+                          width: 118,
+                          height: 118,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: context.palette.cardMuted,
+                            border: Border.all(
+                              color: context.palette.scaffoldBg,
+                              width: 5,
                             ),
-                          ],
-                        ),
-                        child: GestureDetector(
-                          onTap:
-                              (_profile!.profilePhotoUrl != null &&
-                                  _profile!.profilePhotoUrl!.isNotEmpty)
-                              ? () => FullImageViewer.show(
-                                  context,
-                                  _profile!.profilePhotoUrl,
-                                )
-                              : null,
-                          child:
-                              _profile!.profilePhotoUrl != null &&
-                                  _profile!.profilePhotoUrl!.isNotEmpty
-                              ? CachedImage(
-                                  _profile!.profilePhotoUrl!,
-                                  fit: BoxFit.cover,
-                                  // Explicit size, and it is what makes the
-                                  // avatar actually round.
-                                  //
-                                  // BoxFit.cover only decides how the image
-                                  // fills the box it is GIVEN; with no
-                                  // width/height this widget sized itself to
-                                  // the image instead of to the circle, so a
-                                  // photo that was not square left the
-                                  // container's own colour showing through
-                                  // in the corners of the clip — the "gaps,
-                                  // and it isn't round" report. Every other
-                                  // avatar in this file already passes both.
-                                  //
-                                  // 118 outer − 5 border on each side.
-                                  width: 108,
-                                  height: 108,
-                                  errorBuilder:
-                                      (context, error, stackTrace) =>
-                                          _initialAvatar(),
-                                )
+                            image: (_profile!.profilePhotoUrl ?? '').isNotEmpty
+                                ? DecorationImage(
+                                    image: CachedNetworkImageProvider(
+                                      photoUrlAtSize(
+                                        _profile!.profilePhotoUrl,
+                                        320,
+                                      ),
+                                      cacheManager: adventImageCacheManager,
+                                    ),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.10),
+                                blurRadius: 18,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: (_profile!.profilePhotoUrl ?? '').isNotEmpty
+                              ? null
                               : _initialAvatar(),
                         ),
                       ),

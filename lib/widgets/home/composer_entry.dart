@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import '../../utils/photo_url.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
@@ -89,25 +91,41 @@ class ComposerEntry extends StatelessWidget {
                         gradient: AppColors.primaryGradient,
                         shape: BoxShape.circle,
                       ),
+                      // DecorationImage, not a clipped child — same pattern
+                      // as edit_profile_screen, which is the one that has
+                      // always looked right.
+                      //
+                      // A decoration paints its image THROUGH its own shape,
+                      // giving an exact circle. Putting the image inside as a
+                      // child and rounding it with `clipBehavior` only
+                      // approximates the curve, and with a 2px border drawn
+                      // over the top the flat segments show — the founder's
+                      // "it doesn't fit" on this avatar specifically, while
+                      // the one in the header a few pixels away looked fine.
+                      //
+                      // The initials stay as the child: a DecorationImage
+                      // paints over its child, so they show while the photo
+                      // loads and remain if it never arrives, which is what
+                      // the errorBuilder used to do.
                       child: Container(
                         width: 40,
                         height: 40,
-                        clipBehavior: Clip.antiAlias,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           gradient: AppColors.primaryGradient,
                           shape: BoxShape.circle,
                           border: Border.all(color: palette.card, width: 2),
+                          image: (photoUrl ?? '').isEmpty
+                              ? null
+                              : DecorationImage(
+                                  image: CachedNetworkImageProvider(
+                                    photoUrlAtSize(photoUrl, 120),
+                                    cacheManager: adventImageCacheManager,
+                                  ),
+                                  fit: BoxFit.cover,
+                                ),
                         ),
-                        child: photoUrl == null || photoUrl!.isEmpty
-                            ? fallback
-                            : CachedImage(
-                                photoUrl!,
-                                fit: BoxFit.cover,
-                                width: 40,
-                                height: 40,
-                                errorBuilder: (_, _, _) => Center(child: fallback),
-                              ),
+                        child: (photoUrl ?? '').isEmpty ? fallback : null,
                       ),
                     ),
                     const SizedBox(width: AppSpace.md),

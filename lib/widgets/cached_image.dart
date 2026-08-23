@@ -121,7 +121,23 @@ class _CachedImageState extends State<CachedImage> {
     // Note the size feeds the cache key via imageUrl, so a 28px chat avatar
     // and a 118px profile avatar are cached separately — which is correct,
     // and is why this is not simply pinned to 1024 everywhere.
-    final box = widget.width ?? widget.height;
+    // `isFinite` is load-bearing, not defensive noise.
+    //
+    // `width: double.infinity` is a completely ordinary thing to pass an
+    // image that should fill its parent, and three call sites in
+    // stories_rail.dart plus one in event_approvals_screen.dart do exactly
+    // that. `(double.infinity * dpr).round()` throws
+    // "UnsupportedError: Infinity or NaN toInt", and a throw inside build()
+    // is replaced by Flutter's red ErrorWidget — which is what the founder
+    // saw as "a red screen with an error where the story should be"
+    // (23 Aug 2026). Guard zero and negatives too; neither can produce a
+    // sensible request size.
+    //
+    // A non-finite box is not an error case, it just means "however big the
+    // parent is", which we cannot know here — so we ask for no particular
+    // size and let the URL stand as stored.
+    final raw = widget.width ?? widget.height;
+    final box = (raw != null && raw.isFinite && raw > 0) ? raw : null;
     final dpr =
         (MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0).clamp(1.0, 3.0);
     final url = box == null

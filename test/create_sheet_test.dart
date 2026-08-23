@@ -62,12 +62,23 @@ void main() {
     // The split into primary/secondary must not have dropped one on the
     // floor — that is the obvious way to break this refactor, and it would
     // silently remove a whole way of contributing to the app.
+    //
+    // 'Church notice' is deliberately NOT in this list (23 Aug 2026). It was
+    // removed from the sheet on purpose, not dropped: `notices` has no
+    // church_id column, so it was never attached to a church; every
+    // authenticated member could read every notice; there was no admin gate
+    // on either the client or the RLS policy; and the table held 0 rows from
+    // 0 posters since launch. Founder's call, given those findings.
+    //
+    // The guard this test provides is unchanged for the seven that remain —
+    // the point is to catch an ACCIDENTAL drop, and this one was a decision.
+    // If the feature is rebuilt properly (church_id + an
+    // is_approved_church_admin policy), add it back here at the same time.
     for (final label in const [
       'Post',
       'Story',
       'Event',
       'Prayer request',
-      'Church notice',
       'Advent News',
       'Sell something',
       'Job opening',
@@ -78,6 +89,17 @@ void main() {
         reason: '$label disappeared from the create sheet',
       );
     }
+
+    // The other half of the same rule: it must not come BACK by accident.
+    // Restoring the tile without the schema and the policy behind it would
+    // re-open a hole where any member publishes what reads as official
+    // church communication to everybody — which is what it did before.
+    expect(
+      find.text('Church notice'),
+      findsNothing,
+      reason: 'Church notice is ungated — it needs notices.church_id and an '
+          'is_approved_church_admin policy before it goes back on the sheet',
+    );
   });
 
   testWidgets('choosing an option returns its kind', (t) async {

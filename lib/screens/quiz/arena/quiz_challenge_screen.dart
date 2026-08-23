@@ -144,7 +144,11 @@ class _QuizOpponentPickerScreenState extends State<QuizOpponentPickerScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Add friends in the member directory, then challenge them '
+              // Not "the member directory" — that screen is disabled, so
+              // this was sending someone with no friends yet to a dead end
+              // at the exact moment they wanted to play with someone.
+              // Find people lives under New chat.
+              'Add friends from Find people, then challenge them '
               'to a Bible Quiz.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodyMedium

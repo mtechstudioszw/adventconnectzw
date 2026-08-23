@@ -191,7 +191,7 @@ class _OrderHandoffCard extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpace.sm),
                   Text(
-                    'Send in Advent Chat',
+                    'Send in Chat',
                     style: AppTextStyles.buttonText.copyWith(
                       color: AppColors.primaryBlue,
                       fontSize: 14.5,

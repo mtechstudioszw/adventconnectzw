@@ -11,7 +11,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/user_avatar.dart';
 import '../../widgets/motion/brand_spinner.dart';
 
-/// WhatsApp-style scoped search for Advent Chat. One search field, a row of
+/// WhatsApp-style scoped search for Chat. One search field, a row of
 /// scope chips (Friends · Messages · Groups · Archived · Status), and an
 /// Explore scope that searches everyone on Advent (people who aren't your
 /// friends yet). Reuses the inbox's already-loaded data so the in-your-world
@@ -28,7 +28,7 @@ class ChatSearchDelegate extends SearchDelegate<void> {
     required this.onOpenStatus,
     required this.onStartChatWithUser,
     required this.onOpenMessage,
-  }) : super(searchFieldLabel: 'Search Advent Chat');
+  }) : super(searchFieldLabel: 'Search Chat');
 
   final List<Conversation> chats; // 1:1 conversations
   final List<Conversation> groups;

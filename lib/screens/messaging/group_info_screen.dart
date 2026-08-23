@@ -47,6 +47,27 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       !_isChurch && _members.any((m) => m.userId == _myId && m.isAdmin);
   // Active member (not left/removed). fetchMembers excludes left members.
   bool get _amMember => _members.any((m) => m.userId == _myId);
+
+  /// You, then admins, then everyone else — each group alphabetical.
+  ///
+  /// The row already labelled itself "Name (You)"; what it could not do was
+  /// put itself where you would look. The server returns members in join
+  /// order, so in a group of any size your own row was somewhere in the
+  /// middle and you had to hunt for it to confirm you were even in the
+  /// list. Admins ride up with you because "who runs this group" is the
+  /// other question this screen is opened to answer.
+  ///
+  /// Church groups come through [GroupService.fetchChurchMembers], which
+  /// has no admin concept, so there the sort is simply you-then-alphabetical.
+  List<GroupMember> _selfFirst(List<GroupMember> members) {
+    final id = _myId;
+    return [...members]..sort((a, b) {
+      if (a.userId == id) return -1;
+      if (b.userId == id) return 1;
+      if (a.isAdmin != b.isAdmin) return a.isAdmin ? -1 : 1;
+      return a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+    });
+  }
   bool get _isChurch => _group?.isChurchGroup ?? false;
   bool get _isChannel => _group?.isChurchChannel ?? false;
 
@@ -77,7 +98,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       if (!mounted) return;
       setState(() {
         _group = convo;
-        _members = members;
+        _members = _selfFirst(members);
         _loading = false;
         _error = null;
       });
@@ -506,7 +527,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   ),
                 ScreenHero(
                   title: _isChannel ? 'Channel info' : 'Group info',
-                  tagline: 'Advent Chat',
+                  tagline: 'Chat',
                   fallbackRoute: 'messages',
                   trailing: _amAdmin
                       ? ScreenHeroTrailing(

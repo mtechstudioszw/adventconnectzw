@@ -182,7 +182,7 @@ class _MarketplaceGuidelinesScreenState
           ),
           const SizedBox(height: 8),
           Text(
-            'Advent Marketplace runs on trust between members — there is no '
+            'Marketplace runs on trust between members — there is no '
             'middleman holding your money or checking your parcels. These are '
             'what make that work.',
             style: AppTextStyles.bodySmall.copyWith(

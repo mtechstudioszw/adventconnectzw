@@ -32,7 +32,7 @@ const bool kFloatingNavBlur = true;
 ///
 /// **Chat replaced Churches here on 2026-07-27.** The floating chat bubble it
 /// supersedes was unreachable: it sat *under* the island and slid away with it
-/// on scroll, so Advent Chat had no working entry point at all. Churches was
+/// on scroll, so Chat had no working entry point at all. Churches was
 /// the right tab to give up because it is the only one already one tap from
 /// Home — the churches discovery rail, the "Churches" quick-stat and the
 /// "Find churches" button all route there, and it keeps its Profile-menu

@@ -33,6 +33,43 @@
 -keep class com.google.android.play.core.** { *; }
 -dontwarn com.google.android.play.core.**
 
+# Appodeal + mediated networks. The SDK resolves every network adapter by
+# CLASS NAME at runtime (com.appodeal.ads.adapters.<network>.*), so R8 sees
+# no reference to any of them and shrinks the entire waterfall out of the
+# release build. The failure is silent and looks exactly like "no fill":
+# init succeeds, requests go out, nothing ever comes back. Debug builds have
+# minify off, which is half of why ads only ever appeared there.
+#
+# The core SDK ships consumer rules in its AAR, but the mediated adapters
+# are added per-network in app/build.gradle.kts and are the part that gets
+# stripped, so keep the adapter packages explicitly.
+-keep class com.appodeal.ads.** { *; }
+-keep interface com.appodeal.ads.** { *; }
+-keep class com.explorestack.** { *; }
+-keep interface com.explorestack.** { *; }
+-keep class io.bidmachine.** { *; }
+-keep interface io.bidmachine.** { *; }
+-dontwarn com.appodeal.ads.**
+-dontwarn com.explorestack.**
+-dontwarn io.bidmachine.**
+
+# The mediated network SDKs pulled in by the adapters in build.gradle.kts.
+# Each ships its own consumer rules, so these are -dontwarn only: adding
+# seven adapters at once surfaces a lot of cross-references to classes that
+# other adapters would have provided, and R8 treats those as build-breaking
+# warnings rather than shrinking decisions. Keeps are deliberately NOT added
+# here — the AARs' own rules are more precise than a blanket -keep, and
+# blanket keeps on seven ad SDKs would undo most of the size win that
+# minification exists for.
+-dontwarn com.applovin.**
+-dontwarn com.unity3d.**
+-dontwarn com.vungle.**
+-dontwarn com.mbridge.**
+-dontwarn sg.bigo.**
+-dontwarn com.inmobi.**
+-dontwarn com.ironsource.**
+-dontwarn com.unity.**
+
 # OkHttp / Conscrypt — pulled in transitively by Supabase and
 # firebase_messaging. Without these you get "platform" warnings.
 -dontwarn org.conscrypt.**

@@ -907,7 +907,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      // Advent Chat is a top-level tab now (it replaced Churches), so the
+      // Chat is a top-level tab now (it replaced Churches), so the
       // inbox carries the island like every other tab destination — and
       // hides it on scroll the way the others do.
       bottomNavigationBar: HideOnScroll(
@@ -983,7 +983,10 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   /// list starts ~90px higher.
   Widget _buildHero() {
     return Container(
-      color: context.palette.scaffoldBg,
+      // Transparent so the ambient field reaches the status bar. This bar
+      // is in the normal flow above the chat list, not stacked over it, so
+      // it has nothing to occlude.
+      color: Colors.transparent,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -994,7 +997,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           child: Row(
             children: [
               Text(
-                'Advent Chat',
+                'Chat',
                 style: AppTextStyles.titleLarge.copyWith(
                   color: context.palette.text,
                   fontWeight: FontWeight.w700,
@@ -1326,9 +1329,13 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (all.isEmpty && requestCount == 0 && _archived.isEmpty) {
       return _buildEmptyState(
         title: 'No conversations yet',
-        body:
-            'Tap the pencil button to start a new chat, or reach out from a '
-            'member directory or church page.',
+        // Both "member directory" and "church page" are gone from this copy
+        // on purpose (founder, 23 Aug 2026): neither route works, so the
+        // empty state was telling a member with no conversations to go to
+        // two places that do not open. The pencil button leads to New chat
+        // → Find people, which is the one thing here that actually works —
+        // so it is the only thing this now names.
+        body: 'Tap the pencil button to start a new chat and find people.',
       );
     }
     final list = _applyFilter(all, _chatFilter);
@@ -3564,8 +3571,10 @@ class _Avatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        gradient: hasPhoto && !isSelfChat ? null : AppColors.primaryGradient,
-        color: hasPhoto && !isSelfChat ? context.palette.cardMuted : null,
+        // `hasPhoto` alone — the `&& !isSelfChat` here was what forced the
+        // gradient behind Notes to self even when there was a photo to show.
+        gradient: hasPhoto ? null : AppColors.primaryGradient,
+        color: hasPhoto ? context.palette.cardMuted : null,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
@@ -3575,7 +3584,16 @@ class _Avatar extends StatelessWidget {
           ),
         ],
       ),
-      child: isSelfChat
+      // Notes to self shows YOUR OWN face, like every other chat shows the
+      // face of whoever is on the other end — because in this one the other
+      // end is you. It used to short-circuit to a bookmark and discard
+      // `photoUrl` entirely, so the row was the only place in the inbox
+      // that never showed a photo at all.
+      //
+      // The bookmark is kept as the FALLBACK, where it does real work: with
+      // no profile photo set, a bookmark says "this is your notes" far
+      // better than your own initials do.
+      child: (isSelfChat && !hasPhoto)
           ? Icon(Icons.bookmark, color: AppColors.white, size: size * 0.44)
           : (isGroup && !hasPhoto)
           ? Icon(Icons.groups, color: AppColors.white, size: size * 0.52)

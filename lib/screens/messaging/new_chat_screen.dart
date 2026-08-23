@@ -294,13 +294,27 @@ class _NewChatScreenState extends State<NewChatScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleSmall.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        // The tick belongs here too. The list row this sheet
+                        // opens from already showed it (see _PersonCard's
+                        // `verified:`), so tapping a verified member made
+                        // their badge vanish — the one screen where you have
+                        // stopped to look at them properly. `m.isVerified`
+                        // was already in hand; nothing needed fetching.
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.titleSmall.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if (m.isVerified) const VerifiedTick(size: 15),
+                          ],
                         ),
                         if ((m.churchName ?? '').trim().isNotEmpty)
                           Text(
@@ -395,7 +409,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
         children: [
           const ScreenHero(
             title: 'New chat',
-            tagline: 'Advent Chat',
+            tagline: 'Chat',
             fallbackRoute: 'messages',
           ),
           Padding(

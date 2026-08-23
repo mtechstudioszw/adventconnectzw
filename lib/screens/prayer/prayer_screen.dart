@@ -487,7 +487,10 @@ class _PrayerScreenState extends State<PrayerScreen> {
 
   Widget _buildCategoryChips() {
     return Container(
-      color: context.palette.scaffoldBg,
+      // Transparent: this rail sits immediately under ScreenHero, which is
+      // now transparent too. Leaving it opaque just moved the hard edge of
+      // the ambient field down by one row instead of removing it.
+      color: Colors.transparent,
       child: SizedBox(
         height: 50,
         child: ListView(

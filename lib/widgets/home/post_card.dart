@@ -528,14 +528,56 @@ class _NaturalMediaState extends State<_NaturalMedia> {
   static const double _minRatio = 4 / 5; // tallest we allow
   static const double _maxRatio = 1.91; // widest we allow
 
+  /// Aspect ratios we have already measured, keyed by image URL.
+  ///
+  /// **This is what stops the feed jumping while you scroll.**
+  ///
+  /// Without it every card began life at [_fallbackRatio] (square) and only
+  /// learned its real shape when the image stream delivered — one frame
+  /// later at best, a network round-trip later at worst — at which point
+  /// `setState` changed the card's HEIGHT. A portrait phone photo clamps to
+  /// 4:5, which is taller than square, so the card GREW after it had already
+  /// been laid out.
+  ///
+  /// A card growing below the viewport is invisible. A card growing ABOVE it
+  /// pushes everything down while the scroll offset stays where it was, so
+  /// the reader is carried backwards — the reported "it takes you up like 3
+  /// posts". And because a ListView rebuilds cards as they recycle, each one
+  /// restarted at square and re-measured EVERY time it came back around,
+  /// which is why it happened repeatedly and only while scrolling.
+  ///
+  /// Measuring is unavoidable (the natural aspect ratio is the whole point
+  /// of this widget — see the class doc and CLAUDE.md), but measuring the
+  /// same image twice is not. Once a URL's ratio is known, a rebuilt card
+  /// gets the correct height in `initState`, before its first layout, and
+  /// never resizes at all.
+  ///
+  /// Process-lifetime and unbounded-by-design: it holds one double per image
+  /// URL seen this session, which is far smaller than the image cache that
+  /// already holds those same pictures.
+  static final Map<String, double> _ratioCache = <String, double>{};
+
+  /// Square, used only for an image whose size we have never resolved.
+  static const double _fallbackRatio = 1.0;
+
   final PageController _pc = PageController();
   ImageStream? _stream;
   ImageStreamListener? _listener;
-  double _ratio = 1.0;
+  late double _ratio;
+
+  /// True when [_ratio] was already correct at first build, so the size
+  /// change [AnimatedSize] exists to smooth never happens.
+  bool _ratioWasKnown = false;
 
   @override
   void initState() {
     super.initState();
+    final cached = _ratioCache[widget.urls.first];
+    _ratioWasKnown = cached != null;
+    _ratio = cached ?? _fallbackRatio;
+    // Still resolve when it was cached — the listener returns early if the
+    // measurement agrees, and this keeps the cache honest if a URL is ever
+    // re-pointed at different bytes.
     _resolveRatio();
   }
 
@@ -558,10 +600,14 @@ class _NaturalMediaState extends State<_NaturalMedia> {
     );
     _stream = provider.resolve(const ImageConfiguration());
     _listener = ImageStreamListener((info, _) {
-      if (!mounted) return;
       final h = info.image.height;
       if (h == 0) return;
       final r = (info.image.width / h).clamp(_minRatio, _maxRatio);
+      // Remember it even if this card is already gone — the next card to
+      // show this image is the one that benefits, and during a fast scroll
+      // that is exactly the card that got disposed mid-measurement.
+      _ratioCache[widget.urls.first] = r;
+      if (!mounted) return;
       if ((r - _ratio).abs() < 0.01) return;
       setState(() => _ratio = r);
     }, onError: (_, _) {});
@@ -575,7 +621,14 @@ class _NaturalMediaState extends State<_NaturalMedia> {
       onTap: widget.onTap,
       onDoubleTap: widget.onDoubleTap,
       child: AnimatedSize(
-        duration: AppMotion.maybe(context, AppMotion.standard),
+        // Zero when the ratio was already known at first build. AnimatedSize
+        // exists to soften the one-time settle from square to the photo's
+        // real shape; if there is no settle, animating is not smoothing
+        // anything — it is re-introducing the height change over 300ms on
+        // every recycled card, which is the jitter itself.
+        duration: _ratioWasKnown
+            ? Duration.zero
+            : AppMotion.maybe(context, AppMotion.standard),
         curve: AppMotion.ease,
         child: AspectRatio(
           aspectRatio: _ratio,

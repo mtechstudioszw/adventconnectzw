@@ -49,12 +49,36 @@ void main() async {
   unawaited(AppBootstrap.startSupabaseInit());
 
   // Cheap LOCAL reads the MaterialApp/theme need before the first frame.
-  // Kept tiny so the splash paints almost immediately.
+  //
+  // "Cheap" was the assumption, not the measurement. Two of these three are
+  // `flutter_secure_storage` reads, and on Android the FIRST read of the
+  // session is what initialises the AndroidX Keystore + EncryptedSharedPrefs
+  // — on the low-end handsets much of this app's audience carries, that is
+  // hundreds of milliseconds to low seconds, spent before Flutter draws
+  // ANYTHING. It is the black-window half of "the app takes 10 seconds to
+  // launch"; the splash cannot be blamed for time that elapses before it
+  // exists.
+  //
+  // So: timeboxed, not awaited to completion. Each service keeps running in
+  // the background and publishes through its own notifier, and the two that
+  // matter for the first frame are both defaulted correctly:
+  //
+  //   - ThemeService starts at ThemeMode.system, so a late answer repaints
+  //     via its ValueListenableBuilder instead of flashing the wrong theme.
+  //     The only visible cost is a device set to an EXPLICIT light/dark
+  //     that briefly follows the system instead — and only when the
+  //     keystore is slow enough to blow the budget.
+  //   - AccountModeService starts in personal mode, which is where the
+  //     overwhelming majority of launches belong anyway, and business mode
+  //     is not reachable from the first frame.
+  //
+  // ConnectivityService is a plain platform-channel read and is not the
+  // problem; it rides along because it is already fast.
   await Future.wait([
     ConnectivityService.initialize(),
     AccountModeService.init(),
     ThemeService.init(),
-  ]);
+  ]).timeout(const Duration(milliseconds: 300), onTimeout: () => const []);
 
   // Media session for the Library music player + Audio Bible.
   //
@@ -531,7 +555,7 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       // re-arms the expiry timer.
       if (AuthService.isSignedIn) unawaited(PremiumService.refresh());
       // Full-screen ad on return-to-foreground (capped once / 3h), but
-      // never over a sensitive flow — Advent Chat, prayer, auth/onboarding,
+      // never over a sensitive flow — Chat, prayer, auth/onboarding,
       // splash/lock, banned/update, admin. Appodeal has no App-Open format,
       // so this is an interstitial sharing the global interstitial cap.
       _maybeShowResumeAd();
@@ -540,7 +564,7 @@ class _AdventConnectAppState extends State<AdventConnectApp>
 
   /// The route blocklist moved to [ResumeAdManager.blockedPrefixes] — next
   /// to the thing it restrains, where a test can read it. It was private
-  /// here, so nothing could check that Advent Chat was still on it.
+  /// here, so nothing could check that Chat was still on it.
   void _maybeShowResumeAd() {
     if (!AuthService.isSignedIn) return;
     final loc = appRouter.routerDelegate.currentConfiguration.uri.path;

@@ -130,7 +130,16 @@ class QuizService {
         : 0;
     final wantCurated = count - wantGenerated;
 
-    final curated = QuizProgressService.pickFresh(pool, wantCurated);
+    // `padWithStale: false` is load-bearing. Padded back up to wantCurated
+    // with already-seen rows, this returned a full list, the shortfall below
+    // computed to zero, and the generator top-up never ran — so a thin topic
+    // served the same handful of questions every round instead of being
+    // filled out with fresh scripture. See QuizProgressService.pickFresh.
+    final curated = QuizProgressService.pickFresh(
+      pool,
+      wantCurated,
+      padWithStale: false,
+    );
     // A thin topic (or an empty cache offline) is topped up from the
     // generator rather than served short or repeated.
     final shortfall = count - curated.length;
@@ -154,7 +163,20 @@ class QuizService {
             category: generatorSupports ? category : null,
           );
 
-    final round = [...curated, ...generated]..shuffle();
+    var round = [...curated, ...generated];
+    // Last resort: the generator was unavailable (offline) or could not
+    // write for this topic, and we are still short. Only NOW do we allow
+    // already-seen questions back in — a repeated round still beats a round
+    // of three questions. Oldest-seen first, which is what pickFresh's
+    // stale ordering gives us.
+    if (round.length < count) {
+      final used = round.map((q) => q.id).toSet();
+      final backfill = QuizProgressService.pickFresh(pool, count)
+          .where((q) => !used.contains(q.id))
+          .take(count - round.length);
+      round = [...round, ...backfill];
+    }
+    round.shuffle();
     return round.take(count).toList();
   }
 

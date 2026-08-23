@@ -378,7 +378,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   Widget build(BuildContext context) {
     return MainScaffold(
       title: 'Churches',
-      // Churches gave up its nav slot to Advent Chat (2026-07-27) and is now
+      // Churches gave up its nav slot to Chat (2026-07-27) and is now
       // PUSHED from Home / Profile. It used to keep the island with
       // `currentIndex: -1` so members could jump to another section, but an
       // island with no active pill still reads as a tab bar — one that
@@ -428,7 +428,13 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
     return FlatStatusBar(
       child: Container(
         width: double.infinity,
-        color: palette.scaffoldBg,
+        // Transparent, like ScreenHero — this header is a hand-rolled copy
+        // of it and carried the same bug: an opaque slab across the top of
+        // the screen hid the app-wide ambient field, so the drifting
+        // particles appeared to begin partway down the page. Nothing
+        // scrolls under this (it sits in the normal flow above the list),
+        // so it has nothing to occlude.
+        color: Colors.transparent,
         child: SafeArea(
           bottom: false,
           child: Padding(

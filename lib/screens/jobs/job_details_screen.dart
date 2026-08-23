@@ -649,11 +649,16 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     return ClipPath(
       clipper: _HeroClipper(),
       child: Container(
-        // Flat header on the scaffold colour (founder rule, 2026-07-28).
-        // Every foreground in here was white-on-navy and has been moved
-        // onto the palette — a background swap alone would have left
-        // white text invisible on light grey.
-        color: context.palette.scaffoldBg,
+        // Flat header (founder rule, 2026-07-28). Every foreground in here
+        // was white-on-navy and has been moved onto the palette — a
+        // background swap alone would have left white text invisible on
+        // light grey.
+        //
+        // Transparent rather than `scaffoldBg`: this hero is in the normal
+        // flow above the detail scroll view, so it occludes nothing, and an
+        // opaque fill stopped the app's ambient field dead across the top
+        // of the screen.
+        color: Colors.transparent,
         child: SafeArea(
           bottom: false,
           child: Padding(

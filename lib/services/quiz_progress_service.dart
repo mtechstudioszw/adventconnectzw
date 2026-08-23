@@ -315,10 +315,30 @@ class QuizProgressService {
   /// inside [seenCooldown], then falling back to whatever was seen
   /// longest ago. The old code wiped its memory when it couldn't fill a
   /// round, which let a question reappear in the very next one.
+  /// [padWithStale] controls what happens when the pool cannot supply
+  /// [count] genuinely-fresh questions.
+  ///
+  /// Defaults to true, which is what every caller used to get implicitly —
+  /// and it quietly defeated the rotation it sits inside. `buildRound` sizes
+  /// its generator top-up from `count - curated.length`, so a pool that
+  /// padded itself back up to `count` with repeats reported **no shortfall**
+  /// and the generator was never asked to fill the gap.
+  ///
+  /// The effect was worst exactly where it was least acceptable: a category
+  /// round is 10 questions, "Prayer" and "Church & Mission" hold 10 curated
+  /// questions each, and the generator does not write for those topics — so
+  /// `wantGenerated` was 0, this method returned all 10 (fresh the first
+  /// time, stale every time after), shortfall was 0, and the member got the
+  /// identical ten questions on every single Prayer round for the 21-day
+  /// cooldown and beyond. That is "the quiz repeats questions frequently".
+  ///
+  /// Pass false to get only genuinely-fresh rows and an honest short list,
+  /// so the caller can decide how to fill the rest.
   static List<QuizQuestion> pickFresh(
     List<QuizQuestion> pool,
     int count, {
     int? seed,
+    bool padWithStale = true,
   }) {
     if (pool.isEmpty || count <= 0) return const [];
     final seen = _seen();
@@ -338,6 +358,8 @@ class QuizProgressService {
     // A seeded shuffle keeps the Daily Challenge identical on every device
     // running this build — same source of randomness as the generator uses.
     fresh.shuffle(seed == null ? null : Random(seed));
+    if (!padWithStale) return fresh.take(count).toList();
+
     // Oldest-seen first, so a forced repeat is at least the most distant one.
     stale.sort((a, b) => (seen[a.id] ?? 0).compareTo(seen[b.id] ?? 0));
 

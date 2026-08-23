@@ -152,14 +152,46 @@ dependencies {
     // a time, and each one costs APK size — do not paste the full list
     // from Appodeal's README.
     //
-    // Only these are usable today (founder's dashboard, 17 Aug 2026):
-    //   * BidMachine        — the adapter below
-    //   * Backfill          — served by the core SDK + iab renderer
-    //   * Ad Server Campaigns — same
-    // Every other network reports "does not pass all restrictions" and
-    // unlocks only once the app has live store traffic. When one unlocks,
-    // generate its line with Appodeal's Dependencies Wizard:
+    // UPDATED 23 Aug 2026. The 17 Aug note below is kept because it explains
+    // how we got here, but it is no longer the situation:
+    //
+    //   > Only these are usable today (founder's dashboard, 17 Aug 2026):
+    //   > BidMachine, Backfill, Ad Server Campaigns. Every other network
+    //   > reports "does not pass all restrictions" and unlocks only once the
+    //   > app has live store traffic.
+    //
+    // The app now HAS live store traffic (34 installs / 59 active users in
+    // the week to 23 Aug) and Mediation Setup -> Ad Networks shows an
+    // "Appodeal account" already attached to ten networks. They were never
+    // able to serve, because a network needs BOTH halves: enabled in the
+    // dashboard AND its adapter compiled in here. Only BidMachine had the
+    // second half, so the production waterfall was one bidder deep:
+    // 6.29K requests, 2.7% fill, $0.0000 eCPM — the 63 impressions that did
+    // land were unpaid Backfill/Ad Server house inventory.
+    //
+    // Each line below is a network the dashboard already holds an account
+    // for, so none of them needs per-network signup. Versions were read from
+    // the Appodeal artifactory on 23 Aug 2026 and are the current releases
+    // against core SDK 4.2.0; the scheme is <network-sdk-version>.<build>,
+    // which is why they do NOT look like Appodeal version numbers.
+    // Regenerate with Appodeal's Dependencies Wizard:
     //   https://docs.appodeal.com/android/advanced/configure-mediated-networks
+    //
+    // DELIBERATELY NOT ADDED, though the dashboard has accounts for them —
+    // each costs APK size and would buy nothing on this app's traffic:
+    //   * VK Ads (my_target)  — "does not pass all restrictions" + CIS-only.
+    //   * Amazon Ads          — "has to be connected manually", thin outside US.
+    //   * DT Exchange         — "does not pass all restrictions".
+    //   * Inmobi              — "not connected to Appodeal default account yet".
+    //   * ironSource          — "does not pass all restrictions".
+    //   * Meta / Yandex       — "has to be connected manually", no account.
+    //
+    // Those statuses are quoted from Apps -> Advent Connect ZW -> Ad Units on
+    // 23 Aug 2026. An adapter for a network the dashboard will not serve is
+    // pure APK weight at zero fill, so the list below is exactly the set that
+    // page reports as ready. Recheck it when adding: ironSource and DT
+    // Exchange are restriction-gated and should unlock as traffic grows, and
+    // Inmobi needs one click to attach the Appodeal default account.
     //
     // NEVER add an AdMob adapter. The AdMob ACCOUNT (not just the app) is
     // disapproved and under appeal; serving through it is the one thing
@@ -168,4 +200,9 @@ dependencies {
     // meta-data has to go back into AndroidManifest.xml at the same time —
     // play-services-ads crashes on launch without it.
     implementation("com.appodeal.ads.sdk.adapters:bidmachine:3.7.1.0")
+    implementation("com.appodeal.ads.sdk.adapters:applovin:13.6.4.0")
+    implementation("com.appodeal.ads.sdk.adapters:unity_ads:4.17.0.0")
+    implementation("com.appodeal.ads.sdk.adapters:vungle:7.7.7.0")
+    implementation("com.appodeal.ads.sdk.adapters:mintegral:17.1.71.0")
+    implementation("com.appodeal.ads.sdk.adapters:bigo_ads:6.0.0.0")
 }

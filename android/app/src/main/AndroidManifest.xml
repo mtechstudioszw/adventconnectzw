@@ -6,6 +6,37 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Network state for connectivity_plus offline detection. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- Advertising ID. This is what makes ads fill in a RELEASE build.
+
+         Since Android 13 (API 33) the advertising ID can only be read if
+         this permission is DECLARED. Without it AdvertisingIdClient does not
+         fail loudly — it hands back the zeroed
+         00000000-0000-0000-0000-000000000000. targetSdk is 36, so that is
+         every user on a current device.
+
+         BidMachine, our only live demand source (see the adapter list in
+         app/build.gradle.kts), is a programmatic bidder. A bid request
+         carrying a zeroed advertising ID is untargetable, draws no bid, and
+         so nothing fills and no ad ever renders.
+
+         It used to merge in for free from play-services-ads, which the AdMob
+         adapter dragged in. Removing AdMob on 18 Aug 2026 took this
+         permission with it: neither the Appodeal core SDK nor the
+         stack_appodeal_flutter plugin declares it — their manifests ask only
+         for INTERNET and ACCESS_NETWORK_STATE.
+
+         This is not the whole story of the production fill failure — the
+         dashboard for 16-23 Aug 26 shows 6.29K requests at 2.7% fill and
+         $0.0000 eCPM, i.e. the waterfall itself is nearly empty (see
+         app/build.gradle.kts: BidMachine is the only mediated network that
+         has been unlocked). But it is the part that suppresses whatever
+         bidding demand does exist, and it costs nothing to fix. Debug builds
+         hide all of it: setTesting(true) serves test creatives outside the
+         waterfall at 100% fill, and they never need an advertising ID.
+
+         Keep the Play Data Safety answer for "advertising ID" as YES. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
     <!-- Geolocator: nearest churches sort + distance chips.
 
          COARSE ONLY, deliberately. LocationService asks for

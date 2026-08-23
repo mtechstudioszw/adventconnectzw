@@ -405,7 +405,7 @@ class _ClaimChurchScreenState extends State<ClaimChurchScreen> {
                   title: 'Post announcements',
                   body:
                       'Share notices that reach every member — in the church '
-                      'feed AND your church channel in Advent Chat.',
+                      'feed AND your church channel in Chat.',
                 ),
                 const _Capability(
                   icon: Icons.photo_camera_back_rounded,

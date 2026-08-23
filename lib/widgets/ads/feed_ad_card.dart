@@ -11,7 +11,7 @@ import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 
 /// The in-feed sponsored card, for the Home and Watch feeds. **Never in
-/// Advent Chat or anything to do with messaging**, and never in auth or
+/// Chat or anything to do with messaging**, and never in auth or
 /// prayer.
 ///
 /// ## This replaced NativeAdCard, and had to

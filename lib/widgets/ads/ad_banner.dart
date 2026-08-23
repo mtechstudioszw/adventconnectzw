@@ -8,7 +8,7 @@ import '../../services/ads/ads_service.dart';
 import '../../services/premium_service.dart';
 
 /// The anchored 320x50 banner. Drop it anywhere that's allowed to show ads
-/// (lists, detail screens) — **NEVER in Advent Chat or anything to do with
+/// (lists, detail screens) — **NEVER in Chat or anything to do with
 /// messaging**, and never in auth/onboarding or prayer. Renders nothing
 /// (zero height) until an ad is actually available, so layouts never
 /// reserve empty space for an ad that didn't arrive.

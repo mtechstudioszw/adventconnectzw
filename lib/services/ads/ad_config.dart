@@ -29,5 +29,17 @@ class AdConfig {
   /// force test ads in a release build while QA-ing.
   static const bool forceTestAds = false;
 
+  /// Force Appodeal's verbose logging on in a release build.
+  ///
+  /// Release normally runs at [Appodeal.LogLevelNone], which is why the
+  /// production fill failure was invisible for so long — the SDK knew
+  /// exactly which networks were bidding and said nothing. Flip this to
+  /// true, ship an internal-track build, and `adb logcat -s Appodeal` shows
+  /// the waterfall per request. Flip it back before a public release: the
+  /// logs are noisy and name the demand sources.
+  static const bool forceVerboseAdLogs = false;
+
+  static bool get verboseLogs => forceVerboseAdLogs || kDebugMode;
+
   static bool get useTestAds => forceTestAds || kDebugMode;
 }

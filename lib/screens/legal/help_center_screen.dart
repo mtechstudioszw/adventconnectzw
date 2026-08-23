@@ -84,7 +84,7 @@ class HelpCenterScreen extends StatelessWidget {
         LegalSection(
           title: 'Chat',
           body:
-              'Advent Chat is private messaging between members. The field at '
+              'Chat is private messaging between members. The field at '
               'the top searches people, groups and message text. Press and '
               'hold any message to report it. Blocking someone stops them '
               'messaging you and hides their posts, stories and prayers from '

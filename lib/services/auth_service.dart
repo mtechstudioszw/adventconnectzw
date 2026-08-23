@@ -919,6 +919,55 @@ class AuthService {
   static Future<bool> isBannedLocally() async =>
       (await SecureStorageService.read(_bannedKey)) == '1';
 
+  /// Does the signed-in member carry the gold verified tick?
+  ///
+  /// Every OTHER surface gets this for free, because it arrives joined onto
+  /// whatever it is rendering — `Post.authorIsVerified`, `Message`, the
+  /// member-directory entry. The gaps are the places that build a row for
+  /// the viewer THEMSELVES out of local state, because there is no join to
+  /// ride on and `auth.currentUser.userMetadata` does not carry it (it is a
+  /// `profiles` column, not auth metadata).
+  ///
+  /// That is why a verified member's own post preview showed no tick: the
+  /// draft Post was assembled from auth metadata, so `authorIsVerified`
+  /// silently defaulted to false and the preview lied about how the post
+  /// would actually look.
+  ///
+  /// Cached for the session — the flag is granted by an admin and does not
+  /// change mid-session, so this is one small read per launch rather than
+  /// one per preview. Fails soft to false: a missing tick is a cosmetic
+  /// loss, and inventing one is not.
+  static bool? _verifiedCache;
+
+  /// Synchronous answer for widgets that cannot await. Null until
+  /// [isCurrentUserVerified] has run once; treat null as "not yet known".
+  static bool? get verifiedCached => _verifiedCache;
+
+  static Future<bool> isCurrentUserVerified() async {
+    final cached = _verifiedCache;
+    if (cached != null) return cached;
+    final user = currentUser;
+    if (user == null) return false;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('is_verified, is_verified_admin')
+          .eq('id', user.id)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 4));
+      final verified =
+          row?['is_verified'] == true || row?['is_verified_admin'] == true;
+      _verifiedCache = verified;
+      return verified;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Drop the cached tick. Called on sign-out so the next account does not
+  /// inherit this one's badge.
+  static void clearVerifiedCache() => _verifiedCache = null;
+
   /// True when the signed-in account is banned (profiles.is_banned).
   /// Persists the result locally so a banned account is locked out instantly
   /// on the next cold start (even offline). On a network blip we trust the

@@ -912,7 +912,7 @@ class _ActionBar extends StatelessWidget {
 
 /// The two ways to reach a seller, side by side and equally weighted.
 ///
-/// Order is deliberate: Advent Chat first because it always works — every
+/// Order is deliberate: Chat first because it always works — every
 /// member has it — and WhatsApp second because it depends on a number the
 /// seller may not have shared and an app the buyer may not have installed.
 class _ContactRow extends StatelessWidget {
@@ -956,7 +956,7 @@ class _AdventChatButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Message the seller in Advent Chat',
+      label: 'Message the seller in Chat',
       child: Pressable(
         onTap: busy ? null : onTap,
         haptics: true,

@@ -22,7 +22,9 @@ import '../../widgets/app_search_field.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/search_suggest_service.dart';
 import '../../services/secure_storage_service.dart';
+import '../../widgets/cached_image.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
@@ -96,6 +98,14 @@ class _SearchScreenState extends State<SearchScreen>
   // lazily the first time we hit an empty-result state.
   List<MemberDirectoryEntry> _fallbackPeople = const [];
   bool _fallbackLoading = false;
+
+  /// Close matches for a query that found nothing — "did you mean…".
+  ///
+  /// Shown ABOVE [_fallbackPeople], because the two are answering different
+  /// questions: these are attempts at what the member actually typed, that
+  /// one is a change of subject. A misspelling should be corrected before
+  /// it is consoled.
+  List<SearchSuggestion> _didYouMean = const [];
 
   List<String> _recent = const [];
   bool _seeAllRecent = false;
@@ -483,8 +493,43 @@ class _SearchScreenState extends State<SearchScreen>
         posts.isNotEmpty ||
         videos.isNotEmpty;
     if (!hasAny) {
+      // Ask what they MEANT before offering something else entirely.
+      // Fires alongside the generic fallback rather than before it, so the
+      // empty state fills in as each answer lands instead of waiting on
+      // both.
+      unawaited(_loadDidYouMean(query));
       _loadFallback();
+    } else if (_didYouMean.isNotEmpty) {
+      // A later query matched — drop suggestions belonging to the previous
+      // one, or they would sit under a result list they have nothing to do
+      // with.
+      setState(() => _didYouMean = const []);
     }
+  }
+
+  /// Close matches for a query that found nothing. Best-effort and
+  /// self-cancelling: if the member has typed on since, the answer is for a
+  /// query that is no longer on screen, so it is dropped.
+  Future<void> _loadDidYouMean(String query) async {
+    final results = await SearchSuggestService.didYouMean(query);
+    if (!mounted || results.isEmpty) return;
+    if (query != _lastQuery) return;
+    setState(() => _didYouMean = results);
+  }
+
+  /// The suggested-members list, fetched at most once per visit to this
+  /// screen and shared by every search.
+  ///
+  /// Held as a Future rather than a List so that two searches racing at
+  /// startup await the same in-flight request instead of firing two.
+  Future<List<MemberDirectoryEntry>>? _suggestedFuture;
+
+  Future<List<MemberDirectoryEntry>> _suggestedForMatching() {
+    // 80 covers both callers: the local substring match in _searchPeople
+    // and the empty-state fallback, which only shows 30. One fetch, not two
+    // at different limits.
+    return _suggestedFuture ??=
+        DirectoryService.fetchSuggestedMembers(limit: 80);
   }
 
   Future<void> _loadFallback() async {
@@ -492,7 +537,10 @@ class _SearchScreenState extends State<SearchScreen>
     if (_fallbackPeople.isNotEmpty) return;
     _fallbackLoading = true;
     try {
-      final list = await DirectoryService.fetchSuggestedMembers(limit: 30);
+      // Reuses whatever _searchPeople already fetched — the empty state is
+      // reached straight after a search, so this was a second request for a
+      // list we had just downloaded.
+      final list = await _suggestedForMatching();
       if (!mounted) return;
       setState(() => _fallbackPeople = list);
     } catch (_) {
@@ -527,7 +575,19 @@ class _SearchScreenState extends State<SearchScreen>
     final results = await Future.wait([
       safe(() => DirectoryService.fetchEntries(search: query)),
       safe(() => DirectoryService.searchProfilesByName(query)),
-      safe(() => DirectoryService.fetchSuggestedMembers(limit: 80)),
+      // Fetched ONCE per visit, not once per search.
+      //
+      // This list does not depend on `query` — it is the generic suggested
+      // -members list, pulled only so the local substring match below can
+      // catch names Supabase's index misses. It was being re-fetched on
+      // every keystroke batch, dragging 80 profile rows over the network
+      // each time to answer a question the previous copy could already
+      // answer.
+      //
+      // On this project that round trip goes to eu-central-1, so it was one
+      // of nine requests per search and by far the heaviest payload. Same
+      // data, same fallback behaviour, one fetch.
+      safe(() => _suggestedForMatching()),
     ]);
     final byProfession = results[0];
     final byName = results[1];
@@ -603,7 +663,10 @@ class _SearchScreenState extends State<SearchScreen>
     // down, and FlatStatusBar keeps the status-bar icons dark on it.
     return FlatStatusBar(
       child: Container(
-        color: context.palette.scaffoldBg,
+        // Transparent so the ambient field reaches the status bar. Nothing
+        // scrolls under this bar — it sits above the results list in the
+        // normal flow — so the opaque fill was only ever hiding particles.
+        color: Colors.transparent,
         // Sits straight under the status bar. The field is the subject of
         // this screen, so it starts as high as the inset allows — 2dp of
         // breathing room, not a band of empty canvas above it.
@@ -677,7 +740,10 @@ class _SearchScreenState extends State<SearchScreen>
       const _FilterDef(_Filter.jobs, 'Jobs', Icons.work_outline_rounded),
     ];
     return Container(
-      color: context.palette.scaffoldBg,
+      // Transparent, like the search bar above it — together they form the
+      // top region of this screen, and painting either one opaque leaves a
+      // band where the ambient field stops dead.
+      color: Colors.transparent,
       padding: const EdgeInsets.only(bottom: 10),
       // No fixed height. The rail used to be pinned at 38dp with text
       // inside it that scales with the system font — at large
@@ -1032,11 +1098,52 @@ class _SearchScreenState extends State<SearchScreen>
         EmptyStateCard(
           icon: Icons.search_off,
           title: 'No matches for "$_lastQuery"',
-          message:
-              'Try a shorter keyword or different spelling. '
-              'Here are people you might know instead.',
+          // The copy changes with what we can actually offer. Telling
+          // someone to "try a different spelling" while showing them the
+          // correct spelling directly underneath is not advice, it is
+          // noise.
+          message: _didYouMean.isNotEmpty
+              ? 'Here are some close matches.'
+              : 'Try a shorter keyword or different spelling. '
+                    'Here are people you might know instead.',
         ),
         const SizedBox(height: 16),
+        // "Did you mean…" — attempts at what was typed. Above the generic
+        // suggestions on purpose: correcting a misspelling beats changing
+        // the subject.
+        if (_didYouMean.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              _didYouMean.length == 1
+                  ? 'Did you mean ${_didYouMean.first.label}?'
+                  : 'Did you mean…',
+              style: AppTextStyles.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          for (final s in _didYouMean)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _DidYouMeanRow(
+                suggestion: s,
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => s.isPerson
+                      ? context.pushNamed(
+                          'user_profile',
+                          pathParameters: {'userId': s.refId},
+                        )
+                      : context.pushNamed(
+                          'church_details',
+                          pathParameters: {'id': s.refId},
+                        ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 20),
+        ],
         if (_fallbackPeople.isNotEmpty) ...[
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 8),
@@ -2469,6 +2576,89 @@ class _Row extends StatelessWidget {
               Icon(Icons.chevron_right, color: context.palette.textMuted),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One "did you mean…" row.
+///
+/// Deliberately plainer than [_PersonResultRow] and the church row: these
+/// are guesses, not matches. Giving them the full result treatment — the
+/// Add-friend button, the follower counts, the query highlighting — would
+/// dress a suggestion up as something the search actually found, and the
+/// highlighting in particular would be a lie, because the whole reason
+/// this row exists is that the text does NOT contain what was typed.
+class _DidYouMeanRow extends StatelessWidget {
+  const _DidYouMeanRow({required this.suggestion, required this.onTap});
+
+  final SearchSuggestion suggestion;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final photo = (suggestion.photoUrl ?? '').trim();
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.divider),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              clipBehavior: Clip.antiAlias,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: palette.cardMuted,
+              ),
+              child: photo.isNotEmpty
+                  ? CachedImage(photo, fit: BoxFit.cover, width: 40, height: 40)
+                  : Icon(
+                      suggestion.isPerson
+                          ? Icons.person_outline
+                          : Icons.church_outlined,
+                      size: 20,
+                      color: palette.textMuted,
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    suggestion.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleSmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    suggestion.sublabel?.trim().isNotEmpty == true
+                        ? suggestion.sublabel!
+                        : (suggestion.isPerson ? 'Member' : 'SDA church'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: palette.textMuted),
+          ],
         ),
       ),
     );

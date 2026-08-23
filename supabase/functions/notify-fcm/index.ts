@@ -438,26 +438,32 @@ Deno.serve(async (req: Request) => {
   // is exactly what youtube_fanout_notification writes (patch_156).
   let imageUrl: string | null = null;
   if (referenceType === "video" && referenceId) {
-    try {
-      const { data: vid } = await supabase
-        .from("youtube_videos")
-        .select("thumbnail_url")
-        .eq("video_id", referenceId)
-        .maybeSingle();
-      imageUrl = (vid?.thumbnail_url as string | null) ?? null;
-    } catch (_) {
-      // best-effort; the fallback below still applies.
-    }
-    // Belt and braces (3 Aug 2026). The row lookup can miss for reasons
-    // that have nothing to do with the push being wrong: a live
-    // broadcast notified in the same instant the row is written, or a
-    // video deleted afterwards (20 historical notifications are orphaned
-    // exactly that way). YouTube's thumbnail URL is deterministic from
-    // the video id, so there is never a good reason to send a live
-    // broadcast out as a bare text banner.
-    if (!imageUrl) {
-      imageUrl = `https://i.ytimg.com/vi/${referenceId}/hqdefault.jpg`;
-    }
+    // ALWAYS the deterministic hqdefault, never `youtube_videos.thumbnail_url`.
+    //
+    // The stored URL is the right thing to render inside the app, and the
+    // wrong thing to hand to FCM. youtube-sync stores whatever YouTube
+    // advertises as the best available frame, which for a live broadcast is
+    // `maxresdefault_live.jpg` — and that URL has two failure modes that a
+    // push cannot survive:
+    //
+    //   1. `maxresdefault` only exists when the source was uploaded at 720p
+    //      or better. For everything else it is a 404.
+    //   2. The `_live` variant stops resolving the moment the stream ends,
+    //      so a notification about a broadcast goes imageless at exactly the
+    //      point people come back to it.
+    //
+    // Either way the fetch fails and Android quietly renders a text-only
+    // banner — reported 23 Aug 2026 as "the YouTube notification no longer
+    // displays a thumbnail". Nothing errored; the image was just never there.
+    //
+    // `hqdefault.jpg` is generated for EVERY video, never expires, and at
+    // 480x360 sits comfortably inside FCM's image size limit (maxres at
+    // 1280x720 does not always). This was already the fallback three lines
+    // below — it simply never ran, because the row lookup succeeded and
+    // handed back the fragile URL.
+    //
+    // Dropping the lookup also removes a DB round-trip from every video push.
+    imageUrl = `https://i.ytimg.com/vi/${referenceId}/hqdefault.jpg`;
   }
 
   try {

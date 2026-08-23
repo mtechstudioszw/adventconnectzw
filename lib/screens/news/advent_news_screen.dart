@@ -106,7 +106,10 @@ class _AdventNewsScreenState extends State<AdventNewsScreen> {
 
   Widget _buildCategoryChips() {
     return Container(
-      color: context.palette.scaffoldBg,
+      // Transparent: sits immediately under ScreenHero, which is now
+      // transparent too. An opaque rail here just moves the hard edge of
+      // the ambient field down one row rather than removing it.
+      color: Colors.transparent,
       child: SizedBox(
         height: 52,
         child: ListView(

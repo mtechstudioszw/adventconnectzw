@@ -48,6 +48,7 @@ class ScreenHero extends StatelessWidget {
     this.subtitle,
     this.fallbackRoute,
     this.trailing,
+    this.opaque = false,
   });
 
   final String title;
@@ -56,13 +57,34 @@ class ScreenHero extends StatelessWidget {
   final String? fallbackRoute;
   final Widget? trailing;
 
+  /// Paint `palette.scaffoldBg` behind the header instead of letting the
+  /// app's ambient field show through.
+  ///
+  /// **Defaults to false, and that is the fix for a real bug.** This header
+  /// used to paint an opaque slab unconditionally. Once the splash's
+  /// drifting particle field moved behind the whole app
+  /// (`lib/widgets/ambient_background.dart`, 18 Aug 2026) that slab became a
+  /// lid: the field was full-screen underneath, but every screen built on
+  /// `ScreenHero` covered its top ~120-160px with flat grey, so the motion
+  /// appeared to start partway down the page. That is the "background is cut
+  /// out at the top / not full screen" report — the field was never
+  /// clipped, it was painted over.
+  ///
+  /// Transparency is safe here by construction: `ScreenHero` is an ordinary
+  /// widget in the normal layout flow, not a sliver and not `Positioned`, so
+  /// nothing ever scrolls beneath it. CLAUDE.md's rule that headers need
+  /// `scaffoldBg` to occlude scrolling content applies to PINNED headers —
+  /// an `AppBar`, or a header stacked over a list. Set [opaque] to true in
+  /// that situation and the old behaviour comes back for that screen alone.
+  final bool opaque;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     return FlatStatusBar(
       child: Container(
         width: double.infinity,
-        color: palette.scaffoldBg,
+        color: opaque ? palette.scaffoldBg : Colors.transparent,
         child: SafeArea(
           bottom: false,
           child: Padding(

@@ -30,7 +30,7 @@ class OrderHandoff {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'This seller hasn\'t shared a phone number. Try Advent Chat.',
+            'This seller hasn\'t shared a phone number. Try Chat.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

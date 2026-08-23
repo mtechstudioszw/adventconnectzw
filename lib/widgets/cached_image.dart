@@ -8,6 +8,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
+import '../utils/photo_url.dart';
 
 /// HTTP file service that bounds how long a single image fetch may take.
 ///
@@ -107,7 +108,25 @@ class _CachedImageState extends State<CachedImage> {
 
   @override
   Widget build(BuildContext context) {
-    final url = widget.url;
+    // Ask the host for the size we are about to draw, rather than accepting
+    // whatever thumbnail it volunteered.
+    //
+    // Google hands every OAuth avatar over as `=s96-c` — a 96px image — and
+    // that is what got stored for every Google-signup member. Drawn in a
+    // 118px circle it is already upscaled, and full-screen it is a blur with
+    // nothing to zoom into. Doing this here rather than at the call sites
+    // fixes every avatar in the app at once, and leaves non-Google URLs
+    // (Supabase storage, YouTube thumbs) completely untouched.
+    //
+    // Note the size feeds the cache key via imageUrl, so a 28px chat avatar
+    // and a 118px profile avatar are cached separately — which is correct,
+    // and is why this is not simply pinned to 1024 everywhere.
+    final box = widget.width ?? widget.height;
+    final dpr =
+        (MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0).clamp(1.0, 3.0);
+    final url = box == null
+        ? widget.url
+        : photoUrlAtSize(widget.url, (box * dpr).round());
     return CachedNetworkImage(
       key: ValueKey('$url#$_attempt'),
       imageUrl: url,

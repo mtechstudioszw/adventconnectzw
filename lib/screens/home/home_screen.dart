@@ -876,7 +876,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   /// What the Chat tab badges: unread messages plus friend requests waiting
-  /// to be accepted, since both are answered from inside Advent Chat.
+  /// to be accepted, since both are answered from inside Chat.
   int? get _chatBadgeCount {
     final total = _unreadMessages + _pendingFriendRequests;
     return total > 0 ? total : null;
@@ -1174,7 +1174,7 @@ class _HomeScreenState extends State<HomeScreen>
           // listen further up.
           return false;
         },
-        // The floating Advent Chat bubble that used to sit here is gone
+        // The floating Chat bubble that used to sit here is gone
         // (2026-07-27). It was unreachable by construction: `extendBody` puts
         // the body under the island, so a bottom-anchored bubble rendered
         // beneath the nav and could not be tapped, and it slid away with the
@@ -2215,7 +2215,13 @@ class _HomeScreenState extends State<HomeScreen>
           widget: _discoverySection(
             title: 'More of the community',
             action: 'See all',
-            onAction: () => context.pushNamed('member_directory'),
+            // NOT member_directory — same reason as the end-of-feed card
+            // above: that screen predates these and does not work, so "See
+            // all" was a dead end. This one was missed when the other was
+            // fixed. `extra: true` opens New chat already switched to
+            // "Find people", which is the screen that actually answers
+            // "who else is on here?".
+            onAction: () => context.pushNamed('new_chat', extra: true),
             child: _buildSuggestedMembersRow(wider),
           ),
         ),

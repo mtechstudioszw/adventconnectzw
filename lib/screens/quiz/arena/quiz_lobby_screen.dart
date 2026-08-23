@@ -973,12 +973,21 @@ class _MuteButton extends StatefulWidget {
 class _MuteButtonState extends State<_MuteButton> {
   @override
   Widget build(BuildContext context) {
+    // The MASTER mute, not the "Sound effects" switch. One speaker icon in
+    // the arena means "silence the game" — effects and soundtrack both —
+    // which is what a member expects and what it says on the tooltip. It
+    // used to call toggleMute(), which reaches only the effects pool, so
+    // muting left the music playing.
+    final muted = QuizSfx.masterMuted;
     return ArenaIconButton(
-      icon: QuizSfx.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-      tooltip: QuizSfx.muted ? 'Unmute' : 'Mute',
+      icon: muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+      tooltip: muted ? 'Unmute' : 'Mute',
       onTap: () async {
-        await QuizSfx.toggleMute();
-        if (!QuizSfx.muted) QuizSfx.play(QuizSound.tap);
+        await QuizSfx.toggleMasterMute();
+        // Start or stop the soundtrack to match. QuizSfx cannot do this
+        // itself without importing QuizMusic, which imports QuizSfx.
+        await QuizMusic.reconcile();
+        if (!QuizSfx.masterMuted) QuizSfx.play(QuizSound.tap);
         if (mounted) setState(() {});
       },
     );

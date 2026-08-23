@@ -20,10 +20,21 @@ Future<bool> showPostPreview(
   required PostVisibility visibility,
   String? churchName,
   String? churchPhotoUrl,
-}) {
+}) async {
   final user = AuthService.currentUser;
   final meta = user?.userMetadata ?? const {};
   final trimmed = body.trim();
+
+  // The viewer's own gold tick. It is NOT in auth metadata — it is a
+  // `profiles` column — so a draft built from metadata alone always came
+  // out unverified, and a verified member's preview showed no tick even
+  // though the published post would have one. The whole promise of this
+  // sheet is "this is how it will look", so getting the badge wrong is
+  // exactly the kind of lie it exists to prevent.
+  //
+  // Cached after the first call, and fails soft to false.
+  final authorIsVerified = await AuthService.isCurrentUserVerified();
+  if (!context.mounted) return false;
 
   // `createdAt` is now, so the card's relative timestamp reads "just now"
   // — which is exactly what it will say a second after publishing.
@@ -35,6 +46,7 @@ Future<bool> showPostPreview(
         ? (meta['full_name'] as String).trim()
         : 'You',
     authorPhotoUrl: (meta['profile_photo_url'] as String?)?.trim(),
+    authorIsVerified: authorIsVerified,
     createdAt: DateTime.now(),
     body: trimmed.isEmpty ? null : trimmed,
     imageUrl: photos.isEmpty ? null : photos.first,

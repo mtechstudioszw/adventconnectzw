@@ -148,12 +148,25 @@ class _CreateScreenState extends State<_CreateScreen>
       'Prayer request',
       'Ask for prayer',
     ),
-    _Option(
-      CreateKind.notice,
-      Icons.campaign_outlined,
-      'Church notice',
-      'Tell your local church',
-    ),
+    // REMOVED 23 Aug 2026 — "Church notice / Tell your local church".
+    //
+    // It promised something the schema cannot deliver: `notices` has no
+    // church_id column, so a "church notice" was never attached to a church
+    // at all, and `notices_select_all` shows every notice to every
+    // authenticated member. There was also no admin gate on either side —
+    // any active member could publish what reads as official church
+    // communication, to everybody.
+    //
+    // Nobody ever did: the table holds 0 rows from 0 posters since launch.
+    // So this removes a live permissions hole and a misleading label at
+    // zero cost to anyone.
+    //
+    // The route, screen, model and service are deliberately LEFT IN PLACE
+    // (post_notice / PostNoticeScreen / NoticeService). Nothing links to
+    // them now, so they are unreachable, and that is the cheap half to undo
+    // if the feature is built properly later — the expensive half is the
+    // migration that gives notices a church_id and an
+    // is_approved_church_admin() policy.
     _Option(
       CreateKind.news,
       Icons.newspaper_outlined,

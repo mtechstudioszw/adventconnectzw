@@ -36,14 +36,22 @@ class SplashScreen extends StatefulWidget {
   static Duration get brandDuration => _SplashScreenState._brandDuration;
 
   /// The longest the splash can hold the screen once the engine is up: the
-  /// brand window, plus the update/maintenance gate cap, plus the exit fade.
-  /// Excludes native launch and Flutter engine init, which this screen does
-  /// not control.
+  /// brand window plus the exit fade. Excludes native launch and Flutter
+  /// engine init, which this screen does not control.
+  ///
+  /// The gate cap used to be a third term here. It is not any more: the
+  /// update/maintenance gates and the routing reads are all now capped by
+  /// what REMAINS of the brand window rather than starting their own clock
+  /// after it, so they cannot extend this. That is the whole of the founder
+  /// rule — the ring closes, the app opens.
+  ///
+  /// One documented exception does not appear in this number: a device whose
+  /// last known maintenance answer was "blocked" waits up to
+  /// [MaintenanceService.splashGateTimeout] for a definitive one, because
+  /// admitting it and then locking it mid-session is worse.
   @visibleForTesting
   static Duration get worstCaseHoldMs =>
-      _SplashScreenState._brandDuration +
-      const Duration(milliseconds: 400) +
-      _SplashScreenState._exitDuration;
+      _SplashScreenState._brandDuration + _SplashScreenState._exitDuration;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -78,6 +86,17 @@ class _SplashScreenState extends State<SplashScreen>
   static const Duration _brandDuration = Duration(milliseconds: 1800);
 
   static const Duration _exitDuration = Duration(milliseconds: 320);
+
+  /// When the brand animation started.
+  ///
+  /// The splash's whole budget is measured from here, so "the app opens when
+  /// the ring closes" is a guarantee rather than an aspiration — see
+  /// [_remainingBrandBudget]. Previously each stage carried its own
+  /// independent timeout and they ADDED: 1800ms of ring, then 400ms of
+  /// gates, then a tail of secure-storage reads. Every one of those budgets
+  /// was defensible on its own, which is exactly why nobody noticed they
+  /// summed to roughly double the animation the user was watching.
+  late final DateTime _bootStart;
 
   late final AnimationController _entrance;
   late final AnimationController _progress;
@@ -116,6 +135,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+    _bootStart = DateTime.now();
 
     _entrance = AnimationController(
       vsync: this,
@@ -242,6 +262,69 @@ class _SplashScreenState extends State<SplashScreen>
     go();
   }
 
+  /// How much of the brand window is left.
+  ///
+  /// Every remaining wait is capped by this, so the sum of the splash's
+  /// stages can never exceed the animation the user is watching. Returns
+  /// [Duration.zero] once the ring has closed — at which point anything
+  /// still outstanding has already lost its chance to matter and the
+  /// fallbacks below are what route the user.
+  Duration _remainingBrandBudget() {
+    final left = _brandDuration - DateTime.now().difference(_bootStart);
+    return left.isNegative ? Duration.zero : left;
+  }
+
+  /// Every local read the routing decision can need, fetched at once.
+  ///
+  /// These are all `flutter_secure_storage` reads. Individually each is a
+  /// platform-channel hop of a few tens of ms; run back to back on a cold
+  /// Android keystore they were the splash's entire tail — and they ran
+  /// AFTER the ring had already closed, which is the part the user sees as
+  /// "it finished animating and then just sat there".
+  ///
+  /// Nothing here depends on anything else here. The code only read as
+  /// though it did, because each read sat on the line that consumed it:
+  ///
+  ///   hasAccessToken -> isBannedLocally -> isEnabled -> read(onboarding)
+  ///
+  /// [BiometricService.isEnabled] is the expensive one and the least
+  /// obviously so: it resolves a per-account key first, so it is FOUR reads
+  /// (user id, legacy flag, migration check, the flag itself), not one — and
+  /// it sits on the path every returning member walks on every launch.
+  ///
+  /// Each read fails soft. A splash that cannot answer "is there a token?"
+  /// must still route somewhere, and the safe somewhere is the login screen.
+  Future<_RoutingFacts> _prefetchRouting() async {
+    Future<T> soft<T>(Future<T> Function() read, T fallback) async {
+      try {
+        return await read();
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    final results = await Future.wait([
+      soft(() => SecureLocalStorage().hasAccessToken(), false),
+      soft(() => AuthService.isBannedLocally(), false),
+      soft(() => BiometricService.isEnabled(), false),
+      soft(
+        () async =>
+            await SecureStorageService.read(
+              OnboardingScreen.onboardingFlagKey,
+            ) ==
+            'true',
+        false,
+      ),
+    ]);
+
+    return _RoutingFacts(
+      hasPersistedToken: results[0],
+      bannedLocally: results[1],
+      biometricEnabled: results[2],
+      hasSeenOnboarding: results[3],
+    );
+  }
+
   Future<void> _navigate() async {
     // Run the brand animation and the deferred Supabase init in
     // parallel — main.dart no longer awaits Supabase before runApp,
@@ -282,6 +365,12 @@ class _SplashScreenState extends State<SplashScreen>
     // waiting for a prompt. Fire-and-forget: it never gates anything.
     unawaited(BiometricService.prewarm());
 
+    // Every secure-storage read the routing decision can need, started HERE
+    // rather than one-at-a-time after the gates. On a cold Android keystore
+    // this was the single largest contributor to the tail, and none of it
+    // ever needed to be sequential. See [_prefetchRouting].
+    final routingFuture = _prefetchRouting();
+
     await Future.wait([
       Future.delayed(_minLoaderDuration),
       // Capped at the brand duration, NOT at some unrelated network budget.
@@ -314,25 +403,30 @@ class _SplashScreenState extends State<SplashScreen>
     // of resting at a partial fill while we finish routing.
     _progress.animateTo(1.0, duration: const Duration(milliseconds: 220));
 
-    // Both gates are waited for TOGETHER.
+    // Both gates are waited for TOGETHER, and — the part that changed —
+    // inside what is LEFT of the brand window rather than after it.
     //
-    // They used to be awaited one after the other, 400ms each, so a device
-    // that could not reach Supabase paid 800ms of pure tail — twice, for
-    // two queries that were already running in parallel above. Waiting on
-    // them at once caps the whole thing at 400ms. They are still CHECKED in
-    // order below, because that order is a deliberate decision.
+    // They already ran in parallel with the ring; it was only the WAIT that
+    // was stacked on the end, so a launch cost 1800ms of animation plus
+    // another 400ms of gate before it could even start reading storage.
+    // Capping at the remainder makes the gates free on any launch where the
+    // ring is still turning, which is nearly all of them.
+    //
+    // They are still CHECKED in order below — that order is deliberate.
+    //
+    // The one deliberate exception is a device whose last known answer was
+    // "blocked": [MaintenanceService.splashGateTimeout] stretches to 4.5s
+    // for it, because letting that member in and then locking them 15s later
+    // is worse than a slow splash. That case keeps its full budget; it is
+    // rare, and it is the one launch where waiting is the kinder option.
+    final gateBudget = _remainingBrandBudget();
+    final maintenanceBudget = MaintenanceService.splashGateTimeout;
     final gates = await Future.wait([
-      updateFuture.timeout(
-        const Duration(milliseconds: 400),
-        onTimeout: () => UpdateCheck.none,
-      ),
-      // 400 ms as before for everyone whose last answer was "not blocked" —
-      // the splash stays exactly as fast. A device that WAS blocked last
-      // time waits longer for a real answer, because for that device the
-      // 400 ms cap is what produced "loads normally, then locks": it gave
-      // up, failed open, and main.dart's 15 s poll locked it afterwards.
+      updateFuture.timeout(gateBudget, onTimeout: () => UpdateCheck.none),
       maintenanceFuture.timeout(
-        MaintenanceService.splashGateTimeout,
+        maintenanceBudget > const Duration(milliseconds: 1000)
+            ? maintenanceBudget
+            : gateBudget,
         onTimeout: () => MaintenanceState.off,
       ),
     ]);
@@ -377,16 +471,30 @@ class _SplashScreenState extends State<SplashScreen>
     // `_navigate` is unawaited, so the throw vanished into an unhandled
     // future and the splash never navigated at all. The persisted-token
     // read below answers the question on its own.
+    //
+    // The reads themselves were started at the top of this method and have
+    // been running alongside the ring ever since; by here they are almost
+    // always already resolved. Capped at whatever is left of the brand
+    // window so a wedged keystore cannot hold the splash open — the
+    // fallbacks are all "false", which routes to login, and a member who is
+    // actually signed in lands back on home the moment they retry.
+    final facts = await routingFuture
+        .timeout(
+          _remainingBrandBudget(),
+          onTimeout: () => const _RoutingFacts.unknown(),
+        )
+        .catchError((_) => const _RoutingFacts.unknown());
+    if (!mounted) return;
+
     final signedIn =
         (AppBootstrap.isReady && AuthService.isSignedIn) ||
-        await SecureLocalStorage().hasAccessToken();
-    if (!mounted) return;
+        facts.hasPersistedToken;
     // Banned accounts hit a full lockout screen (backend already blocks
     // their actions via user_is_active()). Check the PERSISTED flag first so
     // a banned account is locked INSTANTLY + offline on every cold start —
     // even before the live session restores — and can't escape by killing
     // the app. The lockout screen re-checks the server and releases on unban.
-    if (signedIn && await AuthService.isBannedLocally()) {
+    if (signedIn && facts.bannedLocally) {
       if (!mounted) return;
       context.goNamed('account_banned');
       return;
@@ -408,7 +516,7 @@ class _SplashScreenState extends State<SplashScreen>
       // (the old behaviour signed them out, which everyone hated).
       // The lock screen itself routes onward to home / profile_setup
       // after a successful unlock.
-      if (await BiometricService.isEnabled()) {
+      if (facts.biometricEnabled) {
         if (!mounted) return;
         // Navigate DIRECTLY — no 320ms fade first. The unlock path is the
         // one a returning user walks every single launch, and the founder's
@@ -444,12 +552,7 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    final hasSeenOnboarding =
-        await SecureStorageService.read(OnboardingScreen.onboardingFlagKey) ==
-        'true';
-    if (!mounted) return;
-
-    if (!hasSeenOnboarding) {
+    if (!facts.hasSeenOnboarding) {
       // First launch ever — celebrate it with the blossom hand-off
       // instead of the plain fade used for warm starts.
       await _blossomOutThen(() => context.goNamed('onboarding'));
@@ -746,4 +849,44 @@ class _SplashScreenState extends State<SplashScreen>
       },
     );
   }
+}
+
+/// The four local facts the splash's routing decision rests on, read in
+/// parallel while the gold ring is still turning.
+///
+/// Grouping them is not tidiness — it is what makes the parallel read
+/// possible at all. While each value was fetched on the line that used it,
+/// the reads were forced into a chain by the shape of the code rather than
+/// by any real dependency, and that chain ran after the animation had
+/// visibly finished.
+class _RoutingFacts {
+  const _RoutingFacts({
+    required this.hasPersistedToken,
+    required this.bannedLocally,
+    required this.biometricEnabled,
+    required this.hasSeenOnboarding,
+  });
+
+  /// What we assume when the reads could not finish inside the brand window.
+  ///
+  /// Every field is the SAFE answer, not the likely one:
+  ///   - no token -> login, which a signed-in member escapes by retrying;
+  ///   - not banned -> main.dart's ban guard re-checks within seconds;
+  ///   - no biometric -> the lock screen is skipped, and the app's own
+  ///     resume handler re-arms it on the next backgrounding;
+  ///   - onboarding seen -> a returning member is not shown the intro again.
+  ///
+  /// The one case this gets wrong is a brand-new install whose very first
+  /// keystore read times out, which then sees login instead of onboarding.
+  /// That is recoverable in one tap; the alternatives are not.
+  const _RoutingFacts.unknown()
+    : hasPersistedToken = false,
+      bannedLocally = false,
+      biometricEnabled = false,
+      hasSeenOnboarding = true;
+
+  final bool hasPersistedToken;
+  final bool bannedLocally;
+  final bool biometricEnabled;
+  final bool hasSeenOnboarding;
 }

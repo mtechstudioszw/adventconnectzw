@@ -129,10 +129,29 @@ Success Green:  #2E7D32  // Status badges ONLY
   83 files carry `backgroundColor: Colors.transparent`. A Scaffold that
   paints `palette.scaffoldBg` again punches an opaque hole in the field.
 
-  \- \*\*`palette.scaffoldBg` itself is NOT retired.\*\* Headers rely on it to
-    occlude content scrolling under them (the flat-header rule above), and
-    modal sheets and dialogs need it to be opaque. Only the \*Scaffold\*
-    background changed.
+  \- \*\*`palette.scaffoldBg` itself is NOT retired.\*\* Modal sheets and
+    dialogs need it to be opaque, and so does any header content actually
+    scrolls \*under\*. Only the \*Scaffold\* background changed.
+
+  \- \*\*The test is PINNING, not "is it a header".\*\* (23 Aug 2026.) This
+    line used to read "headers rely on it to occlude content scrolling
+    under them", and taken literally it caused a bug: `ScreenHero` and
+    four hand-rolled copies painted an opaque slab across the top of every
+    screen. The field was full-screen underneath the whole time — it was
+    covered, so the particles looked like they started 120-160px down.
+    Members reported "the background is cut off at the top, not full
+    screen like the splash".
+
+    Ask \*\*"does anything scroll beneath this?"\*\*:
+    \- `SliverPersistentHeaderDelegate`, `AppBar`, anything stacked over a
+      list → \*\*opaque\*\*. Marketplace's category strip and Watch's pinned
+      header are the live examples — checked, correctly left alone.
+    \- An ordinary widget in the normal flow above a scroll view →
+      \*\*transparent\*\*. It occludes nothing.
+
+    `ScreenHero` now defaults to transparent and takes `opaque: true` for
+    the pinned case. Avatar rings and the product-details sheet also keep
+    `scaffoldBg` on purpose — they are fills, not headers.
 
   \- \*\*Five screens keep an opaque Scaffold on purpose\*\* because they paint
     this same field themselves: `auth\_shell`, `onboarding\_flow\_screen`,

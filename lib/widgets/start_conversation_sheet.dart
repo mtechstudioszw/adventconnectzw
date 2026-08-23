@@ -153,7 +153,7 @@ class _StartConversationSheetState extends State<_StartConversationSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'We\'ll open Advent Chat with $firstName. If you aren\'t '
+            'We\'ll open Chat with $firstName. If you aren\'t '
             'friends yet, they\'ll see it in their Requests inbox.',
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.textMuted,

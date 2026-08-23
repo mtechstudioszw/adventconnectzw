@@ -72,3 +72,7 @@ scripts/*.tmp.*
 # Recipient log written by scripts/send_announcement_email.ps1.
 # Contains real member email addresses - PII. Never commit it.
 scripts/.announcement-sent.log
+# church_scraper.py resume state — regenerated on every run, pure churn in diffs
+visited.json
+queue.json
+failed.json

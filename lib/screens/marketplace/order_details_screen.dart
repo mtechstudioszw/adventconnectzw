@@ -241,7 +241,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       ),
       const SizedBox(height: AppSpace.sm),
       _OutlineAction(
-        label: 'Message in Advent Chat',
+        label: 'Message in Chat',
         icon: Icons.forum_outlined,
         color: AppColors.primaryBlue,
         onTap: () => OrderHandoff.viaAdventChat(context, order),

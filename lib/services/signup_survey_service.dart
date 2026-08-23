@@ -10,11 +10,38 @@ class SignupSurveyService {
 
   // Local one-shot flag so we never nag a user who already answered or
   // dismissed it, without a DB round-trip on every launch.
-  static const _kShownPref = 'signup_survey_shown_v1';
+  //
+  // Two things about this key are load-bearing, and v1 got both wrong:
+  //
+  //  1. **It starts with `pref:`.** `CacheService.writePref` does NOT add
+  //     that prefix for you, and `clearUserData()` deletes every key that
+  //     lacks it on sign-out. v1 was `signup_survey_shown_v1`, so signing
+  //     out threw the flag away and the next launch asked again. That is
+  //     the "it keeps asking me, I already filled it in" report.
+  //
+  //  2. **It carries the user id.** Prefixing alone would have swung the
+  //     bug the other way: the flag would survive sign-out for the PHONE,
+  //     so a second member signing in on the same handset would be counted
+  //     as already-answered and never asked at all. Namespacing keeps both
+  //     properties — this account is never asked twice, a different account
+  //     reads a different key, finds nothing, and gets its turn.
+  //
+  // Same shape as `biometric_enabled:<id>` in SecureStorageService, and for
+  // the same reason. Bumped to v2 so nobody inherits a v1 value.
+  static String _shownKey(String userId) =>
+      'pref:signup_survey_shown_v2:$userId';
 
-  static bool get shownLocally => CacheService.readPref(_kShownPref) == '1';
+  static bool get shownLocally {
+    final id = _client.auth.currentUser?.id;
+    if (id == null) return false;
+    return CacheService.readPref(_shownKey(id)) == '1';
+  }
 
-  static Future<void> markShown() => CacheService.writePref(_kShownPref, '1');
+  static Future<void> markShown() async {
+    final id = _client.auth.currentUser?.id;
+    if (id == null) return;
+    await CacheService.writePref(_shownKey(id), '1');
+  }
 
   /// Only ask accounts that are genuinely new. Anything older than this is
   /// an existing member who reinstalled, cleared data, or just signed in

@@ -19,14 +19,36 @@ import '../theme/app_palette.dart';
 /// those Scaffolds used to paint (`palette.scaffoldBg`) is painted here
 /// instead, once, for the whole app.
 ///
-/// What must NOT become transparent: headers, modal sheets and dialogs.
-/// `ScreenHero` and friends rely on `palette.scaffoldBg` to occlude content
-/// scrolling underneath them (CLAUDE.md's flat-header rule), and a sheet you
-/// can see the app through reads as a rendering fault. Only the *Scaffold*
-/// background was changed. Five screens keep their opaque Scaffold because
-/// they already paint this same field themselves — the auth shell, both
-/// onboarding screens, maintenance and chat (via `ChatWallpaper`); making
-/// those transparent would stack two fields.
+/// What must NOT become transparent: modal sheets, dialogs, and headers
+/// that content actually scrolls **under**. A sheet you can see the app
+/// through reads as a rendering fault, and a pinned header that stops
+/// occluding turns every list into a smear.
+///
+/// **That test is about pinning, not about being a header** (23 Aug 2026).
+/// The rule was originally written as "headers stay opaque", and taken at
+/// face value it produced a real bug: `ScreenHero` — and four hand-rolled
+/// copies of it — painted an opaque `scaffoldBg` slab across the top of
+/// every screen. The field underneath was full-screen the whole time; it
+/// was simply covered, so the drifting particles appeared to begin 120-160px
+/// down the page. Members reported it as "the background is cut off at the
+/// top / not full screen like the splash".
+///
+/// So the question to ask of any surface is not "is this a header?" but
+/// **"does anything scroll beneath it?"**:
+///
+///   - `SliverPersistentHeaderDelegate` / `AppBar` / anything stacked over a
+///     list → **opaque**. Marketplace's category strip and Watch's pinned
+///     header are the live examples; they were checked and left alone.
+///   - An ordinary widget in the normal flow above a scroll view →
+///     **transparent**. It occludes nothing, so the fill only ever hid the
+///     field. `ScreenHero` now defaults this way and takes `opaque: true`
+///     for the pinned case.
+///
+/// Only the *Scaffold* background was changed by the original migration.
+/// Five screens keep their opaque Scaffold because they already paint this
+/// same field themselves — the auth shell, both onboarding screens,
+/// maintenance and chat (via `ChatWallpaper`); making those transparent
+/// would stack two fields.
 class AmbientBackground extends StatefulWidget {
   const AmbientBackground({super.key, required this.child});
 

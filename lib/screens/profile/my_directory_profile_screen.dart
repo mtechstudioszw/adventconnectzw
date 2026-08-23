@@ -121,7 +121,12 @@ class _MyDirectoryProfileScreenState extends State<MyDirectoryProfileScreen> {
               tagline: 'Member directory',
               subtitle:
                   'Share what you do so others in the community can find you.',
-              fallbackRoute: 'member_directory',
+              // 'profile', not 'member_directory'. The fallback is what Back
+              // uses when there is nothing to pop — pointing it at the
+              // disabled directory screen meant the one case it exists to
+              // handle was the one case it made worse, stranding the member
+              // on a dead screen instead of returning them somewhere real.
+              fallbackRoute: 'profile',
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),

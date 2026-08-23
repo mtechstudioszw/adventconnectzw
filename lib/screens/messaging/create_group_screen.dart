@@ -171,7 +171,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         children: [
           const ScreenHero(
             title: 'New group',
-            tagline: 'Advent Chat',
+            tagline: 'Chat',
             fallbackRoute: 'messages',
           ),
           Expanded(

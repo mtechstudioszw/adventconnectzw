@@ -72,7 +72,7 @@ class MessagingService {
 
   /// Total unread messages across every thread, published app-wide.
   ///
-  /// Advent Chat is a bottom-nav tab now, so its badge has to be right on
+  /// Chat is a bottom-nav tab now, so its badge has to be right on
   /// Watch / Marketplace / Profile too — screens that never fetch an inbox.
   /// [fetchConversations] refreshes this on every call, and the nav listens,
   /// so the badge stays live wherever the member happens to be standing.

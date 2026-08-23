@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../utils/photo_url.dart';
 import 'cached_image.dart';
 
 /// Generic full-screen image viewer used app-wide for tap-to-expand:
@@ -50,8 +51,18 @@ class FullImageViewer extends StatelessWidget {
               child: InteractiveViewer(
                 minScale: 1,
                 maxScale: 4,
+                // Ask for the biggest render the host will give us.
+                //
+                // CachedImage sizes its own request from the width/height it
+                // is handed, and this one is deliberately unsized (BoxFit
+                // .contain inside an InteractiveViewer), so it would fall
+                // back to the URL as stored. For a Google avatar that URL is
+                // `=s96-c` — a 96px image — which this screen then stretched
+                // full-width and offered 4x zoom on. Hence "the Google
+                // picture is far away and won't zoom": there was no detail
+                // there to magnify. Non-Google URLs are returned unchanged.
                 child: CachedImage(
-                  imageUrl,
+                  photoUrlAtSize(imageUrl, 1024),
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) => const Center(
                     child: Icon(

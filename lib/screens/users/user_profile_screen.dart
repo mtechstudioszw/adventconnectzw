@@ -380,7 +380,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final hasCover = cover != null && cover.isNotEmpty;
     return FlatStatusBar(
       child: Container(
-        color: context.palette.scaffoldBg,
+        // Transparent — mirrors the own-profile header. An opaque slab here
+        // covered the ambient field across the top of the screen; this sits
+        // in the normal flow, so there is nothing scrolling under it.
+        color: Colors.transparent,
         child: SafeArea(
           bottom: false,
           child: Column(
@@ -462,6 +465,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ? CachedImage(
                                   _profile!.profilePhotoUrl!,
                                   fit: BoxFit.cover,
+                                  // Explicit size, and it is what makes the
+                                  // avatar actually round.
+                                  //
+                                  // BoxFit.cover only decides how the image
+                                  // fills the box it is GIVEN; with no
+                                  // width/height this widget sized itself to
+                                  // the image instead of to the circle, so a
+                                  // photo that was not square left the
+                                  // container's own colour showing through
+                                  // in the corners of the clip — the "gaps,
+                                  // and it isn't round" report. Every other
+                                  // avatar in this file already passes both.
+                                  //
+                                  // 118 outer − 5 border on each side.
+                                  width: 108,
+                                  height: 108,
                                   errorBuilder:
                                       (context, error, stackTrace) =>
                                           _initialAvatar(),

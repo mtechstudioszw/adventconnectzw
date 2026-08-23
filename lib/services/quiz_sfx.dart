@@ -60,6 +60,31 @@ class QuizSfx {
   static const _kHaptics = 'pref:quiz_haptics_off';
   static const _kVolume = 'pref:quiz_sfx_volume';
 
+  /// The arena's speaker button — a MASTER mute, distinct from [_kMuted].
+  ///
+  /// These were one flag, and that conflation produced two opposite bug
+  /// reports from the same founder:
+  ///
+  ///  * "turn off sound effects and the music stops — it should only stop
+  ///    when I turn off music" (Aug 2026). Fixed by decoupling [QuizMusic]
+  ///    from [muted] entirely.
+  ///  * "the mute button doesn't turn off music, it turns off sound effects
+  ///    only" (23 Aug 2026). Which the first fix caused, because the speaker
+  ///    button and the *Sound effects* switch were both calling
+  ///    [setMuted] — so making one of them stop reaching the soundtrack
+  ///    necessarily stopped the other one too.
+  ///
+  /// Neither report is wrong; they are about two different controls that
+  /// happened to share a flag. So they now have two:
+  ///
+  ///  * [muted]        — "Sound effects off". Settings switch. SFX only.
+  ///  * [masterMuted]  — the speaker icon. Silences effects AND music.
+  ///
+  /// Haptics stay independent of both, deliberately — see the note above
+  /// the haptics section. Muting is about a quiet room, and silent feedback
+  /// is exactly what you still want there.
+  static const _kMasterMuted = 'pref:quiz_master_muted';
+
   // The unprefixed keys these used to be written under. Read once, on the
   // first load, so nobody's existing settings are thrown away by the
   // rename — then written back under the new key.
@@ -99,6 +124,48 @@ class QuizSfx {
     loadPrefs();
     return _muted;
   }
+
+  /// Master mute — the arena's speaker icon. See [_kMasterMuted].
+  static bool _masterMuted = false;
+
+  static bool get masterMuted {
+    loadPrefs();
+    return _masterMuted;
+  }
+
+  /// True when nothing should make a sound: either switch silences audio.
+  static bool get silent {
+    loadPrefs();
+    return _muted || _masterMuted;
+  }
+
+  /// Flip the master mute. Callers must also nudge `QuizMusic.reconcile()`
+  /// so the soundtrack starts or stops to match — this class deliberately
+  /// does not import QuizMusic (QuizMusic imports THIS, and a cycle between
+  /// the two audio services is how the last round of coupling bugs began).
+  static Future<void> setMasterMuted(bool value) async {
+    loadPrefs();
+    _masterMuted = value;
+    await CacheService.writePref(_kMasterMuted, value ? '1' : '0');
+    if (value) {
+      for (final player in _players.values) {
+        try {
+          await player.stop();
+        } catch (_) {}
+      }
+    } else {
+      // stop() released the sources; re-attach so unmuting makes sound again.
+      for (final entry in _players.entries) {
+        try {
+          await entry.value.setSourceAsset(entry.key.asset);
+          await entry.value.setVolume(entry.key.volume * _volume);
+        } catch (_) {}
+      }
+    }
+    revision.value++;
+  }
+
+  static Future<void> toggleMasterMute() => setMasterMuted(!masterMuted);
 
   /// The quietest the SLIDER may go.
   ///
@@ -153,6 +220,13 @@ class QuizSfx {
     loadPrefs();
     _hapticsOff = !value;
     await CacheService.writePref(_kHaptics, value ? '0' : '1');
+    // Bump the revision like every other setter here. Without this the
+    // stored value changed but nothing listening to [revision] rebuilt, so
+    // the vibration switch snapped straight back to its old position — the
+    // setting HAD been saved, the UI just never redrew. That is the
+    // "vibration toggle will still be on" half of the report, and it is why
+    // it looked like the toggle did nothing at all.
+    revision.value++;
   }
 
   /// The arena's audio contract, shared with [QuizMusic] so there is ONE
@@ -199,6 +273,10 @@ class QuizSfx {
     if (_prefsLoaded) return;
     _prefsLoaded = true;
     _muted = _readFlag(_kMuted, _legacyMuted);
+    // No legacy key — the master mute is new (23 Aug 2026), and defaulting
+    // it to whatever `quiz_sfx_muted` happened to hold would silently mute
+    // the soundtrack for everyone who had only ever turned effects off.
+    _masterMuted = CacheService.readPref(_kMasterMuted) == '1';
     _hapticsOff = _readFlag(_kHaptics, _legacyHaptics);
     // Clamped to kMinVolume on the way IN as well, so a phone that already
     // stored "0.00" before the slider had a floor heals itself on the next
@@ -316,7 +394,8 @@ class QuizSfx {
   /// pool on the way out) this kicks off initialisation instead of
   /// silently dropping every effect for the whole round.
   static void play(QuizSound sound) {
-    if (muted) return;
+    // `silent`, not `muted`: either switch stops effects.
+    if (silent) return;
     if (!_initialised) {
       unawaited(init());
       return;
@@ -375,6 +454,13 @@ class QuizSfx {
   }
 
   static void hapticCountBeat() {
+    // Guarded, like every other helper in this section. It was the ONE that
+    // wasn't — and it is the one that fires on every countdown beat of every
+    // question, so a member who switched vibration off still felt the phone
+    // buzz continuously through the whole round. Turning the setting off
+    // appeared to do nothing, because the haptic they actually noticed was
+    // never gated on it.
+    if (!hapticsEnabled) return;
     HapticFeedback.mediumImpact();
   }
 
@@ -412,6 +498,7 @@ class QuizSfx {
     _initialising = false;
     _prefsLoaded = false;
     _muted = false;
+    _masterMuted = false;
     _hapticsOff = false;
     _volume = 0.85;
     _generation++;

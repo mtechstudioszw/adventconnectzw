@@ -21,6 +21,7 @@ import '../../services/connectivity_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/gallery_service.dart';
+import '../../services/sabbath_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -1315,7 +1316,12 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
     final hasCover = coverUrl != null;
     return FlatStatusBar(
       child: Container(
-        color: context.palette.scaffoldBg,
+        // Transparent so the app-wide ambient field runs behind the header
+        // instead of stopping at its bottom edge. This sits in the normal
+        // flow above the scroll view, so it has nothing to occlude — the
+        // `scaffoldBg` here was hiding the particles across the top of the
+        // screen, which is the "background is cut out at the top" report.
+        color: Colors.transparent,
         child: SafeArea(
           bottom: false,
           child: Column(
@@ -1324,13 +1330,41 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                 padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
                 child: Row(
                   children: [
-                    Text(
-                      'Profile',
-                      style: AppTextStyles.displayMedium.copyWith(
-                        color: context.palette.text,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Profile',
+                          style: AppTextStyles.displayMedium.copyWith(
+                            color: context.palette.text,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        // Sabbath greeting, flat and gold — the same marker
+                        // Home uses, so the day reads consistently across
+                        // the app instead of only on one tab. NOT a navy →
+                        // gold gradient: see CLAUDE.md's Sabbath rule.
+                        //
+                        // Gated on isSabbathNow() alone, deliberately not on
+                        // SabbathService.isEnabled(). That flag is the opt-in
+                        // for the countdown CHIP — a member who never turned
+                        // the countdown on is still an Adventist on Sabbath,
+                        // and greeting them is not the same as pestering
+                        // them with a timer.
+                        if (SabbathService.isSabbathNow())
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              'Happy Sabbath',
+                              style: AppTextStyles.labelLarge.copyWith(
+                                color: AppColors.goldAccent,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     const Spacer(),
                     // Friend QR — Adventists meet in person, and scanning

@@ -214,7 +214,12 @@ class QuizMusic {
     if (!shouldPlay(
       enabled: enabled,
       userMusicOn: MusicPlayerService.instance.isPlayingNow,
-      muted: false, // effects mute no longer silences the soundtrack
+      // The MASTER mute (the arena's speaker icon), never QuizSfx.muted.
+      // The "Sound effects" switch must not reach across and stop the
+      // soundtrack — that was the founder's earlier report — but the
+      // speaker button is meant to silence everything, which is the
+      // current one. Two flags, each controlling what it is labelled.
+      muted: QuizSfx.masterMuted,
     )) {
       return;
     }
@@ -264,7 +269,12 @@ class QuizMusic {
     final should = shouldPlay(
       enabled: enabled,
       userMusicOn: MusicPlayerService.instance.isPlayingNow,
-      muted: false, // effects mute no longer silences the soundtrack
+      // The MASTER mute (the arena's speaker icon), never QuizSfx.muted.
+      // The "Sound effects" switch must not reach across and stop the
+      // soundtrack — that was the founder's earlier report — but the
+      // speaker button is meant to silence everything, which is the
+      // current one. Two flags, each controlling what it is labelled.
+      muted: QuizSfx.masterMuted,
     );
     if (should && _player == null) {
       await start();

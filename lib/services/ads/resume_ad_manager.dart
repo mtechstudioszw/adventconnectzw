@@ -42,13 +42,13 @@ class ResumeAdManager {
 
   /// Routes where a full-screen ad must NOT appear.
   ///
-  /// Advent Chat is absolute (founder, 18 Aug 2026): **nothing to do with
+  /// Chat is absolute (founder, 18 Aug 2026): **nothing to do with
   /// messaging ever carries an ad** — not this, not a banner, not a feed
   /// card. Prayer is the same kind of rule. The rest are places where a
   /// tester hit an unskippable ad every time they opened something;
   /// revenue stays on the home feed and stories.
   static const List<String> blockedPrefixes = <String>[
-    '/messages', // Advent Chat — inbox, conversations, groups, requests
+    '/messages', // Chat — inbox, conversations, groups, requests
     '/prayer',
     '/splash',
     '/biometric-lock',

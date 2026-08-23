@@ -888,8 +888,8 @@ class _SellerGate extends StatelessWidget {
         : (
             'SELLER ACCOUNT REQUIRED',
             'Set up your store first',
-            'Only verified sellers can list products on Advent '
-                'Connect. Set up a free store profile to start '
+            'Only verified sellers can list products on Adventist '
+                'Super App. Set up a free store profile to start '
                 'selling within the trusted SDA community.',
             'Set up my store',
             Icons.storefront_rounded,

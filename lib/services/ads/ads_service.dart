@@ -85,7 +85,7 @@ class AdsService {
       // Configuration must happen BEFORE initialize().
       Appodeal.setTesting(AdConfig.useTestAds);
       Appodeal.setLogLevel(
-        kDebugMode ? Appodeal.LogLevelDebug : Appodeal.LogLevelNone,
+        AdConfig.verboseLogs ? Appodeal.LogLevelDebug : Appodeal.LogLevelNone,
       );
       // Belt and braces. We deliberately ship no AdMob adapter (see
       // android/app/build.gradle.kts), but the AdMob ACCOUNT is disapproved

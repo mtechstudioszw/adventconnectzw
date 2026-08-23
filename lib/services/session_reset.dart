@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'account_mode_service.dart';
+import 'auth_service.dart';
 import 'biometric_service.dart';
 import 'cache_service.dart';
 import 'cart_service.dart';
@@ -90,6 +91,15 @@ class SessionReset {
     // a plain static and would otherwise carry over.
     await _step('biometric', () async {
       BiometricService.clearSessionOnSignOut();
+    });
+
+    // The verified-tick flag is cached for the session (it is granted by an
+    // admin and cannot change mid-session). Without this, an unverified
+    // member signing in after a verified one on the same phone would render
+    // a gold tick on their own post preview — a badge they have not been
+    // given, on the one surface whose job is to show them the truth.
+    await _step('verifiedTick', () async {
+      AuthService.clearVerifiedCache();
     });
 
     // The cached quiz identity is a static, and it also holds the live

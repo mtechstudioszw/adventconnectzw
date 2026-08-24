@@ -1,7 +1,7 @@
-// Render test for the Premium screen.
+﻿// Render test for the Premium screen.
 //
-// It has two completely different faces — the pitch and the "you're
-// already subscribed" view — and the pitch quotes a real ad count back
+// It has two completely different faces â€” the pitch and the "you're
+// already subscribed" view â€” and the pitch quotes a real ad count back
 // at the user, which is a number that comes from disk. Both faces are
 // rendered here at 1.0x / 1.6x / 2.5x system text on a 360dp phone,
 // because a fixed-height box holding wrappable text is this project's
@@ -13,6 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:advent_connect_zw/screens/premium/premium_screen.dart';
 import 'package:advent_connect_zw/services/ads/ad_impression_counter.dart';
 import 'package:advent_connect_zw/services/billing/billing_service.dart';
+import 'package:advent_connect_zw/services/ai/ai_tiers.dart';
 import 'package:advent_connect_zw/services/premium_service.dart';
 import 'package:advent_connect_zw/theme/app_theme.dart';
 
@@ -28,13 +29,13 @@ Future<void> _pump(
         size: const Size(360, 780),
         textScaler: TextScaler.linear(textScale),
       ),
-      // autoLoad: false keeps Supabase and the Play Store out of it —
+      // autoLoad: false keeps Supabase and the Play Store out of it â€”
       // the constructor seam this project uses for exactly this.
       child: const PremiumScreen(autoLoad: false),
     ),
   ));
   // StaggeredReveal arms a delay timer per card and the ad counter
-  // animates up, so settle rather than pump — a bare pump leaves those
+  // animates up, so settle rather than pump â€” a bare pump leaves those
   // timers pending and the teardown fails on them.
   await t.pumpAndSettle();
 }
@@ -61,32 +62,77 @@ void main() {
       expect(t.takeException(), isNull);
     });
 
-    testWidgets('quotes the real ad count once there is one worth quoting',
-        (t) async {
-      AdImpressionCounter.debugSet(count: 214);
+    testWidgets('leads with Advent AI, not with ad removal', (t) async {
+      // The screen was rebuilt (23 Aug 2026) around a POSITIVE benefit.
+      // Premium's whole pitch used to be the absence of advertising â€”
+      // "pay us and we will stop doing this to you" â€” which is a weak
+      // offer and, in a church app, an off-putting one. Advent AI is the
+      // first thing Premium has ever had that a member actually WANTS,
+      // so it is what they see first.
       await _pump(t);
-      // The counter animates up from zero, so settle before reading it.
       await t.pumpAndSettle();
-      expect(find.text('214'), findsOneWidget);
-      expect(find.textContaining('ads shown to you'), findsOneWidget);
-    });
 
-    testWidgets('shows no hollow zero on a fresh install', (t) async {
-      // A brand-new user has seen nothing. "0 ads shown to you" would be
-      // both useless and faintly absurd, so the copy switches instead.
-      AdImpressionCounter.debugSet(count: 0);
-      await _pump(t);
-      await t.pumpAndSettle();
-      expect(find.text('0'), findsNothing);
+      // Advent AI is the FIRST card, so it is on screen without
+      // scrolling â€” that is the whole point of the reordering.
+      expect(find.text('Advent AI'), findsWidgets);
       expect(
-        find.text('Read, watch and pray without interruption'),
-        findsOneWidget,
+        find.textContaining('${AiTiers.premium.monthlyMessages}'),
+        findsWidgets,
+        reason: 'the Premium allowance is the headline number',
       );
     });
 
-    testWidgets('offers a way out that is one clear tap', (t) async {
+    testWidgets('shows a worked example rather than a claim', (t) async {
+      // Every other line on a paywall is an assertion about how good the
+      // thing is. A real exchange is evidence, and it is the reason this
+      // card converts at all.
       await _pump(t);
-      expect(find.text('Keep watching ads for now'), findsOneWidget);
+      await t.pumpAndSettle();
+      expect(
+        find.textContaining('Matthew 11:28'),
+        findsOneWidget,
+        reason: 'the sample answer quotes a real verse',
+      );
+    });
+
+    testWidgets('the ad count still appears, but no longer leads',
+        (t) async {
+      // Not deleted â€” a real number of ads someone has sat through is
+      // honest and worth saying. It just is not the opening argument any
+      // more, so it now sits BELOW the fold and the test has to scroll
+      // to reach it. That scroll is the assertion: if this card ever
+      // creeps back to the top, the test starts passing without one.
+      AdImpressionCounter.debugSet(count: 214);
+      await _pump(t);
+      await t.pumpAndSettle();
+
+      expect(
+        find.textContaining('ads shown to you'),
+        findsNothing,
+        reason: 'ad guilt must not be the first thing a member reads',
+      );
+
+      await t.scrollUntilVisible(
+        find.textContaining('ads shown to you'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await t.pumpAndSettle();
+      expect(find.textContaining('ads shown to you'), findsOneWidget);
+    });
+
+    testWidgets('declining never shames the member', (t) async {
+      // This used to read "Keep watching ads for now", which makes the
+      // member say something unpleasant about themselves in order to
+      // refuse. That is confirmshaming, and the brief bans dark
+      // patterns. Plainly "Not now".
+      await _pump(t);
+      expect(find.text('Not now'), findsOneWidget);
+      expect(
+        find.text('Keep watching ads for now'),
+        findsNothing,
+        reason: 'the confirmshaming decline must not come back',
+      );
     });
   });
 
@@ -135,3 +181,4 @@ void main() {
     expect(t.takeException(), isNull);
   });
 }
+

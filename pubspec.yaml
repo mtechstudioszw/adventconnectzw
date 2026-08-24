@@ -15,6 +15,15 @@ dependencies:
   supabase_flutter: ^2.5.0
   go_router: ^14.2.0
   flutter_secure_storage: ^9.2.2
+  # Advent AI streams its answers as server-sent events, and
+  # `functions.invoke()` buffers the whole body before returning — which
+  # would turn a progressive answer into a ten-second wait on a blank
+  # screen. This needs the streaming client underneath it.
+  #
+  # NOT a new dependency in practice: http 1.6.0 was already in the tree
+  # transitively (supabase_flutter pulls it). Naming it here only makes
+  # an existing resolution explicit, so the graph is unchanged.
+  http: ^1.6.0
   # End-to-end encryption. The Signal protocol — X3DH + Double Ratchet for
   # 1:1, Sender Keys for groups — which is what WhatsApp runs. Pure Dart
   # (no platform channels), so the crypto is unit-testable in `flutter
@@ -196,6 +205,37 @@ dependencies:
   webview_flutter: 4.14.0
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.4.0
+
+  # ---- Audio calling (1:1 + small group) -----------------------------
+  #
+  # flutter_webrtc is the media engine. The audio itself is peer-to-peer
+  # (or TURN-relayed when P2P fails) and NEVER passes through Supabase —
+  # signalling only carries SDP/ICE, which is a few KB per call.
+  #
+  # Mesh, deliberately, and capped at CallConfig.maxParticipants (5 by
+  # default). At 5 people each phone sends 4 Opus uplinks of ~24 kbps —
+  # about 96 kbps up, which a Harare mobile connection carries fine. The
+  # engine sits behind CallTransport (lib/services/calls/call_transport.dart)
+  # so an SFU can replace it without touching CallService or any screen;
+  # see docs/CALLING_SETUP.md for the arithmetic and the switchover point.
+  #
+  # Pinned exact per project policy. REQUIRES `flutter pub get`, and on
+  # Android minSdk 24 (already set) + the RECORD_AUDIO / BLUETOOTH_CONNECT
+  # / FOREGROUND_SERVICE_MICROPHONE permissions in AndroidManifest.xml.
+  flutter_webrtc: 1.6.0
+
+  # The incoming-call UI that a normal notification cannot be.
+  #
+  # On iOS this is CallKit — the system call screen, driven by a PushKit
+  # VoIP push, which is the ONLY mechanism Apple allows to wake a killed
+  # app for a call. On Android it is a full-screen-intent notification
+  # that shows over the lock screen with Accept / Decline.
+  #
+  # It also vends the PushKit device token (getDevicePushTokenVoIP), which
+  # is what supabase/functions/call-push signs an APNs JWT for. FCM v1
+  # cannot send a VoIP push at all — Apple requires the <bundle>.voip
+  # topic and a VoIP-capable key — so that function talks to APNs directly.
+  flutter_callkit_incoming: 3.1.5
 
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale

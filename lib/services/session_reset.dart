@@ -5,10 +5,12 @@ import 'auth_service.dart';
 import 'biometric_service.dart';
 import 'cache_service.dart';
 import 'cart_service.dart';
+import 'calls/call_service.dart';
 import 'messaging_service.dart';
 import 'music_player_service.dart';
 import 'premium_service.dart';
 import 'e2ee/e2ee_service.dart';
+import 'fundraiser_service.dart';
 import 'presence_service.dart';
 import 'typing_signal.dart';
 import 'quiz_home_signal.dart';
@@ -62,6 +64,14 @@ class SessionReset {
   /// catches sessions that end without going through those — a revoked
   /// token, or a refresh that fails for good.
   static Future<void> onSignOut() async {
+    // Calls go FIRST, and this one is not cosmetic like the rest of this
+    // file. Everything else here is stale state; a live call is a live
+    // microphone. If the member signs out mid-call, this is what leaves
+    // the call, releases the mic, tears down the peer connections, gives
+    // the audio session back, dismisses the system call UI, and drops
+    // this handset's push tokens so it stops ringing for an account that
+    // is no longer on it.
+    await _step('calls', CallService.clearOnSignOut);
     await _step('messaging', MessagingService.clearOnSignOut);
     await _step('cart', CartService.clearOnSignOut);
     await _step('accountMode', AccountModeService.resetToPersonal);
@@ -114,6 +124,15 @@ class SessionReset {
     // player's live dot lit on the Quiz pill.
     await _step('quizHomeSignal', () async {
       QuizHomeSignal.resetForSignOut();
+    });
+
+    // The iPhone fundraiser's in-memory campaign, which carries THIS
+    // member's dismissal flag on it. Same static-notifier problem as the
+    // two above: the disk copy is unprefixed and so `clearUserData()`
+    // already takes it, but the notifier would hand the next account the
+    // previous member's "I dismissed this" until the next refresh landed.
+    await _step('fundraiser', () async {
+      FundraiserService.resetForSignOut();
     });
 
     // User-scoped `pref:` keys. `clearUserData()` spares this namespace so

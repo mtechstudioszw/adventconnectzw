@@ -4,6 +4,7 @@ import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/admin_quiz_screen.dart';
+import '../screens/admin/admin_calls_screen.dart';
 import '../screens/admin/church_members_screen.dart';
 import '../screens/admin/user_insights_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
@@ -11,6 +12,7 @@ import '../screens/admin/church_admin_approvals_screen.dart';
 import '../screens/admin/seller_approvals_screen.dart';
 import '../screens/admin/news_approvals_screen.dart';
 import '../screens/admin/event_approvals_screen.dart';
+import '../screens/admin/fundraiser_approvals_screen.dart';
 import '../screens/auth/auth_screen.dart';
 import '../screens/auth/email_verification_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -53,7 +55,10 @@ import '../services/church_service.dart';
 import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
+import '../screens/calls/call_history_screen.dart';
+import '../screens/calls/call_screen.dart';
 import '../screens/donate/donate_screen.dart';
+import '../screens/donate/iphone_fundraiser_screen.dart';
 import '../models/advent_news_model.dart';
 import '../models/event_model.dart';
 import '../models/job_model.dart';
@@ -90,6 +95,7 @@ import '../screens/news/advent_news_details_screen.dart';
 import '../screens/news/advent_news_screen.dart';
 import '../screens/news/post_advent_news_screen.dart';
 import '../screens/onboarding/onboarding_screen.dart';
+import '../screens/advent_ai/advent_ai_screen.dart';
 import '../screens/prayer/post_prayer_screen.dart';
 import '../screens/prayer/prayer_details_screen.dart';
 import '../screens/home/home_screen.dart';
@@ -452,6 +458,19 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
+      // Advent AI. Reached from the app-wide bubble (AdventAiBubble),
+      // which is mounted above this Navigator in MaterialApp.builder —
+      // so the push lands on the ROOT navigator, not inside a tab shell.
+      //
+      // `?c=<id>` resumes a conversation. Absent means a new one, and
+      // no row is written until the first send.
+      path: '/advent-ai',
+      name: 'advent_ai',
+      builder: (context, state) => AdventAiScreen(
+        conversationId: state.uri.queryParameters['c'],
+      ),
+    ),
+    GoRoute(
       path: '/prayer',
       name: 'prayer',
       builder: (context, state) => const PrayerScreen(),
@@ -580,6 +599,15 @@ final GoRouter appRouter = GoRouter(
       path: '/donate',
       name: 'donate',
       builder: (context, state) => const DonateScreen(),
+    ),
+    // The iPhone campaign. Separate from /donate on purpose: that page is
+    // an open-ended gift toward running the app, this one is a single
+    // costed goal with a bar and an end. Sharing a route would make both
+    // harder to explain.
+    GoRoute(
+      path: '/iphone-fundraiser',
+      name: 'iphone_fundraiser',
+      builder: (context, state) => const IphoneFundraiserScreen(),
     ),
     GoRoute(
       path: '/messages',
@@ -908,6 +936,14 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const EventApprovalsScreen(),
         ),
         GoRoute(
+          // iPhone fundraiser queue (patch_253). The ONLY surface in the
+          // app that can move the campaign total, and it does so through a
+          // SECURITY DEFINER RPC that re-checks is_super_admin itself.
+          path: 'fundraiser',
+          name: 'admin_fundraiser',
+          builder: (context, state) => const FundraiserApprovalsScreen(),
+        ),
+        GoRoute(
           // Super-admin Library content manager (patch_133): curate hymns +
           // upload music / EGW PDFs.
           path: 'library',
@@ -926,7 +962,43 @@ final GoRouter appRouter = GoRouter(
           name: 'admin_quiz',
           builder: (context, state) => const AdminQuizScreen(),
         ),
+        GoRoute(
+          // Calling metrics — volume, outcomes and relayed minutes, which
+          // is the only number that maps to an infrastructure bill
+          // (patch_264). Counts and durations only: no call audio exists
+          // anywhere in the system to expose.
+          path: 'calls',
+          name: 'admin_calls',
+          builder: (context, state) => const AdminCallsScreen(),
+        ),
       ],
+    ),
+    // ---- Audio calling -------------------------------------------------
+    //
+    // `/call` takes NO parameters, and that is deliberate. The live call
+    // is a singleton in CallService (a phone has one microphone), so the
+    // screen reads it rather than being handed one. Passing a call id
+    // through the route would create a second source of truth and let a
+    // stale link open a screen for a call that has already ended.
+    //
+    // Nothing navigates here directly either: main.dart listens to
+    // CallService.onShowCallScreen and pushes this route, so an incoming
+    // call from a push, a Realtime event or a lock-screen accept all
+    // arrive the same way.
+    GoRoute(
+      path: '/call',
+      name: 'call',
+      // No transition. A call screen that fades in feels like a delay on
+      // the one screen where a delay reads as a dropped call.
+      pageBuilder: (context, state) => NoTransitionPage<void>(
+        key: state.pageKey,
+        child: const CallScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/calls',
+      name: 'calls',
+      builder: (context, state) => const CallHistoryScreen(),
     ),
     GoRoute(
       path: '/report-submitted',

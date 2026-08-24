@@ -49,3 +49,35 @@ jobs:
 
       - name: Test
         run: flutter test
+
+      # The edge function is TypeScript, so neither `flutter analyze` nor
+      # `flutter test` can see it — and `supabase functions deploy` is
+      # otherwise the first thing that ever parses it. A syntax error
+      # would ship from a fully green repo. That has already happened
+      # once — an escaped newline sequence written as a REAL newline
+      # inside a double-quoted string, which is an unterminated string
+      # literal and unparseable. This step is what caught it.
+      #
+      # Also runs behavioural tests for the scripture-reference parser,
+      # the pure function that decides whether Advent AI quotes the real
+      # Bible or answers from memory.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Edge function syntax + tests
+        run: node supabase/functions/advent-ai/test/run.mjs
+
+      # The Advent AI SQL cannot be executed in CI, so it ships on review
+      # alone. Review already missed nothing here only because it was done
+      # twice; these are the mechanical checks that do not need a human -
+      # duplicate patch numbers, unbalanced $$, ledger values that violate
+      # their own CHECK constraint, calls to functions no patch defines,
+      # INSERTs naming columns that do not exist, and patches that depend
+      # on a later patch than themselves.
+      #
+      # Validated by negative tests: each check was confirmed to FAIL on a
+      # deliberately broken copy before being trusted.
+      - name: Advent AI SQL cross-checks
+        run: python scripts/check_ai_patches.py

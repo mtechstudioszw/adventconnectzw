@@ -62,6 +62,7 @@ import '../../widgets/home/section_header.dart';
 import '../../widgets/home/signup_survey_sheet.dart';
 import '../../widgets/home/edit_post_dialog.dart';
 import '../../widgets/home/invite_friends_card.dart';
+import '../../widgets/home/iphone_fundraiser_card.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/today_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
@@ -2355,6 +2356,22 @@ class _HomeScreenState extends State<HomeScreen>
       return seedA.compareTo(seedB);
     });
     return [
+      // The iPhone campaign, FIRST among the discovery cards and outside
+      // the shuffle above.
+      //
+      // In the feed rather than pinned above it, deliberately: it is an
+      // optional ask, so it should be something you scroll past like any
+      // other card, not the first thing between you and the app. First
+      // among them so it is reliably reachable rather than buried at
+      // whatever depth a per-viewer shuffle happened to drop it.
+      //
+      // It self-hides — not loaded, dismissed, paused, or running on iOS
+      // all render SizedBox.shrink — so nothing here needs a condition and
+      // Home never learns anything about campaign state.
+      const Padding(
+        padding: EdgeInsets.fromLTRB(0, 8, 0, 8),
+        child: IphoneFundraiserCard(),
+      ),
       for (final slot in discoverable) slot.widget,
       const Padding(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 8),

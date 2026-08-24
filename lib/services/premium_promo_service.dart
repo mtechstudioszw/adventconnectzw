@@ -56,6 +56,7 @@ class PremiumPromoService {
     '/cart',
     '/checkout',
     '/donate',
+    '/iphone-fundraiser',
     // Don't pitch the thing they're already looking at.
     '/premium',
   ];

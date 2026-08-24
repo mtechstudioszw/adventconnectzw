@@ -69,6 +69,77 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
+    <!-- ===== Audio calling (flutter_webrtc + flutter_callkit_incoming) =====
+
+         RECORD_AUDIO is already declared at the top of this file for voice
+         notes and is the same permission a call needs, so it is not repeated.
+         Everything in this block exists only because of calling.
+
+         Several of these ALSO merge in from the flutter_callkit_incoming
+         manifest. Declaring them here anyway is deliberate: this file is the
+         record of what the app itself uses, and a plugin version bump that
+         quietly drops one must not take the call path down with it. -->
+
+    <!-- Android 12 (API 31) put Bluetooth device access behind a runtime
+         permission. Without it CallAudio's
+         Helper.setSpeakerphoneOnButPreferBluetooth() cannot see the connected
+         SCO headset and falls back to the earpiece WITHOUT throwing — so a
+         member on a car kit hears the call out of the handset in their pocket
+         and is heard by nobody. A silent fallback is the whole problem here:
+         nothing in the UI says the route was refused. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <!-- Lets the app put the audio system into MODE_IN_COMMUNICATION and flip
+         the speakerphone. Without it the call rides the MEDIA stream instead:
+         the volume keys adjust the wrong stream, the platform's echo
+         cancellation and gain control are never applied (so both sides hear
+         themselves back), and the speaker toggle on the call screen does
+         nothing at all. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- Android 14 (API 34) requires the TYPED foreground-service permission
+         matching every foregroundServiceType a service declares. The call
+         service below declares `microphone`, so without this permission
+         startForeground() throws SecurityException the moment the app is
+         backgrounded. The call itself survives; the microphone does not. The
+         member sees nothing and is simply never heard again. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <!-- The other half of that typed pair — the same service declares
+         `phoneCall`. MANAGE_OWN_CALLS is what allows the plugin's
+         CallkitConnectionService to register the call with the Telecom stack,
+         which is what makes Android treat this as a CALL rather than an app
+         playing audio: other media ducks, the in-call status bar appears, and
+         the platform can end the call when a real cellular call arrives. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
+    <!-- The lock-screen incoming-call UI. Without it a full-screen intent
+         silently degrades to a heads-up notification, so a call arriving on a
+         locked phone is a banner that slides away after a few seconds. The
+         isFullScreen / isShowFullLockedScreen AndroidParams set in
+         lib/services/calls/callkit_bridge.dart depend on this being declared.
+         Note Android 14+ also grants this at install time only to apps whose
+         use case is calling — which ours is. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <!-- REMOVED deliberately, the same way and for the same kind of reason as
+         ACCESS_FINE_LOCATION above.
+
+         flutter_callkit_incoming declares FOREGROUND_SERVICE_CAMERA in its own
+         manifest because the plugin also supports VIDEO calls. This app does
+         not: callkit_bridge.dart passes `type: 0` and `supportsVideo: false`,
+         and the plugin's CallkitNotificationService.kt only ORs
+         FOREGROUND_SERVICE_TYPE_CAMERA into the service type mask inside an
+         `if (isVideo && ...)` branch that can never be taken here.
+
+         Left alone it is a Play submission blocker rather than a harmless
+         extra: a camera foreground-service type obliges us to file a
+         foreground-service declaration justifying camera use we never make,
+         and the review rejects a build whose declaration and manifest
+         disagree. Deleting a line we never wrote is not an option — the
+         permission arrives by manifest merge, so tools:node="remove" is the
+         only thing that keeps it out of the built APK. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_CAMERA"
+        tools:node="remove"/>
+
     <!-- image_picker (camera path) + profile/cover photo capture flows.
          Without this declared, Permission.camera.request() returns
          "granted" immediately on Android without ever showing the
@@ -225,6 +296,41 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON"/>
             </intent-filter>
         </receiver>
+        <!-- flutter_callkit_incoming's call foreground service, re-declared
+             here for exactly ONE reason: to narrow its foregroundServiceType.
+
+             The plugin's manifest declares
+             android:foregroundServiceType="phoneCall|microphone|camera". The
+             camera type buys this app nothing (audio only — see the
+             FOREGROUND_SERVICE_CAMERA removal at the top of this file), and
+             the two halves must be changed TOGETHER. Removing the permission
+             while leaving the type declared is the worst of the three states:
+             Android 14+ refuses to start a foreground service whose declared
+             type has no matching permission, so every incoming call would die
+             at startForeground() and the phone would never ring.
+
+             tools:replace is required because the manifest merger will not
+             choose between two explicit values for the same attribute — the
+             same mechanism as tools:replace="android:allowBackup" on
+             <application> above, and it fails the build rather than picking.
+
+             Every other attribute is copied VERBATIM from the plugin manifest
+             and none of it is decoration. android:permission ties the service
+             to the plugin's own ${applicationId}.PERMISSION_CALL signature
+             check, so a third-party app cannot start our call service;
+             android:stopWithTask="false" is what keeps a live call running
+             after the member swipes the app off the recents list. Because this
+             declaration WINS the merge, any attribute dropped here is dropped
+             from the built APK — so if the plugin is upgraded, diff its
+             manifest against this block before assuming it still matches. -->
+        <service
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitNotificationService"
+            android:enabled="true"
+            android:exported="true"
+            android:stopWithTask="false"
+            android:foregroundServiceType="phoneCall|microphone"
+            android:permission="${applicationId}.PERMISSION_CALL"
+            tools:replace="android:foregroundServiceType"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -13,6 +13,7 @@ import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
 import 'services/cache_service.dart';
+import 'services/calls/call_service.dart';
 import 'services/ads/ads_service.dart';
 import 'services/ads/resume_ad_manager.dart';
 import 'services/connectivity_service.dart';
@@ -32,6 +33,7 @@ import 'services/push_service.dart';
 import 'services/theme_service.dart';
 import 'theme/app_text_styles.dart';
 import 'theme/app_theme.dart';
+import 'widgets/advent_ai_bubble.dart';
 import 'widgets/ambient_background.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/global_media_bars.dart';
@@ -296,6 +298,40 @@ Future<void> _initBackgroundServices() async {
 
     AnalyticsService.markReady();
     await PushService.initialize();
+
+    // Calling. AFTER PushService.initialize() on purpose: CallService
+    // registers this handset's FCM token for call pushes, and on Android
+    // that token comes from the same FirebaseMessaging instance
+    // PushService has just set up. Registering first would hand the
+    // server a null token and the phone would never ring.
+    //
+    // Not awaited — a member must never wait on call setup to reach
+    // their inbox. It also reconciles with the server on the way in, so
+    // a call that survived a force-quit is rejoined rather than left as
+    // a ghost.
+    unawaited(CallService.initialize());
+
+    // The only place a call screen is opened. Every route in — an FCM
+    // push, a Realtime invite, a lock-screen accept, a recovered call
+    // after a crash — ends here, so there is exactly one navigation path
+    // and no way to end up with two call screens stacked.
+    CallService.onShowCallScreen.listen((signal) {
+      try {
+        if (signal.startsWith('callback:')) {
+          // "Call back" on a missed-call notification. Deliberately does
+          // NOT dial: an accidental tap must not place a call. It opens
+          // the call log, where calling back is one deliberate tap.
+          appRouter.pushNamed('calls');
+          return;
+        }
+        final location = appRouter.routerDelegate.currentConfiguration.uri.path;
+        if (location == '/call') return; // already there
+        appRouter.pushNamed('call');
+      } catch (e, st) {
+        debugPrint('Opening the call screen failed: $e
+$st');
+      }
+    });
     PushService.onMessageTap.listen((msg) {
       final type = (msg.data['reference_type'] ?? '').toString();
       final id = (msg.data['reference_id'] ?? '').toString();
@@ -549,6 +585,11 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       unawaited(MessagingService.markAllIncomingDelivered());
       // Rejoin presence (online again + heartbeat resumes).
       if (AuthService.isSignedIn) unawaited(PresenceService.start());
+      // Ask the server what call we are actually in. The app may have
+      // been killed mid-call, or a call may have been swept as stale
+      // while the phone was in a pocket — either way whatever is in
+      // memory is a guess and the server's answer is not.
+      if (AuthService.isSignedIn) unawaited(CallService.recoverActiveCall());
       // Re-read premium on every return. This is what makes a
       // cancellation, refund or expiry that happened server-side while
       // the app was backgrounded take effect without a relaunch — and it
@@ -672,6 +713,18 @@ class _AdventConnectAppState extends State<AdventConnectApp>
                           // GlobalMediaBars, because the Watch player and the
                           // music card park independently.
                           Positioned.fill(child: GlobalMediaBars()),
+                          // Advent AI. Same layer, same reason: it is
+                          // ABOVE the router's Navigator, so the floating
+                          // navigation island cannot paint over it. The
+                          // last floating bubble this app shipped was
+                          // mounted inside the Navigator and was
+                          // unreachable for exactly that reason.
+                          //
+                          // It hides itself on its own blocked routes —
+                          // messaging above all (founder rule: an AI
+                          // button over a private chat reads as being
+                          // watched). See AdventAiBubble.blockedPrefixes.
+                          Positioned.fill(child: AdventAiBubble()),
                         ],
                       ),
                     ),

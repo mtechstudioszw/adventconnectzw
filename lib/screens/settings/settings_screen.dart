@@ -1056,6 +1056,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                             ),
                             const _Divider(),
                             _NavRow(
+                              icon: Icons.volunteer_activism_outlined,
+                              label: 'iPhone contributions',
+                              onTap: () =>
+                                  context.pushNamed('admin_fundraiser'),
+                            ),
+                            const _Divider(),
+                            _NavRow(
                               icon: Icons.library_books_outlined,
                               label: 'Manage Library',
                               onTap: () => context.pushNamed('admin_library'),

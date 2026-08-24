@@ -79,9 +79,42 @@ class BillingService {
   static final ValueNotifier<PremiumFlowState> state =
       ValueNotifier<PremiumFlowState>(PremiumFlowState.idle);
 
-  /// The live offer, once loaded. Its [PremiumOffer.price] is the store's
-  /// own localised string — always prefer it to any hardcoded label.
+  /// The offer that will be purchased. Its [PremiumOffer.price] is the
+  /// store's own localised string — always prefer it to any hardcoded
+  /// label.
+  ///
+  /// With several base plans this is whichever the member SELECTED, so
+  /// the price on the button and the price they are charged are the same
+  /// object. It defaults to the cheapest, so any path that buys without
+  /// an explicit choice can only ever undercharge.
   static PremiumOffer? offer;
+
+  /// Every plan the store offers for this subscription, cheapest first.
+  ///
+  /// Empty until [loadOffer] runs, and length 1 until an annual base
+  /// plan is activated in Play Console.
+  static List<PremiumOffer> offers = const [];
+
+  /// Bumps whenever the selected plan changes.
+  ///
+  /// The picker and the buy bar are separate widgets showing the same
+  /// price, so they must rebuild together — a button reading "$3.00"
+  /// while the picker shows Yearly selected is a mis-sold subscription
+  /// waiting to happen. Both listen to this.
+  static final ValueNotifier<int> planRevision = ValueNotifier<int>(0);
+
+  /// Choose which plan [buy] will purchase.
+  ///
+  /// Deliberately the ONLY way to change [offer]. A screen that assigned
+  /// to `offer` directly could set a plan the store never returned, and
+  /// the purchase would fail with a message nobody could explain.
+  static void selectPlan(PremiumOffer plan) {
+    final known = offers.any((o) =>
+        o.productId == plan.productId && o.rawPrice == plan.rawPrice);
+    if (!known) return;
+    offer = plan;
+    planRevision.value++;
+  }
 
   /// Plain-English failure text, safe to show a user.
   static String? errorMessage;
@@ -117,14 +150,22 @@ class BillingService {
       return;
     }
 
-    final loaded = await _store.loadOffer(BillingConfig.monthlyProductId);
-    if (loaded == null) {
+    // Every base plan, not just one. A subscription with a monthly and
+    // an annual plan returns two, and the picker needs both.
+    final loaded = await _store.loadOffers(BillingConfig.monthlyProductId);
+    if (loaded.isEmpty) {
       state.value = PremiumFlowState.unavailable;
       errorMessage = "Premium isn't available just yet. Please try again "
           'a little later.';
       return;
     }
-    offer = loaded;
+    offers = loaded;
+
+    // Default to the CHEAPEST, never the first returned. If the member
+    // buys without touching the picker they get the smallest commitment,
+    // which is both the kinder default and the one that cannot surprise
+    // anybody with a charge ten times what they expected.
+    offer = loaded.reduce((a, b) => a.rawPrice <= b.rawPrice ? a : b);
     state.value = PremiumFlowState.ready;
   }
 
@@ -337,6 +378,7 @@ class BillingService {
     _verifier = null;
     _initialized = false;
     offer = null;
+    offers = const [];
     errorMessage = null;
     state.value = PremiumFlowState.idle;
   }

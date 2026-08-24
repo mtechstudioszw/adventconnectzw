@@ -1,0 +1,96 @@
+# =====================================================================
+#  Podfile — iOS dependencies
+#
+#  ## This project has never been built for iOS
+#
+#  There is no Apple Developer account yet and the whole app is
+#  developed on Windows, so no Podfile existed until calling needed one.
+#  This is the canonical Flutter template plus the two things this app
+#  specifically requires. Treat the first `pod install` on a Mac as the
+#  real test of it — see docs/CALLING_SETUP.md.
+#
+#  ## Why 13.0
+#
+#  flutter_webrtc 1.6.0 declares `s.ios.deployment_target = '13.0'`, so
+#  anything lower fails to resolve. Everything else in the tree is
+#  happy at or below that (flutter_callkit_incoming asks for 10.0).
+# =====================================================================
+
+platform :ios, '13.0'
+
+# CocoaPods analytics sends network stats synchronously on every pod
+# install, which measurably slows down builds.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(
+    File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__
+  )
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. " \
+          "If you're running pod install manually, make sure " \
+          "flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. " \
+        "Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(
+  File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root
+)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+
+    target.build_configurations.each do |config|
+      # permission_handler compiles ONE permission handler per macro. The
+      # macros default to off, so without this the microphone request
+      # returns "denied" immediately without ever showing a dialog — which
+      # looks exactly like a member refusing, and makes every call silent
+      # with no way to recover. This is the single most common
+      # permission_handler misconfiguration on iOS.
+      #
+      # Only the permissions this app actually asks for are enabled, so
+      # App Store review is not shown usage prompts we never use.
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+      ]
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] += [
+        'PERMISSION_MICROPHONE=1',
+        'PERMISSION_CAMERA=1',
+        'PERMISSION_PHOTOS=1',
+        'PERMISSION_LOCATION=1',
+        'PERMISSION_NOTIFICATIONS=1',
+      ]
+
+      # Matches the platform line at the top. Some transitive pods still
+      # default to 11.0 and warn loudly at link time.
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+    end
+  end
+end

@@ -43,18 +43,45 @@ class FakeBillingPlatform implements BillingPlatform {
   @override
   Future<bool> isAvailable() async => available;
 
+  /// When true the fake returns BOTH a monthly and an annual plan, the
+  /// way Play does once a second base plan is activated. Off by default
+  /// so the existing single-plan tests are unchanged.
+  bool annualExists = false;
+
+  PremiumOffer _monthly(String productId) => PremiumOffer(
+        productId: productId,
+        title: 'Adventist Super App Premium',
+        description: 'Monthly',
+        price: 'US\$3.00',
+        currencyCode: 'USD',
+        rawPrice: 3.0,
+        native: 'fake-monthly',
+      );
+
+  PremiumOffer _annual(String productId) => PremiumOffer(
+        productId: productId,
+        title: 'Adventist Super App Premium',
+        description: 'Annual',
+        price: 'US\$30.00',
+        currencyCode: 'USD',
+        rawPrice: 30.0,
+        native: 'fake-annual',
+      );
+
   @override
-  Future<PremiumOffer?> loadOffer(String productId) async => offerExists
-      ? PremiumOffer(
-          productId: productId,
-          title: 'Adventist Super App Premium',
-          description: 'No ads',
-          price: 'US\$3.00',
-          currencyCode: 'USD',
-          rawPrice: 3.0,
-          native: 'fake-product',
-        )
-      : null;
+  Future<PremiumOffer?> loadOffer(String productId) async =>
+      offerExists ? _monthly(productId) : null;
+
+  @override
+  Future<List<PremiumOffer>> loadOffers(String productId) async {
+    if (!offerExists) return const [];
+    // Cheapest first, matching the real platform's contract — the picker
+    // relies on that order and a fake that returned them the other way
+    // round would hide a real ordering bug.
+    return annualExists
+        ? [_monthly(productId), _annual(productId)]
+        : [_monthly(productId)];
+  }
 
   @override
   Future<bool> buy(PremiumOffer offer) async {

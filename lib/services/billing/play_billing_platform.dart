@@ -55,7 +55,19 @@ class PlayBillingPlatform implements BillingPlatform {
       }
       if (response.productDetails.isEmpty) return null;
 
-      final p = response.productDetails.first;
+      // `.first` was correct only while the subscription had exactly one
+      // base plan. `in_app_purchase` returns ONE ProductDetails PER BASE
+      // PLAN, so the day an annual plan is added in Play Console this
+      // picks whichever Play happened to return first — and a button
+      // labelled "$3.00 / month" could start a $30.00 yearly purchase.
+      //
+      // loadOffers() below returns them all and the UI chooses. This
+      // single-offer entry point stays for callers that only need "is
+      // there anything to sell", and now deliberately prefers the
+      // CHEAPEST plan so a mislabelled fallback can only ever undercharge.
+      final all = response.productDetails.toList()
+        ..sort((a, b) => a.rawPrice.compareTo(b.rawPrice));
+      final p = all.first;
       return PremiumOffer(
         productId: p.id,
         title: p.title,
@@ -68,6 +80,39 @@ class PlayBillingPlatform implements BillingPlatform {
     } catch (e) {
       debugPrint('PlayBilling.loadOffer threw: $e');
       return null;
+    }
+  }
+
+  /// Every purchasable plan for [productId], cheapest first.
+  ///
+  /// A Play subscription may carry several base plans (monthly, annual,
+  /// …) and `queryProductDetails` returns one entry for each. The plan
+  /// picker needs all of them; anything that just needs a price can use
+  /// [loadOffer].
+  @override
+  Future<List<PremiumOffer>> loadOffers(String productId) async {
+    try {
+      final response = await _iap.queryProductDetails({productId});
+      if (response.error != null) {
+        debugPrint('PlayBilling.loadOffers error: ${response.error}');
+      }
+      final details = response.productDetails.toList()
+        ..sort((a, b) => a.rawPrice.compareTo(b.rawPrice));
+      return [
+        for (final p in details)
+          PremiumOffer(
+            productId: p.id,
+            title: p.title,
+            description: p.description,
+            price: p.price,
+            currencyCode: p.currencyCode,
+            rawPrice: p.rawPrice,
+            native: p,
+          ),
+      ];
+    } catch (e) {
+      debugPrint('PlayBilling.loadOffers threw: $e');
+      return const [];
     }
   }
 

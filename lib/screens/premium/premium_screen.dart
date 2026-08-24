@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../services/ads/ad_impression_counter.dart';
+import '../../services/ai/ai_balance_service.dart';
+import '../../services/ai/ai_tiers.dart';
 import '../../services/billing/billing_config.dart';
 import '../../services/billing/billing_service.dart';
 import '../../services/premium_service.dart';
@@ -9,6 +11,8 @@ import '../../theme/app_palette.dart';
 import '../../widgets/motion/motion.dart';
 import '../../widgets/premium/premium_badge.dart';
 import '../../widgets/screen_shell.dart';
+import 'widgets/advent_ai_offer_card.dart';
+import 'widgets/plan_picker.dart';
 
 /// "Go Premium".
 ///
@@ -118,13 +122,31 @@ class _ActiveView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
+                // Leads with Advent AI, not with ads.
+                //
+                // This line used to say only "Every ad is switched off",
+                // which described Premium entirely by what it removes —
+                // the same negative framing the offer screen was rebuilt
+                // to get away from. A member who has just paid should be
+                // told what they now HAVE. Ads follow as a second clause
+                // because it is still true and still worth saying.
                 Text(
-                  until == null
-                      ? 'Every ad is switched off across the app.'
-                      : 'Every ad is switched off. Renews on '
-                          '${_formatDate(until.toLocal())}.',
-                  style: TextStyle(fontSize: 15, color: palette.textMuted),
+                  '${AiTiers.premium.monthlyMessages} Advent AI questions '
+                  'a month, and no ads anywhere in the app.'
+                  '${until == null ? '' : ' Renews on '
+                      '${_formatDate(until.toLocal())}.'}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: palette.textMuted,
+                    height: 1.45,
+                  ),
                 ),
+                const SizedBox(height: 12),
+                // Their live remaining allowance, so "active" is a fact
+                // they can see rather than a claim. A subscriber who
+                // cannot tell whether the thing they pay for is working
+                // is a subscriber who cancels.
+                const _ActiveAllowanceRow(),
               ],
             ),
           ),
@@ -190,11 +212,37 @@ class _OfferView extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             children: [
-              StaggeredReveal(index: 0, child: const _AdCostCard()),
+              // Advent AI leads.
+              //
+              // This screen used to open with the ad-count card — the
+              // "honest gut-punch" of how many ads you had sat through.
+              // Opening on a grievance sells by making someone feel bad
+              // about their own use of the app, and it left Premium with
+              // nothing positive to offer.
+              //
+              // Advent AI is the first thing Premium has ever had that a
+              // member actually WANTS, so it goes first and the ad card
+              // moves below the fold as supporting evidence.
+              StaggeredReveal(index: 0, child: const AdventAiOfferCard()),
               const SizedBox(height: 12),
-              StaggeredReveal(index: 1, child: const _ComparisonCard()),
+              // The choice, right under what they are choosing.
+              StaggeredReveal(
+                index: 1,
+                child: ValueListenableBuilder<int>(
+                  valueListenable: BillingService.planRevision,
+                  builder: (context, _, child) => PlanPicker(
+                    offers: BillingService.offers,
+                    selected: BillingService.offer,
+                    onSelect: BillingService.selectPlan,
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
-              StaggeredReveal(index: 2, child: _PriceAnchorCard(price: price)),
+              StaggeredReveal(index: 2, child: const _ComparisonCard()),
+              const SizedBox(height: 12),
+              StaggeredReveal(index: 3, child: const _AdCostCard()),
+              const SizedBox(height: 12),
+              StaggeredReveal(index: 4, child: _PriceAnchorCard(price: price)),
               if (flow == PremiumFlowState.pendingPayment) ...[
                 const SizedBox(height: 12),
                 StaggeredReveal(
@@ -233,7 +281,17 @@ class _OfferView extends StatelessWidget {
             ],
           ),
         ),
-        _BuyBar(price: price, busy: busy, enabled: !unavailable),
+        // Rebuilds with the picker: the label carries the price the
+        // member is about to be charged, and the two must never disagree.
+        ValueListenableBuilder<int>(
+          valueListenable: BillingService.planRevision,
+          builder: (context, _, child) => _BuyBar(
+            price: BillingService.offer?.price ??
+                BillingConfig.fallbackPriceLabel,
+            busy: busy,
+            enabled: !unavailable,
+          ),
+        ),
       ],
     );
   }
@@ -450,8 +508,13 @@ class _PriceAnchorCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Cancel any time in the Play Store, and keep Premium until '
-                  'the period you paid for ends. No refund games.',
+                  // "No refund games" is retired (founder, 23 Aug 2026).
+                  // It implies other people play games, and it puts the
+                  // idea of a dispute in someone's head at the exact
+                  // moment they are deciding to trust us. The reassurance
+                  // is the same without the swipe.
+                  'Cancel any time in the Play Store, and keep Premium '
+                  'until the period you paid for ends.',
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
@@ -548,7 +611,12 @@ class _BuyBar extends StatelessWidget {
             // The button states the act, not the wait. "Verifying…" would
             // be telling the user to hold on; the spinner already says
             // that, and the label should say what they're getting.
-            label: busy ? 'Switching ads off' : 'Go Premium — $price',
+            //
+            // "Switching ads off" is retired: Premium's headline benefit
+            // is Advent AI now, and naming the removal of an annoyance
+            // as the thing being bought is what made this screen feel
+            // like a squeeze.
+            label: busy ? 'Setting up Premium' : 'Go Premium — $price',
             icon: Icons.star_rounded,
             loading: busy,
             enabled: enabled,
@@ -558,9 +626,18 @@ class _BuyBar extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.of(context).maybePop(),
             style: TextButton.styleFrom(foregroundColor: palette.textMuted),
-            // Honest, and still framed: they are choosing the ads, not
-            // choosing "no". One tap, no guilt screen, no second prompt.
-            child: const Text('Keep watching ads for now'),
+            // Plainly "not now".
+            //
+            // This used to read "Keep watching ads for now", defended as
+            // "they are choosing the ads, not choosing no". That is
+            // confirmshaming: making someone say something unpleasant
+            // about themselves in order to decline. It is a dark pattern
+            // the brief bans outright (§27), and in a church app it is
+            // the single line most likely to leave a member feeling the
+            // app is working against them.
+            //
+            // Declining must cost nothing and say nothing about them.
+            child: const Text('Not now'),
           ),
         ],
       ),
@@ -571,6 +648,98 @@ class _BuyBar extends StatelessWidget {
 // =====================================================================
 //  Small shared pieces
 // =====================================================================
+
+/// A subscriber's live Advent AI allowance, on the Premium screen.
+///
+/// "Premium is active" is a claim. This is evidence: a real number that
+/// moves as they use it. Somebody who cannot tell whether the thing they
+/// pay for is working is somebody who cancels — and this is the screen
+/// they open when they are wondering.
+///
+/// Renders nothing at all until the balance is known, rather than
+/// flashing a hollow "0 of 500" while the fetch is in flight.
+class _ActiveAllowanceRow extends StatefulWidget {
+  const _ActiveAllowanceRow();
+
+  @override
+  State<_ActiveAllowanceRow> createState() => _ActiveAllowanceRowState();
+}
+
+class _ActiveAllowanceRowState extends State<_ActiveAllowanceRow> {
+  @override
+  void initState() {
+    super.initState();
+    // The member may have arrived straight from a purchase, so the
+    // cached figure can predate their subscription by seconds.
+    AiBalanceService.refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return ValueListenableBuilder<AiBalance>(
+      valueListenable: AiBalanceService.balance,
+      builder: (context, balance, _) {
+        if (balance.grant <= 0) return const SizedBox.shrink();
+
+        final used = (balance.grant - balance.remaining).clamp(0, balance.grant);
+        final fraction = balance.grant == 0
+            ? 0.0
+            : (balance.remaining / balance.grant).clamp(0.0, 1.0);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded,
+                    size: 14, color: AppColors.goldAccent),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Advent AI this month',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: palette.text,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${balance.remaining} of ${balance.grant} left',
+                  style: TextStyle(fontSize: 13, color: palette.textMuted),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(100),
+              child: LinearProgressIndicator(
+                value: fraction,
+                minHeight: 6,
+                backgroundColor: palette.chipBg,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(AppColors.primaryBlue),
+              ),
+            ),
+            if (used > 0) ...[
+              const SizedBox(height: 6),
+              Text(
+                // Their own usage, stated warmly. Not a warning — a
+                // subscriber running low is a subscriber getting value,
+                // and the tone should say so.
+                'You have asked $used question${used == 1 ? '' : 's'} '
+                'this month.',
+                style: TextStyle(fontSize: 12, color: palette.textMuted),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
 
 class _Card extends StatelessWidget {
   const _Card({required this.child});

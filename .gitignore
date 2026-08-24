@@ -76,3 +76,7 @@ scripts/.announcement-sent.log
 visited.json
 queue.json
 failed.json
+
+# Transpiled output from supabase/functions/advent-ai/test/run.mjs.
+# Regenerated on every run; the TypeScript sources are the truth.
+supabase/functions/*/test/.build/

@@ -18,6 +18,7 @@ import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/calls/call_action.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
@@ -785,8 +786,39 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               onTap: _openChat,
             ),
           ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 1,
+            child: _SquareButton(
+              icon: Icons.call_outlined,
+              onTap: _startCall,
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  /// Ring this member.
+  ///
+  /// The button is shown to everyone, including people this member has
+  /// not connected with, and that is deliberate: `call_reachability`
+  /// decides server-side and answers every refusal — blocked, privacy
+  /// setting, deleted account, not connected — with one identical
+  /// sentence. Hiding the button for some of those cases would leak
+  /// which one applies, which is exactly what the server takes care not
+  /// to say. A refused call costs one round trip and tells the caller
+  /// nothing they should not know.
+  Future<void> _startCall() async {
+    final profile = _profile;
+    if (profile == null) return;
+    await CallActions.callUser(
+      context,
+      userId: widget.userId,
+      displayName: (profile.fullName ?? '').trim().isEmpty
+          ? 'Member'
+          : profile.fullName!.trim(),
+      photoUrl: profile.profilePhotoUrl,
     );
   }
 

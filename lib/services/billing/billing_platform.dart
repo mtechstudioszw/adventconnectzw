@@ -133,7 +133,23 @@ abstract class BillingPlatform {
   /// Fetch the live product. Returns null when the store has never heard
   /// of [productId] — which in practice means the base plan was never
   /// activated in Play Console, not that the code is wrong.
+  ///
+  /// When a subscription carries several base plans this returns the
+  /// CHEAPEST, so a caller that only wants "is there anything to sell"
+  /// can never accidentally quote the dearest one. Use [loadOffers] to
+  /// show a choice.
   Future<PremiumOffer?> loadOffer(String productId);
+
+  /// Every purchasable plan for [productId], cheapest first.
+  ///
+  /// A Play subscription may carry several base plans — monthly and
+  /// annual on one product id — and the store returns one entry per
+  /// plan. This is what the plan picker reads.
+  ///
+  /// Returns an empty list rather than throwing when the store has
+  /// nothing: a missing annual plan must degrade to "monthly only", not
+  /// to a broken screen.
+  Future<List<PremiumOffer>> loadOffers(String productId);
 
   /// Start the store's own purchase sheet. Resolves as soon as the sheet
   /// is presented; the result arrives on [purchaseUpdates].

@@ -15,16 +15,51 @@
 // The FCM background handler runs in its own isolate with its own globals,
 // so it built its own client. These checks pin the rule at the only place
 // it is expressible without a device: the source itself.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
 String _read(String path) => File(path).readAsStringSync();
 
+/// Drop comment LINES before matching.
+///
+/// This guard works by grepping source text, which means prose that
+/// merely *names* the forbidden call trips it. That is not hypothetical:
+/// `ai_balance_service.dart` explains, correctly, why
+/// `AppBootstrap.startSupabaseInit()` is not awaited — and CI failed on
+/// the explanation. Rewording accurate documentation to appease a regex
+/// is the wrong trade; teaching the regex to read code instead of prose
+/// is the right one.
+///
+/// Deliberately line-based rather than a general comment stripper: a
+/// naive cut from `//` to end-of-line also mangles URLs inside string
+/// literals, and could in principle hide a real call sitting after one.
+/// A real call is never on a line that STARTS with a comment marker, so
+/// dropping only those lines is both sufficient and safe.
+String _codeOnly(String source) {
+  final out = StringBuffer();
+  var inBlock = false;
+  for (final line in const LineSplitter().convert(source)) {
+    final trimmed = line.trimLeft();
+    if (inBlock) {
+      if (trimmed.contains('*/')) inBlock = false;
+      continue;
+    }
+    if (trimmed.startsWith('/*')) {
+      if (!trimmed.contains('*/')) inBlock = true;
+      continue;
+    }
+    if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+    out.writeln(line);
+  }
+  return out.toString();
+}
+
 void main() {
   group('background isolate must not refresh tokens', () {
     test('the FCM background handler uses the non-refreshing bootstrap', () {
-      final src = _read('lib/services/push_service.dart');
+      final src = _codeOnly(_read('lib/services/push_service.dart'));
       expect(
         src.contains('startSupabaseInitForBackgroundIsolate'),
         isTrue,
@@ -49,7 +84,7 @@ void main() {
       final bareCall = RegExp(r'AppBootstrap\.startSupabaseInit\s*\(\s*\)');
       final callers = <String>[
         for (final f in lib)
-          if (bareCall.hasMatch(f.readAsStringSync())) f.path,
+          if (bareCall.hasMatch(_codeOnly(f.readAsStringSync()))) f.path,
       ];
 
       expect(

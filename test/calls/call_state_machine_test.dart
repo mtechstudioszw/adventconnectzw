@@ -329,8 +329,8 @@ void main() {
     test('anything that counts time is live and not terminal', () {
       for (final phase in CallPhase.values) {
         if (!phase.countsTime) continue;
-        expect(phase.isLive, isTrue, reason: '${phase.name}');
-        expect(phase.isTerminal, isFalse, reason: '${phase.name}');
+        expect(phase.isLive, isTrue, reason: phase.name);
+        expect(phase.isTerminal, isFalse, reason: phase.name);
       }
     });
 

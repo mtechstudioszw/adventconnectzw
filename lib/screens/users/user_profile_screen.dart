@@ -815,9 +815,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     await CallActions.callUser(
       context,
       userId: widget.userId,
-      displayName: (profile.fullName ?? '').trim().isEmpty
+      displayName: profile.fullName.trim().isEmpty
           ? 'Member'
-          : profile.fullName!.trim(),
+          : profile.fullName.trim(),
       photoUrl: profile.profilePhotoUrl,
     );
   }

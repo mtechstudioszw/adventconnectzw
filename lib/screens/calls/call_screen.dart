@@ -305,7 +305,7 @@ class _DirectAvatarState extends State<_DirectAvatar>
         widget.state.phase == CallPhase.ringing ||
         widget.state.phase == CallPhase.incoming;
     // Honour "remove animations" — the app-wide rule from AppMotion.
-    final allowed = !MediaQuery.maybeDisableAnimationsOf(context);
+    final allowed = !(MediaQuery.maybeDisableAnimationsOf(context) ?? false);
     if (ringing && allowed) {
       if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
     } else {

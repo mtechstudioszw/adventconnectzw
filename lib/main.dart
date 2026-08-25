@@ -328,8 +328,7 @@ Future<void> _initBackgroundServices() async {
         if (location == '/call') return; // already there
         appRouter.pushNamed('call');
       } catch (e, st) {
-        debugPrint('Opening the call screen failed: $e
-$st');
+        debugPrint('Opening the call screen failed: $e\n$st');
       }
     });
     PushService.onMessageTap.listen((msg) {

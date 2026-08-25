@@ -393,6 +393,7 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
           _Label('Street address'),
           TextFormField(
             controller: _address,
+            maxLength: 200,
             textCapitalization: TextCapitalization.words,
             decoration: _dec(context, hint: 'e.g. 12 Samora Machel Ave'),
           ),
@@ -406,6 +407,7 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
                     _Label('Suburb'),
                     TextFormField(
                       controller: _suburb,
+                      maxLength: 60,
                       textCapitalization: TextCapitalization.words,
                       decoration: _dec(context, hint: 'Suburb'),
                     ),
@@ -420,6 +422,7 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
                     _Label('City'),
                     TextFormField(
                       controller: _city,
+                      maxLength: 60,
                       textCapitalization: TextCapitalization.words,
                       decoration: _dec(context, hint: 'City'),
                       validator: (v) => (v == null || v.trim().isEmpty)
@@ -873,6 +876,7 @@ class _ServiceTimeSheetState extends State<_ServiceTimeSheet> {
                 const SizedBox(height: 14),
                 TextField(
                   controller: _label,
+                  maxLength: 60,
                   textCapitalization: TextCapitalization.words,
                   onChanged: (_) => setState(() {}),
                   style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),

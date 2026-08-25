@@ -207,6 +207,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           Expanded(
                             child: TextField(
                               controller: _nameController,
+                              maxLength: 60,
                               textCapitalization: TextCapitalization.words,
                               onChanged: (_) => setState(() {}),
                               style: AppTextStyles.titleMedium.copyWith(
@@ -230,6 +231,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       Divider(color: palette.divider, height: 22),
                       TextField(
                         controller: _descController,
+                        maxLength: 300,
                         textCapitalization: TextCapitalization.sentences,
                         maxLines: 2,
                         minLines: 1,

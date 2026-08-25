@@ -185,7 +185,6 @@ class _SignupSurveySheetState extends State<SignupSurveySheet> {
                   decoration: InputDecoration(
                     hintText: 'Fellowship, events, marketplace…',
                     hintStyle: TextStyle(color: palette.textMuted),
-                    counterText: '',
                     filled: true,
                     fillColor: palette.inputFill,
                     border: OutlineInputBorder(

@@ -65,8 +65,11 @@ class _PostComposerState extends State<_PostComposer>
   /// member lost everything they'd typed.
   static const int _maxBody = 2000;
 
-  /// Show the counter only once it's actually relevant.
-  static const int _counterFrom = 1800;
+  /// The counter is on from the first character (founder, 25 Aug 2026):
+  /// every field you can type into tells you its limit. It used to appear
+  /// only at 1,800 of 2,000, which meant the first time most people learnt
+  /// there was a limit was when the field stopped taking letters.
+  static const int _counterFrom = 1;
 
   /// Cap on photos per post. The DB check allows 10; the product decision is
   /// 4, which is what fits a 2×2 grid without the card dominating the feed.
@@ -865,11 +868,13 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-/// How much room is left, as a ring that fills.
+/// How much you have used of the limit, as a ring that fills.
 ///
-/// A bare "203 left" is a number you have to compare against a limit you do
-/// not remember. A ring closing is the same information without the
-/// arithmetic, and it turns red only once it actually matters.
+/// It read "203 left", which is the one number that does NOT tell you what
+/// the limit is — you had to add it to what you had already typed. It
+/// reads "1797/2000" now, matching every other field in the app. The ring
+/// still carries the shape of it at a glance, and turns red only once the
+/// end is actually close.
 class _CounterRing extends StatelessWidget {
   const _CounterRing({required this.used, required this.max});
 
@@ -901,7 +906,7 @@ class _CounterRing extends StatelessWidget {
         ),
         const SizedBox(width: 7),
         Text(
-          '$left left',
+          '$used/$max',
           style: AppTextStyles.labelSmall.copyWith(
             color: urgent ? AppColors.red : context.palette.textMuted,
             fontWeight: FontWeight.w700,
@@ -1764,7 +1769,24 @@ class _StoryComposerState extends State<_StoryComposer> {
                                       decoration: InputDecoration(
                                         isDense: true,
                                         filled: false,
-                                        counterText: '',
+                                        // Hand-built rather than
+                                        // counterText, because the default
+                                        // counter paints in the theme's
+                                        // colour and this sheet's
+                                        // background is whichever colour
+                                        // the member picked — it would be
+                                        // invisible on half of them.
+                                        counter: Text(
+                                          '${_statusText.text.characters.length}'
+                                          '/700',
+                                          style: TextStyle(
+                                            color: textCol.withValues(
+                                              alpha: 0.7,
+                                            ),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                         border: InputBorder.none,
                                         enabledBorder: InputBorder.none,
                                         focusedBorder: InputBorder.none,

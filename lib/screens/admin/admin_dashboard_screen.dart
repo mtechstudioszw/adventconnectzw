@@ -1816,7 +1816,7 @@ class _ComposerSheetState extends State<_ComposerSheet> {
                     decoration: _dec(
                       hint: 'Body',
                       icon: Icons.notes_outlined,
-                    ).copyWith(counterText: ''),
+                    ),
                   ),
                   Row(
                     children: [

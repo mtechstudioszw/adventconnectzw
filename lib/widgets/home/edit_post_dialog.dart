@@ -59,6 +59,10 @@ class _EditPostDialogState extends State<_EditPostDialog> {
         autofocus: true,
         minLines: 3,
         maxLines: 8,
+        // posts.body is CHECK (<= 2000) — patch_011. The composer that
+        // creates a post has always enforced it; the dialog that edits one
+        // never did, so an edit could only fail at save time.
+        maxLength: 2000,
         textCapitalization: TextCapitalization.sentences,
         decoration: const InputDecoration(border: OutlineInputBorder()),
       ),

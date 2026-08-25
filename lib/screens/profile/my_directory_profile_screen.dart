@@ -208,7 +208,7 @@ class _MyDirectoryProfileScreenState extends State<MyDirectoryProfileScreen> {
                                       icon: Icons.notes_outlined,
                                       hint:
                                           'One or two lines about what you offer.',
-                                    ).copyWith(counterText: ''),
+                                    ),
                                   ),
                                 ),
                               ],

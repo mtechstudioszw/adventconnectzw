@@ -336,7 +336,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
                                   icon: Icons.notes_outlined,
                                   hint:
                                       'A short pitch — what you sell and why people buy from you.',
-                                ).copyWith(counterText: ''),
+                                ),
                               ),
                             ),
                           ],
@@ -553,7 +553,7 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
                                   decoration: _filledDecoration(
                                     icon: Icons.info_outline,
                                     hint: 'Shown next to your listings.',
-                                  ).copyWith(counterText: ''),
+                                  ),
                                 ),
                               ),
                             ],

@@ -129,6 +129,26 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
                                 focusNode: _focus,
                                 maxLines: null,
                                 minLines: 1,
+                                // Rides on messages.content (<= 2000).
+                                maxLength: 2000,
+                                // White, because this screen is the photo
+                                // full-bleed on black — the theme's own
+                                // counter colour disappears on it.
+                                buildCounter: (
+                                  context, {
+                                  required currentLength,
+                                  required isFocused,
+                                  required maxLength,
+                                }) => currentLength == 0
+                                    ? null
+                                    : Text(
+                                        '$currentLength/$maxLength',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                 textCapitalization:
                                     TextCapitalization.sentences,
                                 style: AppTextStyles.bodyMedium.copyWith(

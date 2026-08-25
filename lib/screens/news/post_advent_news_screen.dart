@@ -201,7 +201,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
                         decoration: _filledDecoration(
                           icon: Icons.title,
                           hint: 'e.g. Solusi University graduation 2026',
-                        ).copyWith(counterText: ''),
+                        ),
                         validator: (v) {
                           if ((v ?? '').trim().length < 4) {
                             return 'At least 4 characters';
@@ -224,7 +224,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
                         decoration: _filledDecoration(
                           icon: Icons.subject_outlined,
                           hint: 'A short hook that explains why it matters.',
-                        ).copyWith(counterText: ''),
+                        ),
                         validator: (v) {
                           if ((v ?? '').trim().length < 10) {
                             return 'At least 10 characters';
@@ -248,7 +248,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
                           icon: Icons.article_outlined,
                           hint: 'The full story. Leave empty if the summary '
                               'is enough.',
-                        ).copyWith(counterText: ''),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -280,7 +280,7 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
                         decoration: _filledDecoration(
                           icon: Icons.tag,
                           hint: 'e.g. ANN',
-                        ).copyWith(counterText: ''),
+                        ),
                       ),
                     ),
                     if (_error != null) ...[

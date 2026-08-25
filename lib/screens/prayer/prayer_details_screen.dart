@@ -716,6 +716,8 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                     controller: _commentController,
                     minLines: 1,
                     maxLines: 4,
+                    // prayer_responses.message is CHECK (<= 1000).
+                    maxLength: 1000,
                     textCapitalization: TextCapitalization.sentences,
                     style: AppTextStyles.bodyMedium.copyWith(fontSize: 14),
                     decoration: InputDecoration(

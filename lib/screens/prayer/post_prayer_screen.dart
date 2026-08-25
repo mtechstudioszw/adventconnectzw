@@ -211,7 +211,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
                                 decoration: postFormFilledDecoration(
                                   icon: Icons.notes_outlined,
                                   hint: 'Pray with me for...',
-                                ).copyWith(counterText: ''),
+                                ),
                               ),
                             ),
                           ],

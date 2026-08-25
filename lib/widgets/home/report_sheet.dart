@@ -199,6 +199,7 @@ class _ReportSheetState extends State<_ReportSheet> {
                   controller: _detailsController,
                   minLines: 3,
                   maxLines: 6,
+                  maxLength: 500,
                   textCapitalization: TextCapitalization.sentences,
                   style: AppTextStyles.bodyMedium.copyWith(
                     fontSize: 14.5,

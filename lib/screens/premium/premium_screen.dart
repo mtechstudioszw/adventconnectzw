@@ -8,6 +8,7 @@ import '../../services/billing/billing_service.dart';
 import '../../services/premium_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
+import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/motion/motion.dart';
 import '../../widgets/premium/premium_badge.dart';
 import '../../widgets/screen_shell.dart';
@@ -695,7 +696,7 @@ class _ActiveAllowanceRowState extends State<_ActiveAllowanceRow> {
           children: [
             Row(
               children: [
-                Icon(Icons.auto_awesome_rounded,
+                Icon(AdventAiBrand.icon,
                     size: 14, color: AppColors.goldAccent),
                 const SizedBox(width: 6),
                 Expanded(

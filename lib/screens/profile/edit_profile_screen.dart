@@ -45,6 +45,17 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   /// ISO alpha-2. Seeded from auth metadata; falls back to ZW, which is what
   /// patch_213 backfilled every pre-rebrand profile to.
   String _country = Countries.defaultCode;
+
+  // What the server actually held when this screen opened.
+  //
+  // These exist so an UNTOUCHED field is never written. Country and home
+  // church both sit behind a 14-day cooldown, and this screen used to
+  // send both on every save — so editing only your name spent a cooldown
+  // on a field you never opened, and the NEXT save was refused with "you
+  // can only change your country once every 2 weeks" even though the
+  // country had genuinely changed. That is the founder's 25 Aug report.
+  String? _initialCountry;
+  String? _initialChurchId;
   String? _profilePhotoUrl;
   String? _coverPhotoUrl;
   bool _saving = false;
@@ -85,26 +96,52 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     _profilePhotoUrl = (meta['profile_photo_url'] as String?);
     _coverPhotoUrl = (meta['cover_photo_url'] as String?);
     _showAge = (meta['show_age'] as bool?) ?? true;
+    // Provisional only — the real value comes from the profiles row in
+    // _loadProfileFields() below. Auth metadata is NOT the source of
+    // truth for country: accounts created before patch_213 have no
+    // `country` key at all, so this silently fell back to the default
+    // and then SAVED it, overwriting the member's real country.
     _country = (meta['country'] as String?) ?? Countries.defaultCode;
+    _initialChurchId = _selectedChurchId;
     _loadChurches();
-    _loadDob();
+    _loadProfileFields();
   }
 
-  /// Date of birth lives in the profiles row (not always in auth
-  /// metadata), so fetch it for the age editor.
-  Future<void> _loadDob() async {
+  /// The fields whose source of truth is the profiles ROW, not auth
+  /// metadata: date of birth (never mirrored reliably) and country
+  /// (missing from metadata on every pre-patch_213 account).
+  ///
+  /// One round trip for both. Reading country here rather than from
+  /// metadata is half the cooldown fix — the other half is only sending
+  /// it when it changed, in [_save].
+  Future<void> _loadProfileFields() async {
     try {
       final user = AuthService.currentUser;
       if (user == null) return;
       final row = await Supabase.instance.client
           .from('profiles')
-          .select('date_of_birth')
+          .select('date_of_birth, country, church_id')
           .eq('id', user.id)
           .maybeSingle();
-      final raw = row?['date_of_birth']?.toString();
-      if (raw != null && raw.isNotEmpty && mounted) {
-        setState(() => _dob = DateTime.tryParse(raw));
-      }
+      if (row == null || !mounted) return;
+
+      final raw = row['date_of_birth']?.toString();
+      final storedCountry = (row['country'] as String?)?.trim();
+      final storedChurch = row['church_id']?.toString();
+
+      setState(() {
+        if (raw != null && raw.isNotEmpty) _dob = DateTime.tryParse(raw);
+        if (storedCountry != null && storedCountry.isNotEmpty) {
+          _country = storedCountry;
+        }
+        // Baselines are taken from the ROW, so "unchanged" is measured
+        // against what the trigger will compare on save.
+        _initialCountry = _country;
+        if (storedChurch != null && storedChurch.isNotEmpty) {
+          _selectedChurchId ??= storedChurch;
+          _initialChurchId = storedChurch;
+        }
+      });
     } catch (_) {}
   }
 
@@ -222,11 +259,18 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       username: _usernameController.text.trim().isEmpty
           ? null
           : _usernameController.text.trim(),
-      churchId: _selectedChurchId,
+      // null means "don't touch it". Both of these sit behind a 14-day
+      // cooldown, so sending an unchanged value is not a harmless no-op:
+      // if the value the screen holds differs at all from the row (which
+      // it did, because country was read from auth metadata), it spends
+      // the member's cooldown on a field they never opened.
+      churchId: _selectedChurchId == _initialChurchId
+          ? null
+          : _selectedChurchId,
       profilePhotoUrl: _profilePhotoUrl,
       coverPhotoUrl: _coverPhotoUrl,
       showAge: _showAge,
-      country: _country,
+      country: _country == _initialCountry ? null : _country,
       dateOfBirth: _dob,
     );
     if (!mounted) return;
@@ -655,7 +699,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               decoration: _filledDecoration(
                 icon: Icons.notes_outlined,
                 hint: 'A short line about you',
-              ).copyWith(counterText: ''),
+              ),
             ),
           ),
           const SizedBox(height: 18),

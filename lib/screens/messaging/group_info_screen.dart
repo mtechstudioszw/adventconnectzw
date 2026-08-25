@@ -467,6 +467,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             children: [
               TextField(
                 controller: nameController,
+                maxLength: 60,
                 decoration: const InputDecoration(labelText: 'Group name'),
               ),
               const SizedBox(height: 12),

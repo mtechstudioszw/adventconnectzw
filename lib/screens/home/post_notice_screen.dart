@@ -194,7 +194,7 @@ class _PostNoticeScreenState extends State<PostNoticeScreen> {
                               icon: Icons.notes_outlined,
                               hint:
                                   'What happened, where, how to reach you.',
-                            ).copyWith(counterText: ''),
+                            ),
                           ),
                         ],
                       ),

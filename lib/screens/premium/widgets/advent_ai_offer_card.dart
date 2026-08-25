@@ -6,6 +6,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_tokens.dart';
+import '../../../widgets/advent_ai_mark.dart';
 
 /// The hero of the Premium offer.
 ///
@@ -91,7 +92,7 @@ class _Header extends StatelessWidget {
               gradient: AppColors.primaryGradient,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: const Icon(Icons.auto_awesome_rounded,
+            child: const Icon(AdventAiBrand.icon,
                 color: Colors.white, size: 20),
           ),
           const SizedBox(width: AppSpace.md),
@@ -166,7 +167,7 @@ class _SampleExchange extends StatelessWidget {
           ),
           Row(
             children: [
-              Icon(Icons.auto_awesome_rounded,
+              Icon(AdventAiBrand.icon,
                   size: 13, color: AppColors.goldAccent),
               const SizedBox(width: AppSpace.xs),
               Text('Advent AI',
@@ -188,9 +189,24 @@ class _SampleExchange extends StatelessWidget {
 
 /// What the member has now, and what Premium changes.
 ///
-/// Shows their ACTUAL remaining questions when the balance is known.
-/// Self-perception again: a real figure they recognise beats a generic
-/// "10 per month", because it is about them rather than about the plan.
+/// # Why the plan figure and the live figure are two separate lines
+///
+/// This used to show ONE value that swapped between them: the member's
+/// remaining questions when the balance had loaded, and "10 a month"
+/// when it had not. Both are true, and showing them in the same slot
+/// made them look like the same number changing.
+///
+/// The founder read it exactly that way on 25 Aug 2026 — "when the user
+/// signs in again, if they were left with 2 messages it restarts to 10".
+/// Nothing had been re-granted; `ai_accounts` is per member and only
+/// rolls over on the 1st (verified against the live rows). What reset
+/// was this label, because signing in again empties the client's balance
+/// cache for a moment and the fallback copy is the plan's headline
+/// number.
+///
+/// So: the plan figure is stated as the plan, permanently, and the
+/// member's own standing appears beneath it as its own line when it is
+/// actually known. Neither can now be mistaken for the other.
 class _AllowanceLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -200,16 +216,18 @@ class _AllowanceLine extends StatelessWidget {
       valueListenable: AiBalanceService.balance,
       builder: (context, balance, _) {
         final known = balance.grant > 0 || balance.remaining > 0;
-        final now = known && !balance.isPremium
-            ? '${balance.remaining} left this month'
-            : '${AiTiers.free.monthlyMessages} a month';
+        final n = balance.remaining;
 
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _Step(
                 label: 'Free',
-                value: now,
+                value: '${AiTiers.free.monthlyMessages} a month',
+                note: known && !balance.isPremium
+                    ? '$n left this month'
+                    : null,
                 muted: true,
               ),
             ),
@@ -237,11 +255,16 @@ class _Step extends StatelessWidget {
     required this.label,
     required this.value,
     required this.muted,
+    this.note,
   });
 
   final String label;
   final String value;
   final bool muted;
+
+  /// The member's own standing, under the plan's figure. Null when it is
+  /// not known — never substituted for [value]. See [_AllowanceLine].
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +286,13 @@ class _Step extends StatelessWidget {
             color: muted ? palette.textMuted : AppColors.primaryBlue,
           ),
         ),
+        if (note != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            note!,
+            style: AppTextStyles.labelSmall.copyWith(color: palette.textMuted),
+          ),
+        ],
       ],
     );
   }

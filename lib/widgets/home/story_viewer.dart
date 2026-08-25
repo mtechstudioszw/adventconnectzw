@@ -566,6 +566,27 @@ class _StoryViewerState extends State<StoryViewer>
                               minLines: 1,
                               maxLines: 3,
                               textInputAction: TextInputAction.send,
+                              // Lands in messages.content, CHECK (<= 2000).
+                              maxLength: 2000,
+                              // Hand-built: the default counter paints in
+                              // the theme's colour, and this bar sits on
+                              // someone's photo. White, and only once
+                              // there is something to count.
+                              buildCounter: (
+                                context, {
+                                required currentLength,
+                                required isFocused,
+                                required maxLength,
+                              }) => currentLength == 0
+                                  ? null
+                                  : Text(
+                                      '$currentLength/$maxLength',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                               onSubmitted: (_) => _sendReply(story),
                               decoration: InputDecoration(
                                 isDense: true,

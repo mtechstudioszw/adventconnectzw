@@ -142,6 +142,7 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _nameController,
+                            maxLength: 120,
                             textCapitalization: TextCapitalization.words,
                             validator: (v) {
                               if (v == null || v.trim().isEmpty) {
@@ -207,6 +208,7 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                             const SizedBox(height: 8),
                             TextFormField(
                               controller: _regionController,
+                              maxLength: 80,
                               textCapitalization: TextCapitalization.words,
                               style: AppTextStyles.bodyLarge
                                   .copyWith(fontSize: 15),
@@ -221,6 +223,7 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _cityController,
+                            maxLength: 60,
                             textCapitalization: TextCapitalization.words,
                             validator: (v) {
                               if (v == null || v.trim().isEmpty) {
@@ -240,6 +243,7 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _suburbController,
+                            maxLength: 60,
                             textCapitalization: TextCapitalization.words,
                             style: AppTextStyles.bodyLarge
                                 .copyWith(fontSize: 15),
@@ -260,6 +264,7 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _pastorController,
+                            maxLength: 80,
                             textCapitalization: TextCapitalization.words,
                             style: AppTextStyles.bodyLarge
                                 .copyWith(fontSize: 15),
@@ -273,6 +278,7 @@ class _SuggestChurchScreenState extends State<SuggestChurchScreen> {
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _phoneController,
+                            maxLength: 20,
                             keyboardType: TextInputType.phone,
                             inputFormatters: [
                               FilteringTextInputFormatter.allow(

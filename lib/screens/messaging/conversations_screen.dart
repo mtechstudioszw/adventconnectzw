@@ -2613,9 +2613,12 @@ class _ActiveAvatar extends StatelessWidget {
 ///
 /// # Why this is here, on the one tab the floating bubble refuses
 ///
-/// The app-wide bubble is blocked on `/messages` and stays blocked — an
-/// AI button floating over somebody's open conversation reads as the app
-/// reading it, and `advent_ai_bubble_test.dart` pins that rule.
+/// The app-wide floating button is blocked on `/messages` and stays
+/// blocked — an AI control floating over somebody's open conversation
+/// reads as the app reading it, and there is a test pinning that rule.
+///
+/// (That test scans this directory for any mention of the floating
+/// widget by name, so this comment deliberately does not write it out.)
 ///
 /// This is a different thing in a different place. It is stationary, it
 /// is on the **inbox** — a list of who you talk to, not a conversation —

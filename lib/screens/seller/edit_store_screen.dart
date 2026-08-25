@@ -475,7 +475,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
                     decoration: _filledDecoration(
                       icon: Icons.notes_outlined,
                       hint: 'What you sell and why people buy from you.',
-                    ).copyWith(counterText: ''),
+                    ),
                   ),
                 ),
               ],
@@ -674,7 +674,7 @@ class _EditStoreScreenState extends State<EditStoreScreen>
                       decoration: _filledDecoration(
                         icon: Icons.info_outline,
                         hint: 'Shown alongside your listings.',
-                      ).copyWith(counterText: ''),
+                      ),
                     ),
                   ),
                 ],

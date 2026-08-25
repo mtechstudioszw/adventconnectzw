@@ -542,6 +542,7 @@ class _PostEventScreenState extends State<PostEventScreen>
             label: 'Title',
             child: TextFormField(
               controller: _titleController,
+              maxLength: 120,
               textCapitalization: TextCapitalization.sentences,
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Title is required';
@@ -560,6 +561,7 @@ class _PostEventScreenState extends State<PostEventScreen>
             label: 'Description',
             child: TextFormField(
               controller: _descriptionController,
+              maxLength: 4000,
               maxLines: 4,
               textCapitalization: TextCapitalization.sentences,
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
@@ -680,6 +682,7 @@ class _PostEventScreenState extends State<PostEventScreen>
             label: 'Venue',
             child: TextFormField(
               controller: _venueController,
+              maxLength: 120,
               textCapitalization: TextCapitalization.sentences,
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: postFormFilledDecoration(
@@ -693,6 +696,7 @@ class _PostEventScreenState extends State<PostEventScreen>
             label: 'City',
             child: TextFormField(
               controller: _cityController,
+              maxLength: 60,
               textCapitalization: TextCapitalization.words,
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: postFormFilledDecoration(
@@ -737,6 +741,7 @@ class _PostEventScreenState extends State<PostEventScreen>
               label: 'State or region (optional)',
               child: TextFormField(
                 controller: _regionController,
+                maxLength: 80,
                 textCapitalization: TextCapitalization.words,
                 style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
                 decoration: postFormFilledDecoration(
@@ -777,6 +782,7 @@ class _PostEventScreenState extends State<PostEventScreen>
             label: 'Contact name',
             child: TextFormField(
               controller: _contactNameController,
+              maxLength: 80,
               textCapitalization: TextCapitalization.words,
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: postFormFilledDecoration(
@@ -790,6 +796,7 @@ class _PostEventScreenState extends State<PostEventScreen>
             label: 'Contact phone',
             child: TextFormField(
               controller: _contactPhoneController,
+              maxLength: 20,
               keyboardType: TextInputType.phone,
               style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
               decoration: postFormFilledDecoration(

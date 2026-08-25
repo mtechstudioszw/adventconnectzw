@@ -162,6 +162,7 @@ class _SuggestEditScreenState extends State<SuggestEditScreen> {
                             const SizedBox(height: 8),
                             TextFormField(
                               controller: _newValueController,
+                              maxLength: 500,
                               maxLines: _selected!.multiline ? 4 : 1,
                               keyboardType: _selected!.keyboardType,
                               textCapitalization: TextCapitalization.sentences,

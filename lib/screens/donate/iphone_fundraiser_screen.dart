@@ -819,7 +819,6 @@ class _ConfirmBlock extends StatelessWidget {
           decoration: InputDecoration(
             filled: true,
             fillColor: palette.inputFill,
-            counterText: '',
             hintText: 'EcoCash reference (optional)',
             hintStyle:
                 AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),

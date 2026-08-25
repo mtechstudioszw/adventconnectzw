@@ -39,38 +39,46 @@ double pulse(double t, double a, double b) {
 class FilmTimeline {
   FilmTimeline._();
 
-  // Ten scenes. It was seven, and three of the app's biggest reasons to
-  // sign up never appeared at all: the offline Library (the whole Bible,
-  // Sabbath School, ~995 hymns and EGW, all usable with no signal), the
-  // home feed itself, and the Quiz Arena. The film is the pitch — leaving
-  // out the offline Library in particular was leaving out the answer to
-  // "why this app and not a browser".
+  // Eleven scenes. It was seven, then ten, and the app kept growing past
+  // its own pitch: the offline Library, the feed and the Quiz Arena were
+  // added in Aug 2026, and voice/video calling and Advent AI shipped after
+  // that (founder, 25 Aug 2026). A member arriving at sign-up had no idea
+  // either existed. Calls ride along with chat — they are the same
+  // conversation, one of them just out loud — and Advent AI takes the last
+  // slot before the finale, which is the one people remember.
   //
-  // Windows overlap by ~0.017 so every exit is somebody else's entrance;
-  // nothing ever page-cuts.
+  // **Every window keeps the LENGTH it had.** Room for the new scene comes
+  // out of the GAPS between starts, not out of any scene's duration —
+  // because each scene's internal beats are written as absolute `a + 0.0x`
+  // offsets tuned against its own length, and shortening a window would
+  // silently push its last beat past its own exit. Overlap grew from
+  // ~0.017 to ~0.025, which is if anything cleaner: an outgoing scene now
+  // begins its exit exactly as the next one begins its entrance.
   static const s0 = (0.000, 0.088); // brand open
-  static const s1 = (0.075, 0.190); // churches
-  static const s2 = (0.176, 0.292); // prayer
-  static const s3 = (0.278, 0.383); // chat
-  static const s4 = (0.370, 0.486); // marketplace + jobs
-  static const s5 = (0.472, 0.588); // watch (video + live)
-  static const s6 = (0.574, 0.700); // library — offline scripture
-  static const s7 = (0.686, 0.792); // home feed + stories
-  static const s8 = (0.778, 0.874); // quiz arena
-  static const s9 = (0.860, 1.000); // sabbath finale + CTA
+  static const s1 = (0.070, 0.185); // churches
+  static const s2 = (0.158, 0.274); // prayer
+  static const s3 = (0.248, 0.353); // chat + calls
+  static const s4 = (0.330, 0.446); // marketplace + jobs
+  static const s5 = (0.420, 0.536); // watch (video + live)
+  static const s6 = (0.510, 0.636); // library — offline scripture
+  static const s7 = (0.608, 0.714); // home feed + stories
+  static const s8 = (0.690, 0.786); // quiz arena
+  static const s9 = (0.770, 0.870); // advent ai
+  static const s10 = (0.860, 1.000); // sabbath finale + CTA
 
   /// Tap-to-advance targets. The film still scrubs THROUGH the frames in
   /// between rather than cutting, so tapping never breaks continuity.
   static const boundaries = <double>[
     0.088,
-    0.190,
-    0.292,
-    0.383,
-    0.486,
-    0.588,
-    0.700,
-    0.792,
-    0.874,
+    0.185,
+    0.274,
+    0.353,
+    0.446,
+    0.536,
+    0.636,
+    0.714,
+    0.786,
+    0.870,
     1.0,
   ];
 
@@ -843,16 +851,22 @@ class SceneChatMarket extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (a, b) = FilmTimeline.s3;
-    final stageIn = seg(t, a, a + 0.035, Curves.easeOutCubic);
+    final stageIn = seg(t, a, a + 0.030, Curves.easeOutCubic);
     final typing = pulse(
       t,
-      a + 0.008,
-      a + 0.055,
+      a + 0.006,
+      a + 0.042,
     ); // typing bubble lives then goes
-    final bubble1 = seg(t, a + 0.047, a + 0.072, Curves.easeOutBack);
-    final ticksBlue = seg(t, a + 0.078, a + 0.095);
-    final bubble2 = seg(t, a + 0.088, a + 0.112, Curves.easeOutBack);
-    final lineIn = seg(t, a + 0.038, a + 0.078, Curves.easeOutCubic);
+    final bubble1 = seg(t, a + 0.034, a + 0.054, Curves.easeOutBack);
+    final ticksBlue = seg(t, a + 0.064, a + 0.076);
+    final bubble2 = seg(t, a + 0.050, a + 0.070, Curves.easeOutBack);
+    // The call beat (founder, 25 Aug 2026). The conversation does not cut
+    // to a second scene — the thread slides up and the call rises out from
+    // under it, because chatting and calling ARE the same thread in the
+    // app. Whole thing lives inside the window this scene already had.
+    final callIn = seg(t, a + 0.068, a + 0.090, Curves.easeOutBack);
+    final connected = seg(t, a + 0.086, a + 0.100, Curves.easeOutCubic);
+    final lineIn = seg(t, a + 0.030, a + 0.062, Curves.easeOutCubic);
     final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
 
     if (stageIn == 0) return const SizedBox.shrink();
@@ -1006,18 +1020,214 @@ class SceneChatMarket extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // The call, rising out from under the thread. Sized
+                    // by an AnimatedSize-free trick: the SizedBox is only
+                    // as tall as the pill's own progress, so the column
+                    // above it lifts smoothly instead of jumping.
+                    if (callIn > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Opacity(
+                          opacity: callIn.clamp(0.0, 1.0),
+                          child: Transform.translate(
+                            offset: Offset(0, 22 * (1 - callIn.clamp(0.0, 1.0))),
+                            child: _CallPill(
+                              phase: (t - a) * 190,
+                              connected: connected,
+                              ring: callIn,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
               const SizedBox(height: 26),
               SceneLine(
-                text: 'Chat freely with\nyour church family.',
+                // Was "Chat freely with / your church family." Calling
+                // shipped after that line was written, and the film is
+                // the only place a new member is told what is in here.
+                text: 'Chat and call\nyour church family.',
                 enter: lineIn,
                 exit: exit,
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The live-call pill: avatar with radar rings, name + timer, a waveform
+/// that actually moves, and the call glyph.
+///
+/// Everything is Transform + Container on a handful of boxes — no blur, no
+/// per-frame layout — so it costs the film nothing on a budget Android.
+class _CallPill extends StatelessWidget {
+  const _CallPill({
+    required this.phase,
+    required this.connected,
+    required this.ring,
+  });
+
+  /// Fast local clock for the waveform and the radar rings.
+  final double phase;
+
+  /// 0 → 1 as the call connects: the waveform grows out of a flat line
+  /// and the timer fades up.
+  final double connected;
+
+  /// The pill's own entrance, reused to size the radar rings so they
+  /// bloom outward as it arrives.
+  final double ring;
+
+  @override
+  Widget build(BuildContext context) {
+    final pulseA = (math.sin(phase * 0.9) * 0.5 + 0.5);
+    final pulseB = (math.sin(phase * 0.9 - 1.1) * 0.5 + 0.5);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: byBrightness(
+          context,
+          light: AppColors.white,
+          dark: context.palette.cardMuted,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: byBrightness(
+              context,
+              light: AppColors.darkNavy.withValues(alpha: 0.10),
+              dark: Colors.black.withValues(alpha: 0.40),
+            ),
+            blurRadius: 16,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Avatar + two radar rings expanding out of it. Blue, not the
+          // usual green "answer" circle: green is a status colour in this
+          // app and this is not a status, it is a live call.
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                for (final p in [pulseA, pulseB])
+                  Container(
+                    width: 26 + 16 * p * ring,
+                    height: 26 + 16 * p * ring,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.primaryBlue.withValues(
+                          alpha: 0.30 * (1 - p) * ring,
+                        ),
+                        width: 1.4,
+                      ),
+                    ),
+                  ),
+                Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppColors.primaryGradient,
+                  ),
+                  child: Text(
+                    'R',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Flexible, because the name and the timer are the only parts
+          // of this pill whose width depends on the font the device
+          // actually resolved — everything else is a fixed box. Without
+          // it the row can exceed the 300px stage and paint overflow
+          // stripes, which is exactly how the chat bubble beside it
+          // broke once already.
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ruvimbo',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  connected > 0.5 ? 'Voice call · 00:07' : 'Calling…',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.palette.textMuted,
+                    fontSize: 10.5,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // The waveform. Flat while it rings, alive once it connects.
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < 7; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                  child: Container(
+                    width: 3,
+                    height:
+                        3 +
+                        15 *
+                            connected *
+                            math.sin(phase * 0.7 - i * 0.8).abs(),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: AppColors.primaryGradient,
+            ),
+            child: const Icon(
+              Icons.call_rounded,
+              size: 15,
+              color: AppColors.white,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1434,7 +1644,7 @@ class SceneSabbathFinale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (a, b) = FilmTimeline.s9;
+    final (a, b) = FilmTimeline.s10;
     final ringIn = seg(t, a, a + 0.04, Curves.easeOutCubic);
     final sweep = seg(t, a + 0.02, a + 0.085, Curves.easeInOutCubic);
     final lineIn = seg(t, a + 0.05, a + 0.095, Curves.easeOutCubic);

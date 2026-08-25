@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
 import 'billing_platform.dart';
 
@@ -75,6 +76,7 @@ class PlayBillingPlatform implements BillingPlatform {
         price: p.price,
         currencyCode: p.currencyCode,
         rawPrice: p.rawPrice,
+        basePlanId: _basePlanId(p),
         native: p,
       );
     } catch (e) {
@@ -107,6 +109,7 @@ class PlayBillingPlatform implements BillingPlatform {
             price: p.price,
             currencyCode: p.currencyCode,
             rawPrice: p.rawPrice,
+            basePlanId: _basePlanId(p),
             native: p,
           ),
       ];
@@ -114,6 +117,35 @@ class PlayBillingPlatform implements BillingPlatform {
       debugPrint('PlayBilling.loadOffers threw: $e');
       return const [];
     }
+  }
+
+  /// Which base plan a returned offer belongs to.
+  ///
+  /// Since all three tiers are base plans on ONE product id (see
+  /// [PremiumTier]), `p.id` is the same string for every plan and tells
+  /// us nothing. `queryProductDetails` returns one [ProductDetails] per
+  /// base plan, and on Android each is a [GooglePlayProductDetails]
+  /// carrying the index of the offer it was built from — that is where
+  /// the base plan id lives.
+  ///
+  /// Defensive at every step. This is the one place a plugin upgrade
+  /// could quietly change shape, and the failure it would cause —
+  /// everyone billed correctly by Play but granted the wrong tier by us
+  /// — is exactly the kind that shows up as support tickets rather than
+  /// as a crash. Null here means [BillingConfig.tierForBasePlan] falls
+  /// back to the lowest paid tier.
+  ///
+  /// Note the price is NOT used to identify the plan. It is localised,
+  /// it changes with a Play Console edit, and two plans can share one in
+  /// a currency with big rounding — inferring entitlement from it would
+  /// be a bug waiting for a promotion.
+  String? _basePlanId(ProductDetails p) {
+    if (p is! GooglePlayProductDetails) return null;
+    final index = p.subscriptionIndex;
+    final offers = p.productDetails.subscriptionOfferDetails;
+    if (index == null || offers == null) return null;
+    if (index < 0 || index >= offers.length) return null;
+    return offers[index].basePlanId;
   }
 
   @override

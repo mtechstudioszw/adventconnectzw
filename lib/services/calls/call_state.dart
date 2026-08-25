@@ -11,11 +11,13 @@ enum CallPhase {
   /// No call. The only state from which a new one can start.
   idle,
 
-  /// Outgoing: the start RPC is in flight. Nothing is ringing yet, and
-  /// the call may still be refused (busy, blocked, rate-limited).
+  /// Outgoing: the start RPC is in flight. Their phone is NOT ringing
+  /// yet, and the call may still be refused (busy, blocked,
+  /// rate-limited). Shows "Calling…".
   initiating,
 
-  /// Outgoing: their phone is ringing.
+  /// Outgoing: their phone IS ringing — the server has told us the
+  /// callee's device acknowledged the ring. Shows "Ringing…".
   ringing,
 
   /// Incoming: our phone is ringing.
@@ -72,9 +74,17 @@ extension CallPhaseX on CallPhase {
   /// The line under the caller's name. Every state has one — the brief's
   /// rule was that nobody should ever be left looking at an indefinite
   /// loading screen, and an unlabelled spinner is exactly that.
+  /// The two outgoing labels are a DISTINCTION, not decoration
+  /// (founder, 25 Aug 2026: "when the device is not ringing say calling
+  /// n it rings say ringing"). `initiating` said "Preparing…", which
+  /// describes what our code is doing rather than what is happening to
+  /// the person being called — and it read as a stall. "Calling…" is
+  /// the same fact stated from the caller's side, and it makes the
+  /// switch to "Ringing…" mean something: their phone is out and
+  /// audible now, so waiting is worth it.
   String get label => switch (this) {
     CallPhase.idle => '',
-    CallPhase.initiating => 'Preparing…',
+    CallPhase.initiating => 'Calling…',
     CallPhase.ringing => 'Ringing…',
     CallPhase.incoming => 'Incoming call',
     CallPhase.connecting => 'Connecting…',

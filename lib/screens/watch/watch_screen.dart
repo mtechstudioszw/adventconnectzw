@@ -26,9 +26,16 @@ import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 
 /// Which slice of the library the feed below the chips is showing.
+///
+/// **No `following`.** The Follow control was removed from the player on
+/// 3 Aug 2026 and from the channel screen on 25 Aug 2026, which left this
+/// chip with no way to ever fill — it would have sat here offering
+/// "Follow a channel and its newest videos land here" to members who no
+/// longer can. `YoutubeService.fetchSubscriptionFeed` and the
+/// subscriptions table are deliberately left in place, so restoring both
+/// the control and this chip is a revert rather than a rebuild.
 enum _Filter {
   all('All'),
-  following('Following'),
   shorts('Shorts'),
   series('Series'),
   sermons('Sermons', query: 'sermon'),
@@ -208,11 +215,6 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
         // _loadMoreSeries so the feed list stays a list of videos.
         rows = const [];
         await _loadMoreSeries(reset: reset);
-      case _Filter.following:
-        rows = await YoutubeService.fetchSubscriptionFeed(
-          limit: _page,
-          offset: _offset,
-        );
       case _Filter.all:
         rows = await YoutubeService.fetchFeed(limit: _page, offset: _offset);
       case _Filter.sermons:
@@ -772,8 +774,6 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
             palette,
             switch (_filter) {
               _Filter.saved => 'Nothing saved yet.',
-              _Filter.following =>
-                'Follow a channel and its newest videos land here.',
               _ => 'No videos here yet.',
             },
           ),
@@ -970,7 +970,6 @@ class _FilterBarDelegate extends SliverPersistentHeaderDelegate {
               label: f.label,
               selected: f == selected,
               icon: switch (f) {
-                _Filter.following => Icons.subscriptions_rounded,
                 _Filter.shorts => Icons.bolt_rounded,
                 _Filter.series => Icons.video_library_rounded,
                 _Filter.saved => Icons.bookmark_rounded,

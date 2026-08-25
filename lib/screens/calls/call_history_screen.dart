@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../models/call_model.dart';
 import '../../services/calls/call_api.dart';
+import '../../services/billing/premium_tier.dart';
+import '../../services/calls/missed_call_badge.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -48,6 +51,11 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     super.initState();
     _scroll.addListener(_onScroll);
     unawaited(_load());
+    // Looking at the log IS reading the missed calls — there is no
+    // per-row unread state, and the list shows everything at once.
+    // Cleared here rather than in dispose so the dot is gone the moment
+    // they arrive, not when they leave.
+    unawaited(MissedCallBadge.markSeen());
   }
 
   @override
@@ -249,6 +257,23 @@ class _UsageStrip extends StatelessWidget {
         ? AppColors.goldAccent
         : AppColors.primaryBlue;
 
+    // The upgrade line, and it only appears when it is TRUE and USEFUL.
+    //
+    // Founder question, 25 Aug 2026: "in call log it gives u the minutes
+    // u have per day — is it possible to upgrade to get more minutes in
+    // premium". It already was: premium has been 360 minutes a day
+    // against free's 120 since patch_260. Nothing anywhere said so, so
+    // nobody could buy it — which is the actual missed revenue, not the
+    // absence of a feature.
+    //
+    // Shown only to a free member who has USED enough of the day's
+    // allowance to feel it. An upgrade prompt on a bar sitting at 3% is
+    // the noise this card's own doc comment exists to refuse, and it is
+    // also the least persuasive moment to ask — the member has no
+    // problem yet. At 60%+ the sentence describes something they are
+    // actually experiencing.
+    final showUpgrade = !usage.premium && usage.dailyFraction >= 0.6;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: ScreenCard(
@@ -295,7 +320,68 @@ class _UsageStrip extends StatelessWidget {
                 style: AppTextStyles.caption.copyWith(color: AppColors.red),
               ),
             ],
+            if (showUpgrade) ...[
+              const SizedBox(height: 10),
+              _UpgradeForMinutes(exhausted: usage.dailyExhausted),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Premium gives you 6 hours a day" — the one place in the app that
+/// says so where somebody is in a position to want it.
+///
+/// The numbers come from [TierBenefits], not from a string, so they
+/// cannot drift from the allowance the server actually enforces.
+class _UpgradeForMinutes extends StatelessWidget {
+  const _UpgradeForMinutes({required this.exhausted});
+
+  /// Out of minutes entirely, rather than merely close. Changes the
+  /// verb — "get more" against "they reset at midnight, or get more
+  /// now" — and nothing else. No countdown, no invented scarcity.
+  final bool exhausted;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final plus = TierBenefits.plus;
+    final pro = TierBenefits.pro;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.pushNamed('premium'),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  exhausted
+                      ? 'Premium members get ${plus.callAllowanceLabel} a '
+                            'day, and Pro gets ${pro.callAllowanceLabel}.'
+                      : 'Need longer calls? Premium is '
+                            '${plus.callAllowanceLabel} a day, Pro '
+                            '${pro.callAllowanceLabel}.',
+                  style: AppTextStyles.caption.copyWith(
+                    color: palette.textMuted,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'See plans',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

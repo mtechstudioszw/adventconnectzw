@@ -206,6 +206,16 @@ Deno.serve(async (req) => {
       status: sub.status,
       current_period_end: sub.expiryTime,
       auto_renewing: sub.autoRenewing,
+      // Re-read on EVERY notification, not just on purchase. This is the
+      // path a plan CHANGE arrives on: a member who upgrades Plus to Pro
+      // keeps the same purchase token and the same product id, and the
+      // only thing that moves is the base plan. Without this line their
+      // row would keep saying `monthly` and sync_premium_until would
+      // keep granting Plus to somebody paying for Pro.
+      //
+      // It is also what un-grandfathers a pre-tier subscriber at their
+      // first renewal, which is exactly when it should happen.
+      base_plan_id: sub.basePlanId,
       last_verified_at: new Date().toISOString(),
       raw: sub.raw,
     })

@@ -42,12 +42,44 @@ class CallConfig {
   static bool enabled = true;
 
   /// How long a phone rings before the call is marked missed.
-  static Duration ringTimeout = const Duration(seconds: 45);
+  ///
+  /// A minute (founder's call, 25 Aug 2026 — it was 45s). It is the
+  /// figure the phone networks and WhatsApp both settled on, and it is
+  /// the difference between reaching somebody whose phone is in another
+  /// room and not. The server has the same number in `app_config`
+  /// (`call.ring_timeout_seconds`, patch_268) and its copy is the one
+  /// that decides — this is the fallback for a client that has not
+  /// fetched config yet.
+  static Duration ringTimeout = const Duration(seconds: 60);
 
   /// How long to wait for MEDIA after the call is answered before
   /// giving up. Separate from [ringTimeout]: answering and then failing
   /// to hear anything is a different failure with a different message.
   static Duration connectTimeout = const Duration(seconds: 45);
+
+  /// How often the CALLER asks the server what happened, while the
+  /// other phone is still ringing.
+  ///
+  /// Deliberately far faster than [heartbeat], and it is the fix for a
+  /// real bug (founder, 25 Aug 2026): "when u decline a call it dosent
+  /// say to the other user declined, it keeps saying ringing then says
+  /// no answer".
+  ///
+  /// Nothing pushes a decline to the caller. The callee's `call_reject`
+  /// finalizes the call server-side straight away and correctly, but
+  /// the caller only ever found out through the 15-second heartbeat —
+  /// and that heartbeat is started at the END of `_goLive`, after the
+  /// signalling join, the ICE fetch and the microphone open. On a slow
+  /// connection its first tick could land 25 seconds in, past the point
+  /// the member had given up watching, and the ring timeout got there
+  /// first with "No answer" — which is not merely late, it is WRONG.
+  /// They were declined.
+  ///
+  /// Two seconds against a ring window of at most sixty is thirty extra
+  /// snapshot reads per outgoing call, and only while it rings. That is
+  /// nothing at this app's volume, and it is what turns "no answer"
+  /// back into the truth.
+  static Duration ringPoll = const Duration(seconds: 2);
 
   /// The mesh ceiling. See docs/CALLING_SETUP.md for the bandwidth
   /// arithmetic behind 5, and why raising it needs an SFU rather than
@@ -182,8 +214,9 @@ class CallConfig {
   /// the previous one's fetched config.
   static void reset() {
     enabled = true;
-    ringTimeout = const Duration(seconds: 45);
+    ringTimeout = const Duration(seconds: 60);
     connectTimeout = const Duration(seconds: 45);
+    ringPoll = const Duration(seconds: 2);
     maxGroupParticipants = 5;
     maxDirectDuration = const Duration(minutes: 120);
     maxGroupDuration = const Duration(minutes: 90);

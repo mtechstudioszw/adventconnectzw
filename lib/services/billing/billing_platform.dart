@@ -38,10 +38,21 @@ class PremiumOffer {
     required this.price,
     required this.currencyCode,
     required this.rawPrice,
+    this.basePlanId,
     this.native,
   });
 
   final String productId;
+
+  /// Which BASE PLAN of [productId] this offer is.
+  ///
+  /// All three tiers live on one product (see [PremiumTier]), so the
+  /// product id no longer identifies what is being sold — this does.
+  /// Null on a store that has no such concept, and on Play only if the
+  /// plugin ever stops reporting it; [BillingConfig.tierForBasePlan]
+  /// treats null as the lowest paid tier for that reason.
+  final String? basePlanId;
+
   final String title;
   final String description;
 

@@ -7,6 +7,7 @@ import '../premium_service.dart';
 import 'billing_config.dart';
 import 'billing_platform.dart';
 import 'play_billing_platform.dart';
+import 'premium_tier.dart';
 
 /// Where the purchase flow currently is. The Premium screen renders
 /// straight off this — there is no second copy of the truth.
@@ -108,13 +109,27 @@ class BillingService {
   /// Deliberately the ONLY way to change [offer]. A screen that assigned
   /// to `offer` directly could set a plan the store never returned, and
   /// the purchase would fail with a message nobody could explain.
+  ///
+  /// Matched on the BASE PLAN as well as the price. With three plans on
+  /// one product id, `productId + rawPrice` no longer identifies a plan
+  /// — two plans could share a price after a Play Console edit or a
+  /// rounding-heavy currency, and matching loosely would let a Pro
+  /// selection resolve to the Plus offer object.
   static void selectPlan(PremiumOffer plan) {
     final known = offers.any((o) =>
-        o.productId == plan.productId && o.rawPrice == plan.rawPrice);
+        o.productId == plan.productId &&
+        o.basePlanId == plan.basePlanId &&
+        o.rawPrice == plan.rawPrice);
     if (!known) return;
     offer = plan;
     planRevision.value++;
   }
+
+  /// The tier the currently selected plan would grant. [PremiumTier.plus]
+  /// when nothing is selected yet — the lowest paid tier, so a label
+  /// rendered a frame early can only ever under-promise.
+  static PremiumTier get selectedTier =>
+      BillingConfig.tierForBasePlan(offer?.basePlanId);
 
   /// Plain-English failure text, safe to show a user.
   static String? errorMessage;
@@ -161,11 +176,37 @@ class BillingService {
     }
     offers = loaded;
 
-    // Default to the CHEAPEST, never the first returned. If the member
-    // buys without touching the picker they get the smallest commitment,
-    // which is both the kinder default and the one that cannot surprise
-    // anybody with a charge ten times what they expected.
-    offer = loaded.reduce((a, b) => a.rawPrice <= b.rawPrice ? a : b);
+    // Default to the FEATURED plan — the annual one (founder's call,
+    // 25 Aug 2026: tier 3 "should be selected by default" and carry the
+    // promotion badge).
+    //
+    // This reverses a deliberate old default of "always the cheapest, so
+    // an untouched picker cannot surprise anyone with a charge ten times
+    // what they expected". That caution was right and is not being
+    // waved away — it is satisfied differently now:
+    //
+    //   * the picker OPENS with the featured plan visibly selected and
+    //     its price on the button, so the charge is never a surprise;
+    //   * the buy bar reads the same `offer` object the picker shows
+    //     (that is what `planRevision` is for), so the two cannot drift;
+    //   * and at US$30 against US$5/month, the featured plan is the
+    //     cheapest way to hold Pro for a year by a distance — so it is
+    //     the honest recommendation as well as the profitable one.
+    //
+    // Falls back to the cheapest whenever the featured plan is not for
+    // sale, which is the state of the world until the annual base plan
+    // is created in Play Console.
+    PremiumOffer chosen = loaded.reduce(
+      (a, b) => a.rawPrice <= b.rawPrice ? a : b,
+    );
+    for (final o in loaded) {
+      if (o.basePlanId == BillingConfig.featuredBasePlanId) {
+        chosen = o;
+        break;
+      }
+    }
+    offer = chosen;
+    planRevision.value++;
     state.value = PremiumFlowState.ready;
   }
 

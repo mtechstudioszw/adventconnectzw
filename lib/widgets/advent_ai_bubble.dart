@@ -79,12 +79,20 @@ class AdventAiBubble extends StatelessWidget {
     '/admin',
 
     // ---- Founder call, 25 Aug 2026 -----------------------------------
-    // Both are screens a member is working THROUGH rather than reading:
-    // Settings is a long list of controls the bubble lands on top of,
-    // and the Quiz is timed — a floating button over a question someone
-    // is racing to answer is a mis-tap waiting to happen.
+    // All three are screens a member is working THROUGH rather than
+    // reading. Settings is a long list of controls the bubble lands on
+    // top of; the Quiz is timed, and a floating button over a question
+    // someone is racing to answer is a mis-tap waiting to happen.
+    //
+    // Premium is the third, and the odd one out worth spelling out: the
+    // bubble is an ADVERT for the thing this screen is already selling.
+    // It floats over the plan picker and the buy bar — the two controls
+    // the whole screen exists to deliver a tap to — and a member who
+    // hits it lands in Advent AI instead of buying. It was the only one
+    // of the three still missing from this list.
     '/settings',
     '/quiz',
+    '/premium',
   ];
 
   static bool allowedOn(String location) =>

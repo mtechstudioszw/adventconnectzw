@@ -96,15 +96,33 @@ function parseItems(xml: string, label: string) {
   return out;
 }
 
+/// Constant-time compare, so the secret can't be walked out a byte at a
+/// time by timing the response. Same helper as purge-storage.
+function cronSecretOk(supplied: string | null): boolean {
+  const expected = Deno.env.get("CRON_SECRET") ?? "";
+  if (expected.length === 0 || supplied === null) return false;
+  const a = new TextEncoder().encode(supplied);
+  const b = new TextEncoder().encode(expected);
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
 Deno.serve(async (req) => {
-  const secret = Deno.env.get("CRON_SECRET");
-  if (secret) {
-    const url = new URL(req.url);
-    const got =
-      url.searchParams.get("secret") || req.headers.get("x-cron-secret");
-    if (got !== secret) {
-      return new Response("forbidden", { status: 403 });
-    }
+  // FAIL CLOSED, including when the env var is missing.
+  //
+  // This was `if (secret) { ... }` — authentication was skipped entirely
+  // whenever CRON_SECRET was unset, on a function that runs with the
+  // SERVICE-ROLE key and has verify_jwt off. "Authenticate only if
+  // someone remembered to configure a secret" is the idiom that left
+  // play-rtdn wide open; it is not repeated here.
+  //
+  // The secret now travels in a HEADER only. It used to be accepted as
+  // `?secret=`, which writes it into edge logs, the dashboard's request
+  // view, and any proxy in between. The pg_cron job sends the header.
+  if (!cronSecretOk(req.headers.get("x-cron-secret"))) {
+    return new Response("forbidden", { status: 403 });
   }
 
   const sb = createClient(

@@ -9,6 +9,7 @@ import '../../../services/quiz_sfx.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../theme/app_tokens.dart';
+import '../../../widgets/advent_ai_bubble.dart';
 import '../../../widgets/motion/pressable.dart';
 import 'arena_theme.dart';
 import 'quiz_lobby_screen.dart';
@@ -53,6 +54,18 @@ class _QuizBootScreenState extends State<QuizBootScreen> {
   @override
   void initState() {
     super.initState();
+    // No Advent AI bubble anywhere in the arena (founder, 25 Aug 2026).
+    //
+    // `/quiz` is on AdventAiBubble.blockedPrefixes too, and that alone
+    // should be enough — but the blocklist tests the router's *reported*
+    // location, and every screen past the lobby (round, results,
+    // matchmaking, a live match) is a plain `MaterialPageRoute` push. A
+    // screen that knows it is open is a fact where a router location is
+    // an inference, and this one is mounted underneath the entire arena:
+    // the boot screen crossfades into the lobby *in place* and stays
+    // below everything pushed over it, so one suppress here covers the
+    // whole session and lifts on the way out.
+    AdventAiBubble.suppress();
     // Start fetching the open-the-quiz interstitial NOW, in parallel with
     // the warm-up below, so it has the whole boot to arrive. Requesting it
     // at the moment we want to show it would almost always miss.
@@ -63,6 +76,12 @@ class _QuizBootScreenState extends State<QuizBootScreen> {
     // the battery, which is most of what they are paying to be rid of.
     InterstitialAdManager.loadAd();
     unawaited(_boot());
+  }
+
+  @override
+  void dispose() {
+    AdventAiBubble.unsuppress();
+    super.dispose();
   }
 
   Future<void> _boot() async {

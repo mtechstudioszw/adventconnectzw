@@ -340,6 +340,28 @@ class CallKitBridge {
         isCustomNotification: true,
         isShowLogo: false,
         isShowCallID: false,
+        // ================================================================
+        //  THE RINGTONE. Without this line an incoming call is SILENT.
+        // ================================================================
+        //
+        // Founder report, 25 Aug 2026: "when user a calls u you see its
+        // ringing but dosent make sound". This is why, and it is one
+        // missing field rather than anything subtle.
+        //
+        // `AndroidParams.ringtonePath` has no default in the plugin —
+        // omit it and it passes null through to the sound player, which
+        // then plays nothing. Everything else worked: the full-screen UI
+        // appeared, the buttons worked, the call connected. It just did
+        // not make a noise, which for an incoming call is most of the
+        // feature.
+        //
+        // `system_ringtone_default` is a literal the plugin special-cases
+        // (CallkitSoundPlayerManager.kt) to mean "whatever this handset
+        // rings with". That is the right choice over bundling our own:
+        // a member has already chosen a ringtone they will hear and
+        // recognise from another room, and it respects Do Not Disturb,
+        // silent mode and per-contact overrides for free.
+        ringtonePath: 'system_ringtone_default',
         // Shows the full-screen UI over the lock screen — the whole
         // point of a call notification.
         isShowFullLockedScreen: true,
@@ -361,6 +383,10 @@ class CallKitBridge {
       ios: const IOSParams(
         iconName: 'AppIcon',
         handleType: 'generic',
+        // Same fix as Android's. CallKit is generally better-behaved
+        // about falling back to the system ringtone, but stating it
+        // means the two platforms cannot diverge silently.
+        ringtonePath: 'system_ringtone_default',
         supportsVideo: false,
         maximumCallGroups: 1,
         maximumCallsPerCallGroup: 1,

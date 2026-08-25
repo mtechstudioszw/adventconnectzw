@@ -116,11 +116,26 @@ android {
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
-            } else {
-                // Falls back to the debug key so dev builds still work.
-                // Play Store will reject an upload signed this way — the
-                // release script enforces that key.properties exists.
+            } else if (project.hasProperty("allowDebugSigning")) {
+                // Opt-in escape hatch for local release-mode testing:
+                //   flutter build apk --release -PallowDebugSigning=true
+                project.logger.warn(
+                    "WARNING: signing the RELEASE build with the DEBUG key. " +
+                    "The debug key is shared and publicly known — this " +
+                    "artifact must never be distributed."
+                )
                 signingConfigs.getByName("debug")
+            } else {
+                // Used to fall back to the debug key silently. Play rejects
+                // such uploads, so it was never going to ship — but a
+                // release-shaped APK signed with a publicly known key is
+                // not something to produce by accident, and "it built fine"
+                // is the wrong signal when the keystore is missing.
+                throw GradleException(
+                    "android/key.properties not found — refusing to build a " +
+                    "release signed with the debug key. Add the keystore, or " +
+                    "pass -PallowDebugSigning=true for local testing only."
+                )
             }
             // R8 code shrinking + resource shrinking. Cuts APK size
             // by ~30-50%. Keep rules for Flutter, Firebase, Supabase,

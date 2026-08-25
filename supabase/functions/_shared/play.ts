@@ -147,6 +147,15 @@ export async function getPlayAccessToken(): Promise<string> {
 export interface PlaySubscription {
   status: SubStatus;
   productId: string | null;
+  /// Which BASE PLAN of `productId` this is — `monthly`, `pro-monthly`
+  /// or `annual`.
+  ///
+  /// All three premium tiers are base plans on ONE product (see
+  /// lib/services/billing/premium_tier.dart), so `productId` is the
+  /// same string for every tier and identifies nothing. This is what
+  /// decides what the member gets, which is why it is read from what
+  /// Play reports and never from anything the client sends.
+  basePlanId: string | null;
   expiryTime: string | null;
   autoRenewing: boolean;
   orderId: string | null;
@@ -230,6 +239,11 @@ export function mapPlaySubscription(body: any): PlaySubscription {
   return {
     status,
     productId: line?.productId ?? null,
+    // subscriptionsv2 puts it on the line item's offerDetails. Null
+    // rather than a guess when it is absent: the SQL side treats an
+    // unknown plan as the LOWEST paid tier, and under-granting is a
+    // support ticket where over-granting is giving Pro away.
+    basePlanId: line?.offerDetails?.basePlanId ?? null,
     expiryTime: line?.expiryTime ?? null,
     autoRenewing: Boolean(line?.autoRenewingPlan?.autoRenewEnabled),
     orderId: body?.latestOrderId ?? null,

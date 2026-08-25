@@ -8,6 +8,7 @@ import '../../services/billing/billing_service.dart';
 import '../../services/premium_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
+import '../../widgets/advent_ai_bubble.dart';
 import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/motion/motion.dart';
 import '../../widgets/premium/premium_badge.dart';
@@ -42,11 +43,25 @@ class _PremiumScreenState extends State<PremiumScreen> {
   @override
   void initState() {
     super.initState();
+    // No floating Advent AI button on the screen that sells Advent AI
+    // (founder, 25 Aug 2026). It lands squarely on the plan picker and
+    // the buy bar — the two controls this screen exists to deliver a tap
+    // to — and tapping it navigates AWAY from the purchase. `/premium`
+    // is on AdventAiBubble.blockedPrefixes as well; this is the half
+    // that holds if the screen is ever shown as a sheet, where the
+    // router's location stays whatever was underneath.
+    AdventAiBubble.suppress();
     if (widget.autoLoad) {
       AdImpressionCounter.load();
       BillingService.init();
       BillingService.loadOffer();
     }
+  }
+
+  @override
+  void dispose() {
+    AdventAiBubble.unsuppress();
+    super.dispose();
   }
 
   bool get _busy =>

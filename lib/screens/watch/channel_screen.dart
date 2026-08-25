@@ -37,7 +37,6 @@ class _ChannelScreenState extends State<ChannelScreen> {
   YoutubeChannel? _channel;
   List<YoutubePlaylist> _series = const [];
   YoutubeVideo? _live;
-  bool _subscribed = false;
 
   bool _loading = true;
   bool _loadingMore = false;
@@ -65,10 +64,16 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   Future<void> _bootstrap() async {
     // The channel's own series, and whether it is on air right now.
+    //
+    // No subscription fetch. The Follow control is gone from this screen
+    // (founder's call, 25 Aug 2026), which finished what #9 on 3 Aug
+    // started on the player — Watch is a place to watch, not another
+    // thing to curate. Nothing on this screen reads follow state any
+    // more, so asking the server for it would be a round trip feeding a
+    // widget that no longer exists.
     final results = await Future.wait<Object?>([
       YoutubeService.fetchChannelSeries(widget.channelId),
       YoutubeService.fetchLiveNow(),
-      YoutubeService.fetchSubscriptionIds(),
     ]);
     if (mounted) {
       final live = (results[1] as List<YoutubeVideo>)
@@ -76,8 +81,6 @@ class _ChannelScreenState extends State<ChannelScreen> {
       setState(() {
         _series = results[0] as List<YoutubePlaylist>;
         _live = live.isEmpty ? null : live.first;
-        _subscribed =
-            (results[2] as Set<String>).contains(widget.channelId);
       });
     }
     await _loadMore();
@@ -99,12 +102,6 @@ class _ChannelScreenState extends State<ChannelScreen> {
       _hasMore = rows.length == _page;
       _loadingMore = false;
     });
-  }
-
-  Future<void> _toggleSubscribe() async {
-    final next = !_subscribed;
-    setState(() => _subscribed = next);
-    await YoutubeService.setSubscribed(widget.channelId, next);
   }
 
   void _open(YoutubeVideo v) => context.pushNamed(
@@ -303,11 +300,6 @@ class _ChannelScreenState extends State<ChannelScreen> {
                           ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: AppSpace.sm),
-                  SubscribeButton(
-                    subscribed: _subscribed,
-                    onTap: _toggleSubscribe,
                   ),
                 ],
               ),

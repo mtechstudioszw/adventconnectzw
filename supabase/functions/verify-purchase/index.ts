@@ -154,6 +154,11 @@ Deno.serve(async (req) => {
     user_id: user.id,
     platform,
     product_id: productId,
+    // Which TIER was bought. From the store's own answer, never from
+    // `body` — the client may name a product it likes and is not
+    // believed about that either. sync_premium_until() maps this to
+    // profiles.premium_tier (patch_268).
+    base_plan_id: sub.basePlanId,
     purchase_token: purchaseToken,
     status: sub.status,
     current_period_end: sub.expiryTime,

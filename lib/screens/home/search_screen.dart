@@ -121,6 +121,26 @@ class _SearchScreenState extends State<SearchScreen>
   Set<String> _followedChurchIds = <String>{};
   Set<String> _rsvpedEventIds = <String>{};
 
+  /// The viewer's HOME church (`profiles.church_id`), or null.
+  ///
+  /// A member belongs to one church and follows only that one — the rule
+  /// church_details has enforced since it shipped. This screen offered a
+  /// Follow button on every church in the results and called
+  /// `ChurchService.follow` straight through, so a member with a home
+  /// church could quietly collect a second, a third, a tenth. The insert
+  /// succeeded every time; nothing on the server says no. (Founder
+  /// report, 25 Aug 2026: "it's just the UI but the backend does allow".)
+  ///
+  /// Read from user metadata rather than a query, exactly as
+  /// church_details reads it, so the results list costs no extra round
+  /// trip to know the answer.
+  String? _homeChurchId;
+
+  bool _isHomeChurch(String churchId) =>
+      _homeChurchId != null &&
+      _homeChurchId!.isNotEmpty &&
+      _homeChurchId == churchId;
+
   /// Rows with an action in flight, keyed by result id, so a row can
   /// show a spinner and reject double taps without blocking the list.
   final Set<String> _actionBusy = <String>{};
@@ -201,6 +221,8 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     final me = AuthService.currentUser?.id;
+    _homeChurchId =
+        AuthService.currentUser?.userMetadata?['church_id']?.toString();
     final results = await Future.wait([
       safe(() => FeedService.fetchMyFriendships(), <Friendship>[]),
       safe(() => ChurchService.fetchUserFollowedChurchIds(), <String>{}),
@@ -243,9 +265,34 @@ class _SearchScreenState extends State<SearchScreen>
     }
   }
 
+  /// Follow / unfollow, under the same rule church_details enforces.
+  ///
+  /// The row only renders an action where one is legal (see
+  /// [_ChurchResultRow]), so both branches below are belt-and-braces —
+  /// but they are the branch that actually protects the data, and the
+  /// button they back up has already been wrong once.
   Future<void> _toggleFollowChurch(String churchId) async {
     if (_actionBusy.contains(churchId)) return;
     final following = _followedChurchIds.contains(churchId);
+
+    // You can only be part of your home church — no following others.
+    if (!following && !_isHomeChurch(churchId)) {
+      _notice(
+        'You can only follow your home church. Set this as your home '
+        'church from your profile (Edit profile → Home church).',
+      );
+      return;
+    }
+    // And you can't drop your home church from a search result — you
+    // change it from your profile, on its 2-week cooldown.
+    if (following && _isHomeChurch(churchId)) {
+      _notice(
+        'This is your home church. Change it from your profile — '
+        'you can switch once every 2 weeks.',
+      );
+      return;
+    }
+
     setState(() => _actionBusy.add(churchId));
     try {
       if (following) {
@@ -289,6 +336,21 @@ class _SearchScreenState extends State<SearchScreen>
     } finally {
       if (mounted) setState(() => _actionBusy.remove(eventId));
     }
+  }
+
+  /// Guidance, not a failure. [_toast] paints red, which the colour
+  /// scheme reserves for errors and urgent content — telling somebody
+  /// where their home church lives is neither.
+  void _notice(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        ),
+      ),
+    );
   }
 
   void _toast(String message) {
@@ -1277,6 +1339,7 @@ class _SearchScreenState extends State<SearchScreen>
                 church: c,
                 query: _lastQuery,
                 following: _followedChurchIds.contains(c.id),
+                isHomeChurch: _isHomeChurch(c.id),
                 busy: _actionBusy.contains(c.id),
                 onToggleFollow: () => _toggleFollowChurch(c.id),
                 onTap: () => _openResult(
@@ -1949,6 +2012,7 @@ class _ChurchResultRow extends StatelessWidget {
     required this.church,
     required this.query,
     required this.following,
+    required this.isHomeChurch,
     required this.busy,
     required this.onToggleFollow,
     required this.onTap,
@@ -1957,6 +2021,10 @@ class _ChurchResultRow extends StatelessWidget {
   final Church church;
   final String query;
   final bool following;
+
+  /// This row IS the viewer's home church (`profiles.church_id`).
+  final bool isHomeChurch;
+
   final bool busy;
   final VoidCallback onToggleFollow;
   final VoidCallback onTap;
@@ -2018,13 +2086,41 @@ class _ChurchResultRow extends StatelessWidget {
           ),
         ],
       ),
-      trailing: InlineAction(
-        label: following ? 'Following' : 'Follow',
-        icon: following ? Icons.check : Icons.add,
-        filled: !following,
-        busy: busy,
-        onTap: onToggleFollow,
-      ),
+      // Only the home church gets an action.
+      //
+      //  * home church, followed      → a quiet "Home church" marker.
+      //  * home church, not yet       → "Follow", the one legal follow.
+      //  * anything else, followed    → "Following", so historic rows
+      //                                 collected before this rule can
+      //                                 still be undone from here.
+      //  * anything else, not         → nothing. Tapping the row still
+      //                                 opens the church, which is where
+      //                                 "make this my home church" is
+      //                                 explained properly.
+      trailing: switch ((isHomeChurch, following)) {
+        (true, true) => InlineAction(
+          label: 'Home church',
+          icon: Icons.home_rounded,
+          filled: false,
+          busy: busy,
+          onTap: onToggleFollow,
+        ),
+        (true, false) => InlineAction(
+          label: 'Follow',
+          icon: Icons.add,
+          filled: true,
+          busy: busy,
+          onTap: onToggleFollow,
+        ),
+        (false, true) => InlineAction(
+          label: 'Following',
+          icon: Icons.check,
+          filled: false,
+          busy: busy,
+          onTap: onToggleFollow,
+        ),
+        (false, false) => null,
+      },
     );
   }
 }

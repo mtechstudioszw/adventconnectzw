@@ -31,12 +31,25 @@ void main() {
   tearDown(CallConfig.reset);
 
   group('reset() restores every shipped fallback', () {
-    test('the defaults are the values patch_260 seeds', () {
+    test('the defaults are the values the DB seeds', () {
+      // ringTimeout is 60, not the 45 patch_260 shipped: patch_268
+      // raised it (founder, 25 Aug 2026). A minute is what the phone
+      // networks and WhatsApp both settled on, and it is the difference
+      // between reaching somebody whose phone is in another room and not.
+      //
+      // The pairing is what this test is really guarding: these MUST
+      // match `app_config`, or a handset that has not fetched the server
+      // config yet behaves differently from one that has. Change one,
+      // change patch_268's UPDATE with it.
       CallConfig.reset();
 
       expect(CallConfig.enabled, isTrue);
-      expect(CallConfig.ringTimeout, const Duration(seconds: 45));
+      expect(CallConfig.ringTimeout, const Duration(seconds: 60));
       expect(CallConfig.connectTimeout, const Duration(seconds: 45));
+      // Far faster than the heartbeat, deliberately: while a call is
+      // ringing this poll is the ONLY thing that can tell the caller it
+      // was declined rather than unanswered. See CallConfig.ringPoll.
+      expect(CallConfig.ringPoll, const Duration(seconds: 2));
       expect(CallConfig.maxGroupParticipants, 5);
       expect(CallConfig.maxDirectDuration, const Duration(minutes: 120));
       expect(CallConfig.maxGroupDuration, const Duration(minutes: 90));
@@ -57,7 +70,7 @@ void main() {
       CallConfig.reset();
 
       expect(CallConfig.enabled, isTrue);
-      expect(CallConfig.ringTimeout, const Duration(seconds: 45));
+      expect(CallConfig.ringTimeout, const Duration(seconds: 60));
       expect(CallConfig.connectTimeout, const Duration(seconds: 45));
       expect(CallConfig.maxGroupParticipants, 5);
       expect(CallConfig.maxDirectDuration, const Duration(minutes: 120));
@@ -75,7 +88,7 @@ void main() {
     test('reset() is idempotent', () {
       CallConfig.reset();
       CallConfig.reset();
-      expect(CallConfig.ringTimeout, const Duration(seconds: 45));
+      expect(CallConfig.ringTimeout, const Duration(seconds: 60));
       expect(CallConfig.enabled, isTrue);
     });
 
@@ -102,7 +115,7 @@ void main() {
       CallConfig.debugOverride();
 
       expect(CallConfig.enabled, isTrue);
-      expect(CallConfig.ringTimeout, const Duration(seconds: 45));
+      expect(CallConfig.ringTimeout, const Duration(seconds: 60));
       expect(CallConfig.connectTimeout, const Duration(seconds: 45));
       expect(CallConfig.maxGroupParticipants, 5);
       expect(CallConfig.maxDirectDuration, const Duration(minutes: 120));
@@ -143,11 +156,13 @@ void main() {
     });
 
     test('ring and connect timeouts are separate settings', () {
-      // They share a default, which is exactly how one could be wired to
-      // the other without anybody noticing.
+      // They used to share a default, which is exactly how one could be
+      // wired to the other without anybody noticing. They no longer do
+      // (60 against 45) — keep this anyway: the next person to tune
+      // either one may well land them back on the same number.
       CallConfig.debugOverride(connectTimeout: const Duration(seconds: 5));
       expect(CallConfig.connectTimeout, const Duration(seconds: 5));
-      expect(CallConfig.ringTimeout, const Duration(seconds: 45));
+      expect(CallConfig.ringTimeout, const Duration(seconds: 60));
     });
 
     test('overriding does not claim the server config was loaded', () {

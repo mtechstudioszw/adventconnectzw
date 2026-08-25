@@ -2437,10 +2437,20 @@ class _ChatScreenState extends State<ChatScreen>
 
   // Per-sender label colour for group bubbles — cycled from the approved
   // palette only (no off-scheme colours).
-  static const List<Color> _senderColors = [
-    AppColors.primaryBlue,
-    AppColors.successGreen,
-    AppColors.darkNavy,
+  /// The three colours a group sender's name is printed in, picked by
+  /// hashing their id so the same person is the same colour every time.
+  ///
+  /// Brightness-aware, and it has to be. These used to be the raw
+  /// `AppColors` constants, all three of which are dark-on-light: in
+  /// dark mode `successGreen` was dim and `darkNavy` was #0D1B3E on a
+  /// #0B1124 wallpaper — invisible, for a third of every group's members
+  /// at random. That is the "admin name is not clear" the founder
+  /// reported on 25 Aug 2026. Same hues, readable lightness — see
+  /// [AppPalette.brandBlue] and friends.
+  List<Color> _senderColors(AppPalette palette) => [
+    palette.brandBlue,
+    palette.brandGreen,
+    palette.brandInk,
   ];
 
   /// Open (or create) a 1:1 chat with [userId] — used when tapping a
@@ -2465,8 +2475,9 @@ class _ChatScreenState extends State<ChatScreen>
     final name =
         member?.fullName ??
         (m.senderName.trim().isEmpty ? 'Member' : m.senderName);
-    final color =
-        _senderColors[m.senderId.hashCode.abs() % _senderColors.length];
+    final palette = context.palette;
+    final colors = _senderColors(palette);
+    final color = colors[m.senderId.hashCode.abs() % colors.length];
     final isAdmin = member?.isAdmin ?? false;
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 2),
@@ -2491,13 +2502,16 @@ class _ChatScreenState extends State<ChatScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                  // Same defect as the name beside it: #1565C0 text on a
+                  // 12% #1565C0 wash reads fine on white and disappears
+                  // on the dark wallpaper.
+                  color: palette.brandBlue.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   'admin',
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.primaryBlue,
+                    color: palette.brandBlue,
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
                   ),

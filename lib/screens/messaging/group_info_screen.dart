@@ -815,17 +815,20 @@ class _MemberTile extends StatelessWidget {
           if (member.isVerified) const VerifiedTick(size: 14),
         ],
       ),
+      // Brightness-aware for the same reason the chat's sender label is
+      // (25 Aug 2026): #1565C0 on a 12% #1565C0 wash is legible on white
+      // and dim on a #131A30 list tile.
       trailing: member.isAdmin
           ? Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                color: context.palette.brandBlue.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 'admin',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.primaryBlue,
+                  color: context.palette.brandBlue,
                   fontWeight: FontWeight.w700,
                 ),
               ),

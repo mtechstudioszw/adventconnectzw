@@ -1802,6 +1802,11 @@ class _OtpLinkSheet extends StatefulWidget {
 class _OtpLinkSheetState extends State<_OtpLinkSheet> {
   final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  /// The password step's own focus, so [_verify] can hand focus over
+  /// deliberately instead of leaving it wherever the code field left it.
+  /// See the keyboard note on [_buildPasswordStep].
+  final _passwordFocus = FocusNode();
   bool _verifying = false;
   bool _settingPassword = false;
   bool _verified = false;
@@ -1815,6 +1820,7 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
   void dispose() {
     _codeController.dispose();
     _passwordController.dispose();
+    _passwordFocus.dispose();
     _cooldownTimer?.cancel();
     super.dispose();
   }
@@ -1843,9 +1849,26 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
       return;
     }
     HapticFeedback.mediumImpact();
+
+    // Drop the IME before the step swaps.
+    //
+    // The code field is numeric; the password field is not. A keyboard
+    // type is baked into the input connection when it is opened and is
+    // not renegotiated underneath a live one, so closing the connection
+    // here is what guarantees the password field opens a fresh one with
+    // the alphabetic layout. The keys on the two fields (see
+    // [_buildCodeStep] / [_buildPasswordStep]) stop the old element
+    // being reused; this stops the old *connection* being reused.
+    FocusManager.instance.primaryFocus?.unfocus();
+
     setState(() {
       _verifying = false;
       _verified = true;
+    });
+
+    // Next frame, so the password field exists to receive it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _passwordFocus.requestFocus();
     });
   }
 
@@ -1968,6 +1991,9 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
       ),
       const SizedBox(height: 14),
       TextField(
+        // Keyed, and so is the password field — read the note there
+        // before removing either.
+        key: const ValueKey('otp-link-code'),
         controller: _codeController,
         keyboardType: TextInputType.number,
         textAlign: TextAlign.center,
@@ -2052,11 +2078,29 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
       ),
       const SizedBox(height: 14),
       TextField(
+        // **This key is load-bearing. Do not remove it.**
+        //
+        // Both steps are spread into the same Column, and both put a
+        // TextField at the same index — code step: Text, SizedBox, Text,
+        // SizedBox, TextField; password step: Row, SizedBox, Text,
+        // SizedBox, TextField. Unkeyed children of the same runtimeType
+        // at the same index are RECONCILED, so `_verified` flipping did
+        // not build a new field at all: it reused the code field's
+        // element, and with it the live input connection the numeric
+        // keyboard was opened against. `keyboardType: text` below was
+        // already here and was simply never reaching the platform.
+        //
+        // Reported 25 Aug 2026 by the founder, on the Google-signup →
+        // verify-email → set-a-password flow: "the keyboard will be in
+        // numbers, no way to switch to letters". Distinct keys force a
+        // fresh element, and [_verify] drops the old IME connection.
+        key: const ValueKey('otp-link-password'),
         controller: _passwordController,
+        focusNode: _passwordFocus,
         obscureText: _obscurePassword,
-        // Force the alphanumeric password keyboard — without this it could
-        // inherit the numeric keyboard from the preceding 6-digit code step.
-        keyboardType: TextInputType.text,
+        keyboardType: TextInputType.visiblePassword,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _settingPassword ? null : _setPassword(),
         enableSuggestions: false,
         autocorrect: false,
         decoration: InputDecoration(

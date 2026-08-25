@@ -11,8 +11,10 @@ import 'call_audio.dart';
 import 'call_config.dart';
 import 'call_signaling.dart';
 import 'call_state.dart';
+import 'call_tones.dart';
 import 'call_transport.dart';
 import 'callkit_bridge.dart';
+import 'missed_call_badge.dart';
 import 'mesh_call_transport.dart';
 
 /// Raised when the microphone is not available. Carries whether the
@@ -71,6 +73,7 @@ class CallService {
   static Timer? _heartbeatTimer;
   static Timer? _tickTimer;
   static Timer? _ringTimeout;
+  static Timer? _ringPoll;
   static Timer? _connectTimeout;
 
   static bool _initialized = false;
@@ -225,6 +228,15 @@ class CallService {
         peerPhotoUrl: peerPhotoUrl,
       ),
     );
+    // Explicit, because this phase arrives through _set rather than
+    // _transition — an outgoing call has no previous phase to move from,
+    // so _syncRingback never sees it otherwise.
+    //
+    // Started HERE and not on `ringing`: `place()` below is a network
+    // round trip, and on a slow connection it is seconds of silence
+    // during which the member has no evidence their tap did anything.
+    // That silence is what the founder heard.
+    _syncRingback(CallPhase.initiating);
     _screenRequests.add('');
 
     final generation = _generation;
@@ -257,6 +269,12 @@ class CallService {
     }
 
     _set(value.copyWith(session: session, phase: CallPhase.ringing));
+    _syncRingback(CallPhase.ringing);
+
+    // BEFORE _goLive, deliberately. This is the only thing that will
+    // tell us the callee declined, and _goLive is three network round
+    // trips and a microphone away. See CallConfig.ringPoll.
+    _startRingPoll();
 
     await CallKitBridge.reportOutgoing(
       callId: session.id,
@@ -807,8 +825,10 @@ class CallService {
     }
 
     // Outgoing call that has been answered: the ring window is over.
+    // _transition below stops the ringback.
     if (value.phase == CallPhase.ringing && session.connectedAt != null) {
       _ringTimeout?.cancel();
+      _stopRingPoll();
       _transition(CallPhase.connecting);
       _armConnectTimeout();
     }
@@ -824,6 +844,55 @@ class CallService {
         message: 'This call reached the maximum length.',
       );
     }
+  }
+
+  /// Ask the server, every couple of seconds, what has become of the
+  /// call we are ringing.
+  ///
+  /// Outgoing only, and only while it rings. Stops itself the moment
+  /// the phase moves on, so the normal heartbeat owns a connected call
+  /// and the two never both run.
+  static void _startRingPoll() {
+    _ringPoll?.cancel();
+    _ringPoll = Timer.periodic(
+      CallConfig.ringPoll,
+      (_) => unawaited(_pollWhileRinging()),
+    );
+  }
+
+  static void _stopRingPoll() {
+    _ringPoll?.cancel();
+    _ringPoll = null;
+  }
+
+  static Future<void> _pollWhileRinging() async {
+    final phase = value.phase;
+    if (phase != CallPhase.ringing && phase != CallPhase.initiating) {
+      _stopRingPoll();
+      return;
+    }
+    final session = value.session;
+    if (session == null) return;
+
+    final generation = _generation;
+    // The heartbeat RPC rather than call_current(): it takes the call id
+    // explicitly and returns the snapshot even once the call is over,
+    // which is exactly the case being watched for. `call_current()`
+    // answers "what am I in NOW" and comes back null for a call that
+    // has just ended — the one answer this poll cannot use.
+    //
+    // No media stats: the transport may not exist yet. That is fine,
+    // they are telemetry and the connected heartbeat carries them.
+    final updated = await _safe(
+      () => CallApi.heartbeat(
+        session.id,
+        muted: value.muted,
+        network: _networkLabel(),
+      ),
+    );
+    if (updated == null || generation != _generation) return;
+    if (updated.id != session.id) return;
+    await _applySnapshot(updated);
   }
 
   /// The caller's own give-up clock, and the callee's rang-out clock.
@@ -846,9 +915,18 @@ class CallService {
     if (value.phase == CallPhase.ringing) {
       // Nobody answered. Cancel so the callee's phone stops immediately
       // rather than waiting for the server's sweeper.
+      //
+      // NOT counted as a missed call for US — this is the outgoing side.
+      // A call I placed that went unanswered is an unanswered call, and
+      // badging my own call log for it would leave a permanent red dot
+      // nobody can act on. Same rule as CallHistoryEntry.missed.
       await _safe(() => CallApi.cancel(session.id));
       await _finish(CallPhase.missed, message: null);
     } else if (value.phase == CallPhase.incoming) {
+      // This one IS ours: somebody rang and we did not pick up. Count it
+      // now so the dot appears as the ringing stops, rather than on the
+      // next inbox open.
+      MissedCallBadge.noteMissed();
       await _finish(CallPhase.missed, message: null);
     }
   }
@@ -948,10 +1026,17 @@ class CallService {
     _tickTimer = null;
     _ringTimeout?.cancel();
     _ringTimeout = null;
+    _stopRingPoll();
     _connectTimeout?.cancel();
     _connectTimeout = null;
     _networkSub?.cancel();
     _networkSub = null;
+
+    // Before anything else that can await: the tone must not outlive the
+    // call by the length of a media teardown. This is also the path a
+    // REFUSED call takes (busy, blocked, rate-limited), which never
+    // reaches a phase transition of its own.
+    await _safe(() => CallTones.stopRingback());
 
     await _transportSub?.cancel();
     _transportSub = null;
@@ -1021,7 +1106,28 @@ class CallService {
     }
     if (current == next) return true;
     _set(value.copyWith(phase: next));
+    _syncRingback(next);
     return true;
+  }
+
+  /// The caller's ringback follows the phase, and nothing else.
+  ///
+  /// Driven from here rather than from the call screen on purpose: the
+  /// tone has to stop the instant the call is answered, refused or
+  /// cancelled, and a widget can be disposed, rebuilt or backgrounded
+  /// at any of those moments. The phase is the one thing that is always
+  /// correct, so the sound hangs off it.
+  ///
+  /// Outgoing only. `incoming` is absent deliberately — the OS rings
+  /// for an inbound call through CallKit / the telecom stack, and it
+  /// does so even when the app is not running. Ringing again here would
+  /// double it.
+  static void _syncRingback(CallPhase phase) {
+    if (phase == CallPhase.initiating || phase == CallPhase.ringing) {
+      unawaited(CallTones.startRingback());
+    } else {
+      unawaited(CallTones.stopRingback());
+    }
   }
 
   static CallPhase _phaseForEndReason(CallEndReason reason) => switch (reason) {
@@ -1082,6 +1188,7 @@ class CallService {
     _heartbeatTimer?.cancel();
     _tickTimer?.cancel();
     _ringTimeout?.cancel();
+    _ringPoll?.cancel();
     _connectTimeout?.cancel();
     _set(CallUiState.idle);
   }

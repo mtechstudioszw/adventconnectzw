@@ -23,8 +23,36 @@ import { sbAdmin, fetchAndUpsertVideos } from "../_shared/youtube.ts";
 const API_KEY = Deno.env.get("YOUTUBE_API_KEY")!;
 const WEBSUB_SECRET = Deno.env.get("WEBSUB_SECRET") ?? "";
 
+/// Constant-time hex compare, so the expected HMAC can't be walked out
+/// a nibble at a time by timing the response.
+function hexEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/// FAIL CLOSED on a missing secret.
+///
+/// This read `if (!WEBSUB_SECRET) return true; // not enforced`, which
+/// skipped authentication entirely whenever the env var was unset —
+/// exactly the idiom play-rtdn's header comment calls out as having left
+/// that function wide open. `verify_jwt` is deliberately off here (the
+/// YouTube hub posts anonymously), so the HMAC is the ONLY thing
+/// standing in front of a service-role client.
+///
+/// An unset secret must therefore mean "accept nothing", never "accept
+/// everything" — a secret can go missing on a project restore, and a
+/// silent downgrade to unauthenticated is not a state to recover from.
 async function verifySignature(req: Request, raw: string): Promise<boolean> {
-  if (!WEBSUB_SECRET) return true; // not enforced
+  if (!WEBSUB_SECRET) {
+    console.error(
+      "WEBSUB_SECRET is not set — refusing every notification. Run " +
+        "`supabase secrets set WEBSUB_SECRET=<long random string>` and " +
+        "re-subscribe so the hub signs with the same value.",
+    );
+    return false;
+  }
   const header = req.headers.get("x-hub-signature") ?? "";
   const [, sig] = header.split("=");
   if (!sig) return false;
@@ -34,7 +62,7 @@ async function verifySignature(req: Request, raw: string): Promise<boolean> {
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
   const hex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  return hex === sig;
+  return hexEquals(hex, sig.toLowerCase());
 }
 
 Deno.serve(async (req) => {

@@ -2,7 +2,7 @@ name: advent_connect_zw
 description: "Adventist Super App — connecting SDA people around the globe"
 publish_to: 'none'
 
-version: 1.4.0+1035
+version: 1.5.0+1036
 
 environment:
   sdk: ^3.11.3
@@ -193,6 +193,18 @@ dependencies:
   # itself premium. Pinned exact per project policy.
   in_app_purchase: 3.3.0
 
+  # Promoted from a transitive dependency of in_app_purchase to a direct
+  # one, at the version the lockfile already resolved — nothing new is
+  # pulled in, this only makes the import legal.
+  #
+  # Needed for ONE thing: the base plan id. All three premium tiers are
+  # base plans on a single Play product (see lib/services/billing/
+  # premium_tier.dart), so the platform-neutral `ProductDetails` cannot
+  # tell them apart — every plan reports the same product id. The base
+  # plan lives on `GooglePlayProductDetails`, which is declared here.
+  # Pinned exact per project policy.
+  in_app_purchase_android: 0.5.0
+
   # Watch — official YouTube IFrame player for compliant in-app playback.
   # Video is embedded/streamed by YouTube only; we never download, proxy,
   # or re-host. Pinned exact per project policy. REQUIRES `flutter pub get`
@@ -274,6 +286,13 @@ flutter:
     # lot) — deliberately not mp3 so playback starts with no decode delay,
     # which matters for a tap-response tick. Muteable in the arena.
     - assets/sounds/quiz/
+    # The outgoing ringback tone (440 Hz + 480 Hz, 2s on / 4s off — the
+    # standard call-progress cadence). Synthesised the same way as the
+    # quiz effects, mono 16-bit WAV, ~188 KB. See
+    # lib/services/calls/call_tones.dart for why a VoIP caller needs one
+    # at all: the network generates this on a real phone call, so
+    # without it the caller waits in silence.
+    - assets/sounds/call/
     # Bundled Google Fonts (Poppins + story fonts). google_fonts loads these
     # local files instead of fetching at runtime, so text never paints blank
     # while a font downloads (critical on slow networks) and the app works

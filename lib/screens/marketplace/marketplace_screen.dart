@@ -297,6 +297,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
           pinned: true,
           delegate: _MarketHeaderDelegate(
             topInset: MediaQuery.paddingOf(context).top,
+            // The header's height has to know the text scale — see
+            // _MarketHeaderDelegate._titleBody.
+            textScale: MediaQuery.textScalerOf(context).scale(1),
             controller: _searchController,
             query: _query,
             onQueryChanged: _onSearchChanged,
@@ -1022,6 +1025,7 @@ class _CategoryChip extends StatelessWidget {
 class _MarketHeaderDelegate extends SliverPersistentHeaderDelegate {
   _MarketHeaderDelegate({
     required this.topInset,
+    required this.textScale,
     required this.controller,
     required this.query,
     required this.onQueryChanged,
@@ -1030,17 +1034,79 @@ class _MarketHeaderDelegate extends SliverPersistentHeaderDelegate {
   });
 
   final double topInset;
+
+  /// `MediaQuery.textScalerOf(context).scale(1)` — the reader's text size
+  /// setting. A [SliverPersistentHeaderDelegate] must declare its height
+  /// from [maxExtent] / [minExtent], which have no BuildContext, so the
+  /// scale has to arrive as a field.
+  final double textScale;
+
   final TextEditingController controller;
   final String query;
   final ValueChanged<String> onQueryChanged;
   final VoidCallback onClearQuery;
   final VoidCallback onCartTap;
 
+  // -------------------------------------------------------------------
+  //  Heights
+  //
+  //  These were `static const 58` and `static const 60`, and the title
+  //  block OVERFLOWED AT EVERY TEXT SIZE, default included (founder
+  //  report, 25 Aug 2026 — "pixel overflow in marketplace header where
+  //  it says shop within the community"). The arithmetic nobody did:
+  //
+  //     top padding (AppSpace.sm)                         8.0
+  //     'MARKETPLACE'   10pt Poppins, no explicit height ~15.0
+  //     gap                                               4.0
+  //     the headline    24pt Poppins, no explicit height ~36.0
+  //                                                     ------
+  //                                                      63.0  into 58
+  //
+  //  Poppins carries ~1.5em of line box in its own metrics, so a 24pt
+  //  line is ~36pt tall, not 24. The two Texts were sized as if a font
+  //  were exactly its point size — which is why a five-pixel overflow
+  //  was baked in before the reader touched anything, and why raising
+  //  the system font size made it worse rather than revealing it.
+  //
+  //  Fixed at both ends: the styles below now set an explicit `height`,
+  //  so these numbers are the real line boxes rather than an estimate,
+  //  and the total is multiplied by the reader's text scale instead of
+  //  pretending it is always 1.0.
+  // -------------------------------------------------------------------
+
+  /// Line-height multipliers pinned on the two title Texts. Changing
+  /// either without changing the other is how this drifts back.
+  static const double _taglineHeight = 1.3;
+  static const double _headlineHeight = 1.2;
+
+  static const double _taglineSize = 10;
+  static const double _headlineSize = 24;
+  static const double _titleGap = 4;
+
+  /// Clamp on how far the text setting may stretch the header.
+  ///
+  /// Not a refusal to honour accessibility — the text itself still
+  /// scales, and the headline ellipsizes rather than being cut. It stops
+  /// a 2.0x setting turning a header into most of a small phone's
+  /// screen, which would leave nowhere for the products the header is
+  /// there to introduce.
+  static const double _maxHeaderScale = 1.5;
+
+  double get _scale => textScale.clamp(1.0, _maxHeaderScale);
+
   /// Title block: tagline + headline. This is what scrolls away.
-  static const double _titleBody = 58;
+  double get _titleBody =>
+      AppSpace.sm +
+      (_taglineSize * _taglineHeight +
+              _titleGap +
+              _headlineSize * _headlineHeight) *
+          _scale;
 
   /// Search row + the basket button beside it. This is what pins.
-  static const double _searchBody = 60;
+  ///
+  /// Scales for the same reason: it holds a TextField whose text grows
+  /// with the setting too, and 60 was measured at 1.0.
+  double get _searchBody => 60 * _scale;
 
   @override
   double get maxExtent => topInset + _titleBody + _searchBody;
@@ -1050,7 +1116,9 @@ class _MarketHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(covariant _MarketHeaderDelegate old) =>
-      old.topInset != topInset || old.query != query;
+      old.topInset != topInset ||
+      old.query != query ||
+      old.textScale != textScale;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
@@ -1087,22 +1155,30 @@ class _MarketHeaderDelegate extends SliverPersistentHeaderDelegate {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // `height` on both is what makes _titleBody
+                          // above a measurement rather than a guess.
+                          // Read the note there before changing either.
                           Text(
                             'MARKETPLACE',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.labelSmall.copyWith(
                               color: AppColors.primaryBlue,
+                              fontSize: _taglineSize,
+                              height: _taglineHeight,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 1.6,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: _titleGap),
                           Text(
                             'Shop within the community',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.displayMedium.copyWith(
                               color: palette.text,
-                              fontSize: 24,
+                              fontSize: _headlineSize,
+                              height: _headlineHeight,
                               fontWeight: FontWeight.w700,
                             ),
                           ),

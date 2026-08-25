@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'billing/premium_tier.dart';
 import 'secure_storage_service.dart';
 
 /// Single source of truth for "is this user a paying subscriber?".
@@ -42,7 +43,26 @@ class PremiumService {
   /// premium until the first successful refresh.
   static const _kOwnerKey = 'premium_owner_v1';
 
+  /// Which LEVEL of premium, cached beside the date it expires.
+  ///
+  /// Deliberately a separate key rather than a v2 of [_kUntilKey]: an
+  /// existing subscriber upgrading to this build has a valid cached
+  /// date, and re-keying would drop them back to free until the first
+  /// successful refresh — offline, that could be days. A missing tier
+  /// beside a live date resolves to [PremiumTier.plus], which is what
+  /// every pre-tier subscriber actually bought.
+  static const _kTierKey = 'premium_tier_v1';
+
   static final ValueNotifier<bool> _isPremium = ValueNotifier<bool>(false);
+
+  /// The level currently in force. [PremiumTier.none] whenever
+  /// [isPremium] is false — the two can never disagree, because [_apply]
+  /// derives both from the same evaluation.
+  static final ValueNotifier<PremiumTier> _tier =
+      ValueNotifier<PremiumTier>(PremiumTier.none);
+
+  /// What the server last said, before expiry is applied.
+  static PremiumTier _storedTier = PremiumTier.none;
 
   /// Listen to this to rebuild when premium starts or lapses. Read-only
   /// by design — the only ways to move it are [refresh] (server truth),
@@ -52,6 +72,26 @@ class PremiumService {
 
   /// Convenience for non-widget code (services, managers).
   static bool get isActive => _isPremium.value;
+
+  /// Listen to this to rebuild when the LEVEL changes — including the
+  /// Plus to Pro case, where [isPremium] never moves and a widget
+  /// watching only that would never hear about the upgrade it was just
+  /// paid for.
+  static ValueListenable<PremiumTier> get tierListenable => _tier;
+
+  /// The level in force right now.
+  static PremiumTier get tier => _tier.value;
+
+  /// Entitlements at the current level — call minutes, AI questions,
+  /// ads. Always safe to read; free is a level like any other.
+  static TierBenefits get benefits => TierBenefits.of(_tier.value);
+
+  /// Does this member hold [required] or better?
+  ///
+  /// Prefer this to comparing [tier] directly, so a level added above
+  /// Pro later does not lock existing members out of a feature they are
+  /// paying more than enough for.
+  static bool hasTier(PremiumTier required) => _tier.value.atLeast(required);
 
   static DateTime? _premiumUntil;
 
@@ -76,6 +116,10 @@ class PremiumService {
       final until = await SecureStorageService.read(_kUntilKey);
       _owner = await SecureStorageService.read(_kOwnerKey);
       _premiumUntil = DateTime.tryParse(until ?? '')?.toUtc();
+      _storedTier = _tierFromServer(
+        await SecureStorageService.read(_kTierKey),
+        _premiumUntil,
+      );
     } catch (e) {
       // Secure storage is not universally reliable on Android. A read
       // failure means we start as free and the first refresh() fixes it
@@ -97,14 +141,24 @@ class PremiumService {
       return false;
     }
     try {
+      // `premium_tier` needs its own GRANT SELECT — `authenticated` has
+      // no table-level SELECT on profiles, it reads entirely through
+      // per-column grants, and a select naming an ungranted column fails
+      // AS A WHOLE. Without the grant, premium would stop refreshing for
+      // everybody rather than just missing the tier. patch_268 issues it;
+      // that is why the column is added there and not casually here.
       final row = await _client
           .from('profiles')
-          .select('premium_until')
+          .select('premium_until, premium_tier')
           .eq('id', userId)
           .maybeSingle();
       final raw = row?['premium_until'];
       final until = raw == null ? null : DateTime.tryParse('$raw')?.toUtc();
-      await _store(userId: userId, until: until);
+      await _store(
+        userId: userId,
+        until: until,
+        tier: _tierFromServer(row?['premium_tier'], until),
+      );
     } catch (e) {
       debugPrint('PremiumService.refresh failed (keeping cache): $e');
     }
@@ -118,24 +172,45 @@ class PremiumService {
     _expiryTimer = null;
     _premiumUntil = null;
     _owner = null;
+    _storedTier = PremiumTier.none;
     _isPremium.value = false;
+    _tier.value = PremiumTier.none;
     try {
       await SecureStorageService.delete(_kUntilKey);
       await SecureStorageService.delete(_kOwnerKey);
+      await SecureStorageService.delete(_kTierKey);
     } catch (e) {
       // In-memory state is already false, which is the part that matters.
       debugPrint('PremiumService.clear could not wipe the cache: $e');
     }
   }
 
+  /// Read the server's tier value, with one rule that matters: a member
+  /// who HAS a live premium date but no tier is [PremiumTier.plus], not
+  /// [PremiumTier.none].
+  ///
+  /// That is every subscriber who bought before tiers existed, read by a
+  /// build that shipped after. Treating them as free would take the
+  /// ad-free app away from people mid-subscription on nothing worse than
+  /// a null. The server grandfathers them properly — patch_268 puts them
+  /// on `pro` — but this client must not depend on that having run yet.
+  static PremiumTier _tierFromServer(Object? raw, DateTime? until) {
+    final parsed = PremiumTier.parse(raw);
+    if (parsed != PremiumTier.none) return parsed;
+    return until == null ? PremiumTier.none : PremiumTier.plus;
+  }
+
   static Future<void> _store({
     required String userId,
     required DateTime? until,
+    required PremiumTier tier,
   }) async {
     _owner = userId;
     _premiumUntil = until;
+    _storedTier = tier;
     try {
       await SecureStorageService.write(_kOwnerKey, userId);
+      await SecureStorageService.write(_kTierKey, tier.id);
       if (until == null) {
         await SecureStorageService.delete(_kUntilKey);
       } else {
@@ -149,14 +224,18 @@ class PremiumService {
     _apply();
   }
 
-  /// Recompute [isPremium] from the cached date + the signed-in user.
+  /// Recompute [isPremium] and [tier] from the cached date + the
+  /// signed-in user. Both come from the same evaluation, so an expired
+  /// date can never leave a live tier standing behind it.
   static void _apply() {
-    _isPremium.value = _evaluate(
+    final active = _evaluate(
       until: _premiumUntil,
       owner: _owner,
       currentUserId: _currentUserIdOrNull,
       now: DateTime.now().toUtc(),
     );
+    _isPremium.value = active;
+    _tier.value = active ? _storedTier : PremiumTier.none;
     _scheduleExpiry();
   }
 
@@ -210,26 +289,34 @@ class PremiumService {
     if (left <= Duration.zero || left > const Duration(days: 2)) return;
     _expiryTimer = Timer(left, () {
       _expiryTimer = null;
-      _isPremium.value = _evaluate(
-        until: _premiumUntil,
-        owner: _owner,
-        currentUserId: _currentUserIdOrNull,
-        now: DateTime.now().toUtc(),
-      );
+      // Through _apply, so the TIER drops with the flag. Setting
+      // _isPremium alone here would have left a lapsed member on Pro
+      // call minutes and Pro AI until the next refresh.
+      _apply();
     });
   }
 
   /// Test seam. Sets the in-memory state directly — no storage, no
   /// network — so widget tests can put the app in either state.
   @visibleForTesting
-  static void debugSet({DateTime? until, String? owner, bool? premium}) {
+  static void debugSet({
+    DateTime? until,
+    String? owner,
+    bool? premium,
+    PremiumTier? tier,
+  }) {
     _initialized = true;
     _premiumUntil = until;
     _owner = owner;
     _expiryTimer?.cancel();
     _expiryTimer = null;
+    // Defaults to Plus when a test forces `premium: true` without saying
+    // which level — the same rule _tierFromServer applies to a real
+    // pre-tier subscriber, so existing tests keep meaning what they meant.
+    _storedTier = tier ?? (premium == true ? PremiumTier.plus : _storedTier);
     if (premium != null) {
       _isPremium.value = premium;
+      _tier.value = premium ? _storedTier : PremiumTier.none;
     } else {
       _apply();
     }
@@ -242,7 +329,9 @@ class PremiumService {
     _expiryTimer = null;
     _premiumUntil = null;
     _owner = null;
+    _storedTier = PremiumTier.none;
     _initialized = false;
     _isPremium.value = false;
+    _tier.value = PremiumTier.none;
   }
 }

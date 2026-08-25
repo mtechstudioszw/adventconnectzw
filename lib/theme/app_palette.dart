@@ -15,6 +15,11 @@ import 'app_colors.dart';
 /// Brand identity colours (primaryBlue, darkNavy, goldAccent, red,
 /// successGreen) stay on [AppColors] — they're the identity, they
 /// don't flip with brightness.
+///
+/// The exception is [brandBlue] / [brandGreen] / [brandInk]: the same
+/// three identity hues, at the lightness each brightness can actually
+/// read. See their doc comments — they exist because a group chat in
+/// dark mode was printing sender names in #0D1B3E on a #0B1124 ground.
 @immutable
 class AppPalette extends ThemeExtension<AppPalette> {
   const AppPalette({
@@ -27,6 +32,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.sheet,
     required this.chipBg,
     required this.inputFill,
+    required this.brandBlue,
+    required this.brandGreen,
+    required this.brandInk,
   });
 
   /// Solid background behind the scrolling content of a screen.
@@ -62,6 +70,35 @@ class AppPalette extends ThemeExtension<AppPalette> {
   /// Fill colour of `TextField` / `InputDecorator` boxes.
   final Color inputFill;
 
+  // -------------------------------------------------------------------
+  //  Identity hues, at a readable lightness
+  //
+  //  Founder report, 25 Aug 2026: "in a group in dark mode on messages
+  //  the admin name is not clear". The group sender label picks one of
+  //  three brand colours by hashing the sender id — primaryBlue,
+  //  successGreen and darkNavy — and paints it on the chat wallpaper.
+  //  All three are dark-on-light colours. In dark mode #2E7D32 was dim
+  //  and #0D1B3E was #0D1B3E on #0B1124: functionally invisible, and it
+  //  hit a third of every group's members at random.
+  //
+  //  These are the SAME hues, not new colours — the scheme is intact.
+  //  Only the lightness moves, which is the one thing that has to move
+  //  when the ground under the text inverts. Use them anywhere a brand
+  //  colour is used as FOREGROUND on a palette surface; keep using
+  //  AppColors directly for fills, badges and identity marks.
+  // -------------------------------------------------------------------
+
+  /// [AppColors.primaryBlue], readable as text on this brightness.
+  final Color brandBlue;
+
+  /// [AppColors.successGreen], readable as text on this brightness.
+  final Color brandGreen;
+
+  /// [AppColors.darkNavy], readable as text on this brightness. In dark
+  /// mode this is a light tint of the same hue, not navy — navy on navy
+  /// is the bug this field exists to close.
+  final Color brandInk;
+
   /// Light-mode palette — preserves the existing visual design so the
   /// pre-dark-mode look is byte-for-byte unchanged.
   static const AppPalette light = AppPalette(
@@ -74,6 +111,11 @@ class AppPalette extends ThemeExtension<AppPalette> {
     sheet: AppColors.white,
     chipBg: AppColors.lightGrey,
     inputFill: AppColors.white,
+    // Unchanged: on a light ground the identity colours ARE readable,
+    // so light mode still renders exactly what it always did.
+    brandBlue: AppColors.primaryBlue,
+    brandGreen: AppColors.successGreen,
+    brandInk: AppColors.darkNavy,
   );
 
   /// Dark-mode palette — matches the deep navy `_darkBg` / `_darkSurface`
@@ -89,6 +131,12 @@ class AppPalette extends ThemeExtension<AppPalette> {
     sheet: Color(0xFF131A30),
     chipBg: Color(0xFF1A2240),
     inputFill: Color(0xFF131A30),
+    // Same hues as light, lifted until they clear WCAG AA (4.5:1) on
+    // the darkest surface they can land on, `scaffoldBg` #0B1124 —
+    // which is what the chat wallpaper resolves to.
+    brandBlue: Color(0xFF6FB2F2), // #1565C0 lifted
+    brandGreen: Color(0xFF7FC787), // #2E7D32 lifted
+    brandInk: Color(0xFFA8B8E4), // #0D1B3E lifted — a navy TINT
   );
 
   @override
@@ -102,6 +150,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? sheet,
     Color? chipBg,
     Color? inputFill,
+    Color? brandBlue,
+    Color? brandGreen,
+    Color? brandInk,
   }) {
     return AppPalette(
       scaffoldBg: scaffoldBg ?? this.scaffoldBg,
@@ -113,6 +164,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       sheet: sheet ?? this.sheet,
       chipBg: chipBg ?? this.chipBg,
       inputFill: inputFill ?? this.inputFill,
+      brandBlue: brandBlue ?? this.brandBlue,
+      brandGreen: brandGreen ?? this.brandGreen,
+      brandInk: brandInk ?? this.brandInk,
     );
   }
 
@@ -129,6 +183,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       sheet: Color.lerp(sheet, other.sheet, t)!,
       chipBg: Color.lerp(chipBg, other.chipBg, t)!,
       inputFill: Color.lerp(inputFill, other.inputFill, t)!,
+      brandBlue: Color.lerp(brandBlue, other.brandBlue, t)!,
+      brandGreen: Color.lerp(brandGreen, other.brandGreen, t)!,
+      brandInk: Color.lerp(brandInk, other.brandInk, t)!,
     );
   }
 }

@@ -1,4 +1,5 @@
 import '../billing/billing_config.dart';
+import '../billing/premium_tier.dart';
 
 /// What each Advent AI tier gets, and what it costs us to serve.
 ///
@@ -12,11 +13,32 @@ import '../billing/billing_config.dart';
 ///
 /// Runtime truth always comes from `ai_my_balance()`. This is furniture.
 ///
-/// # The tiers (reconciled 23 Aug 2026)
+/// # The tiers (reconciled 25 Aug 2026)
 ///
 ///   Free      — 10 questions, refilled monthly, on the cheap model.
-///   Premium   — 500 questions a month, on the better model. US$3,
-///               the existing live `premium_monthly` subscription.
+///   Plus      — 100 questions a month, on the better model. US$3.
+///   Pro       — 500 questions a month, on the better model. US$5 a
+///               month, or US$30 a year.
+///
+/// All three paid levels are BASE PLANS on the one live
+/// `premium_monthly` product — see [PremiumTier] for why that shape and
+/// not three products.
+///
+/// ## Why Plus is not zero questions
+///
+/// The founder's proposal put Advent AI entirely behind the $5 tier.
+/// The free tier gets 10 a month, so a $3 tier with none would give a
+/// paying member less than a non-paying one — and every current $3
+/// subscriber already has 500. The full reasoning, and the one-line
+/// change if you want the literal version, is on [TierBenefits.plus].
+///
+/// ## Cost, at the cap
+///
+///   Plus  100 x $0.00197 = $0.20 against ~$2.55 net of the store's cut.
+///   Pro   500 x $0.00197 = $0.99 against ~$4.25 net.
+///
+/// Both hold with a wide margin, and realistic use is far below either
+/// cap — the cap exists to bound the tail, not to describe the median.
 ///
 /// ## Why there is no top-up bundle in v1
 ///
@@ -112,22 +134,21 @@ class AiTiers {
     ],
   );
 
-  /// The existing live subscription — `ai_premium_monthly_units`.
+  /// US$3 a month — the base plan that has been live since 4 Aug 2026,
+  /// now named. `ai_plus_monthly_units`.
   ///
   /// Price and product ID come from [BillingConfig]; a Play product ID
   /// can never be changed after creation, so this file must never
-  /// restate it. 500 questions on the better model costs at most ~$0.99
-  /// against ~$2.55 net of the store's cut, and realistic use is far
-  /// below the cap.
-  static const premium = Tier(
-    id: 'premium',
-    label: 'Premium',
-    monthlyMessages: 500,
+  /// restate it.
+  static const plus = Tier(
+    id: 'plus',
+    label: 'Plus',
+    monthlyMessages: 100,
     model: AiModel.flash,
     priceLabel: BillingConfig.fallbackPriceLabel,
     benefits: <String>[
-      '500 Advent AI questions a month',
-      'Deeper answers — Premium uses our most capable model',
+      '100 Advent AI questions a month, on our better model',
+      'Six hours of calls a day, up from two',
       // The reframe. Read the class doc before touching this line.
       'The app is paid for by members like you, not by advertisers — '
           'so yours has no ads in it',
@@ -135,10 +156,47 @@ class AiTiers {
     ],
   );
 
-  /// Every tier, cheapest first. Premium sits **last** on purpose:
-  /// letting the price climb makes it the considered conclusion of a
-  /// comparison rather than the demand that opens one.
-  static const all = <Tier>[free, premium];
+  /// US$5 a month, or US$30 a year — `ai_premium_monthly_units`.
+  ///
+  /// The config key keeps its old name deliberately: it is the same
+  /// number, on the same allowance, that `premium` granted before the
+  /// tiers were split. Renaming a live app_config key to match a Dart
+  /// identifier would be a migration in exchange for nothing.
+  static const pro = Tier(
+    id: 'pro',
+    label: 'Pro',
+    monthlyMessages: 500,
+    model: AiModel.flash,
+    priceLabel: BillingConfig.fallbackProPriceLabel,
+    benefits: <String>[
+      '500 Advent AI questions a month — five times Plus',
+      'Deeper answers — Pro uses our most capable model',
+      'Twelve hours of calls a day',
+      'The app is paid for by members like you, not by advertisers — '
+          'so yours has no ads in it',
+      'Keeps Adventist Super App free for everyone who cannot pay',
+    ],
+  );
+
+  /// The old name for [pro], from when there was one paid tier.
+  ///
+  /// Kept as a plain alias rather than deprecated: the paywall copy and
+  /// its tests legitimately mean "the top tier", which is what this has
+  /// always pointed at and still does. New code that means a SPECIFIC
+  /// level should name it — [plus] or [pro].
+  static const premium = pro;
+
+  /// Every tier, cheapest first. The price climbs on purpose: it makes
+  /// the top tier the considered conclusion of a comparison rather than
+  /// the demand that opens one.
+  static const all = <Tier>[free, plus, pro];
+
+  /// The Advent AI tier a [PremiumTier] grants.
+  static Tier forPremiumTier(PremiumTier tier) => switch (tier) {
+    PremiumTier.none => free,
+    PremiumTier.plus => plus,
+    PremiumTier.pro => pro,
+  };
 
   /// Warn a member at this many remaining, so the wall is never the
   /// first they hear of it. Arriving at zero unwarned is what makes a

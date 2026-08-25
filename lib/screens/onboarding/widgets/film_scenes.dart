@@ -1635,7 +1635,337 @@ class SceneWatch extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Scene 5 — sabbath finale (ring returns, then hands off to the CTA)
+// Scene 9 — Advent AI
+// ---------------------------------------------------------------------------
+
+/// The last feature before the finale, which makes it the one people walk
+/// into sign-up remembering.
+///
+/// The beat: an orb wakes → a real question types itself in → it thinks →
+/// the answer streams in line by line → the verse it leans on lands as a
+/// gold-edged chip. That order is the actual product: Advent AI answers
+/// FROM scripture, so the verse is the payoff, not decoration.
+///
+/// Motion is Transform + width tweens on a dozen boxes and one rotating
+/// arc. No blur, no per-frame layout, nothing that allocates — same budget
+/// as every other scene, because this film has to hold 60fps on the
+/// cheapest Android in Harare.
+class SceneAdventAi extends StatelessWidget {
+  const SceneAdventAi({super.key, required this.t});
+  final double t;
+
+  static const _question = 'What does the Bible say about worry?';
+
+  @override
+  Widget build(BuildContext context) {
+    final (a, b) = FilmTimeline.s9;
+    final stageIn = seg(t, a, a + 0.026, Curves.easeOutCubic);
+    final orbIn = seg(t, a + 0.004, a + 0.030, Curves.easeOutBack);
+    final typed = seg(t, a + 0.024, a + 0.052, Curves.easeInOut);
+    final thinking = pulse(t, a + 0.050, a + 0.066);
+    final ans1 = seg(t, a + 0.060, a + 0.074, Curves.easeOutCubic);
+    final ans2 = seg(t, a + 0.066, a + 0.080, Curves.easeOutCubic);
+    final ans3 = seg(t, a + 0.072, a + 0.086, Curves.easeOutCubic);
+    final verse = seg(t, a + 0.080, a + 0.094, Curves.easeOutBack);
+    final lineIn = seg(t, a + 0.030, a + 0.062, Curves.easeOutCubic);
+    final exit = seg(t, b - 0.025, b, Curves.easeInCubic);
+
+    if (stageIn == 0) return const SizedBox.shrink();
+
+    // Local clocks. `spin` is deliberately unbounded — the ring should
+    // turn continuously for as long as the scene is on screen rather
+    // than easing to a stop at some arbitrary angle.
+    final spin = (t - a) * 34;
+    final breathe = math.sin((t - a) * 90) * 0.5 + 0.5;
+
+    // Reveal by character count, with a caret, rather than a clipped
+    // Text: clipping cuts a glyph in half mid-stroke and reads as a
+    // rendering bug. Rounding down means the caret always sits on a
+    // whole letter.
+    final shown = _question.substring(
+      0,
+      (_question.length * typed.clamp(0.0, 1.0)).floor(),
+    );
+
+    return Opacity(
+      opacity: (stageIn * (1 - exit)).clamp(0.0, 1.0),
+      child: Transform.translate(
+        offset: Offset(0, 40 * (1 - stageIn) - 60 * exit),
+        child: Transform.scale(
+          scale: 1 - 0.16 * exit,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _MiniSurface(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _AiOrb(enter: orbIn, spin: spin, breathe: breathe),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Advent AI',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: context.palette.text,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                thinking > 0.05 && ans1 == 0
+                                    ? 'Searching scripture…'
+                                    : 'Grounded in the Bible',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: context.palette.textMuted,
+                                  fontSize: 10.5,
+                                  height: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // The question, typed by the member.
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 210),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(14),
+                            topRight: Radius.circular(14),
+                            bottomLeft: Radius.circular(14),
+                            bottomRight: Radius.circular(4),
+                          ),
+                        ),
+                        child: Text(
+                          // The caret rides the end of the text and stops
+                          // once the question is finished.
+                          typed >= 1 ? _question : '$shown|',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Thinking dots, then the answer streaming in.
+                    if (thinking > 0.02 && ans1 == 0)
+                      Opacity(
+                        opacity: thinking.clamp(0.0, 1.0),
+                        child: Row(
+                          children: [
+                            for (var i = 0; i < 3; i++)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 5),
+                                child: Transform.translate(
+                                  offset: Offset(
+                                    0,
+                                    -3 *
+                                        math
+                                            .sin((t - a) * 240 - i * 0.9)
+                                            .abs(),
+                                  ),
+                                  child: Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: ink(context, 0.30),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    if (ans1 > 0) ...[
+                      _TextBar(grow: ans1, width: 236),
+                      const SizedBox(height: 7),
+                      _TextBar(grow: ans2, width: 210),
+                      const SizedBox(height: 7),
+                      _TextBar(grow: ans3, width: 168),
+                    ],
+                    if (verse > 0) ...[
+                      const SizedBox(height: 12),
+                      Transform.scale(
+                        scale: verse.clamp(0.0, 1.2),
+                        alignment: Alignment.centerLeft,
+                        child: Opacity(
+                          opacity: verse.clamp(0.0, 1.0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.goldAccent.withValues(
+                                alpha: 0.12,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AppColors.goldAccent.withValues(
+                                  alpha: 0.45,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.menu_book_rounded,
+                                  size: 13,
+                                  color: AppColors.goldAccent,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Philippians 4:6',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: AppColors.goldAccent,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 26),
+              SceneLine(
+                text: 'Ask Advent AI.\nAnswers rooted in scripture.',
+                enter: lineIn,
+                exit: exit,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The Advent AI mark: a gradient disc, a halo that breathes, and a blue
+/// arc that turns around it while the model is working.
+class _AiOrb extends StatelessWidget {
+  const _AiOrb({
+    required this.enter,
+    required this.spin,
+    required this.breathe,
+  });
+
+  final double enter;
+  final double spin;
+  final double breathe;
+
+  @override
+  Widget build(BuildContext context) {
+    final e = enter.clamp(0.0, 1.2);
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Halo. Alpha is clamped rather than scaled by `e` alone,
+          // because easeOutBack overshoots past 1 and Opacity asserts.
+          Container(
+            width: 40 * e,
+            height: 40 * e,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primaryBlue.withValues(
+                alpha: (0.10 + 0.10 * breathe).clamp(0.0, 1.0),
+              ),
+            ),
+          ),
+          Transform.rotate(
+            angle: spin,
+            child: SizedBox(
+              width: 36 * e,
+              height: 36 * e,
+              child: CustomPaint(painter: _OrbArcPainter(context)),
+            ),
+          ),
+          Transform.scale(
+            scale: e,
+            child: Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppColors.primaryGradient,
+              ),
+              child: const Icon(
+                Icons.auto_awesome,
+                size: 14,
+                color: AppColors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Two short arcs on opposite sides — the orbit that reads as "thinking"
+/// once [_AiOrb] rotates it.
+class _OrbArcPainter extends CustomPainter {
+  _OrbArcPainter(BuildContext context) : color = blueText(context);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.shortestSide <= 0) return;
+    final rect = Rect.fromCircle(
+      center: size.center(Offset.zero),
+      radius: size.shortestSide / 2 - 1.2,
+    );
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..color = color.withValues(alpha: 0.75);
+    canvas.drawArc(rect, -math.pi / 2, math.pi * 0.55, false, paint);
+    canvas.drawArc(rect, math.pi / 2, math.pi * 0.30, false, paint);
+  }
+
+  @override
+  bool shouldRepaint(_OrbArcPainter old) => old.color != color;
+}
+
+// ---------------------------------------------------------------------------
+// Scene 10 — sabbath finale (ring returns, then hands off to the CTA)
 // ---------------------------------------------------------------------------
 
 class SceneSabbathFinale extends StatelessWidget {

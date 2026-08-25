@@ -14,17 +14,20 @@ import 'widgets/film_scenes.dart';
 import 'widgets/film_scenes_library.dart';
 
 /// First-run intro — a continuous, auto-playing motion piece, not
-/// slides. One master timeline drives TEN overlapping scenes (brand →
-/// churches → prayer → chat → marketplace/jobs → watch → offline
-/// Library → feed → quiz → sabbath finale); elements transform into each
-/// other instead of page-cutting, an ambient light field keeps even
-/// resting moments breathing, and the final scene settles into the
-/// sign-up CTA so intro → auth feels like the same film continuing.
+/// slides. One master timeline drives ELEVEN overlapping scenes (brand →
+/// churches → prayer → chat + calls → marketplace/jobs → watch → offline
+/// Library → feed → quiz → Advent AI → sabbath finale); elements
+/// transform into each other instead of page-cutting, an ambient light
+/// field keeps even resting moments breathing, and the final scene
+/// settles into the sign-up CTA so intro → auth feels like the same film
+/// continuing.
 ///
-/// The film is the pitch, so it has to actually cover the product. It
-/// was seven scenes and silently omitted the three things most likely to
-/// win a member: the offline Library, the feed they'll live in, and the
-/// quiz. See FilmTimeline.
+/// The film is the pitch, so it has to actually cover the product, and
+/// the product keeps moving. It was seven scenes and omitted the offline
+/// Library, the feed and the quiz; it was then ten and omitted calling
+/// and Advent AI, both of which shipped after it was written. Calling
+/// lives inside the chat scene — same thread, out loud — and Advent AI
+/// has the last slot before the finale. See FilmTimeline.
 ///
 /// Interaction model (stories-style):
 /// * it plays itself — no static frame ever waits for a swipe;
@@ -67,13 +70,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   void initState() {
     super.initState();
-    // 42s for ten scenes ≈ 4.2s each — was 31s for seven. Holding the
-    // per-scene pace matters more than the total: each scene has to
-    // finish its move AND let a two-line caption be read, and the new
-    // ones (Library, feed, quiz) carry more detail than the early ones.
+    // 46s for eleven scenes ≈ 4.2s each — was 42s for ten, 31s for
+    // seven. Holding the per-scene pace matters more than the total:
+    // each scene has to finish its move AND let a two-line caption be
+    // read. The Advent AI scene in particular types a whole question in
+    // and streams an answer back, which is not a beat you can rush.
     _film = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 42),
+      duration: const Duration(seconds: 46),
     )..addListener(_onFilmTick);
     _ambient = AnimationController(
       vsync: this,
@@ -257,7 +261,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           if (live(FilmTimeline.s6)) SceneLibrary(t: t),
           if (live(FilmTimeline.s7)) SceneFeed(t: t),
           if (live(FilmTimeline.s8)) SceneQuiz(t: t),
-          if (t > FilmTimeline.s9.$1 - 0.01) SceneSabbathFinale(t: t),
+          if (live(FilmTimeline.s9)) SceneAdventAi(t: t),
+          if (t > FilmTimeline.s10.$1 - 0.01) SceneSabbathFinale(t: t),
         ],
       ),
     );

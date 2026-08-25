@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../config/router_config.dart';
+import '../screens/library/widgets/now_playing_bar.dart';
 import '../services/music_player_service.dart';
 import '../theme/app_tokens.dart';
 import 'advent_ai_mark.dart';
+import 'global_media_bars.dart';
 import 'media/floating_dock.dart';
 
 /// The app-wide Advent AI button.
@@ -177,17 +179,76 @@ class AdventAiBubble extends StatelessWidget {
                 ? _islandInset
                 : _plainInset + MediaQuery.paddingOf(context).bottom;
 
-            return FloatingDock(
-              size: const Size(_size, _size),
-              anchors: _anchors,
-              anchor: anchor,
-              margin: EdgeInsets.fromLTRB(
-                AppSpace.md,
-                MediaQuery.paddingOf(context).top + AppSpace.xl,
-                AppSpace.md,
-                inset,
+            return _MusicAware(
+              builder: (context, musicInset) => FloatingDock(
+                size: const Size(_size, _size),
+                anchors: _anchors,
+                anchor: anchor,
+                margin: EdgeInsets.fromLTRB(
+                  AppSpace.md,
+                  MediaQuery.paddingOf(context).top + AppSpace.xl,
+                  AppSpace.md,
+                  inset + musicInset,
+                ),
+                child: const _BubbleButton(),
               ),
-              child: const _BubbleButton(),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Hands its builder however much extra bottom clearance the docked
+/// music card needs, or zero.
+///
+/// # Why this exists
+///
+/// The bubble's resting slot moved to the bottom edge on 25 Aug 2026,
+/// and the music card's default slot is bottom-CENTRE — a card up to
+/// 380dp wide against a 56dp button on the same line. They shared the
+/// same bottom inset (96, the island), so the bubble came to rest
+/// squarely on top of the now-playing card whenever anything was
+/// playing. Lowering the button was the founder's call; landing it on
+/// the music player was not.
+///
+/// The card only ever moves along its own six slots, so "is it on the
+/// bottom row" is the whole question — `anchor.y == 1`. A card parked
+/// anywhere else is not in this button's way and gets no clearance.
+///
+/// The nesting mirrors [NowPlayingBar] exactly, and for its reason:
+/// `MusicPlayerService.instance` constructs an AudioPlayer at the call
+/// site, so it must not be touched until `ready` is true. This widget is
+/// mounted in `MaterialApp.builder` and paints on the first frame, over
+/// the splash.
+class _MusicAware extends StatelessWidget {
+  const _MusicAware({required this.builder});
+
+  final Widget Function(BuildContext, double) builder;
+
+  /// The card's height plus a gap, so the two do not merely touch.
+  static const double _clearance = NowPlayingBar.barHeight + 4 + AppSpace.sm;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Alignment>(
+      valueListenable: GlobalMediaBars.musicAnchor,
+      builder: (context, musicAnchor, _) {
+        if (musicAnchor.y != 1.0) return builder(context, 0);
+
+        return ValueListenableBuilder<bool>(
+          valueListenable: MusicPlayerService.ready,
+          builder: (context, ready, _) {
+            if (!ready) return builder(context, 0);
+
+            final service = MusicPlayerService.instance;
+            return ValueListenableBuilder<int>(
+              valueListenable: service.revision,
+              builder: (context, _, _) => builder(
+                context,
+                service.current == null ? 0 : _clearance,
+              ),
             );
           },
         );

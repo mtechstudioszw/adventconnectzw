@@ -119,6 +119,60 @@ void main() {
     });
   });
 
+  group('the allowance meter — "508 of 500"', () {
+    // Reported 25 Aug 2026 and reproduced against the live row: the
+    // founder's own subscribed account held 8 unspent FREE units on top
+    // of a 500 allowance, so `total_remaining` was 508 while
+    // `allowance_units` was 500. The Premium screen rendered
+    // "508 of 500 left" and hid its usage line, because `grant -
+    // remaining` was negative.
+    //
+    // `remaining` is still the right figure for "may I ask a question".
+    // The meter is the thing that must not use it.
+    AiBalance subscriberWithFreeLeft() => AiBalance.fromJson(
+          row(total: 508, free: 8, allowance: 500, premium: true),
+        );
+
+    test('the meter reads the allowance, not the total', () {
+      final b = subscriberWithFreeLeft();
+      expect(b.remaining, 508, reason: 'the total is unchanged');
+      expect(b.allowanceRemaining, 500);
+      expect(b.allowanceRemaining, lessThanOrEqualTo(b.grant),
+          reason: 'a meter can never read past its own maximum');
+    });
+
+    test('usage is never negative', () {
+      expect(subscriberWithFreeLeft().allowanceUsed, 0);
+    });
+
+    test('a subscriber part-way through the month', () {
+      // 8 free left, 460 of the allowance left → 468 total.
+      final b = AiBalance.fromJson(
+        row(total: 468, free: 8, allowance: 500, premium: true),
+      );
+      expect(b.allowanceRemaining, 460);
+      expect(b.allowanceUsed, 40);
+    });
+
+    test('a free member has no meter to read', () {
+      // grant is 0 for a free member — allowance_units only carries the
+      // Premium figure — so the meter must report nothing rather than
+      // dividing by it.
+      final b = AiBalance.fromJson(row(total: 2, free: 2));
+      expect(b.grant, 0);
+      expect(b.allowanceRemaining, 0);
+      expect(b.allowanceUsed, 0);
+    });
+
+    test('a subscriber whose free sample is spent reads plainly', () {
+      final b = AiBalance.fromJson(
+        row(total: 500, free: 0, allowance: 500, premium: true),
+      );
+      expect(b.allowanceRemaining, 500);
+      expect(b.allowanceUsed, 0);
+    });
+  });
+
   group('the low-balance warning', () {
     test('fires at the configured threshold, not a magic number', () {
       final at = AiBalance.fromJson(row(total: AiTiers.warnAtRemaining));

@@ -190,6 +190,15 @@ class FundraiserService {
 
   /// Close the card, for good, on every device this account signs into.
   ///
+  /// **Nothing in the app calls this any more.** The founder removed the
+  /// card's close button on 25 Aug 2026 — the campaign runs until it is
+  /// paused or funded. It is kept, along with the server flag and
+  /// [_applyLocalDismissal], because accounts that dismissed the card
+  /// while it *was* dismissible still carry `dismissed = true`, and
+  /// honouring that is kinder than resurrecting a card somebody
+  /// deliberately closed. Deleting this would also mean deleting the
+  /// state that keeps their card hidden.
+  ///
   /// Order matters: local first so the card disappears on the same frame
   /// as the tap, then the server write. If the write fails the local flag
   /// still holds and [_fetch] retries the sync on the next refresh, so a

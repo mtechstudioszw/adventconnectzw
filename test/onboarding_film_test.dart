@@ -20,8 +20,8 @@ Widget _stage(Widget child) => MaterialApp(
     );
 
 void main() {
-  // Every scene, and the window it must survive. All ten — the original
-  // seven are covered too, because the failure this test first caught
+  // Every scene, and the window it must survive. All eleven — the
+  // original seven are covered too, because the failure this test first caught
   // (an easeOutBack progress fed straight to Opacity, which overshoots
   // 1.0 and trips an assert) is a mistake the whole file is exposed to.
   final scenes = <String, (({double a, double b}), Widget Function(double))>{
@@ -61,8 +61,12 @@ void main() {
       (a: FilmTimeline.s8.$1, b: FilmTimeline.s8.$2),
       (t) => SceneQuiz(t: t)
     ),
-    'finale': (
+    'advent ai': (
       (a: FilmTimeline.s9.$1, b: FilmTimeline.s9.$2),
+      (t) => SceneAdventAi(t: t)
+    ),
+    'finale': (
+      (a: FilmTimeline.s10.$1, b: FilmTimeline.s10.$2),
       (t) => SceneSabbathFinale(t: t)
     ),
   };
@@ -120,6 +124,7 @@ void main() {
       FilmTimeline.s7,
       FilmTimeline.s8,
       FilmTimeline.s9,
+      FilmTimeline.s10,
     ];
     expect(windows.first.$1, 0.0);
     expect(windows.last.$2, 1.0);

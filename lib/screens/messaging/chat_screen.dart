@@ -31,7 +31,6 @@ import '../../widgets/char_counter.dart';
 import '../../widgets/expandable_text.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/home/story_viewer.dart';
-import '../../widgets/linkified_text.dart';
 import '../../widgets/verified_tick.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';

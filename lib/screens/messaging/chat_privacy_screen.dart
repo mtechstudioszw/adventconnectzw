@@ -221,6 +221,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         _SectionLabel('Who can message me'),
         const SizedBox(height: 8),
         ScreenCard(
+          key: const ValueKey('who-can-message-card'),
           child: Column(
             children: [
               _ChoiceRow(
@@ -261,6 +262,10 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         _SectionLabel('Who can call me'),
         const SizedBox(height: 8),
         ScreenCard(
+          // Scoped so a test can tell the two identical option triples
+          // apart: both sections read Everyone / Friends only / Nobody, so a
+          // bare find.text('Everyone') matches this card and the one above.
+          key: const ValueKey('who-can-call-card'),
           child: Column(
             children: [
               _ChoiceRow(
@@ -408,7 +413,8 @@ class _RowDivider extends StatelessWidget {
       Divider(height: 20, color: context.palette.divider);
 }
 
-/// One of the mutually exclusive "who can message me" options.
+/// One of a set of mutually exclusive options — used by both the
+/// "Who can message me" and "Who can call me" sections.
 class _ChoiceRow extends StatelessWidget {
   const _ChoiceRow({
     required this.title,

@@ -27,6 +27,8 @@ import '../../services/presence_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/push_service.dart';
 import '../../services/voice_player_service.dart';
+import '../../widgets/char_counter.dart';
+import '../../widgets/expandable_text.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/linkified_text.dart';
@@ -65,6 +67,11 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen>
     with SingleTickerProviderStateMixin {
+  /// Mirrors messages.content's CHECK constraint in schema.sql. Keep the
+  /// two in step — the database wins, and it rejects with no explanation
+  /// a member can act on.
+  static const int _maxMessage = 2000;
+
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
 
@@ -782,6 +789,11 @@ class _ChatScreenState extends State<ChatScreen>
 
   // Typing indicator state.
   RealtimeChannel? _typingChannel;
+  /// Joined channel used to ping the PEER's inbox row. Opened lazily on
+  /// the first typing/recording ping (see _pingPeerInbox) and removed in
+  /// dispose — a joined channel that outlives the screen is a leaked
+  /// socket, and one per chat opened adds up over a session.
+  RealtimeChannel? _peerInboxChannel;
   Timer? _typingExpiry;
   Timer? _typingThrottle;
   bool _otherTyping = false;
@@ -1496,6 +1508,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (ch != null) {
       Supabase.instance.client.removeChannel(ch);
     }
+    final peerCh = _peerInboxChannel;
+    if (peerCh != null) {
+      Supabase.instance.client.removeChannel(peerCh);
+    }
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -1673,9 +1689,16 @@ class _ChatScreenState extends State<ChatScreen>
     if (convo == null || convo.isGroup || convo.isSelfChat) return;
     final other = convo.otherUserId;
     if (other.isEmpty) return;
+
+    // Opened lazily on the first ping rather than in initState, because
+    // `_conversation` is null until the thread loads and most chats are
+    // opened and read without ever typing — no keystroke, no socket.
+    final channel =
+        _peerInboxChannel ??= MessagingService.openPeerInboxChannel(other);
+
     unawaited(
       MessagingService.broadcastTypingToInbox(
-        recipientUserId: other,
+        channel: channel,
         conversationId: widget.conversationId,
         kind: kind,
       ),
@@ -3967,10 +3990,28 @@ class _ChatScreenState extends State<ChatScreen>
   Widget _buildComposeBar() {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (_replyTo != null || _editing != null) _buildReplyEditPreview(),
         if (_productPreviewTitle != null || _productPreviewImage != null)
           _buildProductPreview(),
+        // Above the bar, not below it: the send button and the mic are the
+        // bottom edge of this screen and nothing may push them around.
+        // Empty composer shows nothing at all.
+        Padding(
+          padding: const EdgeInsets.only(right: 4, bottom: 2),
+          // Listens to the controller rather than riding on setState:
+          // _onInputChanged only rebuilds when _hasText flips, and making
+          // it rebuild per keystroke would re-lay out the whole message
+          // list on every letter typed.
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _inputController,
+            builder: (context, value, _) => CharCounter(
+              used: value.text.characters.length,
+              max: _maxMessage,
+            ),
+          ),
+        ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -3987,6 +4028,20 @@ class _ChatScreenState extends State<ChatScreen>
                   controller: _inputController,
                   minLines: 1,
                   maxLines: 5,
+                  // messages.content is CHECK (<= 2000) in schema.sql. It
+                  // was not enforced here at all, so a long paste was
+                  // accepted by the composer and then refused by the
+                  // database as a generic send failure.
+                  maxLength: _maxMessage,
+                  // Flutter's counter would draw inside the pill and push
+                  // the send button around; _ComposerCounter sits above it.
+                  buildCounter:
+                      (
+                        context, {
+                        required currentLength,
+                        required isFocused,
+                        required maxLength,
+                      }) => null,
                   textCapitalization: TextCapitalization.sentences,
                   style: AppTextStyles.bodyMedium.copyWith(
                     fontSize: 14.5,
@@ -5066,10 +5121,18 @@ class _MessageBubble extends StatelessWidget {
                   ],
                 ),
               ),
-            LinkifiedText(
+            // Folds at 12 lines with Read more / Read less. A pasted
+            // paragraph used to render in full, so one long message filled
+            // the screen and buried the conversation either side of it
+            // (founder, 25 Aug 2026). Links stay tappable in both states.
+            ExpandableText(
               text: message.content,
+              collapsedLines: 12,
               onTapLink: (url) => openMessageLink(context, url),
               linkColor: isMine ? AppColors.white : AppColors.primaryBlue,
+              // Blue on the outgoing gradient is unreadable, so the toggle
+              // borrows the bubble's own foreground colour.
+              toggleColor: isMine ? AppColors.white : AppColors.primaryBlue,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: isMine ? AppColors.white : context.palette.text,
                 fontSize: 14.5,

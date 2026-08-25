@@ -98,6 +98,35 @@ class AiSendException implements Exception {
   final AiSendError error;
 }
 
+/// Hands the caller a way to stop an answer part-way through.
+///
+/// # What stopping does and does not do
+///
+/// It closes the HTTP client, which drops the SSE connection. Whatever
+/// had already streamed is kept and returned — a stopped answer is a
+/// short answer, not a lost one.
+///
+/// It does **not** cancel the work on the server, and it must not be
+/// mistaken for a refund. The unit was debited before the provider was
+/// called (see `advent-ai/index.ts` step 5), the edge function goes on to
+/// finish the answer and persist both turns, and reopening the
+/// conversation later shows the full text. That is deliberate: refunding
+/// a member who read half an answer and stopped it would make "stop" a
+/// free-questions button, and the provider has already been paid either
+/// way.
+class AiSendCancel {
+  bool _cancelled = false;
+  void Function()? _abort;
+
+  bool get isCancelled => _cancelled;
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _abort?.call();
+  }
+}
+
 /// Conversations, messages, and the streaming send.
 ///
 /// # Where the security actually lives
@@ -206,6 +235,7 @@ class AiChatService {
     required String conversationId,
     required String message,
     required void Function(String delta) onDelta,
+    AiSendCancel? cancel,
     Duration timeout = const Duration(seconds: 90),
   }) async {
     final session = _db.auth.currentSession;
@@ -225,6 +255,16 @@ class AiChatService {
 
     final client = http.Client();
     final buffer = StringBuffer();
+
+    // Closing the client is what actually stops the stream; everything
+    // else is bookkeeping. Registered before the first await so a cancel
+    // that lands while the request is still in flight is not missed.
+    cancel?._abort = client.close;
+    if (cancel?.isCancelled ?? false) {
+      client.close();
+      return '';
+    }
+
     try {
       final res = await client.send(req).timeout(timeout);
 
@@ -252,6 +292,7 @@ class AiChatService {
       var pending = '';
       await for (final chunk
           in res.stream.transform(utf8.decoder).timeout(timeout)) {
+        if (cancel?.isCancelled ?? false) break;
         pending += chunk;
         final lines = pending.split('\n');
         pending = lines.removeLast();
@@ -290,19 +331,34 @@ class AiChatService {
         }
       }
 
+      // A stopped answer is a short answer, not a failure — including the
+      // case where nothing had arrived yet. Never throws, so the screen
+      // does not have to tell the difference between "it broke" and "I
+      // pressed stop".
+      if (cancel?.isCancelled ?? false) return buffer.toString();
+
       if (buffer.isEmpty) throw const AiSendException(AiSendError.providerFailed);
       return buffer.toString();
     } on AiSendException {
       rethrow;
     } on TimeoutException {
+      // Same rule: a stop that races the timeout is still a stop.
+      if (cancel?.isCancelled ?? false) return buffer.toString();
       throw const AiSendException(AiSendError.providerFailed);
     } catch (_) {
+      // Closing the client to cancel surfaces here as a broken
+      // connection, because that is exactly what it is. Checked BEFORE
+      // the offline story below, or every stop would be reported to the
+      // member as "you're offline".
+      if (cancel?.isCancelled ?? false) return buffer.toString();
+
       // Socket, DNS, TLS — the request never landed. Presented as
       // offline because that is what it is from the member's side, and
       // "check your connection" is actionable where "provider failed"
       // is not.
       throw const AiSendException(AiSendError.offline);
     } finally {
+      cancel?._abort = null;
       client.close();
     }
   }

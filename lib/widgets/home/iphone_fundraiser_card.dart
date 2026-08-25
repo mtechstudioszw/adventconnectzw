@@ -15,12 +15,22 @@ import '../motion/pressable.dart';
 /// ## What it is, and what it is deliberately not
 ///
 /// It is a card in the feed, the same shape and weight as
-/// [InviteFriendsCard] two slots away. It is NOT a popup, an interstitial,
-/// a paywall or a subscription pitch: it never covers the screen, never
-/// blocks anything, never returns after it is closed, and never sends a
-/// notification. Everything in the app stays free whether or not anyone
-/// gives a cent — the moment that stops being true this becomes an
-/// unbilled in-app purchase under both stores' rules.
+/// [InviteFriendsCard]. It is NOT a popup, an interstitial, a paywall or a
+/// subscription pitch: it never covers the screen, never blocks anything,
+/// and never sends a notification. Everything in the app stays free whether
+/// or not anyone gives a cent — the moment that stops being true this
+/// becomes an unbilled in-app purchase under both stores' rules.
+///
+/// ## There is no close button (founder, 25 Aug 2026)
+///
+/// The card carried a small "×" that hid it for good, per account. It does
+/// not any more: the campaign runs until the founder ends it, and the only
+/// thing that takes the card off Home is the founder setting the campaign
+/// to `paused` (or it reaching its goal, which turns it into the
+/// thank-you). [FundraiserService.dismiss] and the server's `dismissed`
+/// flag are left in place — an account that dismissed the card before this
+/// change keeps that state, and honouring it is cheaper and kinder than
+/// resurrecting a card someone deliberately closed.
 ///
 /// ## It self-hides
 ///
@@ -29,7 +39,7 @@ import '../motion/pressable.dart';
 ///
 ///   * the campaign has not loaded yet (no spinner, no placeholder — a
 ///     skeleton for an optional ask is worse than nothing);
-///   * the member closed it, on this or any of their devices;
+///   * the member closed it back when it could be closed;
 ///   * the founder set the campaign to `paused`;
 ///   * the app is running on iOS, where the pitch is nonsense.
 ///
@@ -75,10 +85,18 @@ class _IphoneFundraiserCardState extends State<IphoneFundraiserCard> {
         }
         FundraiserService.noteCardShown(campaign);
         return Padding(
-          padding: EdgeInsets.symmetric(horizontal: widget.horizontalMargin),
+          // The bottom gap belongs to the card, not to the parent: Home
+          // stacks this directly above the composer, and a SizedBox up
+          // there would leave a hole on every screen where the card
+          // self-hides — which is most of them.
+          padding: EdgeInsets.fromLTRB(
+            widget.horizontalMargin,
+            0,
+            widget.horizontalMargin,
+            AppSpace.md,
+          ),
           child: FundraiserCardBody(
             campaign: campaign,
-            onDismiss: FundraiserService.dismiss,
             onSupport: () {
               FundraiserService.noteSupportTapped();
               context.pushNamed('iphone_fundraiser');
@@ -96,12 +114,10 @@ class FundraiserCardBody extends StatelessWidget {
   const FundraiserCardBody({
     super.key,
     required this.campaign,
-    required this.onDismiss,
     required this.onSupport,
   });
 
   final FundraiserCampaign campaign;
-  final VoidCallback onDismiss;
   final VoidCallback onSupport;
 
   @override
@@ -134,8 +150,10 @@ class FundraiserCardBody extends StatelessWidget {
                 child: Padding(
                   // Optically centres the title against the 40px mark
                   // without a Center, which would push the subtitle around
-                  // as it wraps.
-                  padding: const EdgeInsets.only(top: 2),
+                  // as it wraps. The trailing padding is the space the
+                  // close button used to occupy, kept so the title does not
+                  // run to the card's edge.
+                  padding: const EdgeInsets.fromLTRB(0, 2, 8, 0),
                   child: Text(
                     // Server copy, for BOTH states: fundraiser_status()
                     // hands back the thank-you as title/body once the
@@ -151,9 +169,6 @@ class FundraiserCardBody extends StatelessWidget {
                   ),
                 ),
               ),
-              // The close affordance. Small, quiet, and always present —
-              // including on the thank-you, where it is the only control.
-              _CloseButton(onTap: onDismiss),
             ],
           ),
           const SizedBox(height: 10),
@@ -212,34 +227,6 @@ class _Mark extends StatelessWidget {
         done ? Icons.check_rounded : Icons.apple,
         color: AppColors.white,
         size: 21,
-      ),
-    );
-  }
-}
-
-class _CloseButton extends StatelessWidget {
-  const _CloseButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Dismiss the iPhone fundraiser card',
-      child: InkResponse(
-        onTap: onTap,
-        radius: 20,
-        // A 36px target inside a 20px glyph: reachable by thumb without
-        // making "close" the loudest thing on the card.
-        child: SizedBox(
-          width: 36,
-          height: 36,
-          child: Icon(
-            Icons.close_rounded,
-            size: 17,
-            color: context.palette.textMuted,
-          ),
-        ),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'account_mode_service.dart';
+import 'ai/ai_balance_service.dart';
 import 'auth_service.dart';
 import 'biometric_service.dart';
 import 'cache_service.dart';
@@ -76,6 +77,15 @@ class SessionReset {
     await _step('cart', CartService.clearOnSignOut);
     await _step('accountMode', AccountModeService.resetToPersonal);
     await _step('premium', PremiumService.clear);
+
+    // Advent AI's remaining-questions figure. `AiBalanceService.clear()`
+    // was written for exactly this and then never called from anywhere —
+    // so the counter survived sign-out, and the next member to open
+    // Advent AI on the phone was shown the previous member's balance
+    // until the first refresh landed. Same static-notifier carryover as
+    // the quiz, fundraiser and verified-tick steps below.
+    await _step('aiBalance', () async => AiBalanceService.clear());
+
     await _step('presence', PresenceService.stop);
     await _step('typingSignal', TypingSignal.stop);
     // Drops in-memory handles only. The Hive box and keystore entries are

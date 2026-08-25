@@ -65,11 +65,32 @@ class CallApi {
           e.hint ?? 'You have done that a lot in a short time. Please wait.',
         );
       }
+      // A missing function is a DEPLOYMENT problem, not a member
+      // problem, and it must not be dressed up as a network blip:
+      // "could not reach the call service" sent the founder hunting a
+      // connection fault when the real answer was that a patch had not
+      // been applied. PGRST202 = no such RPC, 42883 = no such function.
+      if (e.code == 'PGRST202' || e.code == '42883') {
+        debugPrint('CallApi: call RPCs missing — patches 260+ not applied? $e');
+        throw const CallFailure(
+          'NOT_DEPLOYED',
+          'Calling is not available on this version yet.',
+        );
+      }
       debugPrint('CallApi postgrest error: ${e.code} ${e.message}');
-      throw const CallFailure('SERVER', 'Could not reach the call service.');
+      throw const CallFailure(
+        'SERVER',
+        'The call service had a problem. Please try again.',
+      );
     } catch (e) {
-      debugPrint('CallApi error: $e');
-      throw const CallFailure('NETWORK', 'Could not reach the call service.');
+      // Genuinely the network: a socket that never opened, DNS, TLS.
+      // Distinguished from the branch above so the message can honestly
+      // say which side failed.
+      debugPrint('CallApi network error: $e');
+      throw const CallFailure(
+        'NETWORK',
+        'Could not reach the call service. Check your connection.',
+      );
     }
   }
 

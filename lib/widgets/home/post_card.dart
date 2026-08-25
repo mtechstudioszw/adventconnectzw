@@ -12,6 +12,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../cached_image.dart';
+import '../expandable_text.dart';
 import '../motion/pressable.dart';
 
 /// One card in the home feed.
@@ -88,7 +89,6 @@ class _PostCardState extends State<PostCard>
     with SingleTickerProviderStateMixin {
   static const int _bodyCollapsedLines = 6;
 
-  bool _expanded = false;
   int _photo = 0;
   late final AnimationController _bloom;
 
@@ -312,42 +312,18 @@ class _PostCardState extends State<PostCard>
         AppSpace.lg,
         AppSpace.md,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AnimatedSize(
-            duration: AppMotion.maybe(context, AppMotion.standard),
-            curve: AppMotion.ease,
-            alignment: Alignment.topCenter,
-            child: Text(
-              body,
-              maxLines: _expanded ? null : _bodyCollapsedLines,
-              overflow: _expanded ? null : TextOverflow.ellipsis,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: palette.text,
-                height: 1.45,
-              ),
-            ),
-          ),
-          // Cheap proxy for "will this clip?" — a real TextPainter measure
-          // per card would cost more than it saves, and a stray "See more"
-          // on a borderline post is harmless (tapping it just re-lays out).
-          if (!_expanded && body.length > 220)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpace.xs),
-              child: GestureDetector(
-                onTap: () => setState(() => _expanded = true),
-                behavior: HitTestBehavior.opaque,
-                child: Text(
-                  'See more',
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-        ],
+      // The expand/collapse used to live here as a one-way "See more":
+      // there was no way back, so an expanded 2,000-character post ate the
+      // feed for as long as the card stayed alive. ExpandableText owns
+      // both directions now, and it measures the text instead of guessing
+      // from its length. See lib/widgets/expandable_text.dart.
+      child: ExpandableText(
+        text: body,
+        collapsedLines: _bodyCollapsedLines,
+        style: AppTextStyles.bodyMedium.copyWith(
+          color: palette.text,
+          height: 1.45,
+        ),
       ),
     );
   }

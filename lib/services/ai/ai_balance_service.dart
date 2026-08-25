@@ -99,6 +99,27 @@ class AiBalance {
   /// When [remaining] refills. Null for free members (no refill).
   final DateTime? resetsOn;
 
+  /// What is left of the **Premium allowance alone**, with the free
+  /// sample excluded.
+  ///
+  /// # The "508 of 500" bug (found 25 Aug 2026)
+  ///
+  /// [remaining] is `total_remaining` — free sample plus allowance. A
+  /// subscriber who still had 8 unspent free units therefore read
+  /// 8 + 500, and the Premium screen rendered "508 of 500 left" against
+  /// a progress bar that had to clamp itself to full. It also hid the
+  /// "you have asked N questions this month" line, because
+  /// `grant - remaining` was negative.
+  ///
+  /// Anything drawing the allowance meter must use THIS, not [remaining].
+  /// [remaining] is still the right figure for "can I ask a question",
+  /// which is why it is the one [canUse] reads.
+  int get allowanceRemaining =>
+      grant <= 0 ? 0 : (remaining - freeRemaining).clamp(0, grant);
+
+  /// Questions spent out of the Premium allowance this month.
+  int get allowanceUsed => grant <= 0 ? 0 : grant - allowanceRemaining;
+
   /// The only question the UI should ask.
   bool get canUse => reason == AiGateReason.ok && remaining > 0;
 

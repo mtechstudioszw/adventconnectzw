@@ -12,12 +12,22 @@ class LinkifiedText extends StatefulWidget {
     required this.style,
     required this.linkColor,
     required this.onTapLink,
+    this.maxLines,
+    this.overflow,
+    this.textAlign,
   });
 
   final String text;
   final TextStyle style;
   final Color linkColor;
   final void Function(String url) onTapLink;
+
+  /// Clip the text after this many lines. Null (the default) renders the
+  /// whole thing, which is what every caller did before [ExpandableText]
+  /// needed a collapsed chat bubble.
+  final int? maxLines;
+  final TextOverflow? overflow;
+  final TextAlign? textAlign;
 
   @override
   State<LinkifiedText> createState() => _LinkifiedTextState();
@@ -78,6 +88,11 @@ class _LinkifiedTextState extends State<LinkifiedText> {
     }
     if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
     if (spans.isEmpty) spans.add(TextSpan(text: text));
-    return Text.rich(TextSpan(style: widget.style, children: spans));
+    return Text.rich(
+      TextSpan(style: widget.style, children: spans),
+      maxLines: widget.maxLines,
+      overflow: widget.overflow ?? TextOverflow.clip,
+      textAlign: widget.textAlign,
+    );
   }
 }

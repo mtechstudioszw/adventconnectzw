@@ -9,6 +9,8 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../utils/date_format.dart';
 import '../cached_image.dart';
+import '../char_counter.dart';
+import '../expandable_text.dart';
 import '../verified_tick.dart';
 
 /// Bottom sheet that opens when the user taps "Comment" on a feed post.
@@ -50,6 +52,11 @@ class _CommentsSheet extends StatefulWidget {
 }
 
 class _CommentsSheetState extends State<_CommentsSheet> {
+  /// Mirrors post_comments.body's CHECK constraint (patch_011). If this
+  /// and the database ever disagree, the database wins and the member
+  /// sees a failure they cannot act on — keep them in step.
+  static const int _maxComment = 1000;
+
   final _controller = TextEditingController();
   final _composerFocus = FocusNode();
   List<PostComment> _flat = [];
@@ -405,67 +412,97 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: context.palette.inputFill,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: context.palette.divider),
-                ),
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _composerFocus,
-                  minLines: 1,
-                  maxLines: 4,
-                  textCapitalization: TextCapitalization.sentences,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 14.5,
-                    color: context.palette.text,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: _replyTo == null
-                        ? 'Write a comment…'
-                        : 'Write a reply…',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.textMuted,
-                      fontSize: 14.5,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: context.palette.inputFill,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: context.palette.divider),
                     ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                onPressed:
-                    _sending || _controller.text.trim().isEmpty ? null : _send,
-                icon: _sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.white,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.send,
-                        color: AppColors.white,
-                        size: 18,
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _composerFocus,
+                      minLines: 1,
+                      maxLines: 4,
+                      // post_comments.body is CHECK (1..1000) — patch_011. The
+                      // field enforces it here so the member is stopped AT the
+                      // limit instead of the insert failing afterwards with
+                      // "Could not post comment", which is what they used to
+                      // get for a comment one character too long.
+                      maxLength: _maxComment,
+                      // The number lives on the row under the pill, where it
+                      // does not stretch the input every time it appears.
+                      buildCounter:
+                          (
+                            context, {
+                            required currentLength,
+                            required isFocused,
+                            required maxLength,
+                          }) => null,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontSize: 14.5,
+                        color: context.palette.text,
                       ),
+                      decoration: InputDecoration(
+                        hintText: _replyTo == null
+                            ? 'Write a comment…'
+                            : 'Write a reply…',
+                        hintStyle: AppTextStyles.bodyMedium.copyWith(
+                          color: context.palette.textMuted,
+                          fontSize: 14.5,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    onPressed:
+                        _sending || _controller.text.trim().isEmpty ? null : _send,
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.send,
+                            color: AppColors.white,
+                            size: 18,
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            // Appears with the first character, so an empty sheet stays
+            // clean and nobody discovers the limit by hitting it.
+            Padding(
+              padding: const EdgeInsets.only(right: 6, top: 2),
+              child: CharCounter(
+                used: _controller.text.characters.length,
+                max: _maxComment,
               ),
             ),
           ],
@@ -624,11 +661,17 @@ class _CommentRow extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      comment.body,
+                    // Long comments fold. One 1,000-character comment used
+                    // to push every reply under it off the sheet — you had
+                    // to scroll past someone's essay to find the next
+                    // person. Four lines, then Read more / Read less.
+                    ExpandableText(
+                      text: comment.body,
+                      collapsedLines: 4,
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontSize: 14,
                         height: 1.4,
+                        color: context.palette.text,
                       ),
                     ),
                   ],

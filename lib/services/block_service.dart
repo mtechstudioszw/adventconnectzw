@@ -23,15 +23,43 @@ class BlockService {
         .toList();
   }
 
-  /// True when [userId] has blocked the current viewer (so their profile
-  /// should read as unavailable). Uses the SECURITY DEFINER is_blocked_by
-  /// RPC (patch_071) since RLS hides the other user's block row.
-  static Future<bool> amIBlockedBy(String userId) async {
+  /// Is there a block between me and [userId], in EITHER direction?
+  ///
+  /// The symmetric question (patch_200). This is the right one for
+  /// CONTENT — you block someone to stop seeing them, so their posts and
+  /// stories should leave your feed too.
+  ///
+  /// It is the WRONG one for deciding whether a profile reads as
+  /// unavailable: it hid the blocked person from the blocker, along with
+  /// the Unblock button. Use [hasBlockedMe] there.
+  static Future<bool> isBlockedEitherWay(String userId) async {
     try {
       final res =
           await _client.rpc('is_blocked_by', params: {'p_author': userId});
       return res == true;
     } catch (_) {
+      return false;
+    }
+  }
+
+  /// Has [userId] blocked ME?
+  ///
+  /// One-directional (patch_266). True only when THEY blocked me, so the
+  /// person who did the blocking still sees the account they blocked —
+  /// which is how they unblock it, and what WhatsApp does.
+  ///
+  /// Must go through the SECURITY DEFINER RPC: `blocked_users` RLS hides
+  /// the other person's rows, so a direct query returns nothing whether
+  /// they blocked you or not.
+  static Future<bool> hasBlockedMe(String userId) async {
+    try {
+      final res =
+          await _client.rpc('has_blocked_me', params: {'p_user': userId});
+      return res == true;
+    } catch (_) {
+      // Fail OPEN. A network blip must not make a normal profile read as
+      // "unavailable" — the server still refuses anything that matters
+      // (messages, calls, content) on its own.
       return false;
     }
   }

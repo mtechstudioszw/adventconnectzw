@@ -683,10 +683,12 @@ class _ActiveAllowanceRowState extends State<_ActiveAllowanceRow> {
       builder: (context, balance, _) {
         if (balance.grant <= 0) return const SizedBox.shrink();
 
-        final used = (balance.grant - balance.remaining).clamp(0, balance.grant);
-        final fraction = balance.grant == 0
-            ? 0.0
-            : (balance.remaining / balance.grant).clamp(0.0, 1.0);
+        // The ALLOWANCE, not the total. `balance.remaining` also carries
+        // the free sample, and a subscriber holding 8 unused free units
+        // read "508 of 500 left" here — see AiBalance.allowanceRemaining.
+        final left = balance.allowanceRemaining;
+        final used = balance.allowanceUsed;
+        final fraction = (left / balance.grant).clamp(0.0, 1.0);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -707,7 +709,7 @@ class _ActiveAllowanceRowState extends State<_ActiveAllowanceRow> {
                   ),
                 ),
                 Text(
-                  '${balance.remaining} of ${balance.grant} left',
+                  '$left of ${balance.grant} left',
                   style: TextStyle(fontSize: 13, color: palette.textMuted),
                 ),
               ],
@@ -731,6 +733,20 @@ class _ActiveAllowanceRowState extends State<_ActiveAllowanceRow> {
                 // and the tone should say so.
                 'You have asked $used question${used == 1 ? '' : 's'} '
                 'this month.',
+                style: TextStyle(fontSize: 12, color: palette.textMuted),
+              ),
+            ],
+            if (balance.freeRemaining > 0) ...[
+              const SizedBox(height: 6),
+              Text(
+                // Without this the bar looks broken. A subscriber who
+                // still holds free units spends THOSE first
+                // (ai_spend_unit is free-first), so their next few
+                // questions move nothing on the meter above. Saying so
+                // is the difference between "stuck" and "extra".
+                'Plus ${balance.freeRemaining} free question'
+                '${balance.freeRemaining == 1 ? '' : 's'} still to use — '
+                'those go first.',
                 style: TextStyle(fontSize: 12, color: palette.textMuted),
               ),
             ],

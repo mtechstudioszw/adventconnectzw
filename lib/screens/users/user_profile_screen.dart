@@ -86,11 +86,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       final results = await Future.wait([
         UserProfileService.fetch(widget.userId),
         FeedService.fetchMyFriendships(),
-        BlockService.amIBlockedBy(widget.userId),
+        BlockService.hasBlockedMe(widget.userId),
       ]);
       if (!mounted) return;
-      // If this user blocked the viewer, their profile reads as
-      // unavailable (no about/posts/stories — those are RLS-hidden too).
+      // If THEY blocked the viewer, their profile reads as unavailable
+      // (no photo, cover, about, posts or stories — those are RLS-hidden
+      // too).
+      //
+      // One-directional on purpose. This used to ask the SYMMETRIC
+      // `is_blocked_by`, so blocking somebody also hid them from YOU —
+      // including this screen, which is the only place the Unblock
+      // button lives. See patch_266.
       if (results[2] as bool) {
         setState(() {
           _loading = false;
@@ -457,7 +463,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       // photo loads and remain if it never does — which also
                       // replaces the errorBuilder this pattern cannot take.
                       child: GestureDetector(
-                        onTap: (_profile!.profilePhotoUrl ?? '').isNotEmpty
+                        onTap: _hasAvatarPhoto
                             ? () => FullImageViewer.show(
                                 context,
                                 _profile!.profilePhotoUrl,
@@ -469,12 +475,28 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: context.palette.cardMuted,
+                            // The blue belongs to the CIRCLE, not to a child
+                            // inside it. It used to be painted by
+                            // `_initialAvatar()` on an unshaped, unsized
+                            // Container — and `alignment: Alignment.center`
+                            // here hands a child LOOSE constraints, so that
+                            // Container shrank to the size of the letter and
+                            // painted a blue SQUARE floating in the middle of
+                            // the ring. That is the founder's "it looks like a
+                            // square, not a circle" (25 Aug 2026). Same fix as
+                            // profile_screen's own avatar, which never had the
+                            // bug because it fills the circle from here.
+                            gradient: _hasAvatarPhoto
+                                ? null
+                                : AppColors.primaryGradient,
+                            color: _hasAvatarPhoto
+                                ? context.palette.cardMuted
+                                : null,
                             border: Border.all(
                               color: context.palette.scaffoldBg,
                               width: 5,
                             ),
-                            image: (_profile!.profilePhotoUrl ?? '').isNotEmpty
+                            image: _hasAvatarPhoto
                                 ? DecorationImage(
                                     image: CachedNetworkImageProvider(
                                       photoUrlAtSize(
@@ -494,9 +516,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                             ],
                           ),
-                          child: (_profile!.profilePhotoUrl ?? '').isNotEmpty
-                              ? null
-                              : _initialAvatar(),
+                          child: _hasAvatarPhoto ? null : _initialAvatar(),
                         ),
                       ),
                     ),
@@ -670,19 +690,39 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  bool get _hasAvatarPhoto => (_profile?.profilePhotoUrl ?? '').isNotEmpty;
+
+  /// Just the letters. The blue circle behind them is the avatar Container
+  /// itself — see the note on its `gradient`. Nothing here may carry a
+  /// decoration of its own, or it paints its own shape inside the ring.
+  ///
+  /// One initial per word, up to two ("Anesu Chirwa" → "AC"), because that
+  /// is what a 118px circle has room for and what everyone else's photo
+  /// slot shows. [FittedBox] guarantees the pair stays inside the circle at
+  /// any system font scale rather than clipping against the ring.
   Widget _initialAvatar() {
-    final initial = _profile!.fullName.trim().isEmpty
+    final name = _profile?.fullName.trim() ?? '';
+    final words = name
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    final initials = words.isEmpty
         ? '?'
-        : _profile!.fullName.trim().substring(0, 1).toUpperCase();
-    return Container(
-      decoration: BoxDecoration(gradient: AppColors.primaryGradient),
-      alignment: Alignment.center,
-      child: Text(
-        initial,
-        style: AppTextStyles.displayLarge.copyWith(
-          color: AppColors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 42,
+        : words.take(2).map((w) => w[0].toUpperCase()).join();
+    return Padding(
+      // Keeps the letters off the inside of the 5px ring.
+      padding: const EdgeInsets.all(14),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          initials,
+          textAlign: TextAlign.center,
+          style: AppTextStyles.displayLarge.copyWith(
+            color: AppColors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 42,
+            height: 1,
+          ),
         ),
       ),
     );

@@ -2074,28 +2074,46 @@ class MessagingService {
     }
   }
 
-  /// Tell [recipientUserId] that we're typing (or recording) in
-  /// [conversationId], so it shows on their INBOX row as well as in the
-  /// chat if they have it open.
+  /// Open a channel for pinging [recipientUserId]'s INBOX row, and JOIN
+  /// it. The caller keeps it for the life of the chat screen and closes
+  /// it in dispose.
   ///
-  /// Fire-and-forget on a throwaway channel: we are only ever sending,
-  /// never listening, and `sendBroadcastMessage` falls back to the REST
-  /// broadcast endpoint when the channel isn't joined — which is the
-  /// normal case here and is fine. Subscribing just to send would cost a
-  /// socket join per peer.
+  /// ## Why this joins, when the previous version deliberately did not
+  ///
+  /// It used to build a throwaway channel, call `sendBroadcastMessage`
+  /// without subscribing, and rely on realtime-dart falling back to the
+  /// REST broadcast endpoint — reasoning that a socket join per peer was
+  /// not worth it for a decorative ping.
+  ///
+  /// Reported 25 Aug 2026: "typing / recording audio shows inside the
+  /// chat only". Inside the chat is the one path that uses a SUBSCRIBED
+  /// channel; the inbox path is the one that does not. Everything else
+  /// about the two is identical — same event name, same payload keys,
+  /// same topic on both ends — so the un-joined send is what differs,
+  /// and the `catch (_)` meant it failed in total silence.
+  ///
+  /// One socket join while a 1:1 chat is open is a price worth paying
+  /// for a feature that otherwise does not work at all.
   ///
   /// 1:1 only. A group would mean one send per member every couple of
   /// seconds; group typing stays on the conversation channel, which the
   /// open chat already subscribes to.
+  static RealtimeChannel openPeerInboxChannel(String recipientUserId) {
+    final channel = _client.channel(inboxTypingChannelName(recipientUserId));
+    channel.subscribe();
+    return channel;
+  }
+
+  /// Tell the peer we're typing (or recording) in [conversationId], so it
+  /// shows on their INBOX row as well as inside an already-open chat.
   static Future<void> broadcastTypingToInbox({
-    required String recipientUserId,
+    required RealtimeChannel channel,
     required String conversationId,
     String kind = 'typing',
   }) async {
     final me = _client.auth.currentUser?.id;
-    if (me == null || recipientUserId.isEmpty) return;
+    if (me == null) return;
     try {
-      final channel = _client.channel(inboxTypingChannelName(recipientUserId));
       await channel.sendBroadcastMessage(
         event: 'typing',
         payload: {
@@ -2105,9 +2123,10 @@ class MessagingService {
           'ts': DateTime.now().millisecondsSinceEpoch,
         },
       );
-      await _client.removeChannel(channel);
-    } catch (_) {
-      // No-op: typing pings are decorative.
+    } catch (e) {
+      // Still non-fatal — but no longer silent. A ping that cannot be
+      // delivered is exactly the failure that hid this bug for weeks.
+      debugPrint('broadcastTypingToInbox failed: $e');
     }
   }
 

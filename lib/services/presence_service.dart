@@ -293,6 +293,18 @@ class PresenceService {
   /// null if the user has hidden their last seen via the chat
   /// privacy settings (show_last_seen = false) or on lookup failure.
   static Future<DateTime?> fetchLastSeen(String userId) async {
+    // Blocking takes last seen away too, in both directions.
+    //
+    // Reported 25 Aug 2026: after blocking someone the green dot goes
+    // (patch_210 handles that via [_hidden]) but the header still read
+    // "last seen 12:04" — so blocking removed the live signal and left
+    // the historical one, which is the more precise of the two.
+    //
+    // [_hidden] is already the symmetric block set this service loads on
+    // start and refreshes on every block/unblock, so the answer is in
+    // memory and costs nothing. Checked BEFORE the query, so a blocked
+    // pair does not even ask the server.
+    if (_hidden.contains(userId)) return null;
     try {
       final row = await _client
           .from('profiles')

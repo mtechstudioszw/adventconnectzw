@@ -44,6 +44,11 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
   bool _showOnlineStatus = true;
   bool _showReadReceipts = true;
   String _whoCanMessage = 'everyone';
+  // Defaults to 'friends', matching the column default in patch_265.
+  // A ringing phone is a far louder interruption than an unread badge,
+  // so calling starts tighter than messaging and the member opens it up
+  // rather than having to discover they need to close it down.
+  String _whoCanCall = 'friends';
   String? _error;
 
   @override
@@ -67,7 +72,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
           .from('profiles')
           .select(
             'show_last_seen, show_online_status, show_read_receipts, '
-            'who_can_message',
+            'who_can_message, who_can_call',
           )
           .eq('id', user.id)
           .maybeSingle();
@@ -77,6 +82,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         _showOnlineStatus = row?['show_online_status'] != false;
         _showReadReceipts = row?['show_read_receipts'] != false;
         _whoCanMessage = (row?['who_can_message'] as String?) ?? 'everyone';
+        _whoCanCall = (row?['who_can_call'] as String?) ?? 'friends';
         _loading = false;
       });
     } catch (_) {
@@ -163,6 +169,17 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     );
   }
 
+  void _setWhoCanCall(String v) {
+    if (v == _whoCanCall) return;
+    final was = _whoCanCall;
+    setState(() => _whoCanCall = v);
+    _persist(
+      'who_can_call',
+      v,
+      revert: () => _whoCanCall = was,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -236,6 +253,46 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                 value: 'nobody',
                 group: _whoCanMessage,
                 onSelect: _setWhoCanMessage,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        _SectionLabel('Who can call me'),
+        const SizedBox(height: 8),
+        ScreenCard(
+          child: Column(
+            children: [
+              _ChoiceRow(
+                title: 'Everyone',
+                subtitle:
+                    'Anyone on Adventist Super App can ring you, including '
+                    'people you have never spoken to.',
+                value: 'everyone',
+                group: _whoCanCall,
+                onSelect: _setWhoCanCall,
+              ),
+              const _RowDivider(),
+              _ChoiceRow(
+                title: 'Friends only',
+                // Named as the default so nobody has to guess which one
+                // they are on before they have touched the screen.
+                subtitle:
+                    'Only people whose friend request you have accepted can '
+                    'call you. This is the default.',
+                value: 'friends',
+                group: _whoCanCall,
+                onSelect: _setWhoCanCall,
+              ),
+              const _RowDivider(),
+              _ChoiceRow(
+                title: 'Nobody',
+                subtitle:
+                    'No one can call you. You can still call other people, '
+                    'and messaging is unaffected.',
+                value: 'nobody',
+                group: _whoCanCall,
+                onSelect: _setWhoCanCall,
               ),
             ],
           ),

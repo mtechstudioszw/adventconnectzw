@@ -8,6 +8,8 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
+import '../../widgets/advent_ai_bubble.dart';
+import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/screen_shell.dart';
 import 'ai_gate_copy.dart';
 import 'widgets/ai_markdown.dart';
@@ -47,16 +49,28 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
   /// success and discarded on failure.
   AiMessage? _streaming;
 
+  /// Live only while an answer is streaming. Cancelled by the stop
+  /// button, and again on dispose so leaving the screen mid-answer does
+  /// not leave a socket open behind it.
+  AiSendCancel? _cancel;
+
   @override
   void initState() {
     super.initState();
     _conversationId = widget.conversationId;
+    // The app-wide bubble already refuses `/advent-ai` by route prefix.
+    // This says it a second way, from the screen itself, because the
+    // founder still saw the bubble here on 25 Aug 2026 and a mounted
+    // screen is a fact where a router location is an inference.
+    AdventAiBubble.suppress();
     AiBalanceService.refresh();
     if (_conversationId != null) _loadHistory();
   }
 
   @override
   void dispose() {
+    AdventAiBubble.unsuppress();
+    _cancel?.cancel();
     _controller.dispose();
     _scroll.dispose();
     _focus.dispose();
@@ -107,8 +121,10 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
       return;
     }
 
+    final cancel = AiSendCancel();
     setState(() {
       _sending = true;
+      _cancel = cancel;
       _messages.add(AiMessage(role: 'user', content: text));
       _streaming = AiMessage(
         role: 'assistant',
@@ -126,6 +142,7 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
       await AiChatService.send(
         conversationId: _conversationId!,
         message: text,
+        cancel: cancel,
         onDelta: (delta) {
           if (!mounted) return;
           setState(() => _streaming!.content += delta);
@@ -135,11 +152,23 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
 
       if (!mounted) return;
       setState(() {
-        _streaming!.status = AiMessageStatus.complete;
-        _messages.add(_streaming!);
-        _streaming = null;
+        final answer = _streaming!;
+        // A stopped answer is KEPT, exactly as much of it as arrived.
+        // The only thing thrown away is a stop that beat the first word,
+        // which would otherwise leave an empty answer bubble sitting
+        // under the question forever.
+        if (cancel.isCancelled && answer.content.trim().isEmpty) {
+          _streaming = null;
+        } else {
+          answer.status = AiMessageStatus.complete;
+          _messages.add(answer);
+          _streaming = null;
+        }
         _sending = false;
+        _cancel = null;
       });
+      // A stopped answer never receives the final frame that carries the
+      // authoritative balance, so it is re-read rather than left stale.
       AiBalanceService.refresh();
     } on AiSendException catch (e) {
       if (!mounted) return;
@@ -150,11 +179,16 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
         _messages.removeLast();
         _streaming = null;
         _sending = false;
+        _cancel = null;
         _controller.text = text;
       });
       _handleSendError(e.error);
     }
   }
+
+  /// Stop the answer where it is. The unit stays spent — see
+  /// [AiSendCancel] for why that is deliberate rather than an oversight.
+  void _stop() => _cancel?.cancel();
 
   void _handleSendError(AiSendError error) {
     switch (error) {
@@ -235,6 +269,7 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
                 focusNode: _focus,
                 sending: _sending,
                 onSend: _send,
+                onStop: _stop,
               ),
             ],
           ),
@@ -289,12 +324,24 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
 //  Balance strip
 // ---------------------------------------------------------------------
 
-/// The member's remaining questions, always visible.
+/// The member's remaining questions, and the way to buy more of them.
 ///
 /// Transparency is the brief's rule (§27) and also the kindest design:
-/// a member who can see "3 left" is never ambushed by a wall. It shows
-/// only when the figure is small enough to matter — a subscriber with
-/// 480 remaining does not need a counter on their screen.
+/// a member who can see "3 left" is never ambushed by a wall.
+///
+/// # Who sees what
+///
+/// **Free members always see both** — the count and an Upgrade button
+/// (founder call, 25 Aug 2026). Ten questions a month is a figure worth
+/// watching, and the only route to Premium from here used to be the
+/// paywall sheet that appears once you have already been refused. Asking
+/// somebody to upgrade at the moment you block them is the worst
+/// possible time to ask; a quiet button they can reach whenever they
+/// like is a better offer and a less resented one.
+///
+/// **Subscribers see the count only when it is running low**, and never
+/// an Upgrade button — there is nothing to sell them, and a subscriber
+/// with 480 remaining does not need a counter on their screen.
 class _BalanceStrip extends StatelessWidget {
   const _BalanceStrip();
 
@@ -303,28 +350,89 @@ class _BalanceStrip extends StatelessWidget {
     return ValueListenableBuilder<AiBalance>(
       valueListenable: AiBalanceService.balance,
       builder: (context, balance, _) {
-        if (!balance.isRunningLow) return const SizedBox.shrink();
+        final canUpgrade = !balance.isPremium;
+        // `grant`/`remaining` are both 0 before the first fetch lands.
+        // Rendering "0 questions left" over an unknown balance would
+        // announce a wall the member may not be behind.
+        final known = balance.grant > 0 || balance.remaining > 0;
+        final showCount = balance.isRunningLow || (canUpgrade && known);
+
+        if (!showCount && !canUpgrade) return const SizedBox.shrink();
+
         final palette = context.palette;
         final n = balance.remaining;
+
         return Container(
           width: double.infinity,
           margin: const EdgeInsets.fromLTRB(
               AppSpace.lg, 0, AppSpace.lg, AppSpace.sm),
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpace.md, vertical: AppSpace.sm),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpace.md, AppSpace.xs, AppSpace.xs, AppSpace.xs),
           decoration: BoxDecoration(
             color: palette.chipBg,
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: Text(
-            n == 0
-                ? 'No questions left this month'
-                : '$n question${n == 1 ? '' : 's'} left this month',
-            style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
-            textAlign: TextAlign.center,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  !showCount
+                      ? 'Advent AI'
+                      : n == 0
+                          ? 'No questions left this month'
+                          : '$n question${n == 1 ? '' : 's'} left this month',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: palette.textMuted),
+                ),
+              ),
+              if (canUpgrade) const _UpgradeButton(),
+            ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Straight to the Premium screen.
+///
+/// Pushed on this screen's own navigator, so Premium arrives on top of
+/// Advent AI and the back arrow returns the member to the question they
+/// were part-way through asking.
+class _UpgradeButton extends StatelessWidget {
+  const _UpgradeButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.button),
+        onTap: () => context.push('/premium'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.md, vertical: 6),
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.arrow_upward_rounded,
+                  size: 14, color: Colors.white),
+              const SizedBox(width: AppSpace.xs),
+              Text(
+                'Upgrade',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -377,10 +485,10 @@ class _Turn extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome_rounded,
+              Icon(AdventAiBrand.icon,
                   size: 16, color: AppColors.goldAccent),
               const SizedBox(width: AppSpace.xs),
-              Text('Advent AI',
+              Text(AdventAiBrand.name,
                   style: AppTextStyles.labelSmall
                       .copyWith(color: palette.textMuted)),
             ],
@@ -410,6 +518,9 @@ class _Turn extends StatelessWidget {
                 ),
               ),
             ),
+            // Under EVERY answer, not once at the top of the screen.
+            // Founder rule, 25 Aug 2026 — see AdventAiBrand.disclaimer.
+            AdventAiDisclaimer(color: palette.textMuted),
           ],
         ],
       ),
@@ -494,8 +605,7 @@ class _EmptyState extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: AppSpace.xl),
-          Icon(Icons.auto_awesome_rounded,
-              size: 40, color: AppColors.goldAccent),
+          Icon(AdventAiBrand.icon, size: 40, color: AppColors.goldAccent),
           const SizedBox(height: AppSpace.md),
           Text('Ask about Scripture, or about the app',
               textAlign: TextAlign.center,
@@ -547,12 +657,14 @@ class _Composer extends StatelessWidget {
     required this.focusNode,
     required this.sending,
     required this.onSend,
+    required this.onStop,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool sending;
   final VoidCallback onSend;
+  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -596,43 +708,80 @@ class _Composer extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpace.sm),
-          _SendButton(sending: sending, onTap: onSend),
+          _SendButton(sending: sending, onSend: onSend, onStop: onStop),
         ],
       ),
     );
   }
 }
 
+/// Send, and — while an answer is streaming — **stop**.
+///
+/// # Why this is a button and not a spinner
+///
+/// It used to go flat grey with a spinner in it: a disabled control that
+/// told the member to wait. Every assistant they have used does the
+/// opposite — the send button becomes a stop button, and pressing it
+/// ends the answer where it is (founder call, 25 Aug 2026: "when Advent
+/// AI is responding the send button should turn into a generating icon
+/// that, if you click it, stops the response midway — like Claude,
+/// ChatGPT").
+///
+/// The ring keeps turning around the square so the control still reads
+/// as "working" at a glance; the square is what says it can be pressed.
 class _SendButton extends StatelessWidget {
-  const _SendButton({required this.sending, required this.onTap});
+  const _SendButton({
+    required this.sending,
+    required this.onSend,
+    required this.onStop,
+  });
+
   final bool sending;
-  final VoidCallback onTap;
+  final VoidCallback onSend;
+  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return SizedBox(
       width: 44,
       height: 44,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          onTap: sending ? null : onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: sending ? null : AppColors.primaryGradient,
-              color: sending ? context.palette.chipBg : null,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.arrow_upward_rounded,
-                      color: Colors.white, size: 20),
+      child: Semantics(
+        button: true,
+        label: sending ? 'Stop generating' : 'Send',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            onTap: sending ? onStop : onSend,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: sending ? null : AppColors.primaryGradient,
+                color: sending ? palette.chipBg : null,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: sending
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 26,
+                            height: 26,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.primaryBlue,
+                              ),
+                            ),
+                          ),
+                          Icon(Icons.stop_rounded,
+                              size: 16, color: palette.text),
+                        ],
+                      )
+                    : const Icon(Icons.arrow_upward_rounded,
+                        color: Colors.white, size: 20),
+              ),
             ),
           ),
         ),

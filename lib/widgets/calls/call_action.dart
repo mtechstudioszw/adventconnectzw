@@ -7,6 +7,7 @@ import '../../screens/calls/call_screen.dart' show showMicrophoneDeniedDialog;
 import '../../services/calls/call_config.dart';
 import '../../services/calls/call_service.dart';
 import '../../services/calls/call_state.dart';
+import '../../services/connectivity_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -100,6 +101,22 @@ class CallActions {
   }
 
   static Future<bool> _preflight(BuildContext context) async {
+    // Offline is checked FIRST, and it is checked here rather than left
+    // to the server round trip, because the two produce very different
+    // messages for the same situation. With no data, `call_start` never
+    // arrives, the RPC times out after fifteen seconds, and the member
+    // is told "the network is too slow" — which reads as the app being
+    // broken. "You're offline" is the truth, and it arrives instantly.
+    if (!ConnectivityService.isOnline) {
+      if (context.mounted) {
+        _snack(
+          context,
+          'You\'re offline. Connect to the internet to make a call.',
+        );
+      }
+      return false;
+    }
+
     // The server's master switch, so calling can be taken down without
     // shipping a build if TURN costs spike or a bug lands. Refreshed
     // rather than trusted from launch — a member who has had the app

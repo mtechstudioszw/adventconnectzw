@@ -361,7 +361,6 @@ void main() {
         (t) async {
       await t.pumpWidget(_host(FundraiserCardBody(
         campaign: _campaign(raised: 4200, supporters: 6),
-        onDismiss: () {},
         onSupport: () {},
       )));
       await t.pumpAndSettle();
@@ -380,7 +379,6 @@ void main() {
       // A $250 campaign must render as $250 with no code change.
       await t.pumpWidget(_host(FundraiserCardBody(
         campaign: _campaign(goal: 25000, raised: 5000),
-        onDismiss: () {},
         onSupport: () {},
       )));
       await t.pumpAndSettle();
@@ -392,7 +390,6 @@ void main() {
     testWidgets('it never covers the screen', (t) async {
       await t.pumpWidget(_host(FundraiserCardBody(
         campaign: _campaign(raised: 4200),
-        onDismiss: () {},
         onSupport: () {},
       )));
       await t.pumpAndSettle();
@@ -403,26 +400,24 @@ void main() {
       expect(card.height, lessThan(screen.height / 2));
     });
 
-    testWidgets('the close control is present and reports the dismissal',
+    testWidgets('there is no close control — the founder ends the campaign',
         (t) async {
-      var dismissed = 0;
+      // The "×" was removed on 25 Aug 2026. A member cannot take the card
+      // off Home any more; pausing the campaign is what does that, and
+      // that lives in the admin queue.
       await t.pumpWidget(_host(FundraiserCardBody(
         campaign: _campaign(raised: 4200),
-        onDismiss: () => dismissed++,
         onSupport: () {},
       )));
       await t.pumpAndSettle();
 
-      await t.tap(find.byIcon(Icons.close_rounded));
-      await t.pumpAndSettle();
-      expect(dismissed, 1);
+      expect(find.byIcon(Icons.close_rounded), findsNothing);
     });
 
     testWidgets('Support the project opens the contribution flow', (t) async {
       var supported = 0;
       await t.pumpWidget(_host(FundraiserCardBody(
         campaign: _campaign(raised: 4200),
-        onDismiss: () {},
         onSupport: () => supported++,
       )));
       await t.pumpAndSettle();
@@ -435,7 +430,6 @@ void main() {
     testWidgets('a member with a pledge in review is told so', (t) async {
       await t.pumpWidget(_host(FundraiserCardBody(
         campaign: _campaign(raised: 4200, pending: 1),
-        onDismiss: () {},
         onSupport: () {},
       )));
       await t.pumpAndSettle();
@@ -449,7 +443,6 @@ void main() {
     testWidgets('a funded campaign stops asking for money', (t) async {
       await t.pumpWidget(_host(FundraiserCardBody(
         campaign: _campaign(status: 'completed', raised: 9900),
-        onDismiss: () {},
         onSupport: () {},
       )));
       await t.pumpAndSettle();
@@ -460,8 +453,9 @@ void main() {
       // The whole point of section 10 of the brief.
       expect(find.text('Support the project'), findsNothing);
       expect(find.text('100%'), findsOneWidget);
-      // Still closeable.
-      expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+      // And the thank-you has no close button either — it is not a control
+      // surface, it is the end of the campaign.
+      expect(find.byIcon(Icons.close_rounded), findsNothing);
     });
   });
 

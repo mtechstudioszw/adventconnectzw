@@ -1330,6 +1330,19 @@ class _HomeScreenState extends State<HomeScreen>
                   // from it, and cost a whole row between the live card and
                   // the composer. Search is the header glyph now, full stop.
                   const SizedBox(height: AppSpace.md),
+                  // The fundraiser, directly under the live cards and above
+                  // the composer (founder, 25 Aug 2026). It used to be the
+                  // first of the shuffled discovery cards INSIDE the feed,
+                  // where reaching it meant scrolling past the devotion, the
+                  // library row and the church events. Moved, not copied —
+                  // two of the same card in one scroll would read as nagging,
+                  // which is the one thing this card must never do.
+                  //
+                  // It still self-hides (paused, funded-and-closed, iOS, not
+                  // loaded), so on a quiet day this costs the composer no
+                  // space at all and Home learns nothing about campaign
+                  // state. Its own 16px margin matches the composer's.
+                  const IphoneFundraiserCard(),
                   ComposerEntry(
                     photoUrl: _viewerPhotoUrl(),
                     name: _displayFullName(),
@@ -2356,22 +2369,10 @@ class _HomeScreenState extends State<HomeScreen>
       return seedA.compareTo(seedB);
     });
     return [
-      // The iPhone campaign, FIRST among the discovery cards and outside
-      // the shuffle above.
-      //
-      // In the feed rather than pinned above it, deliberately: it is an
-      // optional ask, so it should be something you scroll past like any
-      // other card, not the first thing between you and the app. First
-      // among them so it is reliably reachable rather than buried at
-      // whatever depth a per-viewer shuffle happened to drop it.
-      //
-      // It self-hides — not loaded, dismissed, paused, or running on iOS
-      // all render SizedBox.shrink — so nothing here needs a condition and
-      // Home never learns anything about campaign state.
-      const Padding(
-        padding: EdgeInsets.fromLTRB(0, 8, 0, 8),
-        child: IphoneFundraiserCard(),
-      ),
+      // The iPhone campaign used to be the first card in this list. The
+      // founder moved it above the composer on 25 Aug 2026 — see the
+      // IphoneFundraiserCard in the header column. Do NOT add a second
+      // copy here: one card, one place.
       for (final slot in discoverable) slot.widget,
       const Padding(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 8),

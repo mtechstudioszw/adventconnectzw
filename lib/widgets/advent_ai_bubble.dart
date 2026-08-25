@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../config/router_config.dart';
 import '../services/music_player_service.dart';
-import '../theme/app_colors.dart';
 import '../theme/app_tokens.dart';
+import 'advent_ai_mark.dart';
 import 'media/floating_dock.dart';
 
 /// The app-wide Advent AI button.
@@ -48,6 +48,12 @@ class AdventAiBubble extends StatelessWidget {
   /// Route prefixes where the bubble must never appear.
   static const List<String> blockedPrefixes = <String>[
     // ---- Privacy. Founder rule; do not add exceptions. --------------
+    //
+    // The INBOX carries its own Advent AI button above the compose
+    // button (see conversations_screen.dart) — asked for on 25 Aug 2026.
+    // That is a deliberate, stationary entry point on a list of chats,
+    // not a control floating over somebody's open conversation, and the
+    // rule this line enforces is about the second thing.
     '/messages',
 
     // ---- No authenticated member yet --------------------------------
@@ -69,10 +75,35 @@ class AdventAiBubble extends StatelessWidget {
     // ---- Deliberately full-screen or self-contained ------------------
     '/advent-ai', // already there
     '/admin',
+
+    // ---- Founder call, 25 Aug 2026 -----------------------------------
+    // Both are screens a member is working THROUGH rather than reading:
+    // Settings is a long list of controls the bubble lands on top of,
+    // and the Quiz is timed — a floating button over a question someone
+    // is racing to answer is a mis-tap waiting to happen.
+    '/settings',
+    '/quiz',
   ];
 
   static bool allowedOn(String location) =>
       !blockedPrefixes.any(location.startsWith);
+
+  /// Held up while an Advent AI screen is mounted.
+  ///
+  /// [blockedPrefixes] already refuses `/advent-ai`, and that should be
+  /// enough — but it is a check on the router's *reported* location, and
+  /// the founder reported seeing the bubble on the AI screen anyway
+  /// (25 Aug 2026). A screen that knows it is open is a fact rather than
+  /// an inference, so it gets to say so directly. A counter, not a bool,
+  /// so an AI screen pushed over an AI screen still leaves it suppressed
+  /// on the way back out.
+  static final ValueNotifier<int> suppressed = ValueNotifier<int>(0);
+
+  /// Call from `initState` / `dispose` of any screen that must not have
+  /// the bubble floating over it.
+  static void suppress() => suppressed.value++;
+  static void unsuppress() =>
+      suppressed.value = (suppressed.value - 1).clamp(0, 1 << 30);
 
   /// Clears the floating navigation island on the five tab destinations.
   /// Same figure as [GlobalMediaBars] — they share an edge and must not
@@ -89,20 +120,45 @@ class AdventAiBubble extends StatelessWidget {
 
   static const double _size = 56;
 
-  /// Parked slot, held statically so it survives route changes and the
-  /// bubble being unmounted on a blocked route. Defaults to the right
-  /// edge, above the island — clear of the composer on the feed and of
-  /// the send button everywhere else.
-  static final ValueNotifier<Alignment> anchor =
-      ValueNotifier<Alignment>(const Alignment(1, 0.55));
+  /// Clearance from the bottom on screens that have no island. The
+  /// island's own 96 is too much where there is no island, but the bare
+  /// `AppSpace.md` this used to fall back to put the bubble level with
+  /// send buttons and bottom sheets' handles. This clears them without
+  /// leaving it stranded halfway up the screen.
+  static const double _plainInset = 40;
 
+  /// Parked slot, held statically so it survives route changes and the
+  /// bubble being unmounted on a blocked route.
+  ///
+  /// **Defaults to the LOWEST slot on the right** (founder call, 25 Aug
+  /// 2026: "it's a bit high, lower it down in all screens"). At y = 1 the
+  /// bubble rests directly on whichever bottom margin the screen resolves
+  /// below — the island on the five tab destinations, [_plainInset]
+  /// everywhere else — so on Home it sits just above the tabs, which is
+  /// where it was asked for.
+  static final ValueNotifier<Alignment> anchor =
+      ValueNotifier<Alignment>(const Alignment(1, 1));
+
+  /// Six parking slots. The whole ladder moved down with the default: the
+  /// old top slot (-0.6) put the bubble level with a screen's header, and
+  /// nobody drags a button UP into a title bar on purpose.
   static final List<Alignment> _anchors = [
-    for (final y in const [-0.6, 0.0, 0.55])
+    for (final y in const [-0.1, 0.5, 1.0])
       for (final x in const [-1.0, 1.0]) Alignment(x, y),
   ];
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: suppressed,
+      builder: (context, held, _) {
+        if (held > 0) return const SizedBox.shrink();
+        return _build(context);
+      },
+    );
+  }
+
+  Widget _build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: MusicPlayerService.fullPlayerOpen,
       builder: (context, fullPlayerOpen, _) {
@@ -119,7 +175,7 @@ class AdventAiBubble extends StatelessWidget {
 
             final inset = _tabPaths.contains(path)
                 ? _islandInset
-                : AppSpace.md + MediaQuery.paddingOf(context).bottom;
+                : _plainInset + MediaQuery.paddingOf(context).bottom;
 
             return FloatingDock(
               size: const Size(_size, _size),
@@ -147,7 +203,7 @@ class _BubbleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Advent AI',
+      label: AdventAiBrand.name,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -156,26 +212,7 @@ class _BubbleButton extends StatelessWidget {
           // shell, so a nested push would be swallowed by whichever tab
           // happened to be showing.
           onTap: () => rootNavigatorKey.currentContext?.push('/advent-ai'),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.32),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.auto_awesome_rounded,
-                color: Colors.white,
-                size: 26,
-              ),
-            ),
-          ),
+          child: const AdventAiMark(),
         ),
       ),
     );

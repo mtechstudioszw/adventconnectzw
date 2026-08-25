@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/group_service.dart';
 import '../../services/messaging_service.dart';
+import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/church_group_avatar.dart';
 import '../../services/presence_service.dart';
 import '../../services/typing_signal.dart';
@@ -915,10 +916,19 @@ class _ConversationsScreenState extends State<ConversationsScreen>
         child: const MainBottomNav(currentIndex: MainBottomNav.chatIndex),
       ),
       // Hidden while multi-selecting or searching — in both modes the screen
-      // is doing something else and a "compose" button is noise.
+      // is doing something else and a "compose" button is noise. Advent AI
+      // goes with it: same reasoning, and the two are one stack.
       floatingActionButton: _chatSelect || _query.isNotEmpty
           ? null
-          : _ComposeFab(onTap: _openNewChatSheet),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const _AdventAiFab(),
+                const SizedBox(height: AppSpace.md),
+                _ComposeFab(onTap: _openNewChatSheet),
+              ],
+            ),
       body: Column(
         children: [
           FlatStatusBar(
@@ -1005,6 +1015,25 @@ class _ConversationsScreenState extends State<ConversationsScreen>
                 ),
               ),
               const Spacer(),
+              // Call log. WhatsApp puts this behind a Calls TAB; this
+              // screen has no TabBar (Requests is a boolean view swap,
+              // not a tab), so a header button is the idiom that already
+              // exists here rather than a restructure of a 1,600-line
+              // screen for one destination.
+              //
+              // It sits OUTSIDE the overflow menu on purpose: a missed
+              // call is something you go looking for, and burying it two
+              // taps deep is how people conclude the app has no call
+              // history at all.
+              IconButton(
+                icon: Icon(
+                  Icons.call_outlined,
+                  color: context.palette.text,
+                ),
+                tooltip: 'Calls',
+                splashRadius: 22,
+                onPressed: () => context.pushNamed('calls'),
+              ),
               // The person-search circle button was removed (founder, Aug).
               // The inline field directly below already searches people,
               // groups and messages, so the icon sat on top of the same job.
@@ -2580,6 +2609,57 @@ class _ActiveAvatar extends StatelessWidget {
 /// A gradient squircle rather than Material's flat circular FAB — the stock
 /// one reads as a system control dropped on the screen, and this is the one
 /// button on the inbox that should look deliberate.
+/// Advent AI, sitting directly above the compose button.
+///
+/// # Why this is here, on the one tab the floating bubble refuses
+///
+/// The app-wide bubble is blocked on `/messages` and stays blocked — an
+/// AI button floating over somebody's open conversation reads as the app
+/// reading it, and `advent_ai_bubble_test.dart` pins that rule.
+///
+/// This is a different thing in a different place. It is stationary, it
+/// is on the **inbox** — a list of who you talk to, not a conversation —
+/// and it disappears the moment you open a chat. Asked for on 25 Aug
+/// 2026, and it is where a member goes looking when they want to ask
+/// something rather than someone.
+///
+/// Deliberately quieter than [_ComposeFab]: smaller, flat card rather
+/// than gradient. Chat's own compose button is the primary action on
+/// this screen and must stay the loudest thing on it.
+class _AdventAiFab extends StatelessWidget {
+  const _AdventAiFab();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Semantics(
+      button: true,
+      label: AdventAiBrand.name,
+      child: Pressable(
+        onTap: () => context.push('/advent-ai'),
+        pressedScale: 0.92,
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(
+              color: AppColors.primaryBlue.withValues(alpha: 0.22),
+            ),
+            boxShadow: AppShadows.card(context),
+          ),
+          child: const Icon(
+            AdventAiBrand.icon,
+            color: AppColors.primaryBlue,
+            size: 22,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ComposeFab extends StatelessWidget {
   const _ComposeFab({required this.onTap});
 

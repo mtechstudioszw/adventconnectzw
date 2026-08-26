@@ -4,6 +4,8 @@ import 'dart:io' show Platform;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
+import 'call_audio.dart';
+
 /// The ringback tone the CALLER hears while the other phone rings.
 ///
 /// # Why this exists
@@ -106,8 +108,16 @@ class CallTones {
   /// It matters for two reasons the member would notice: the volume keys
   /// have to adjust the CALL stream (so turning the ringback down turns
   /// the call down, which is what they expect), and the tone has to come
-  /// out of the earpiece when the call is on the earpiece rather than
-  /// blaring from the loudspeaker with the phone against their head.
+  /// out of whichever route the call is actually on — [CallAudio] owns
+  /// that decision, so this reads it rather than hardcoding earpiece.
+  ///
+  /// Previously this hardcoded `isSpeakerphoneOn: false`. On Android that
+  /// flag is not scoped to this one player — the plugin applies it via
+  /// `AudioManager.setSpeakerphoneOn()`, which is phone-wide — so every
+  /// outgoing call was silently forcing the whole handset back to the
+  /// earpiece the instant the ringback started, overriding whatever the
+  /// member had picked (or would pick) on the speaker button. Reading
+  /// [CallAudio.isSpeakerOn] here instead of writing `false` is the fix.
   ///
   /// Focus is deliberately left alone — [CallAudio] has already taken
   /// it for the call, and asking again here would duck the call's own
@@ -115,10 +125,11 @@ class CallTones {
   static Future<void> _configureForCall(AudioPlayer player) async {
     if (kIsWeb) return;
     try {
+      final speakerOn = CallAudio.isSpeakerOn;
       await player.setAudioContext(
         AudioContext(
-          android: const AudioContextAndroid(
-            isSpeakerphoneOn: false,
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: speakerOn,
             stayAwake: true,
             contentType: AndroidContentType.speech,
             usageType: AndroidUsageType.voiceCommunication,

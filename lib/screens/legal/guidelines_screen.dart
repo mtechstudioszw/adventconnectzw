@@ -4,7 +4,7 @@ import 'widgets/legal_layout.dart';
 /// Community Guidelines, in-app.
 ///
 /// ## This file is a MIRROR, not an author
-///
+////
 /// Three genuinely different Community Guidelines existed at once — the live
 /// site had 8 sections, this screen had 9, and `docs/guidelines.html` had 10,
 /// with sections in each that appeared nowhere else. That is not three copies

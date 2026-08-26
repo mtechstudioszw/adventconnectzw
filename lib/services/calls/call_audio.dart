@@ -73,6 +73,12 @@ class CallAudio {
   static Timer? _pollTimer;
   static bool _active = false;
 
+  /// Whether the member has explicitly asked for speaker — set by
+  /// [setRoute]/[toggleSpeaker] any time they choose it, including
+  /// while the call is still ringing and [begin] has not run yet.
+  /// Cleared on [end] so it never leaks into the next call.
+  static bool _speakerRequested = false;
+
   /// The route in use. Listen to repaint the audio-output button.
   static ValueListenable<AudioRoute> get route => _route;
 
@@ -130,14 +136,20 @@ class CallAudio {
 
     await _refreshAvailable();
 
-    // Pick the route the way a phone would.
+    // Pick the route the way a phone would — but a member who already
+    // tapped "speaker" while this call was still ringing (setRoute
+    // applies immediately, it does not wait for begin) gets that choice
+    // honoured rather than silently overwritten the moment media comes
+    // up. Wired/Bluetooth still win over everything, the same as a real
+    // phone: plugging in a headset should not be undone by a stale
+    // speaker tap from ten seconds ago.
     final options = _available.value;
     AudioRoute initial;
     if (options.contains(AudioRoute.wired)) {
       initial = AudioRoute.wired;
     } else if (options.contains(AudioRoute.bluetooth)) {
       initial = AudioRoute.bluetooth;
-    } else if (preferSpeaker) {
+    } else if (preferSpeaker || _speakerRequested) {
       initial = AudioRoute.speaker;
     } else {
       initial = AudioRoute.earpiece;
@@ -226,6 +238,13 @@ class CallAudio {
           break;
       }
       _route.value = next;
+      // Remember an explicit speaker choice so [begin] can honour it
+      // even if it hasn't run yet (a tap during ringing). Any other
+      // route is an explicit "not speaker", including the automatic
+      // wired/Bluetooth fallback in [_refreshAvailable] — that is
+      // correct too, since a device that took over the route makes a
+      // stale speaker request moot.
+      _speakerRequested = next == AudioRoute.speaker;
     } catch (e) {
       debugPrint('CallAudio.setRoute($next) failed: $e');
     }
@@ -244,6 +263,7 @@ class CallAudio {
   /// member's music never comes back. Idempotent.
   static Future<void> end() async {
     _active = false;
+    _speakerRequested = false;
     _pollTimer?.cancel();
     _pollTimer = null;
     try {

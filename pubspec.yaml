@@ -15,22 +15,7 @@ dependencies:
   supabase_flutter: ^2.5.0
   go_router: ^14.2.0
   flutter_secure_storage: ^9.2.2
-  # Advent AI streams its answers as server-sent events, and
-  # `functions.invoke()` buffers the whole body before returning — which
-  # would turn a progressive answer into a ten-second wait on a blank
-  # screen. This needs the streaming client underneath it.
-  #
-  # NOT a new dependency in practice: http 1.6.0 was already in the tree
-  # transitively (supabase_flutter pulls it). Naming it here only makes
-  # an existing resolution explicit, so the graph is unchanged.
   http: ^1.6.0
-  # End-to-end encryption. The Signal protocol — X3DH + Double Ratchet for
-  # 1:1, Sender Keys for groups — which is what WhatsApp runs. Pure Dart
-  # (no platform channels), so the crypto is unit-testable in `flutter
-  # test` on a machine with no device attached, which is the only way this
-  # gets verified here. Hand-rolling any of this would be malpractice: a
-  # ratchet bug does not throw, it silently makes history unreadable
-  # FOREVER.
   libsignal_protocol_dart: ^0.8.2
   google_fonts: ^6.2.1
   image_picker: ^1.1.2
@@ -41,10 +26,6 @@ dependencies:
   firebase_analytics: ^11.3.3
   firebase_crashlytics: ^4.1.3
   flutter_local_notifications: ^17.2.3
-  # Promoted from a transitive dep of flutter_local_notifications so the
-  # Watch tab can schedule broadcast reminders (zonedSchedule needs a
-  # TZDateTime). Pinned to the version already resolved — this adds no
-  # new package to the build, it just makes the import legal.
   timezone: 0.9.4
 
   # Voice notes in chat
@@ -52,193 +33,70 @@ dependencies:
   audioplayers: ^6.1.0
 
   # In-app Library MUSIC player with BACKGROUND playback + lock-screen /
-  # notification controls (play / pause / next / previous outside the app).
-  # just_audio_background wires just_audio to a media session. Pinned exact
-  # per project policy. REQUIRES `flutter pub get` + native config (Android
-  # audio service in AndroidManifest, iOS UIBackgroundModes audio).
+  # notification controls.
   just_audio: 0.9.42
   just_audio_background: 0.0.1-beta.13
-  # Direct (not transitive) because MusicPlayerService has to read and restore
-  # `JustAudioPlatform.instance` itself: just_audio_background swaps the
-  # platform in BEFORE it finishes initialising, so a failed init leaves the
-  # app unable to play anything until the real platform is put back. Version
-  # matches what just_audio 0.9.42 already resolves to.
   just_audio_platform_interface: 4.6.0
 
-  # In-app Library — render uploaded Hymnal / EGW-book PDFs natively
-  # (Android PdfRenderer / iOS PDFKit). Lightweight. Pinned exact per
-  # project policy. REQUIRES `flutter pub get` before building.
-  #
-  # MUST stay >= 1.4.3: older releases (e.g. 1.3.2) bundled an old Pdfium
-  # whose native libs (libjniPdfium / libmodpdfium / libmodft2 / libmodpng /
-  # libc++_shared) were 4 KB-aligned, so Google Play rejected the AAB for
-  # "does not support 16 KB memory page sizes". 1.4.3+ switched to
-  # io.github.oothp:android-pdf-viewer with 16 KB-aligned .so files. Do NOT
-  # downgrade below 1.4.3.
+  # In-app Library — render uploaded Hymnal / EGW-book PDFs natively.
   flutter_pdfview: 1.4.4
   permission_handler: ^11.3.1
   path_provider: ^2.1.4
 
-  # EGW reflowable reader — reads the White Estate EPUBs, which are ZIP
-  # archives of XHTML. Both were ALREADY present as transitive dependencies
-  # at exactly these versions, so promoting them adds no download and no
-  # bundle weight; it only stops the analyzer's
-  # `depend_on_referenced_packages` from firing when we import them
-  # directly. Pinned exact per project policy.
-  #
-  # These replace the PDF path for EGW, and the reason is worth keeping:
-  # flutter_pdfview renders PAGES and exposes no text layer, so highlight /
-  # copy / share-a-quote are impossible on it. The EPUB carries clean
-  # XHTML, the canonical page numbers inline as
-  # `<span epub:type="pagebreak" title="18">`, and scripture pre-tagged as
-  # `<span class="bible-kjv" title="Colossians 2:3">`. PDFs stay as the
-  # fallback for any book without an EPUB.
+  # EGW reflowable reader.
   archive: 4.0.9
   xml: 6.6.1
 
-  # Admin-only: pick Hymnal/EGW PDFs + Music audio files from the device to
-  # upload into the Library. REQUIRES `flutter pub get` before building.
+  # Admin-only file picker.
   file_picker: ^8.1.2
-
-  # TODO: Re-add a chat screenshot-prevention package (Android FLAG_SECURE).
-  # flutter_windowmanager is abandoned (uses v1 Android embedding) and
-  # flutter_windowmanager_plus 1.0.1 forces an old AGP 7.3.0 download that
-  # fails on slow networks. Consider `screen_protector` when revisiting.
 
   # Stage 20 — UI polish
   shimmer: ^3.0.0
   image_cropper: ^8.0.2
 
-  # Stage 20 — Offline mode (last-50 feed cache + offline banner + queued sends)
+  # Stage 20 — Offline mode.
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   connectivity_plus: ^6.1.0
 
   # Auth + biometric + location
   google_sign_in: ^6.2.2
-  # Sign in with Apple — REQUIRED on iOS by App Store Guideline 4.8
-  # whenever a third-party social login (Google) is offered. The
-  # button is shown on iOS only; Android keeps Google-only. Does
-  # nothing until the Apple provider is configured in Supabase +
-  # the Apple Developer account exists — see
-  # docs/APPLE_SIGN_IN_SETUP.md.
   sign_in_with_apple: ^6.1.4
-  # SHA-256 of the Apple sign-in nonce (replay protection).
   crypto: ^3.0.3
   local_auth: ^2.3.0
   geolocator: ^13.0.2
 
-  # Maps — open the device's Maps app for view + directions. We avoid
-  # embedding an in-app map for now because the flutter_map dependency
-  # tree is currently broken on Dart 3 (proj4dart pulls wkt_parser 2.0.0
-  # which is pinned to Dart 2). Revisit once upstream republishes.
+  # Maps / external apps.
   url_launcher: ^6.3.1
 
-  # Save downloaded images (post photos) to the device's photo
-  # gallery. Lightweight cross-platform package — handles
-  # ACCESS_MEDIA_LOCATION on Android 11+ and Photos Library
-  # permission on iOS automatically.
+  # Save downloaded images to the device gallery.
   gal: ^2.3.0
 
-  # Disk-cache network images so they don't redownload on every
-  # scroll. All Image.network call sites go through the CachedImage
-  # wrapper in lib/widgets/cached_image.dart, which has a
-  # source-compatible API with Image.network so the migration was
-  # a mechanical search-and-replace.
+  # Disk-cache network images.
   cached_network_image: ^3.4.0
 
-  # Native share sheet for event / app-invite links. The links point
-  # at the event-share Supabase Edge Function which serves Open Graph
-  # tags so WhatsApp / Facebook render a rich thumbnail preview.
+  # Native share sheet.
   share_plus: ^10.1.4
 
-  # Inbound deep links — catches the io.supabase.adventconnect:// links
-  # emitted by the *-share Edge Functions so a shared event / product /
-  # job / seller opens straight to that screen in-app. The Edge Function
-  # web page falls back to the Play Store when the app isn't installed.
-  # Already present transitively (supabase_flutter uses it for the
-  # auth callback); pinned here as a direct dep so DeepLinkService can
-  # import it. See lib/services/deep_link_service.dart.
+  # Inbound deep links.
   app_links: ^7.0.0
 
-  # Native Play Store in-app review dialog. We call requestReview() from
-  # RatingPromptService after the user has used the app for a while;
-  # Google itself decides whether to actually show the sheet (it's quota-
-  # limited and silently no-ops for users who already reviewed), which is
-  # exactly the "only ask people who haven't rated" behaviour we want.
-  # Pinned exact per project policy (no caret ranges on new deps).
+  # Native Play Store in-app review dialog.
   in_app_review: 2.0.12
 
-  # Appodeal — banner + MREC + interstitial + rewarded ads to monetise the
-  # free app. Replaced google_mobile_ads on 18 Aug 2026: the AdMob ACCOUNT
-  # (not just the app) was disapproved, so fill was zero no matter what the
-  # code did. All placement/frequency logic still lives in lib/services/ads/.
-  # Deliberately NO ads in Advent Chat, auth/onboarding, or prayer screens.
-  #
-  # Two things that differ from the AdMob model:
-  #   * There are no ad-unit IDs. You initialise with the App Key and
-  #     request by TYPE; Appodeal runs the waterfall server-side. Nothing
-  #     gets pasted into ad_config.dart any more.
-  #   * There is no App-Open format, so the App-Open ad became a capped
-  #     interstitial-on-resume (see lib/services/ads/app_open_ad_manager.dart).
-  # Appodeal ships its own GDPR/CCPA consent dialog, which replaces the
-  # AdMob UMP flow — never run both. Pinned exact per project policy.
+  # Appodeal — banner + MREC + interstitial + rewarded ads.
   stack_appodeal_flutter: 4.2.0
 
-  # Premium subscription — $3/month, removes every ad surface above.
-  # Google Play only for now; the app talks to lib/services/billing/
-  # through a store-agnostic interface, so StoreKit slots in behind the
-  # same seam when iOS ships. Purchases are ALWAYS verified server-side
-  # (supabase/functions/verify-purchase) — the client never grants
-  # itself premium. Pinned exact per project policy.
+  # Premium subscription.
   in_app_purchase: 3.3.0
-
-  # Promoted from a transitive dependency of in_app_purchase to a direct
-  # one, at the version the lockfile already resolved — nothing new is
-  # pulled in, this only makes the import legal.
-  #
-  # Needed for ONE thing: the base plan id. All three premium tiers are
-  # base plans on a single Play product (see lib/services/billing/
-  # premium_tier.dart), so the platform-neutral `ProductDetails` cannot
-  # tell them apart — every plan reports the same product id. The base
-  # plan lives on `GooglePlayProductDetails`, which is declared here.
-  # Pinned exact per project policy.
   in_app_purchase_android: 0.5.0
 
-  # Watch — official YouTube IFrame player for compliant in-app playback.
-  # Video is embedded/streamed by YouTube only; we never download, proxy,
-  # or re-host. Pinned exact per project policy. REQUIRES `flutter pub get`
-  # (CI handles it on build).
+  # Watch — official YouTube IFrame player.
   youtube_player_iframe: 6.0.2
-
-  # Watch — embedded YouTube LIVE CHAT panel for live streams (official
-  # live_chat embed in a WebView). Pinned exact. Requires Android minSdk 24
-  # (bumped in android/app/build.gradle.kts) + `flutter pub get`.
   webview_flutter: 4.14.0
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.4.0
 
-  # ---- Audio calling (1:1 + small group) -----------------------------
-  #
-  # flutter_webrtc is the media engine. The audio itself is peer-to-peer
-  # (or TURN-relayed when P2P fails) and NEVER passes through Supabase —
-  # signalling only carries SDP/ICE, which is a few KB per call.
-  #
-  # Mesh, deliberately, and capped at CallConfig.maxParticipants (5 by
-  # default). At 5 people each phone sends 4 Opus uplinks of ~24 kbps —
-  # about 96 kbps up, which a Harare mobile connection carries fine. The
-  # engine sits behind CallTransport (lib/services/calls/call_transport.dart)
-  # so an SFU can replace it without touching CallService or any screen;
-  # see docs/CALLING_SETUP.md for the arithmetic and the switchover point.
-  #
-  # Pinned exact per project policy. REQUIRES `flutter pub get`, and on
-  # Android minSdk 24 (already set) + the RECORD_AUDIO / BLUETOOTH_CONNECT
-  # / FOREGROUND_SERVICE_MICROPHONE permissions in AndroidManifest.xml.
-  flutter_webrtc: 1.6.0
-
-# Force a newer record_linux that matches the record_platform_interface API.
-# The transitive record_linux 0.7.2 is missing startStream() and has a stale
-# hasPermission signature, which breaks compilation even for Android builds.
 dependency_overrides:
   record_linux: ^1.3.0
 
@@ -246,14 +104,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  # Generates Android + iOS launcher icons from a single source PNG.
-  # Run `dart run flutter_launcher_icons` after dropping a 1024x1024
-  # icon at assets/icon/app_icon.png to regenerate.
   flutter_launcher_icons: ^0.14.4
-  # Test-only: lets egw_book_download_test swap in a temp directory for the
-  # app cache, so the resume-on-retry download can be exercised for real
-  # against a local server. Transitive via path_provider; named here because
-  # a test that imports it is a first-class dependency on it.
   path_provider_platform_interface: ^2.1.2
   plugin_platform_interface: ^2.1.8
 
@@ -261,45 +112,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/
-    # Offline KJV Bible (public domain) for the Library's Bible tab. Also
-    # feeds the Quiz Arena's procedural question generator.
     - assets/bible/
-    # Bundled Hymnal (Kristu MuNzwiyo + SDA Hymnal, ~995 hymns / 781 KB).
-    # The Hymnal tab reads THIS, never the network, so it works on a fresh
-    # install in airplane mode. Regenerate after adding hymns in Supabase:
-    #   dart run scripts/export_hymns.dart
     - assets/hymns/
-    # Quiz Arena sound effects. Synthesized mono 16-bit WAVs (~160 KB the
-    # lot) — deliberately not mp3 so playback starts with no decode delay,
-    # which matters for a tap-response tick. Muteable in the arena.
     - assets/sounds/quiz/
-    # The outgoing ringback tone (440 Hz + 480 Hz, 2s on / 4s off — the
-    # standard call-progress cadence). Synthesised the same way as the
-    # quiz effects, mono 16-bit WAV, ~188 KB. See
-    # lib/services/calls/call_tones.dart for why a VoIP caller needs one
-    # at all: the network generates this on a real phone call, so
-    # without it the caller waits in silence.
-    - assets/sounds/call/
-    # Bundled Google Fonts (Poppins + story fonts). google_fonts loads these
-    # local files instead of fetching at runtime, so text never paints blank
-    # while a font downloads (critical on slow networks) and the app works
-    # fully offline. Keep filenames as <Family>-<Variant>.ttf — google_fonts
-    # matches by that suffix.
     - assets/fonts/
 
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
   remove_alpha_ios: true
-  # Adventist Super App brand mark. Three files, generated from the founder's
-  # artwork by scripts/build_brand_assets.ps1 — see assets/icon/README.md.
-  #   app_icon.png            full-bleed square, mark on the brand gradient.
-  #                           Full-bleed on purpose: iOS and Play apply their
-  #                           own corner mask, so artwork carrying its own
-  #                           rounded corners ships with black corners.
-  #   app_icon_foreground.png the mark alone, ~60% of the canvas, so Android's
-  #                           round/squircle masks can't clip it.
-  #   logo.png                the mark alone at ~86% — the in-app asset.
   image_path: "assets/icon/app_icon.png"
   background_color_ios: "#022171"
   adaptive_icon_background: "#022171"

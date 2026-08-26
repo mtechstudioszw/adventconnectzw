@@ -1,170 +1,36 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Voice notes: chat audio recording (record package). -->
+
+    <!-- Voice notes: chat audio recording. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-    <!-- Required for playing voice notes streamed from Supabase storage. -->
+
+    <!-- Network access and connectivity detection. -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Network state for connectivity_plus offline detection. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
-    <!-- Advertising ID. This is what makes ads fill in a RELEASE build.
-
-         Since Android 13 (API 33) the advertising ID can only be read if
-         this permission is DECLARED. Without it AdvertisingIdClient does not
-         fail loudly — it hands back the zeroed
-         00000000-0000-0000-0000-000000000000. targetSdk is 36, so that is
-         every user on a current device.
-
-         BidMachine, our only live demand source (see the adapter list in
-         app/build.gradle.kts), is a programmatic bidder. A bid request
-         carrying a zeroed advertising ID is untargetable, draws no bid, and
-         so nothing fills and no ad ever renders.
-
-         It used to merge in for free from play-services-ads, which the AdMob
-         adapter dragged in. Removing AdMob on 18 Aug 2026 took this
-         permission with it: neither the Appodeal core SDK nor the
-         stack_appodeal_flutter plugin declares it — their manifests ask only
-         for INTERNET and ACCESS_NETWORK_STATE.
-
-         This is not the whole story of the production fill failure — the
-         dashboard for 16-23 Aug 26 shows 6.29K requests at 2.7% fill and
-         $0.0000 eCPM, i.e. the waterfall itself is nearly empty (see
-         app/build.gradle.kts: BidMachine is the only mediated network that
-         has been unlocked). But it is the part that suppresses whatever
-         bidding demand does exist, and it costs nothing to fix. Debug builds
-         hide all of it: setTesting(true) serves test creatives outside the
-         waterfall at 100% fill, and they never need an advertising ID.
-
-         Keep the Play Data Safety answer for "advertising ID" as YES. -->
+    <!-- Advertising ID for Appodeal/BidMachine demand. -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
-    <!-- Geolocator: nearest churches sort + distance chips.
 
-         COARSE ONLY, deliberately. LocationService asks for
-         `LocationAccuracy.medium` (roughly 100-500m) and nothing in the app
-         asks for better — the feature is "sort churches by how near they
-         are", which a city block of precision answers perfectly well.
-
-         ACCESS_FINE_LOCATION was declared anyway. It bought nothing, and it
-         cost: precise location is one of the permissions Play reviews
-         hardest, it carries a heavier Data Safety declaration, and Android
-         shows the member a Precise/Approximate choice they should not have
-         to think about for a church finder.
-
-         The tools:node="remove" is load-bearing. The geolocator plugin
-         merges ACCESS_FINE_LOCATION in from its own manifest, so simply
-         deleting our line would leave the permission in the built APK and
-         change nothing. -->
+    <!-- Nearest-church sorting: approximate location only. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission
         android:name="android.permission.ACCESS_FINE_LOCATION"
         tools:node="remove"/>
-    <!-- local_auth: biometric quick unlock in Settings. -->
+
+    <!-- Biometric quick unlock. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
-    <!-- Android 13+ runtime notification prompt — without this declared,
-         FCM pushes silently never arrive on devices ≥ API 33. -->
+
+    <!-- Android 13+ notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- just_audio_background: foreground media-playback service so Library
-         music keeps playing when the app is backgrounded and shows a media
-         notification with play/pause/next controls. -->
+
+    <!-- Background Library music playback + media notification controls. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
-    <!-- ===== Audio calling (flutter_webrtc + flutter_callkit_incoming) =====
-
-         RECORD_AUDIO is already declared at the top of this file for voice
-         notes and is the same permission a call needs, so it is not repeated.
-         Everything in this block exists only because of calling.
-
-         Several of these ALSO merge in from the flutter_callkit_incoming
-         manifest. Declaring them here anyway is deliberate: this file is the
-         record of what the app itself uses, and a plugin version bump that
-         quietly drops one must not take the call path down with it. -->
-
-    <!-- Android 12 (API 31) put Bluetooth device access behind a runtime
-         permission. Without it CallAudio's
-         Helper.setSpeakerphoneOnButPreferBluetooth() cannot see the connected
-         SCO headset and falls back to the earpiece WITHOUT throwing — so a
-         member on a car kit hears the call out of the handset in their pocket
-         and is heard by nobody. A silent fallback is the whole problem here:
-         nothing in the UI says the route was refused. -->
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
-    <!-- Lets the app put the audio system into MODE_IN_COMMUNICATION and flip
-         the speakerphone. Without it the call rides the MEDIA stream instead:
-         the volume keys adjust the wrong stream, the platform's echo
-         cancellation and gain control are never applied (so both sides hear
-         themselves back), and the speaker toggle on the call screen does
-         nothing at all. -->
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-    <!-- Android 14 (API 34) requires the TYPED foreground-service permission
-         matching every foregroundServiceType a service declares. The call
-         service below declares `microphone`, so without this permission
-         startForeground() throws SecurityException the moment the app is
-         backgrounded. The call itself survives; the microphone does not. The
-         member sees nothing and is simply never heard again. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
-    <!-- The other half of that typed pair — the same service declares
-         `phoneCall`. MANAGE_OWN_CALLS is what allows the plugin's
-         CallkitConnectionService to register the call with the Telecom stack,
-         which is what makes Android treat this as a CALL rather than an app
-         playing audio: other media ducks, the in-call status bar appears, and
-         the platform can end the call when a real cellular call arrives. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
-    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
-    <!-- The lock-screen incoming-call UI. Without it a full-screen intent
-         silently degrades to a heads-up notification, so a call arriving on a
-         locked phone is a banner that slides away after a few seconds. The
-         isFullScreen / isShowFullLockedScreen AndroidParams set in
-         lib/services/calls/callkit_bridge.dart depend on this being declared.
-         Note Android 14+ also grants this at install time only to apps whose
-         use case is calling — which ours is. -->
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
-    <!-- REMOVED deliberately, the same way and for the same kind of reason as
-         ACCESS_FINE_LOCATION above.
-
-         flutter_callkit_incoming declares FOREGROUND_SERVICE_CAMERA in its own
-         manifest because the plugin also supports VIDEO calls. This app does
-         not: callkit_bridge.dart passes `type: 0` and `supportsVideo: false`,
-         and the plugin's CallkitNotificationService.kt only ORs
-         FOREGROUND_SERVICE_TYPE_CAMERA into the service type mask inside an
-         `if (isVideo && ...)` branch that can never be taken here.
-
-         Left alone it is a Play submission blocker rather than a harmless
-         extra: a camera foreground-service type obliges us to file a
-         foreground-service declaration justifying camera use we never make,
-         and the review rejects a build whose declaration and manifest
-         disagree. Deleting a line we never wrote is not an option — the
-         permission arrives by manifest merge, so tools:node="remove" is the
-         only thing that keeps it out of the built APK. -->
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_CAMERA"
-        tools:node="remove"/>
-
-    <!-- image_picker (camera path) + profile/cover photo capture flows.
-         Without this declared, Permission.camera.request() returns
-         "granted" immediately on Android without ever showing the
-         native dialog — which looks like a broken button to the user. -->
+    <!-- Camera for profile/cover photo capture flows. -->
     <uses-permission android:name="android.permission.CAMERA"/>
-    <!-- NOTE: no READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE. Photo picking
-         goes through the Android Photo Picker (image_picker 1.x on API
-         33+) / ACTION_GET_CONTENT, which need no permission, and saving
-         received images uses gal's add-only access. This keeps the app
-         compliant with Google Play's Photo & Video Permissions policy
-         (no broad-access declaration required). -->
-    <!-- tools:replace="android:allowBackup" is what makes this build at all.
-         Appodeal's core SDK (com.appodeal.ads.sdk:core) declares
-         android:allowBackup="true" in its own manifest, and the merger
-         refuses to pick between two explicit values — so every build since
-         the AdMob → Appodeal migration failed at :app:processDebugMainManifest
-         with "Attribute application@allowBackup value=(false) ... is also
-         present at [com.appodeal.ads.sdk:core]".
 
-         The value stays FALSE. Android's auto-backup would copy app data off
-         the device to the member's Google Drive; this app holds auth state
-         and cached personal content (chats, prayer requests), and the Play
-         data-safety declaration says it is not backed up. Flipping it to
-         true would clear the merger and quietly change what leaves the
-         phone — the SDK's default is not a reason to change our posture. -->
     <application
         android:label="Adventist Super App"
         android:name="${applicationName}"
@@ -172,6 +38,7 @@
         android:allowBackup="false"
         android:fullBackupContent="false"
         tools:replace="android:allowBackup">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -181,56 +48,33 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
-            <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
-            <!-- Deep links are handled by app_links (DeepLinkService), NOT
-                 by Flutter's built-in Router integration. Both were active,
-                 so every shared link was delivered TWICE: DeepLinkService
-                 pushed the right screen while the engine simultaneously
-                 handed go_router the raw
-                 `io.supabase.adventconnect://seller/<id>` as a location.
-                 go_router cannot match that — the type is in the HOST and
-                 the path is just the id — so it fell through to
-                 errorBuilder, and the "Route not found" page won the race.
-                 Every shared product and seller link opened to an error.
 
-                 Turning the engine's copy off leaves exactly one handler.
-                 Supabase's own login-callback is unaffected: supabase_flutter
-                 listens through app_links too, not through the Router. -->
             <meta-data
-              android:name="flutter_deeplinking_enabled"
-              android:value="false"
-              />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
+
+            <!-- Flutter's built-in deep-link handling is disabled.
+                 DeepLinkService/app_links handles these URLs. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false"/>
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Deep link for Supabase password-recovery emails. The
-                 reset link sent by Supabase uses redirectTo set in
-                 AuthService.sendPasswordReset; the auth state listener
-                 in main.dart routes to /reset-password on the
-                 passwordRecovery event. -->
+
+            <!-- Supabase password-recovery callback. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="io.supabase.adventconnect"
-                      android:host="login-callback"/>
+                <data
+                    android:scheme="io.supabase.adventconnect"
+                    android:host="login-callback"/>
             </intent-filter>
-            <!-- Shared-content deep links. The *-share Supabase Edge
-                 Functions render a web page that bounces to one of these
-                 io.supabase.adventconnect:// URLs (and falls back to the
-                 Play Store if nothing handles them). DeepLinkService
-                 catches the incoming Uri and routes to the matching
-                 details screen. Custom scheme => autoVerify not needed;
-                 one host per shareable type keeps them distinct from the
-                 login-callback above. -->
+
+            <!-- Shared-content deep links. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -241,46 +85,24 @@
                 <data android:scheme="io.supabase.adventconnect" android:host="seller"/>
             </intent-filter>
         </activity>
-        <!-- image_cropper (UCrop) — registers the native crop activity
-             so picking + cropping a profile / cover photo doesn't crash
-             with ActivityNotFoundException. Theme must be AppCompat-
-             based since UCrop is built on it. -->
+
+        <!-- image_cropper (UCrop). -->
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
-        <!-- FCM default channel — used if a push arrives before the
-             Flutter side has called createNotificationChannel(). Must
-             match the channel id created in PushService.initialize. -->
+
+        <!-- FCM default notification channel. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="advent_connect_zw_default" />
-        <!-- Monochrome notification icon for the status bar. Falls back
-             to the launcher icon if missing. -->
+            android:value="advent_connect_zw_default"/>
+
+        <!-- FCM notification icon. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher" />
-        <!-- Ads are served by Appodeal (18 Aug 2026), which needs NO
-             manifest entry: the App Key is passed to Appodeal.initialize()
-             from lib/services/ads/ad_config.dart and there are no ad-unit
-             IDs to declare anywhere.
+            android:resource="@mipmap/ic_launcher"/>
 
-             The AdMob `com.google.android.gms.ads.APPLICATION_ID` meta-data
-             that used to sit here is gone with the AdMob adapter. It is not
-             optional trivia: play-services-ads CRASHES the app on launch if
-             it is on the classpath without this tag. So if an AdMob adapter
-             is ever added back to app/build.gradle.kts, this must come back
-             in the same change:
-
-             <meta-data
-                 android:name="com.google.android.gms.ads.APPLICATION_ID"
-                 android:value="ca-app-pub-2916679989954369~1736721670" />
-
-             The AdMob account is disapproved and under appeal, so that
-             should not happen soon. -->
-        <!-- just_audio_background: the media-session service + media-button
-             receiver that power background playback and the lock-screen /
-             notification controls for the Library Music player. -->
+        <!-- Background Library music service. -->
         <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
@@ -289,6 +111,8 @@
                 <action android:name="android.media.browse.MediaBrowserService"/>
             </intent-filter>
         </service>
+
+        <!-- Media-button receiver for background music controls. -->
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true">
@@ -296,77 +120,39 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON"/>
             </intent-filter>
         </receiver>
-        <!-- flutter_callkit_incoming's call foreground service, re-declared
-             here for exactly ONE reason: to narrow its foregroundServiceType.
 
-             The plugin's manifest declares
-             android:foregroundServiceType="phoneCall|microphone|camera". The
-             camera type buys this app nothing (audio only — see the
-             FOREGROUND_SERVICE_CAMERA removal at the top of this file), and
-             the two halves must be changed TOGETHER. Removing the permission
-             while leaving the type declared is the worst of the three states:
-             Android 14+ refuses to start a foreground service whose declared
-             type has no matching permission, so every incoming call would die
-             at startForeground() and the phone would never ring.
-
-             tools:replace is required because the manifest merger will not
-             choose between two explicit values for the same attribute — the
-             same mechanism as tools:replace="android:allowBackup" on
-             <application> above, and it fails the build rather than picking.
-
-             Every other attribute is copied VERBATIM from the plugin manifest
-             and none of it is decoration. android:permission ties the service
-             to the plugin's own ${applicationId}.PERMISSION_CALL signature
-             check, so a third-party app cannot start our call service;
-             android:stopWithTask="false" is what keeps a live call running
-             after the member swipes the app off the recents list. Because this
-             declaration WINS the merge, any attribute dropped here is dropped
-             from the built APK — so if the plugin is upgraded, diff its
-             manifest against this block before assuming it still matches. -->
-        <service
-            android:name="com.hiennv.flutter_callkit_incoming.CallkitNotificationService"
-            android:enabled="true"
-            android:exported="true"
-            android:stopWithTask="false"
-            android:foregroundServiceType="phoneCall|microphone"
-            android:permission="${applicationId}.PERMISSION_CALL"
-            tools:replace="android:foregroundServiceType"/>
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <!-- Flutter plugin registration metadata. -->
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2" />
+            android:value="2"/>
     </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
 
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- Android 11+ package visibility: without these, url_launcher's
-             canLaunchUrl() returns false for these schemes even when a
-             handler app exists. Needed for Maps directions (https),
-             phone dialer (tel), email (mailto), and SMS. -->
+
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
+
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="http"/>
         </intent>
+
         <intent>
             <action android:name="android.intent.action.DIAL"/>
             <data android:scheme="tel"/>
         </intent>
+
         <intent>
             <action android:name="android.intent.action.SENDTO"/>
             <data android:scheme="mailto"/>
         </intent>
+
         <intent>
             <action android:name="android.intent.action.SENDTO"/>
             <data android:scheme="smsto"/>

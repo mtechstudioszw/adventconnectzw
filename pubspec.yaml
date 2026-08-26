@@ -2,7 +2,7 @@ name: advent_connect_zw
 description: "Adventist Super App — connecting SDA people around the globe"
 publish_to: 'none'
 
-version: 1.5.1+1037
+version: 2.0.0+1038
 
 environment:
   sdk: ^3.11.3
@@ -235,19 +235,6 @@ dependencies:
   # Android minSdk 24 (already set) + the RECORD_AUDIO / BLUETOOTH_CONNECT
   # / FOREGROUND_SERVICE_MICROPHONE permissions in AndroidManifest.xml.
   flutter_webrtc: 1.6.0
-
-  # The incoming-call UI that a normal notification cannot be.
-  #
-  # On iOS this is CallKit — the system call screen, driven by a PushKit
-  # VoIP push, which is the ONLY mechanism Apple allows to wake a killed
-  # app for a call. On Android it is a full-screen-intent notification
-  # that shows over the lock screen with Accept / Decline.
-  #
-  # It also vends the PushKit device token (getDevicePushTokenVoIP), which
-  # is what supabase/functions/call-push signs an APNs JWT for. FCM v1
-  # cannot send a VoIP push at all — Apple requires the <bundle>.voip
-  # topic and a VoIP-capable key — so that function talks to APNs directly.
-  flutter_callkit_incoming: 3.1.5
 
 # Force a newer record_linux that matches the record_platform_interface API.
 # The transitive record_linux 0.7.2 is missing startStream() and has a stale

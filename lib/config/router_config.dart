@@ -4,7 +4,6 @@ import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/admin_quiz_screen.dart';
-import '../screens/admin/admin_calls_screen.dart';
 import '../screens/admin/church_members_screen.dart';
 import '../screens/admin/user_insights_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
@@ -55,8 +54,6 @@ import '../services/church_service.dart';
 import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
-import '../screens/calls/call_history_screen.dart';
-import '../screens/calls/call_screen.dart';
 import '../screens/donate/donate_screen.dart';
 import '../screens/donate/iphone_fundraiser_screen.dart';
 import '../models/advent_news_model.dart';
@@ -962,43 +959,7 @@ final GoRouter appRouter = GoRouter(
           name: 'admin_quiz',
           builder: (context, state) => const AdminQuizScreen(),
         ),
-        GoRoute(
-          // Calling metrics — volume, outcomes and relayed minutes, which
-          // is the only number that maps to an infrastructure bill
-          // (patch_264). Counts and durations only: no call audio exists
-          // anywhere in the system to expose.
-          path: 'calls',
-          name: 'admin_calls',
-          builder: (context, state) => const AdminCallsScreen(),
-        ),
       ],
-    ),
-    // ---- Audio calling -------------------------------------------------
-    //
-    // `/call` takes NO parameters, and that is deliberate. The live call
-    // is a singleton in CallService (a phone has one microphone), so the
-    // screen reads it rather than being handed one. Passing a call id
-    // through the route would create a second source of truth and let a
-    // stale link open a screen for a call that has already ended.
-    //
-    // Nothing navigates here directly either: main.dart listens to
-    // CallService.onShowCallScreen and pushes this route, so an incoming
-    // call from a push, a Realtime event or a lock-screen accept all
-    // arrive the same way.
-    GoRoute(
-      path: '/call',
-      name: 'call',
-      // No transition. A call screen that fades in feels like a delay on
-      // the one screen where a delay reads as a dropped call.
-      pageBuilder: (context, state) => NoTransitionPage<void>(
-        key: state.pageKey,
-        child: const CallScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/calls',
-      name: 'calls',
-      builder: (context, state) => const CallHistoryScreen(),
     ),
     GoRoute(
       path: '/report-submitted',

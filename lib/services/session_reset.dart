@@ -6,8 +6,6 @@ import 'auth_service.dart';
 import 'biometric_service.dart';
 import 'cache_service.dart';
 import 'cart_service.dart';
-import 'calls/call_service.dart';
-import 'calls/missed_call_badge.dart';
 import 'messaging_service.dart';
 import 'music_player_service.dart';
 import 'premium_service.dart';
@@ -66,18 +64,6 @@ class SessionReset {
   /// catches sessions that end without going through those — a revoked
   /// token, or a refresh that fails for good.
   static Future<void> onSignOut() async {
-    // Calls go FIRST, and this one is not cosmetic like the rest of this
-    // file. Everything else here is stale state; a live call is a live
-    // microphone. If the member signs out mid-call, this is what leaves
-    // the call, releases the mic, tears down the peer connections, gives
-    // the audio session back, dismisses the system call UI, and drops
-    // this handset's push tokens so it stops ringing for an account that
-    // is no longer on it.
-    await _step('calls', CallService.clearOnSignOut);
-    // The missed-call dot is about a PERSON, not a handset — leaving it
-    // lit would show the next member to sign in on this phone somebody
-    // else's missed calls.
-    await _step('missedCalls', MissedCallBadge.clear);
     await _step('messaging', MessagingService.clearOnSignOut);
     await _step('cart', CartService.clearOnSignOut);
     await _step('accountMode', AccountModeService.resetToPersonal);

@@ -36,7 +36,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/calls/call_action.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/chat_wallpaper.dart';
 import '../../widgets/motion/brand_spinner.dart';
@@ -2887,14 +2886,6 @@ class _ChatScreenState extends State<ChatScreen>
                     ),
                   ),
                 ),
-                // Voice call. Shown for both 1:1 and group threads, but
-                // NOT for the church announcements channel or any other
-                // broadcast-shaped conversation — see _canCallHere.
-                if (_canCallHere(isGroup))
-                  _CircleIconButton(
-                    icon: Icons.call_outlined,
-                    onTap: () => unawaited(_startCallFromChat(isGroup, otherUserId)),
-                  ),
                 if (isGroup)
                   _CircleIconButton(
                     icon: Icons.info_outline,
@@ -2907,56 +2898,6 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         ),
       ),
-    );
-  }
-
-  /// Whether a call button belongs in THIS thread's header.
-  ///
-  /// A church announcements channel is a broadcast, not a conversation:
-  /// everyone in the church is implicitly a member, so a call placed
-  /// there would ring hundreds of phones at once — and the participant
-  /// cap would silently pick five of them, which is worse than not
-  /// offering it. `call_start` refuses a non-group conversation anyway,
-  /// so this is presentation, not enforcement.
-  bool _canCallHere(bool isGroup) {
-    final convo = _conversation;
-    if (convo == null) return false;
-    // Church groups are implicit-membership: everyone with that church on
-    // their profile is in them, so there is no bounded set of people to
-    // ring. Self-chat has nobody to call, and a soft-deleted group is
-    // read-only.
-    if (convo.isChurchGroup || convo.isSelfChat || convo.isDeletedGroup) {
-      return false;
-    }
-    return isGroup || convo.otherUserId.isNotEmpty;
-  }
-
-  Future<void> _startCallFromChat(bool isGroup, String? otherUserId) async {
-    final convo = _conversation;
-    if (convo == null) return;
-    if (isGroup) {
-      await CallActions.callGroup(
-        context,
-        conversationId: widget.conversationId,
-        groupName: convo.otherUserName.trim().isEmpty
-            ? 'Group call'
-            : convo.otherUserName.trim(),
-        photoUrl: convo.otherUserPhotoUrl,
-      );
-      return;
-    }
-    if (otherUserId == null || otherUserId.isEmpty) return;
-    await CallActions.callUser(
-      context,
-      userId: otherUserId,
-      displayName: convo.otherUserName.trim().isEmpty
-          ? 'Member'
-          : convo.otherUserName.trim(),
-      photoUrl: convo.otherUserPhotoUrl,
-      // Carried so the call's history row can deep-link back into this
-      // thread. It grants nothing — authorisation is re-derived
-      // server-side from the two user ids.
-      conversationId: widget.conversationId,
     );
   }
 

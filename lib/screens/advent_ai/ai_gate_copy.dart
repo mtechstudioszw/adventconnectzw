@@ -90,6 +90,7 @@ class AiGateCopy {
     AiGateReason reason, {
     DateTime? resetsOn,
     String? priceLabel,
+    String? basePlanId,
     int? used,
   }) {
     final price = priceLabel ?? AiTiers.premium.priceLabel;
@@ -113,7 +114,8 @@ class AiGateCopy {
                 'so anyone can try it. Premium is what keeps it running.',
           ].join('\n\n'),
           benefits: AiTiers.premium.benefits,
-          primaryLabel: 'Go Premium — $price a ${BillingConfig.periodLabel}',
+          primaryLabel:
+    'Go Premium — $price a ${BillingConfig.periodLabelFor(basePlanId)}',
           secondaryLabel: 'Maybe later',
           reassurance: _nothingLost,
         );
@@ -145,7 +147,7 @@ class AiGateCopy {
               "and today's are gone.\n\n"
               'Try again tomorrow, or go Premium to start straight away.',
           benefits: AiTiers.premium.benefits,
-          primaryLabel: 'Go Premium — $price a ${BillingConfig.periodLabel}',
+          primaryLabel: 'Go Premium — $price a ${BillingConfig.periodLabelFor(basePlanId)}',
           secondaryLabel: 'Try tomorrow',
           reassurance: _nothingLost,
         );

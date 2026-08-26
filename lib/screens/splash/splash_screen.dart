@@ -303,8 +303,46 @@ class _SplashScreenState extends State<SplashScreen>
       }
     }
 
+    // hasAccessToken is deliberately NOT in the Future.wait below with the
+    // other three reads. It decides whether a genuinely signed-in member
+    // gets bounced to the login screen, so it gets its own timeout —
+    // [_tokenReadTimeout], independent of whatever is left of the 1800ms
+    // brand window. The other three (ban / biometric / onboarding) are
+    // fine to lose to a tight budget and fail soft to their safe defaults;
+    // losing THIS one is not "fail soft", it's an incorrect logout.
+    //
+    // BiometricService.isEnabled is 4 secure-storage reads on its own and
+    // was previously bundled with this read in the same Future.wait — on a
+    // cold Android Keystore (1-3s per read, see _navigate's comment) it
+    // could starve hasAccessToken's share of a budget that only had
+    // ~1800ms total to begin with, silently signing out a returning member
+    // who was in fact still logged in. Matches the reported symptom:
+    // intermittent, some phones only, worse right after a cold app
+    // restart — consistent with a keystore-speed race rather than a real
+    // logout. Not yet confirmed via device logs — see debugPrint below.
+    final tokenReadStart = DateTime.now();
+    final tokenFuture =
+        soft(() => SecureLocalStorage().hasAccessToken(), false)
+            .timeout(
+              _tokenReadTimeout,
+              onTimeout: () {
+                debugPrint(
+                  '[auth] hasAccessToken TIMED OUT after '
+                  '${DateTime.now().difference(tokenReadStart).inMilliseconds}ms '
+                  '— would have caused a false logout under the old budget',
+                );
+                return false;
+              },
+            )
+            .then((value) {
+              debugPrint(
+                '[auth] hasAccessToken resolved to $value after '
+                '${DateTime.now().difference(tokenReadStart).inMilliseconds}ms',
+              );
+              return value;
+            });
+
     final results = await Future.wait([
-      soft(() => SecureLocalStorage().hasAccessToken(), false),
       soft(() => AuthService.isBannedLocally(), false),
       soft(() => BiometricService.isEnabled(), false),
       soft(
@@ -318,12 +356,18 @@ class _SplashScreenState extends State<SplashScreen>
     ]);
 
     return _RoutingFacts(
-      hasPersistedToken: results[0],
-      bannedLocally: results[1],
-      biometricEnabled: results[2],
-      hasSeenOnboarding: results[3],
+      hasPersistedToken: await tokenFuture,
+      bannedLocally: results[0],
+      biometricEnabled: results[1],
+      hasSeenOnboarding: results[2],
     );
   }
+
+  /// How long the persisted-token read gets, independent of the splash
+  /// animation. Generous on purpose: a false "not signed in" costs a member
+  /// their session, while a slow splash costs at most a couple of extra
+  /// seconds on a first cold start. Correctness wins that trade every time.
+  static const Duration _tokenReadTimeout = Duration(seconds: 5);
 
   Future<void> _navigate() async {
     // Run the brand animation and the deferred Supabase init in
@@ -478,9 +522,16 @@ class _SplashScreenState extends State<SplashScreen>
     // window so a wedged keystore cannot hold the splash open — the
     // fallbacks are all "false", which routes to login, and a member who is
     // actually signed in lands back on home the moment they retry.
+    // NOTE: no longer timeboxed to _remainingBrandBudget() here. That cap
+    // used to apply to the whole bundle, including the persisted-token
+    // read — which silently reintroduced the false-logout race that
+    // _prefetchRouting's own [_tokenReadTimeout] exists to prevent. The
+    // token read now owns its correctness-critical timeout internally;
+    // this await just waits for the (already-in-flight) result, plus a
+    // small safety ceiling so a truly wedged keystore can't hang forever.
     final facts = await routingFuture
         .timeout(
-          _remainingBrandBudget(),
+          _tokenReadTimeout + const Duration(milliseconds: 500),
           onTimeout: () => const _RoutingFacts.unknown(),
         )
         .catchError((_) => const _RoutingFacts.unknown());

@@ -10,8 +10,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_bootstrap.dart';
 import 'e2ee/e2ee_envelope.dart';
 import 'e2ee/e2ee_service.dart';
-import 'calls/call_service.dart';
-import 'calls/callkit_bridge.dart';
 import 'messaging_service.dart';
 import 'notification_service.dart';
 
@@ -20,21 +18,6 @@ import 'notification_service.dart';
 /// because Flutter spawns it in a separate isolate.
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
-  // CALLS COME FIRST, before the `message.notification != null` bail-out
-  // below and before anything touches Supabase.
-  //
-  // An incoming call is the one push with a deadline: the caller is
-  // listening to a ringing tone right now, and every millisecond spent
-  // initialising a Supabase client in this isolate is a millisecond the
-  // phone is not ringing. handleCallPushInBackground raises the system
-  // call UI and nothing else — no session, no network, no decryption —
-  // which is why it can run before any of the setup below.
-  //
-  // It returns true when the message was a call, and this handler stops
-  // there: a call push carries no chat payload, so everything after this
-  // point would be wasted work on it.
-  if (await handleCallPushInBackground(message)) return;
-
   // When notify-fcm sends a chat push DATA-ONLY (no `notification` block),
   // the system won't render it — so we render it here in the background
   // isolate WITH the inline Reply action + the sender's photo. Pushes that
@@ -282,10 +265,29 @@ class PushService {
   );
 
   static bool _initialized = false;
+  static bool _bgHandlerRegistered = false;
   static final StreamController<RemoteMessage> _tapController =
       StreamController<RemoteMessage>.broadcast();
   static StreamSubscription<AuthState>? _authSub;
   static StreamSubscription<String>? _tokenRefreshSub;
+
+  /// Registers ONLY the FCM background-message handler — nothing else.
+  ///
+  /// This is the one call that actually has to happen before runApp():
+  /// it is what lets Android hand an incoming push to
+  /// [_firebaseBackgroundHandler] when the app is fully killed. Every
+  /// other line in [initialize] — local notifications, permission
+  /// prompts, saving the token — is legitimately fine to defer, and
+  /// stays deferred; this one line is not, which is why it is split out
+  /// rather than left buried inside [initialize] behind a Supabase wait.
+  ///
+  /// Requires `Firebase.initializeApp()` to have already completed.
+  /// Idempotent.
+  static void registerBackgroundHandler() {
+    if (_bgHandlerRegistered) return;
+    _bgHandlerRegistered = true;
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+  }
 
   /// Stream of taps on a push notification (foreground or
   /// system-tray-from-background). Listen from your router to deep-link
@@ -299,7 +301,10 @@ class PushService {
     _initialized = true;
 
     // 1. Background isolate handler — must register before runApp().
-    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+    //    Also exposed as [registerBackgroundHandler] so main() can call
+    //    JUST this line, synchronously, before Firebase/Supabase/anything
+    //    else — see that method's doc for why.
+    registerBackgroundHandler();
 
     // 2. Local notifications plugin (used to render foreground pushes
     //    as a heads-up banner and to host the Android channel).
@@ -407,24 +412,6 @@ class PushService {
     // the recipient eventually opens the chat. Best-effort: failure
     // here just leaves the tick single until the chat screen runs
     // its own mark-delivered pass.
-    // A call arriving while the app is OPEN still comes by push, not by
-    // Realtime: the callee has not joined the call's channel yet (the
-    // room token is only handed out once they are a live participant),
-    // so there is nothing subscribed to tell them. Route it to the call
-    // stack and stop — a call is never a chat banner.
-    if ('${message.data['type'] ?? ''}' == 'call') {
-      final callId = '${message.data['call_id'] ?? ''}';
-      final action = '${message.data['action'] ?? 'ring'}';
-      if (callId.isNotEmpty) {
-        if (action == 'cancel') {
-          unawaited(CallKitBridge.reportEnded(callId));
-        } else {
-          unawaited(CallService.presentIncoming(callId));
-        }
-      }
-      return;
-    }
-
     final referenceType = '${message.data['reference_type'] ?? ''}';
     final referenceId = '${message.data['reference_id'] ?? ''}';
     if (referenceType == 'conversation' && referenceId.isNotEmpty) {

@@ -13,7 +13,6 @@ import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
 import 'services/biometric_service.dart';
 import 'services/cache_service.dart';
-import 'services/calls/call_service.dart';
 import 'services/ads/ads_service.dart';
 import 'services/ads/resume_ad_manager.dart';
 import 'services/connectivity_service.dart';
@@ -41,6 +40,31 @@ import 'widgets/voice_mini_bar.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase ready + the FCM background handler registered — BEFORE
+  // runApp(), unconditionally. This must not wait on Supabase, network,
+  // or anything else.
+  //
+  // Previously this ran inside `_initBackgroundServices()`, unawaited,
+  // AFTER runApp(), and only after `AppBootstrap.awaitSupabaseReady()`
+  // finished — a network-dependent wait. On a slow connection, or if the
+  // member backgrounds/kills the app before that chain gets this far,
+  // the background handler never registers for that run — and an
+  // incoming call push arriving while the app is fully killed then has
+  // nothing listening for it. That is not random: it is "did some
+  // previous run ever get this far", which is exactly the kind of
+  // inconsistent, hard-to-pin-down ring failure this was causing.
+  //
+  // Wrapped in try/catch so a missing/broken google-services.json still
+  // lets the rest of the app start — Supabase-only features keep
+  // working, the member just gets no push at all for that session (as
+  // before), instead of a crash.
+  try {
+    await Firebase.initializeApp();
+    PushService.registerBackgroundHandler();
+  } catch (e, st) {
+    debugPrint('Firebase/PushService early init failed: $e\n$st');
+  }
 
   // Tap-to-splash latency is dominated by what runs BEFORE runApp.
   // Supabase.initialize() reads + decrypts the persisted session via
@@ -256,12 +280,13 @@ Future<void> _initBackgroundServices() async {
     unawaited(E2eeService.start(warmUser.id));
   }
 
-  // Firebase + Crashlytics + Push. Wrapped in a try so a missing /
-  // broken google-services.json doesn't kill the whole app — Supabase
-  // still works and the user just doesn't get push.
+  // Crashlytics + the rest of Push. Firebase itself and the FCM
+  // background handler are already up (moved before runApp, above) — do
+  // NOT call Firebase.initializeApp() again here, it throws
+  // [core/duplicate-app] on a second call. Still wrapped in try/catch:
+  // Crashlytics setup or PushService's local-notifications/permission
+  // work failing must not take the rest of this block down with it.
   try {
-    await Firebase.initializeApp();
-
     // Transient network / auth-retry failures (no connection, DNS blip,
     // Supabase token-refresh retry) are NOT real crashes — record them as
     // non-fatal so they don't dominate Crashlytics' "trending crashes" or
@@ -299,38 +324,6 @@ Future<void> _initBackgroundServices() async {
     AnalyticsService.markReady();
     await PushService.initialize();
 
-    // Calling. AFTER PushService.initialize() on purpose: CallService
-    // registers this handset's FCM token for call pushes, and on Android
-    // that token comes from the same FirebaseMessaging instance
-    // PushService has just set up. Registering first would hand the
-    // server a null token and the phone would never ring.
-    //
-    // Not awaited — a member must never wait on call setup to reach
-    // their inbox. It also reconciles with the server on the way in, so
-    // a call that survived a force-quit is rejoined rather than left as
-    // a ghost.
-    unawaited(CallService.initialize());
-
-    // The only place a call screen is opened. Every route in — an FCM
-    // push, a Realtime invite, a lock-screen accept, a recovered call
-    // after a crash — ends here, so there is exactly one navigation path
-    // and no way to end up with two call screens stacked.
-    CallService.onShowCallScreen.listen((signal) {
-      try {
-        if (signal.startsWith('callback:')) {
-          // "Call back" on a missed-call notification. Deliberately does
-          // NOT dial: an accidental tap must not place a call. It opens
-          // the call log, where calling back is one deliberate tap.
-          appRouter.pushNamed('calls');
-          return;
-        }
-        final location = appRouter.routerDelegate.currentConfiguration.uri.path;
-        if (location == '/call') return; // already there
-        appRouter.pushNamed('call');
-      } catch (e, st) {
-        debugPrint('Opening the call screen failed: $e\n$st');
-      }
-    });
     PushService.onMessageTap.listen((msg) {
       final type = (msg.data['reference_type'] ?? '').toString();
       final id = (msg.data['reference_id'] ?? '').toString();
@@ -584,11 +577,6 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       unawaited(MessagingService.markAllIncomingDelivered());
       // Rejoin presence (online again + heartbeat resumes).
       if (AuthService.isSignedIn) unawaited(PresenceService.start());
-      // Ask the server what call we are actually in. The app may have
-      // been killed mid-call, or a call may have been swept as stale
-      // while the phone was in a pocket — either way whatever is in
-      // memory is a guess and the server's answer is not.
-      if (AuthService.isSignedIn) unawaited(CallService.recoverActiveCall());
       // Re-read premium on every return. This is what makes a
       // cancellation, refund or expiry that happened server-side while
       // the app was backgrounded take effect without a relaunch — and it

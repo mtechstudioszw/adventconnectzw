@@ -258,7 +258,13 @@ class _OfferView extends StatelessWidget {
               const SizedBox(height: 12),
               StaggeredReveal(index: 3, child: const _AdCostCard()),
               const SizedBox(height: 12),
-              StaggeredReveal(index: 4, child: _PriceAnchorCard(price: price)),
+              StaggeredReveal(
+                index: 4,
+                child: _PriceAnchorCard(
+                  price: price,
+                  basePlanId: BillingService.offer?.basePlanId,
+                ),
+              ),
               if (flow == PremiumFlowState.pendingPayment) ...[
                 const SizedBox(height: 12),
                 StaggeredReveal(
@@ -496,9 +502,14 @@ class _ComparisonCard extends StatelessWidget {
 
 /// Price anchoring, done with arithmetic rather than adjectives.
 class _PriceAnchorCard extends StatelessWidget {
-  const _PriceAnchorCard({required this.price});
+  const _PriceAnchorCard({required this.price, this.basePlanId});
 
   final String price;
+
+  /// The selected offer's base plan id, so the period shown here always
+  /// matches what's actually selected in [PlanPicker] rather than
+  /// assuming "month" for every plan.
+  final String? basePlanId;
 
   @override
   Widget build(BuildContext context) {
@@ -515,7 +526,7 @@ class _PriceAnchorCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$price a ${BillingConfig.periodLabel}',
+                  '$price a ${BillingConfig.periodLabelFor(basePlanId)}',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,

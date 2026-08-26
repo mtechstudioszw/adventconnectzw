@@ -33,19 +33,22 @@ class BillingConfig {
   //  which is why tiers are safe to add where a consumable top-up was
   //  not.
   //
-  //  FOUNDER ACTION — Play Console, before any of this can sell:
+  //  CONFIRMED LIVE (24 Aug 2026): all three base plans exist in Play
+  //  Console under `premium_monthly`.
   //
   //    Subscription `premium_monthly`
-  //      • base plan `monthly`     — EXISTS AND IS LIVE. US$3 / month.
-  //                                  Do not touch it. Changing the price
-  //                                  or the id of a live base plan is
-  //                                  either impossible or a migration.
-  //      • base plan `pro-monthly` — CREATE. US$5 / month, auto-renewing.
-  //      • base plan `annual`      — CREATE. US$30 / year, auto-renewing.
+  //      • base plan `monthly`         — US$3 / month.
+  //      • base plan `pro-monthly`     — US$5 / month, auto-renewing.
+  //      • base plan `annualpermanent` — US$30 / year, auto-renewing.
   //
-  //  Until they exist, `loadOffers` returns one plan, the picker shows a
-  //  single quiet row, and everyone who buys gets Plus. Nothing breaks
-  //  and nothing lies.
+  //  NOTE: the yearly base plan's id is `annualpermanent`, not `annual`.
+  //  It was created under that name in Play Console and — like the
+  //  product id — a base plan id can never be changed after creation.
+  //  If this constant and the console ever disagree, every offer on the
+  //  yearly plan silently falls through to the "unknown base plan"
+  //  fallback: labelled monthly, priced right, but graded as Plus
+  //  instead of Pro. That happened once already (25 Aug 2026); this
+  //  comment exists so it doesn't happen again by the same route.
   // -------------------------------------------------------------------
 
   /// Base plan ids as created in Play Console. The store reports these
@@ -53,7 +56,7 @@ class BillingConfig {
   /// from the price.
   static const String monthlyBasePlanId = 'monthly';
   static const String proMonthlyBasePlanId = 'pro-monthly';
-  static const String annualBasePlanId = 'annual';
+  static const String annualBasePlanId = 'annualpermanent';
 
   /// Which tier each base plan grants.
   ///
@@ -105,9 +108,16 @@ class BillingConfig {
   static const String fallbackProPriceLabel = 'US\$5.00';
   static const String fallbackAnnualPriceLabel = 'US\$30.00';
 
-  /// Human label for the billing period. Kept next to the price so the
-  /// two can never drift apart in the UI.
-  static const String periodLabel = 'month';
+  /// Human label for the billing period of a SPECIFIC offer.
+  ///
+  /// Not a constant — it used to be `static const periodLabel = 'month'`,
+  /// which was correct back when there was one base plan and wrong the
+  /// moment a yearly one existed: it labelled the US$30 plan "a month"
+  /// regardless of which offer was actually selected. This reads the
+  /// offer's own base plan id, the same source of truth [PlanPicker]
+  /// uses, so the two can never disagree about what a member is buying.
+  static String periodLabelFor(String? basePlanId) =>
+      basePlanId == annualBasePlanId ? 'year' : 'month';
 
   /// What the annual plan saves, expressed in MONTHS rather than a
   /// percentage.

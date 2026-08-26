@@ -1,6 +1,33 @@
 # Builds a Play-Store-ready signed Android App Bundle (AAB).
 # Manual trigger only — there's no reason to burn CI minutes
 # producing a signed Play upload artifact on every push.
+#
+# Setup (one-time):
+#   1. Generate an upload keystore locally if you haven't already:
+#        keytool -genkey -v -keystore upload.jks \
+#                -keyalg RSA -keysize 2048 -validity 10000 \
+#                -alias upload
+#      Pick passwords you'll remember. Keep upload.jks SAFE — losing
+#      it locks you out of all future Play Store updates for this
+#      application id (Google offers Play App Signing as a backup
+#      but you still need this for the upload signature).
+#
+#   2. Base64-encode the keystore so it can live in a GitHub Secret:
+#        base64 -w0 upload.jks > upload.jks.b64        (Linux)
+#        certutil -encode upload.jks upload.jks.b64    (Windows)
+#
+#   3. Repo Settings → Secrets and variables → Actions → New secret:
+#        ANDROID_KEYSTORE_BASE64  — paste of upload.jks.b64 contents
+#        ANDROID_KEYSTORE_PASSWORD — keystore password
+#        ANDROID_KEY_ALIAS         — usually "upload"
+#        ANDROID_KEY_PASSWORD      — key password (often same as store)
+#
+#   4. Trigger: Actions → "Build AAB (Play Store)" → Run workflow.
+#
+# Download:
+#   Releases page → "Latest Play Store build" → app-release.aab.
+#   Upload that AAB to Play Console → Production / Internal / Closed
+#   testing track.
 
 name: Build AAB (Play Store)
 
@@ -10,6 +37,10 @@ on:
 permissions:
   contents: write
 
+# A second dispatch supersedes the first. Without this, re-running because the
+# code moved leaves the stale build occupying a runner for its full hour and
+# racing the new one to publish the same release tag — the loser overwrites
+# the winner, and which is which depends on who finishes last.
 concurrency:
   group: build-aab
   cancel-in-progress: true
@@ -18,12 +49,31 @@ jobs:
   build:
     name: Release AAB (Android)
     runs-on: ubuntu-latest
+    # 60, not 30. A RELEASE AAB is a much heavier job than the debug APK
+    # this number was copied from: R8/ProGuard minification, every ABI, and
+    # on a cold runner Gradle downloads the pinned NDK (27.0.12077973, well
+    # over a gigabyte) before it can start. The first build after a cache
+    # miss ran past 30 minutes and was killed with nothing to show for it.
+    #
+    # A timeout is a backstop against a hung job, not a budget. This
+    # workflow is manual-dispatch only, so a generous ceiling costs nothing
+    # in Actions minutes — it just stops a slow-but-healthy build being
+    # thrown away at the finish line.
+    #
+    # 60 was not enough either: a run on 9 Aug 2026 reached the ceiling and
+    # was killed, for the second time. The cause was the missing Gradle cache
+    # below, not a hang — but the ceiling goes to 90 as well, because being
+    # killed at the finish line is the most expensive possible outcome and a
+    # higher backstop costs nothing when the job is healthy.
     timeout-minutes: 90
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Same disk-space reclaim as build-apk.yml — see the comment there.
+      # A release AAB build is heavier than the debug APK, so if the APK
+      # workflow ran out of room this one certainly would too.
       - name: Free up disk space
         run: |
           echo "=== before ==="
@@ -51,9 +101,28 @@ jobs:
           channel: stable
           cache: true
 
+      # THE reason this job kept hitting its ceiling.
+      #
+      # Flutter was cached; Gradle never was. So every single run re-downloaded
+      # the pinned NDK (27.0.12077973, over a gigabyte), every Gradle
+      # distribution and every Maven dependency before a line was compiled —
+      # on a runner with no memory of the last build. That is most of an hour
+      # spent fetching bytes that never change.
+      #
+      # Keyed on the Gradle files plus pubspec.lock, because those are what
+      # actually determine the dependency set; `restore-keys` means a changed
+      # pubspec still starts from the previous cache instead of from nothing.
       - name: Cache Gradle and Android SDK downloads
         uses: actions/cache@v4
         with:
+          # NOTE: `path:` is a block scalar — a "#" line inside it is a PATH,
+          # not a comment. Explanations stay above the step.
+          #
+          # The NDK path is hard-coded rather than read from the SDK-root
+          # variable: that variable is exported into the job's shells but is
+          # not reliably resolvable inside an action's `with:` block, and an
+          # unresolved value would silently cache the useless path "/ndk".
+          # This is the documented SDK location on GitHub's ubuntu images.
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
@@ -73,43 +142,114 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
-      # ============================================================
-      # DIAGNOSTIC CHECK
-      # This does NOT modify the project.
-      # It checks whether the old calling system or its permissions
-      # still exist anywhere in the GitHub checkout / dependency tree.
-      # ============================================================
-      - name: Diagnose removed calling system
-        shell: bash
+      - name: Restore upload keystore from secret
+        # Decode the base64 secret back into a real .jks file and
+        # write the matching key.properties Gradle reads at build
+        # time. Path inside the runner is /home/runner/work/... —
+        # keystorePropertiesFile in android/app/build.gradle.kts
+        # uses rootProject.file("key.properties") which resolves
+        # under android/, hence the explicit path below.
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          set +e
-
-          echo ""
-          echo "============================================================"
-          echo "1. FLUTTER DEPENDENCY TREE"
-          echo "============================================================"
-
-          flutter pub deps | grep -Ei "webrtc|callkit"
-
-          if [ $? -eq 0 ]; then
-            echo ""
-            echo "::warning::A WebRTC or CallKit package was found in the Flutter dependency tree."
-          else
-            echo "No webrtc/callkit packages found in Flutter dependency tree."
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is empty."
+            echo "::error::See .github/workflows/build-aab.yml header for setup."
+            exit 1
           fi
+          echo "$KEYSTORE_B64" | base64 -d > android/app/upload.jks
+          cat <<EOF > android/key.properties
+          storeFile=upload.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          admobAndroidAppId=ca-app-pub-0000000000000000~0000000000
+          EOF
+          # Sanity-check the keystore decoded (won't print the file).
+          if [ ! -s android/app/upload.jks ]; then
+            echo "::error::Decoded upload.jks is empty."
+            exit 1
+          fi
+          echo "Keystore restored (size: $(wc -c < android/app/upload.jks) bytes)"
 
-          echo ""
-          echo "============================================================"
-          echo "2. SOURCE + NATIVE FILE SEARCH"
-          echo "============================================================"
+      # A hosted runner on a private repo is 2 cores / 7G. Gradle otherwise
+      # sizes its worker pool from the core count and runs forks in parallel,
+      # each with its own JVM, on a machine that has no headroom — the same
+      # squeeze that made runs #43 and #45 die to the OOM killer. One worker
+      # is slower per step and finishes, which is the trade worth making.
+      - name: Constrain Gradle to the runner's actual size
+        run: |
+          {
+            echo "org.gradle.workers.max=1"
+            echo "org.gradle.parallel=false"
+            echo "org.gradle.daemon=false"
+          } >> android/gradle.properties
+          echo "--- effective memory settings ---"
+          grep -E "jvmargs|workers.max|parallel|daemon" android/gradle.properties
+          echo "--- runner memory ---"
+          free -h
 
-          grep -RniE \
-            "FOREGROUND_SERVICE_PHONE_CALL|FOREGROUND_SERVICE_MICROPHONE|CallkitNotificationService|flutter_callkit_incoming|flutter_webrtc" \
-            android lib pubspec.yaml pubspec.lock \
-            --exclude-dir=.gradle \
-            --exclude-dir=build \
-            2>/dev/null
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
 
-          if [ $? -eq 0 ]; then
-            echo ""
-            echo "::warning
+      - name: Test
+        run: flutter test
+
+      - name: Build release AAB
+        # `flutter build appbundle --release` produces
+        # build/app/outputs/bundle/release/app-release.aab — the
+        # AAB format Play Store requires for all new uploads since
+        # Aug 2021.
+        #
+        # --build-number overrides pubspec's versionCode with a value that
+        # ALWAYS increases (1000 + the CI run number), so Play Store can
+        # never reject an upload for "versionCode already used" — no more
+        # manual `+N` bumps in pubspec. --dart-define stamps the commit SHA
+        # into the binary (Settings → App version) for freshness checks.
+        run: |
+          BUILD_NUMBER=$((1000 + ${{ github.run_number }}))
+          echo "Using versionCode (build number): $BUILD_NUMBER"
+          flutter build appbundle --release \
+            --build-number="$BUILD_NUMBER" \
+            --dart-define=GIT_SHA=${{ github.sha }}
+
+      - name: Rename AAB for release
+        run: |
+          mkdir -p release
+          cp build/app/outputs/bundle/release/app-release.aab \
+             release/advent-connect-release.aab
+
+      - name: Publish to "Latest Play Store build" release
+        # Separate moving tag from the debug build so the two never
+        # collide. Marked prerelease until the user explicitly
+        # promotes it via the Releases page UI.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-aab
+          name: Latest Play Store build (build #${{ github.run_number }})
+          body: |
+            Signed release AAB built from commit ${{ github.sha }}.
+            versionCode = 1000 + run number (auto-incrementing).
+
+            **Upload to Play Console:**
+            Download `advent-connect-release.aab` below, then go to
+            Play Console → your app → Production (or Internal /
+            Closed testing) → Create new release → upload this AAB.
+
+            The versionCode auto-increments every CI run, so Play Console
+            will never reject this for a duplicate versionCode — no manual
+            pubspec bump needed.
+          files: release/advent-connect-release.aab
+          prerelease: true
+          make_latest: false
+
+      - name: Wipe restored secrets
+        # Belt-and-braces: ensure the decoded keystore + plaintext
+        # key.properties never linger in the runner cache.
+        if: always()
+        run: |
+          rm -f android/app/upload.jks
+          rm -f android/key.properties

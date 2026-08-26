@@ -377,6 +377,24 @@ class CallService {
         return;
       }
       _set(value.copyWith(session: updated));
+
+      // Tell the system call UI this was answered NOW, not once WebRTC
+      // media happens to connect. flutter_callkit_incoming decides
+      // whether to fire its own "Missed call" system notification based
+      // on whether IT was ever told the call was answered — and
+      // setCallConnected() is the only thing that tells it. Members can
+      // (and do) accept from the in-app screen rather than the native
+      // CallKit sheet, so if this waited for ICE to connect there was a
+      // real window where a normal hang-up right after answering would
+      // race ahead of that signal and the callee's phone would show a
+      // native "Missed call" notification for a call that connected and
+      // ran fine. This is deliberately in addition to, not instead of,
+      // the later reportConnected() call in _reconcileMediaState — that
+      // one drives the system call TIMER, which should still start when
+      // audio actually comes up.
+      final callId = updated.id;
+      unawaited(CallKitBridge.reportConnected(callId));
+
       await _goLive(updated, startMuted: false);
       _armConnectTimeout();
     } on CallFailure catch (e) {

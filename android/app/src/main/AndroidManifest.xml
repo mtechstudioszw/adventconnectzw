@@ -1,35 +1,43 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-
-    <!-- Voice notes: chat audio recording. -->
+    <!-- Voice notes: chat audio recording (record package). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-
-    <!-- Network access and connectivity detection. -->
+    <!-- Required for playing voice notes streamed from Supabase storage. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Network state for connectivity_plus offline detection. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
-    <!-- Advertising ID for Appodeal/BidMachine demand. -->
+    <!-- Advertising ID. -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
 
-    <!-- Nearest-church sorting: approximate location only. -->
+    <!-- Location (Geolocator) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission
         android:name="android.permission.ACCESS_FINE_LOCATION"
         tools:node="remove"/>
 
-    <!-- Biometric quick unlock. -->
+    <!-- Biometrics & Notifications -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
-
-    <!-- Android 13+ notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
-    <!-- Background Library music playback + media notification controls. -->
+    <!-- Background Media Playback (just_audio_background) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
-    <!-- Camera for profile/cover photo capture flows. -->
+    <!-- Camera (image_picker / photos) -->
     <uses-permission android:name="android.permission.CAMERA"/>
+
+    <!-- REMOVED: Calling system & associated foreground service permissions -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"
+        tools:node="remove"/>
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"
+        tools:node="remove"/>
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_CAMERA"
+        tools:node="remove"/>
 
     <application
         android:label="Adventist Super App"
@@ -38,7 +46,7 @@
         android:allowBackup="false"
         android:fullBackupContent="false"
         tools:replace="android:allowBackup">
-
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -48,33 +56,26 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-
+            
             <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme"/>
-
-            <!-- Flutter's built-in deep-link handling is disabled.
-                 DeepLinkService/app_links handles these URLs. -->
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
             <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false"/>
-
+              android:name="flutter_deeplinking_enabled"
+              android:value="false"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-
-            <!-- Supabase password-recovery callback. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data
-                    android:scheme="io.supabase.adventconnect"
-                    android:host="login-callback"/>
+                <data android:scheme="io.supabase.adventconnect"
+                      android:host="login-callback"/>
             </intent-filter>
-
-            <!-- Shared-content deep links. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -86,23 +87,19 @@
             </intent-filter>
         </activity>
 
-        <!-- image_cropper (UCrop). -->
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
 
-        <!-- FCM default notification channel. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="advent_connect_zw_default"/>
-
-        <!-- FCM notification icon. -->
+            android:value="advent_connect_zw_default" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher"/>
+            android:resource="@mipmap/ic_launcher" />
 
-        <!-- Background Library music service. -->
+        <!-- Media Playback Service (just_audio_background) -->
         <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
@@ -111,8 +108,6 @@
                 <action android:name="android.media.browse.MediaBrowserService"/>
             </intent-filter>
         </service>
-
-        <!-- Media-button receiver for background music controls. -->
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true">
@@ -121,10 +116,9 @@
             </intent-filter>
         </receiver>
 
-        <!-- Flutter plugin registration metadata. -->
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2"/>
+            android:value="2" />
     </application>
 
     <queries>
@@ -132,27 +126,22 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
-
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="http"/>
         </intent>
-
         <intent>
             <action android:name="android.intent.action.DIAL"/>
             <data android:scheme="tel"/>
         </intent>
-
         <intent>
             <action android:name="android.intent.action.SENDTO"/>
             <data android:scheme="mailto"/>
         </intent>
-
         <intent>
             <action android:name="android.intent.action.SENDTO"/>
             <data android:scheme="smsto"/>

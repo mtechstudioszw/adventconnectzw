@@ -37,7 +37,7 @@ class AdConfig {
   /// true, ship an internal-track build, and `adb logcat -s Appodeal` shows
   /// the waterfall per request. Flip it back before a public release: the
   /// logs are noisy and name the demand sources.
-  static const bool forceVerboseAdLogs = false;
+  static const bool forceVerboseAdLogs = true;
 
   static bool get verboseLogs => forceVerboseAdLogs || kDebugMode;
 

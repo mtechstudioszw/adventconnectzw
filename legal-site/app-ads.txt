@@ -26,7 +26,7 @@ bidmachine.io,1,DIRECT
 bidmachine.io,466,DIRECT
 #AdMob
 #AdMob publisher id below — already substituted, see header.
-google.com, pub-2916679989954369, DIRECT, f08c47fec0942fa0
+google.com, pub-3321548010656623, DIRECT, f08c47fec0942fa0
 #Meta-Audience
 #Add other networks if applicable
 #Resellers

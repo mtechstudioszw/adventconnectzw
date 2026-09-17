@@ -3,17 +3,13 @@
 #
 #  ## This project has never been built for iOS
 #
-#  There is no Apple Developer account yet and the whole app is
-#  developed on Windows, so no Podfile existed until calling needed one.
-#  This is the canonical Flutter template plus the two things this app
-#  specifically requires. Treat the first `pod install` on a Mac as the
-#  real test of it — see docs/CALLING_SETUP.md.
+#  The project is developed on Windows and has not yet completed a macOS
+#  CocoaPods build. Treat the first `pod install` on a Mac as the real test.
 #
 #  ## Why 13.0
 #
-#  flutter_webrtc 1.6.0 declares `s.ios.deployment_target = '13.0'`, so
-#  anything lower fails to resolve. Everything else in the tree is
-#  happy at or below that (flutter_callkit_incoming asks for 10.0).
+#  iOS 13 is the existing project floor. Verify the resolved plugin
+#  deployment targets during the first macOS CocoaPods build.
 # =====================================================================
 
 platform :ios, '13.0'

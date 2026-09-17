@@ -1,5 +1,9 @@
 # Audio calling — setup, cost and operations
 
+> **Retired.** Audio calling has been removed from the application. This
+> document is retained only as historical operational context; do not follow
+> it, deploy its functions, or enable its configuration for the iOS release.
+
 Voice calls (1:1 and small group) for the Adventist Super App.
 
 **Read this before turning calling on in production.** The code is

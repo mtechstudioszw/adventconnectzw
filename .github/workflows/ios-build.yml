@@ -1,0 +1,234 @@
+name: iOS build and release validation
+
+on:
+  push:
+    branches: [ios-preparation]
+  pull_request:
+    branches: [ios-preparation]
+  workflow_dispatch:
+    inputs:
+      signed_build:
+        description: Build an App Store-signed IPA (requires Apple signing secrets)
+        required: true
+        type: boolean
+        default: false
+      upload_testflight:
+        description: Upload the signed IPA to TestFlight (requires App Store Connect API secrets)
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.41.9"
+
+jobs:
+  unsigned-validation:
+    name: Unsigned iOS validation
+    # macos-26 is a currently supported GitHub-hosted Arm64 runner. It carries
+    # Xcode 26, which Apple requires for current App Store Connect uploads.
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Verify macOS, Xcode, and CocoaPods
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          pod --version
+          flutter --version
+          dart --version
+
+      - name: Fetch Dart packages
+        run: flutter pub get
+
+      - name: Install iOS pods
+        run: |
+          mkdir -p ci-logs
+          cd ios
+          pod install --repo-update 2>&1 | tee ../ci-logs/pod-install.log
+
+      - name: Analyze and test Dart code
+        run: |
+          flutter analyze --no-fatal-infos
+          flutter test
+
+      - name: Build an unsigned release app
+        # This validates Pods, generated Flutter configuration, and Xcode
+        # compilation without requiring a certificate or provisioning profile.
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-number="${{ github.run_number }}" \
+            --dart-define=GIT_SHA="${{ github.sha }}"
+
+      - name: Upload unsigned build and CocoaPods log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-${{ github.run_number }}
+          if-no-files-found: warn
+          path: |
+            build/ios/iphoneos/Runner.app
+            build/ios/iphoneos/Runner.app.dSYM
+            ci-logs/pod-install.log
+
+  signed-archive:
+    name: Signed IPA and optional TestFlight upload
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed_build }}
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+      APPLE_PROVISIONING_PROFILE_NAME: ${{ secrets.APPLE_PROVISIONING_PROFILE_NAME }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Verify required signing secrets are present
+        shell: bash
+        run: |
+          required=(
+            APPLE_CERTIFICATE_P12_BASE64
+            APPLE_CERTIFICATE_PASSWORD
+            APPLE_PROVISIONING_PROFILE_BASE64
+            APPLE_PROVISIONING_PROFILE_NAME
+            APPLE_TEAM_ID
+          )
+          missing=0
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required GitHub Actions secret $name is missing or empty."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::See docs/IOS_RELEASE_CHECKLIST.md: GitHub Actions secrets."
+            exit 1
+          fi
+
+      - name: Fetch Dart packages and install pods
+        run: |
+          flutter pub get
+          cd ios && pod install --repo-update
+
+      - name: Import distribution certificate and provisioning profile
+        shell: bash
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/ios-signing.keychain-db"
+          PROFILE_PATH="$RUNNER_TEMP/adventconnect.mobileprovision"
+          CERT_PATH="$RUNNER_TEMP/distribution.p12"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          echo "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$(uuidgen).mobileprovision"
+          rm -f "$CERT_PATH" "$PROFILE_PATH"
+
+      - name: Build signed IPA
+        shell: bash
+        run: |
+          # Release.xcconfig is already the Runner release configuration.
+          # Append ephemeral CI-only signing values; they are never committed.
+          cp ios/Flutter/Release.xcconfig "$RUNNER_TEMP/Release.xcconfig.original"
+          trap 'cp "$RUNNER_TEMP/Release.xcconfig.original" ios/Flutter/Release.xcconfig; rm -f ios/ExportOptions.plist' EXIT
+          cat >> ios/Flutter/Release.xcconfig <<EOF
+          DEVELOPMENT_TEAM = $APPLE_TEAM_ID
+          CODE_SIGN_STYLE = Manual
+          CODE_SIGN_IDENTITY = Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER = $APPLE_PROVISIONING_PROFILE_NAME
+          EOF
+          cat > ios/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>provisioningProfiles</key><dict>
+              <key>io.supabase.adventconnectzw.adventConnectZw</key>
+              <string>$APPLE_PROVISIONING_PROFILE_NAME</string>
+            </dict>
+          </dict></plist>
+          EOF
+          flutter build ipa --release \
+            --build-number="${{ github.run_number }}" \
+            --dart-define=GIT_SHA="${{ github.sha }}" \
+            --export-options-plist=ios/ExportOptions.plist
+
+      - name: Upload signed IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-signed-${{ github.run_number }}
+          if-no-files-found: error
+          path: |
+            build/ios/ipa/*.ipa
+            build/ios/archive/Runner.xcarchive
+
+      - name: Verify App Store Connect upload secrets
+        if: ${{ inputs.upload_testflight }}
+        shell: bash
+        run: |
+          required=(APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_API_ISSUER_ID APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64)
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "::error::TestFlight upload requested, but $name is missing or empty."
+              exit 1
+            fi
+          done
+
+      - name: Upload signed IPA to TestFlight
+        if: ${{ inputs.upload_testflight }}
+        shell: bash
+        run: |
+          API_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$API_DIR"
+          echo "$APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 --decode > "$API_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          xcrun iTMSTransporter -m upload \
+            -assetFile build/ios/ipa/*.ipa \
+            -apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
+            -apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+
+      - name: Remove signing material from runner
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/distribution.p12" "$RUNNER_TEMP/adventconnect.mobileprovision"
+          rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision

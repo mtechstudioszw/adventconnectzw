@@ -2,21 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- APNs environment. This ONE key governs both push paths: the ordinary
-	     FCM notifications AND the PushKit VoIP pushes that ring an incoming
-	     call (AppDelegate.swift → pushRegistry, sent by the call-push Edge
-	     Function to the <bundle-id>.voip topic).
-
-	     It must be flipped to "production" for any build that leaves Xcode.
-	     A TestFlight or App Store build carrying "development" registers
-	     against the APNs SANDBOX, so call-push — which talks to
-	     api.push.apple.com when APNS_ENV=production — sends to a token the
-	     production gateway does not know. Apple returns BadDeviceToken; the
-	     function logs it and moves on. Nothing crashes, nothing warns, and
-	     the only symptom is that incoming calls never arrive on any device
-	     that installed the app from TestFlight. The two sides must agree:
-	     "development" here pairs with APNS_ENV=sandbox, "production" with
-	     APNS_ENV=production. -->
+	<!-- APNs environment for Firebase Cloud Messaging. The provisioning
+	     profile controls this value: development for a development-signed
+	     device build and production for TestFlight/App Store distribution. -->
 	<key>aps-environment</key>
 	<string>development</string>
 	<!-- Sign in with Apple — required by App Store Guideline 4.8 when

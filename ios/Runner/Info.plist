@@ -2,99 +2,107 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- `audio` — just_audio_background: keeps Library music playing in the
-	     background with lock-screen / Control-Centre playback controls. It is
-	     ALSO what keeps a WebRTC call's audio alive once the member leaves the
-	     app, so it serves both features and must stay.
-
-	     `voip` — PushKit. Without it PKPushRegistry never hands the app a VoIP
-	     token, so `pushRegistry(_:didUpdate:for:)` in AppDelegate.swift is
-	     never called, `user_call_devices.voip_token` stays empty, and
-	     call-push has nothing to send to. Incoming calls then only ever
-	     arrive while the app happens to be foregrounded on Realtime — i.e.
-	     iPhones never ring. -->
+	<!-- Background audio is used by just_audio_background for Library music,
+	     including lock-screen and Control Centre playback controls. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
-		<string>voip</string>
 	</array>
+
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<!-- Covers BOTH microphone callers: voice calls (lib/services/calls) and
-	     chat voice notes. iOS shows this one string for whichever feature asks
-	     first, and a member prompted at the start of their first call must not
-	     be told the app wants the mic for voice notes — an unexplained prompt
-	     is a denied prompt, and a denied mic makes every call silent. -->
+
+	<!-- Microphone access is used for recording voice notes in chats. -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Adventist Super App needs microphone access so you can talk on voice calls and record voice notes in your chats.</string>
+	<string>Adventist Super App needs microphone access so you can record voice notes in your chats.</string>
+
 	<key>NSCameraUsageDescription</key>
 	<string>Adventist Super App uses your camera to upload profile and product photos.</string>
+
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Adventist Super App accesses your photos to upload profile and product images.</string>
-	<!-- `gal` package: saving a post image back to the user's photo
-	     library needs Add-Only access. Without this iOS silently
-	     rejects the save with a permission error. -->
+
+	<!-- gal package: saving a post image back to the user's photo
+	     library needs Add-Only access. -->
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Adventist Super App saves post images you tap "Save to gallery" on into your Photos library.</string>
+
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Adventist Super App uses your location to find SDA churches near you.</string>
+
 	<key>NSFaceIDUsageDescription</key>
 	<string>Adventist Super App uses Face ID to securely unlock your account.</string>
+
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+
 	<key>CFBundleDisplayName</key>
 	<string>Adventist Super App</string>
+
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+
 	<key>CFBundleName</key>
 	<string>advent_connect_zw</string>
+
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
+
 	<key>CFBundleSignature</key>
 	<string>????</string>
+
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
 	<!-- Custom URL scheme for Supabase password-recovery deep links.
-	     Mirrors the AndroidManifest intent-filter; AuthService routes
-	     the link to /reset-password on the passwordRecovery event.
 	     The second entry is the REVERSED_CLIENT_ID from
-	     GoogleService-Info.plist — google_sign_in uses it as the
-	     return URL after the Google OAuth dialog. -->
+	     GoogleService-Info.plist for Google OAuth. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
+
 			<key>CFBundleURLName</key>
 			<string>io.supabase.adventconnect</string>
+
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>io.supabase.adventconnect</string>
 			</array>
 		</dict>
+
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
+
 			<key>CFBundleURLName</key>
 			<string>google-oauth</string>
+
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.13892017929-dg9g51c203gldfk9qb05mv80ps7t997m</string>
 			</array>
 		</dict>
 	</array>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
+
 		<key>UISceneConfigurations</key>
 		<dict>
 			<key>UIWindowSceneSessionRoleApplication</key>
@@ -102,28 +110,36 @@
 				<dict>
 					<key>UISceneClassName</key>
 					<string>UIWindowScene</string>
+
 					<key>UISceneConfigurationName</key>
 					<string>flutter</string>
+
 					<key>UISceneDelegateClassName</key>
 					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+
 					<key>UISceneStoryboardFile</key>
 					<string>Main</string>
 				</dict>
 			</array>
 		</dict>
 	</dict>
+
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

@@ -180,11 +180,17 @@ jobs:
             "$KEYCHAIN_PATH"
 
           echo "=== Importing Apple Distribution certificate ==="
+          # NOTE: do NOT pass "-t cert" here. That flag restricts the import
+          # to certificate objects only and can silently drop the private
+          # key bundled in the .p12, leaving no valid signing identity
+          # (cert without a matching key) even though this step "succeeds".
+          # "-T /usr/bin/codesign" pre-authorizes codesign to use the key.
           security import "$CERT_PATH" \
             -P "$APPLE_CERTIFICATE_PASSWORD" \
             -A \
-            -t cert \
             -f pkcs12 \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
             -k "$KEYCHAIN_PATH"
 
           echo "=== Configuring keychain search list ==="
@@ -375,3 +381,4 @@ jobs:
           rm -f "$RUNNER_TEMP/profile.plist"
           rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision
+

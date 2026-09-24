@@ -122,13 +122,16 @@ jobs:
             APPLE_PROVISIONING_PROFILE_NAME
             APPLE_TEAM_ID
           )
+
           missing=0
+
           for name in "${required[@]}"; do
             if [ -z "${!name}" ]; then
               echo "::error::Required GitHub Actions secret $name is missing or empty."
               missing=1
             fi
           done
+
           if [ "$missing" -ne 0 ]; then
             echo "::error::See docs/IOS_RELEASE_CHECKLIST.md: GitHub Actions secrets."
             exit 1
@@ -137,11 +140,14 @@ jobs:
       - name: Fetch Dart packages and install pods
         run: |
           flutter pub get
-          cd ios && pod install --repo-update
+          cd ios
+          pod install --repo-update
 
       - name: Import distribution certificate and provisioning profile
         shell: bash
         run: |
+          set -euo pipefail
+
           KEYCHAIN_PATH="$RUNNER_TEMP/ios-signing.keychain-db"
           PROFILE_PATH="$RUNNER_TEMP/adventconnect.mobileprovision"
           CERT_PATH="$RUNNER_TEMP/distribution.p12"
@@ -150,10 +156,30 @@ jobs:
           echo "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
           echo "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
 
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "=== Verify decoded signing files ==="
+          test -s "$CERT_PATH"
+          test -s "$PROFILE_PATH"
 
+          echo "Certificate file size:"
+          wc -c "$CERT_PATH"
+
+          echo "Provisioning profile file size:"
+          wc -c "$PROFILE_PATH"
+
+          echo "=== Creating temporary keychain ==="
+          security create-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          security set-keychain-settings \
+            -lut 21600 \
+            "$KEYCHAIN_PATH"
+
+          security unlock-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          echo "=== Importing Apple Distribution certificate ==="
           security import "$CERT_PATH" \
             -P "$APPLE_CERTIFICATE_PASSWORD" \
             -A \
@@ -161,8 +187,12 @@ jobs:
             -f pkcs12 \
             -k "$KEYCHAIN_PATH"
 
-          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          echo "=== Configuring keychain search list ==="
+          security list-keychain \
+            -d user \
+            -s "$KEYCHAIN_PATH" login.keychain-db
 
+          echo "=== Configuring key partition list ==="
           security set-key-partition-list \
             -S apple-tool:,apple:,codesign: \
             -s \
@@ -170,27 +200,92 @@ jobs:
             "$KEYCHAIN_PATH"
 
           echo "=== Signing identities in temporary keychain ==="
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          security find-identity \
+            -v \
+            -p codesigning \
+            "$KEYCHAIN_PATH"
+
+          echo "=== Keychain search list ==="
+          security list-keychains -d user
+
+          echo "=== Provisioning profile details ==="
+          security cms \
+            -D \
+            -i "$PROFILE_PATH" \
+            > "$RUNNER_TEMP/profile.plist"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Name" \
+            "$RUNNER_TEMP/profile.plist"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :UUID" \
+            "$RUNNER_TEMP/profile.plist"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :TeamIdentifier:0" \
+            "$RUNNER_TEMP/profile.plist"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Entitlements:application-identifier" \
+            "$RUNNER_TEMP/profile.plist"
+
+          PROFILE_UUID=$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :UUID" \
+              "$RUNNER_TEMP/profile.plist"
+          )
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          cp "$PROFILE_PATH" \
-            "$HOME/Library/MobileDevice/Provisioning Profiles/$(uuidgen).mobileprovision"
 
-          rm -f "$CERT_PATH" "$PROFILE_PATH"
+          cp "$PROFILE_PATH" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+          echo "=== Installed provisioning profile ==="
+          ls -lh \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+          rm -f "$CERT_PATH" "$PROFILE_PATH" "$RUNNER_TEMP/profile.plist"
 
       - name: Build signed IPA
         shell: bash
         run: |
-          cp ios/Flutter/Release.xcconfig "$RUNNER_TEMP/Release.xcconfig.original"
+          set -euo pipefail
 
-          trap 'cp "$RUNNER_TEMP/Release.xcconfig.original" ios/Flutter/Release.xcconfig; rm -f ios/ExportOptions.plist' EXIT
+          cp \
+            ios/Flutter/Release.xcconfig \
+            "$RUNNER_TEMP/Release.xcconfig.original"
+
+          trap '
+            cp "$RUNNER_TEMP/Release.xcconfig.original" ios/Flutter/Release.xcconfig
+            rm -f ios/ExportOptions.plist
+          ' EXIT
 
           cat >> ios/Flutter/Release.xcconfig <<EOF
           DEVELOPMENT_TEAM = $APPLE_TEAM_ID
           CODE_SIGN_STYLE = Manual
           CODE_SIGN_IDENTITY = Apple Distribution
+          CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution
           PROVISIONING_PROFILE_SPECIFIER = $APPLE_PROVISIONING_PROFILE_NAME
+          PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = $APPLE_PROVISIONING_PROFILE_NAME
           EOF
+
+          echo "=== Effective signing configuration ==="
+
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -showBuildSettings \
+            | grep -E \
+              'PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER'
+
+          echo "=== Available signing identities ==="
+
+          security find-identity \
+            -v \
+            -p codesigning
 
           cat > ios/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -199,10 +294,13 @@ jobs:
           <dict>
             <key>method</key>
             <string>app-store-connect</string>
+
             <key>signingStyle</key>
             <string>manual</string>
+
             <key>teamID</key>
             <string>$APPLE_TEAM_ID</string>
+
             <key>provisioningProfiles</key>
             <dict>
               <key>io.supabase.adventconnectzw.adventConnectZw</key>
@@ -212,7 +310,13 @@ jobs:
           </plist>
           EOF
 
-          flutter build ipa --release \
+          echo "=== ExportOptions.plist ==="
+          plutil -p ios/ExportOptions.plist
+
+          echo "=== Building signed IPA ==="
+
+          flutter build ipa \
+            --release \
             --build-number="${{ github.run_number }}" \
             --dart-define=GIT_SHA="${{ github.sha }}" \
             --export-options-plist=ios/ExportOptions.plist
@@ -247,13 +351,17 @@ jobs:
         if: ${{ inputs.upload_testflight }}
         shell: bash
         run: |
+          set -euo pipefail
+
           API_DIR="$HOME/.appstoreconnect/private_keys"
+
           mkdir -p "$API_DIR"
 
           echo "$APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 --decode \
             > "$API_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
 
-          xcrun iTMSTransporter -m upload \
+          xcrun iTMSTransporter \
+            -m upload \
             -assetFile build/ios/ipa/*.ipa \
             -apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
             -apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
@@ -264,5 +372,6 @@ jobs:
         run: |
           rm -f "$RUNNER_TEMP/distribution.p12"
           rm -f "$RUNNER_TEMP/adventconnect.mobileprovision"
+          rm -f "$RUNNER_TEMP/profile.plist"
           rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision

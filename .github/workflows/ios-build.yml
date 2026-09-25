@@ -319,6 +319,21 @@ jobs:
           echo "=== ExportOptions.plist ==="
           plutil -p ios/ExportOptions.plist
 
+          echo "=== DIAGNOSTIC: raw xcodebuild archive ==="
+          xcodebuild archive \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/diagnostic.xcarchive" \
+            -destination "generic/platform=iOS" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$APPLE_PROVISIONING_PROFILE_NAME" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-diagnostic.log" || true
+
+          echo "=== End diagnostic (build continues below regardless of result) ==="
+
           echo "=== Building signed IPA ==="
 
           flutter build ipa \

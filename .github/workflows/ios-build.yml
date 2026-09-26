@@ -383,11 +383,12 @@ jobs:
           echo "$APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 --decode \
             > "$API_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
 
-          xcrun iTMSTransporter \
-            -m upload \
-            -assetFile build/ios/ipa/*.ipa \
-            -apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            -apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+          xcrun altool \
+            --upload-app \
+            -f build/ios/ipa/*.ipa \
+            -t ios \
+            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
 
       - name: Remove signing material from runner
         if: always()

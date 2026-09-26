@@ -267,6 +267,8 @@ jobs:
             rm -f ios/ExportOptions.plist
           ' EXIT
 
+          printf '\n' >> ios/Flutter/Release.xcconfig
+
           cat >> ios/Flutter/Release.xcconfig <<EOF
           DEVELOPMENT_TEAM = $APPLE_TEAM_ID
           CODE_SIGN_STYLE = Manual

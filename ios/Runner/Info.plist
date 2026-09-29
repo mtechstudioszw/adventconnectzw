@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>GIDClientID</key>
+	<string>13892017929-dg9g51c203gldfk9qb05mv80ps7t997m.apps.googleusercontent.com</string>
 	<!-- Background audio is used by just_audio_background for Library music,
 	     including lock-screen and Control Centre playback controls. -->
 	<key>UIBackgroundModes</key>

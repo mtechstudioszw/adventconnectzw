@@ -388,7 +388,8 @@ jobs:
             -f build/ios/ipa/*.ipa \
             -t ios \
             --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
+            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID" \
+            --apple-id "6819068736"
 
       - name: Remove signing material from runner
         if: always()
@@ -399,4 +400,3 @@ jobs:
           rm -f "$RUNNER_TEMP/profile.plist"
           rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision
-

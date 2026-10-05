@@ -194,12 +194,6 @@ jobs:
             -k "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
-          echo "=== Signing identities in temporary keychain ==="
-          security find-identity \
-            -v \
-            -p codesigning \
-            "$KEYCHAIN_PATH"
-
           echo "=== Provisioning profile details ==="
           security cms \
             -D \
@@ -217,24 +211,12 @@ jobs:
           cp "$PROFILE_PATH" \
             "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 
-          echo "=== Installed provisioning profile ==="
-          ls -lh \
-            "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
-
           rm -f "$CERT_PATH" "$PROFILE_PATH" "$RUNNER_TEMP/profile.plist"
 
       - name: Build signed IPA
         shell: bash
         run: |
           set -euo pipefail
-
-          # Backup Release.xcconfig
-          cp ios/Flutter/Release.xcconfig "$RUNNER_TEMP/Release.xcconfig.original"
-
-          trap '
-            cp "$RUNNER_TEMP/Release.xcconfig.original" ios/Flutter/Release.xcconfig
-            rm -f ios/ExportOptions.plist
-          ' EXIT
 
           # Inject signing settings directly into Release.xcconfig
           printf '\n' >> ios/Flutter/Release.xcconfig
@@ -246,6 +228,8 @@ jobs:
           PROVISIONING_PROFILE_SPECIFIER = $APPLE_PROVISIONING_PROFILE_NAME
           PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = $APPLE_PROVISIONING_PROFILE_NAME
           EOF
+
+          mkdir -p build/ios/ipa
 
           EXPORT_PLIST="$PWD/ios/ExportOptions.plist"
 
@@ -269,12 +253,28 @@ jobs:
           </plist>
           EOF
 
-          echo "=== Building signed IPA ==="
-          flutter build ipa \
+          echo "=== 1. Building iOS Archive ==="
+          flutter build ios \
             --release \
             --build-number="${{ github.run_number }}" \
-            --dart-define=GIT_SHA="${{ github.sha }}" \
-            --export-options-plist="$EXPORT_PLIST"
+            --dart-define=GIT_SHA="${{ github.sha }}"
+
+          echo "=== 2. Archiving with xcodebuild ==="
+          xcodebuild archive \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath "$PWD/build/ios/archive/Runner.xcarchive" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$APPLE_PROVISIONING_PROFILE_NAME"
+
+          echo "=== 3. Exporting IPA ==="
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/build/ios/archive/Runner.xcarchive" \
+            -exportOptionsPlist "$EXPORT_PLIST" \
+            -exportPath "$PWD/build/ios/ipa"
 
       - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v4
@@ -314,10 +314,10 @@ jobs:
           echo "$APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 --decode \
             > "$API_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
 
-          IPA_FILE=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          IPA_FILE=$(find build/ios -name "*.ipa" | head -n 1)
 
           if [ -z "$IPA_FILE" ]; then
-            echo "::error::No .ipa file found in build/ios/ipa directory."
+            echo "::error::No .ipa file was created during build."
             exit 1
           fi
 

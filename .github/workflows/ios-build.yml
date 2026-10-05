@@ -220,12 +220,13 @@ jobs:
 
           echo "Profile application identifier: $PROFILE_APP_ID"
 
-          if [ "$PROFILE_NAME" = "$APPLE_PROVISIONING_PROFILE_NAME" ]; then
-            echo "OK: profile name matches APPLE_PROVISIONING_PROFILE_NAME"
-          else
-            echo "::error::Profile name inside the .mobileprovision does not match the APPLE_PROVISIONING_PROFILE_NAME secret (check spelling, spaces, trailing newline)."
-            exit 1
+          echo "Profile name inside the file: $PROFILE_NAME"
+
+          if [ "$PROFILE_NAME" != "$APPLE_PROVISIONING_PROFILE_NAME" ]; then
+            echo "::warning::APPLE_PROVISIONING_PROFILE_NAME secret differs from the real profile name. Using the real name from the profile."
           fi
+
+          echo "PROFILE_NAME_ACTUAL=$PROFILE_NAME" >> "$GITHUB_ENV"
 
           if /usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" "$RUNNER_TEMP/profile.plist" >/dev/null 2>&1; then
             echo "::error::This is an Ad Hoc or Development profile (it lists devices). Create an App Store distribution profile instead."
@@ -254,6 +255,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # Use the real profile name read from the .mobileprovision file
+          APPLE_PROVISIONING_PROFILE_NAME="$PROFILE_NAME_ACTUAL"
+          echo "Using provisioning profile name: $APPLE_PROVISIONING_PROFILE_NAME"
 
           # Inject signing settings directly into Release.xcconfig
           printf '\n' >> ios/Flutter/Release.xcconfig

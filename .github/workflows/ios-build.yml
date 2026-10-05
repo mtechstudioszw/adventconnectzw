@@ -253,9 +253,10 @@ jobs:
           </plist>
           EOF
 
-          echo "=== 1. Building iOS Archive ==="
+          echo "=== 1. Building iOS app (no codesign) ==="
           flutter build ios \
             --release \
+            --no-codesign \
             --build-number="${{ github.run_number }}" \
             --dart-define=GIT_SHA="${{ github.sha }}"
 
@@ -275,6 +276,9 @@ jobs:
             -archivePath "$PWD/build/ios/archive/Runner.xcarchive" \
             -exportOptionsPlist "$EXPORT_PLIST" \
             -exportPath "$PWD/build/ios/ipa"
+
+          echo "=== IPA output ==="
+          ls -la "$PWD/build/ios/ipa"
 
       - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v4
@@ -328,8 +332,7 @@ jobs:
             -f "$IPA_FILE" \
             -t ios \
             --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID" \
-            --apple-id "6819068736"
+            --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID"
 
       - name: Remove signing material from runner
         if: always()
@@ -340,3 +343,4 @@ jobs:
           rm -f "$RUNNER_TEMP/profile.plist"
           rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision
+          security delete-keychain "$RUNNER_TEMP/ios-signing.keychain-db" || true

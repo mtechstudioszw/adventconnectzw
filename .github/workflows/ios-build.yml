@@ -206,30 +206,11 @@ jobs:
             -p codesigning \
             "$KEYCHAIN_PATH"
 
-          echo "=== Keychain search list ==="
-          security list-keychains -d user
-
           echo "=== Provisioning profile details ==="
           security cms \
             -D \
             -i "$PROFILE_PATH" \
             > "$RUNNER_TEMP/profile.plist"
-
-          /usr/libexec/PlistBuddy \
-            -c "Print :Name" \
-            "$RUNNER_TEMP/profile.plist"
-
-          /usr/libexec/PlistBuddy \
-            -c "Print :UUID" \
-            "$RUNNER_TEMP/profile.plist"
-
-          /usr/libexec/PlistBuddy \
-            -c "Print :TeamIdentifier:0" \
-            "$RUNNER_TEMP/profile.plist"
-
-          /usr/libexec/PlistBuddy \
-            -c "Print :Entitlements:application-identifier" \
-            "$RUNNER_TEMP/profile.plist"
 
           PROFILE_UUID=$(
             /usr/libexec/PlistBuddy \
@@ -253,57 +234,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          cp \
-            ios/Flutter/Release.xcconfig \
-            "$RUNNER_TEMP/Release.xcconfig.original"
+          EXPORT_PLIST="$PWD/ios/ExportOptions.plist"
 
-          trap '
-            cp "$RUNNER_TEMP/Release.xcconfig.original" ios/Flutter/Release.xcconfig
-            rm -f ios/ExportOptions.plist
-          ' EXIT
-
-          printf '\n' >> ios/Flutter/Release.xcconfig
-
-          cat >> ios/Flutter/Release.xcconfig <<EOF
-          DEVELOPMENT_TEAM = $APPLE_TEAM_ID
-          CODE_SIGN_STYLE = Manual
-          CODE_SIGN_IDENTITY = Apple Distribution
-          CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution
-          PROVISIONING_PROFILE_SPECIFIER = $APPLE_PROVISIONING_PROFILE_NAME
-          PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = $APPLE_PROVISIONING_PROFILE_NAME
-          EOF
-
-          echo "=== Effective signing configuration ==="
-
-          xcodebuild \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -sdk iphoneos \
-            -showBuildSettings \
-            | grep -E \
-              'PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER'
-
-          echo "=== Available signing identities ==="
-
-          security find-identity \
-            -v \
-            -p codesigning
-
-          cat > ios/ExportOptions.plist <<EOF
+          cat > "$EXPORT_PLIST" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.plist">
           <plist version="1.0">
           <dict>
             <key>method</key>
-            <string>app-store-connect</string>
-
+            <string>app-store</string>
             <key>signingStyle</key>
             <string>manual</string>
-
             <key>teamID</key>
             <string>$APPLE_TEAM_ID</string>
-
             <key>provisioningProfiles</key>
             <dict>
               <key>io.supabase.adventconnetzw.adventConnectZw</key>
@@ -314,20 +257,16 @@ jobs:
           EOF
 
           echo "=== ExportOptions.plist ==="
-          plutil -p ios/ExportOptions.plist
+          cat "$EXPORT_PLIST"
 
           echo "=== Building signed IPA ==="
-
           flutter build ipa \
             --release \
             --build-number="${{ github.run_number }}" \
             --dart-define=GIT_SHA="${{ github.sha }}" \
-            --export-options-plist=ios/ExportOptions.plist
+            --export-options-plist="$EXPORT_PLIST"
 
-          echo "=== Checking build output directory ==="
-          find build/ios -maxdepth 3
-
-      - name: Upload signed IPA
+      - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-signed-${{ github.run_number }}
@@ -365,19 +304,18 @@ jobs:
           echo "$APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 --decode \
             > "$API_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
 
-          # Search for the .ipa file dynamically across build outputs
-          IPA_PATH=$(find build/ios -name "*.ipa" | head -n 1)
+          IPA_FILE=$(find build/ios/ipa -name "*.ipa" | head -n 1)
 
-          if [ -z "$IPA_PATH" ]; then
-            echo "::error::No .ipa file was found in build/ios directory."
+          if [ -z "$IPA_FILE" ]; then
+            echo "::error::No .ipa file found in build/ios/ipa directory."
             exit 1
           fi
 
-          echo "Found IPA file at: $IPA_PATH"
+          echo "Uploading IPA: $IPA_FILE"
 
           xcrun altool \
             --upload-app \
-            -f "$IPA_PATH" \
+            -f "$IPA_FILE" \
             -t ios \
             --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID" \

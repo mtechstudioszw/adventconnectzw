@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ios-build-${{ github.ref }}
+  group: ios-build-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -206,10 +206,47 @@ jobs:
               "$RUNNER_TEMP/profile.plist"
           )
 
+          PROFILE_NAME=$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :Name" \
+              "$RUNNER_TEMP/profile.plist"
+          )
+
+          PROFILE_APP_ID=$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :Entitlements:application-identifier" \
+              "$RUNNER_TEMP/profile.plist"
+          )
+
+          echo "Profile application identifier: $PROFILE_APP_ID"
+
+          if [ "$PROFILE_NAME" = "$APPLE_PROVISIONING_PROFILE_NAME" ]; then
+            echo "OK: profile name matches APPLE_PROVISIONING_PROFILE_NAME"
+          else
+            echo "::error::Profile name inside the .mobileprovision does not match the APPLE_PROVISIONING_PROFILE_NAME secret (check spelling, spaces, trailing newline)."
+            exit 1
+          fi
+
+          if /usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" "$RUNNER_TEMP/profile.plist" >/dev/null 2>&1; then
+            echo "::error::This is an Ad Hoc or Development profile (it lists devices). Create an App Store distribution profile instead."
+            exit 1
+          fi
+
+          if /usr/libexec/PlistBuddy -c "Print :ProvisionsAllDevices" "$RUNNER_TEMP/profile.plist" >/dev/null 2>&1; then
+            echo "::error::This is an Enterprise profile. Create an App Store distribution profile instead."
+            exit 1
+          fi
+
+          echo "OK: profile looks like an App Store distribution profile"
+
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 
           cp "$PROFILE_PATH" \
             "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+
+          cp "$PROFILE_PATH" \
+            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
 
           rm -f "$CERT_PATH" "$PROFILE_PATH" "$RUNNER_TEMP/profile.plist"
 
@@ -233,26 +270,6 @@ jobs:
 
           EXPORT_PLIST="$PWD/ios/ExportOptions.plist"
 
-          cat > "$EXPORT_PLIST" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.plist">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>teamID</key>
-            <string>$APPLE_TEAM_ID</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>io.supabase.adventconnetzw.adventConnectZw</key>
-              <string>$APPLE_PROVISIONING_PROFILE_NAME</string>
-            </dict>
-          </dict>
-          </plist>
-          EOF
-
           echo "=== 1. Building iOS app (no codesign) ==="
           flutter build ios \
             --release \
@@ -266,6 +283,33 @@ jobs:
             -scheme Runner \
             -configuration Release \
             -archivePath "$PWD/build/ios/archive/Runner.xcarchive"
+
+          echo "=== Reading bundle ID from archive ==="
+          ARCHIVE_APP=$(find "$PWD/build/ios/archive/Runner.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" | head -n 1)
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$ARCHIVE_APP/Info.plist")
+          echo "Archived bundle ID: $BUNDLE_ID"
+
+          cat > "$EXPORT_PLIST" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.plist">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$BUNDLE_ID</key>
+              <string>$APPLE_PROVISIONING_PROFILE_NAME</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
 
           echo "=== 3. Exporting IPA ==="
           xcodebuild -exportArchive \
@@ -339,4 +383,5 @@ jobs:
           rm -f "$RUNNER_TEMP/profile.plist"
           rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
           rm -f "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision
+          rm -f "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.mobileprovision
           security delete-keychain "$RUNNER_TEMP/ios-signing.keychain-db" || true

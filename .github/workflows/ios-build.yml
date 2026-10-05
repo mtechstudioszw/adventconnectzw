@@ -292,7 +292,7 @@ jobs:
 
           cat > ios/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.plist">
           <plist version="1.0">
           <dict>
             <key>method</key>
@@ -316,21 +316,6 @@ jobs:
           echo "=== ExportOptions.plist ==="
           plutil -p ios/ExportOptions.plist
 
-          echo "=== DIAGNOSTIC: raw xcodebuild archive ==="
-          xcodebuild archive \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -archivePath "$RUNNER_TEMP/diagnostic.xcarchive" \
-            -destination "generic/platform=iOS" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$APPLE_PROVISIONING_PROFILE_NAME" \
-            2>&1 | tee "$RUNNER_TEMP/xcodebuild-diagnostic.log" || true
-
-          echo "=== End diagnostic (build continues below regardless of result) ==="
-
           echo "=== Building signed IPA ==="
 
           flutter build ipa \
@@ -338,6 +323,9 @@ jobs:
             --build-number="${{ github.run_number }}" \
             --dart-define=GIT_SHA="${{ github.sha }}" \
             --export-options-plist=ios/ExportOptions.plist
+
+          echo "=== Checking build output directory ==="
+          find build/ios -maxdepth 3
 
       - name: Upload signed IPA
         uses: actions/upload-artifact@v4
@@ -372,13 +360,20 @@ jobs:
           set -euo pipefail
 
           API_DIR="$HOME/.appstoreconnect/private_keys"
-
           mkdir -p "$API_DIR"
 
           echo "$APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 --decode \
             > "$API_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
 
-          IPA_PATH=$(ls build/ios/ipa/*.ipa | head -n 1)
+          # Search for the .ipa file dynamically across build outputs
+          IPA_PATH=$(find build/ios -name "*.ipa" | head -n 1)
+
+          if [ -z "$IPA_PATH" ]; then
+            echo "::error::No .ipa file was found in build/ios directory."
+            exit 1
+          fi
+
+          echo "Found IPA file at: $IPA_PATH"
 
           xcrun altool \
             --upload-app \

@@ -160,12 +160,6 @@ jobs:
           test -s "$CERT_PATH"
           test -s "$PROFILE_PATH"
 
-          echo "Certificate file size:"
-          wc -c "$CERT_PATH"
-
-          echo "Provisioning profile file size:"
-          wc -c "$PROFILE_PATH"
-
           echo "=== Creating temporary keychain ==="
           security create-keychain \
             -p "$KEYCHAIN_PASSWORD" \
@@ -234,6 +228,25 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Backup Release.xcconfig
+          cp ios/Flutter/Release.xcconfig "$RUNNER_TEMP/Release.xcconfig.original"
+
+          trap '
+            cp "$RUNNER_TEMP/Release.xcconfig.original" ios/Flutter/Release.xcconfig
+            rm -f ios/ExportOptions.plist
+          ' EXIT
+
+          # Inject signing settings directly into Release.xcconfig
+          printf '\n' >> ios/Flutter/Release.xcconfig
+          cat >> ios/Flutter/Release.xcconfig <<EOF
+          DEVELOPMENT_TEAM = $APPLE_TEAM_ID
+          CODE_SIGN_STYLE = Manual
+          CODE_SIGN_IDENTITY = Apple Distribution
+          CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER = $APPLE_PROVISIONING_PROFILE_NAME
+          PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = $APPLE_PROVISIONING_PROFILE_NAME
+          EOF
+
           EXPORT_PLIST="$PWD/ios/ExportOptions.plist"
 
           cat > "$EXPORT_PLIST" <<EOF
@@ -255,9 +268,6 @@ jobs:
           </dict>
           </plist>
           EOF
-
-          echo "=== ExportOptions.plist ==="
-          cat "$EXPORT_PLIST"
 
           echo "=== Building signed IPA ==="
           flutter build ipa \

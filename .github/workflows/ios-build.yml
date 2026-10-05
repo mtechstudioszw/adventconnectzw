@@ -378,9 +378,11 @@ jobs:
           echo "$APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64" | base64 --decode \
             > "$API_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
 
+          IPA_PATH=$(ls build/ios/ipa/*.ipa | head -n 1)
+
           xcrun altool \
             --upload-app \
-            -f build/ios/ipa/*.ipa \
+            -f "$IPA_PATH" \
             -t ios \
             --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_API_ISSUER_ID" \

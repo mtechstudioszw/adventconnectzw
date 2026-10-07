@@ -1,3 +1,4 @@
+import '../../config/platform_flags.dart';
 import '../../services/ai/ai_balance_service.dart';
 import '../../services/ai/ai_tiers.dart';
 import '../../services/billing/billing_config.dart';
@@ -94,6 +95,36 @@ class AiGateCopy {
     int? used,
   }) {
     final price = priceLabel ?? AiTiers.premium.priceLabel;
+
+    // iOS: nothing is for sale (no In-App Purchase is configured), so the
+    // two states that normally sell Premium say only what happened and when
+    // it comes back. No price, no benefits, no mention of Premium.
+    if (kHidePayments) {
+      if (reason == AiGateReason.outOfFree) {
+        return AiGateCopy(
+          title: "That's your free questions used",
+          body: [
+            if (used != null && used > 0)
+              "You've studied with Advent AI $used "
+                  "${used == 1 ? 'time' : 'times'} this month.",
+            'Your free questions come back on ${_monthDay(resetsOn)}.',
+          ].join('\n\n'),
+          secondaryLabel: 'Got it',
+          reassurance: _nothingLost,
+        );
+      }
+      if (reason == AiGateReason.freePoolClosed) {
+        return const AiGateCopy(
+          title: 'Free questions are all taken today',
+          body:
+              'We cover a set number of free Advent AI questions each day, '
+              "and today's are gone.\n\n"
+              'Please try again tomorrow.',
+          secondaryLabel: 'Try tomorrow',
+          reassurance: _nothingLost,
+        );
+      }
+    }
 
     switch (reason) {
       // ---------------------------------------------------------------

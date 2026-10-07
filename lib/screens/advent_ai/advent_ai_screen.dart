@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/platform_flags.dart';
 import '../../services/ai/ai_balance_service.dart';
 import '../../services/ai/ai_chat_service.dart';
 import '../../theme/app_colors.dart';
@@ -385,7 +386,8 @@ class _BalanceStrip extends StatelessWidget {
                       .copyWith(color: palette.textMuted),
                 ),
               ),
-              if (canUpgrade) const _UpgradeButton(),
+              // Hidden on iOS: Premium has no In-App Purchase there.
+              if (canUpgrade && !kHidePayments) const _UpgradeButton(),
             ],
           ),
         );

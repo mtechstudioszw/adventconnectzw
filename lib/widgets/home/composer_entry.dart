@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../config/platform_flags.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/photo_url.dart';
 import '../../theme/app_palette.dart';
@@ -247,19 +248,23 @@ class HomeShortcutChips extends StatelessWidget {
               onTap: onEvents,
             ),
           ),
-          const SizedBox(width: AppSpace.sm),
-          Expanded(
-            child: _ShortcutChip(
-              icon: Icons.favorite_rounded,
-              label: 'Donate',
-              // Home's single gold moment on an ordinary day. On Sabbath
-              // the header takes the gold instead; the two never compete
-              // because the header's is a whole warm gradient and this is
-              // one 16dp glyph in a tinted disc.
-              tint: AppColors.goldAccent,
-              onTap: onDonate,
+          // Hidden on iOS: Apple requires In-App Purchase for anything that
+          // asks users to send money. Churches and Events then share the row.
+          if (!kHidePayments) ...[
+            const SizedBox(width: AppSpace.sm),
+            Expanded(
+              child: _ShortcutChip(
+                icon: Icons.favorite_rounded,
+                label: 'Donate',
+                // Home's single gold moment on an ordinary day. On Sabbath
+                // the header takes the gold instead; the two never compete
+                // because the header's is a whole warm gradient and this is
+                // one 16dp glyph in a tinted disc.
+                tint: AppColors.goldAccent,
+                onTap: onDonate,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

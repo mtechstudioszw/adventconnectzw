@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/platform_flags.dart';
 import '../../models/friendship_model.dart';
 import '../../models/church_model.dart';
 import '../../models/ministry_tag_model.dart';
@@ -650,6 +651,8 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
               // the only route to ad-free, so a church admin sees this
               // exactly like anyone else. Listens so the label flips the
               // moment a purchase lands, without reopening the sheet.
+              // Hidden on iOS: no In-App Purchase is configured there.
+              if (!kHidePayments)
               ValueListenableBuilder<bool>(
                 valueListenable: PremiumService.isPremium,
                 builder: (context, isPremium, _) => _MoreMenuRow(

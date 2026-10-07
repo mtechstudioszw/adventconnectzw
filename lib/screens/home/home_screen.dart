@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show FloatingHeaderSnapConfiguration;
 import 'package:go_router/go_router.dart';
+import '../../config/platform_flags.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_version.dart';
@@ -247,7 +248,9 @@ class _HomeScreenState extends State<HomeScreen>
     // refuses outright if any other sheet is still up, so being last
     // costs nothing and guarantees it never talks over the others.
     Future.delayed(const Duration(seconds: 6), () {
-      if (mounted) PremiumPromoSheet.maybeShow(context);
+      // Never on iOS: the promo leads to the Premium screen, and no
+      // In-App Purchase is configured there.
+      if (mounted && !kHidePayments) PremiumPromoSheet.maybeShow(context);
     });
     // "Finish your profile" nudge. The RPC re-checks completeness and
     // won't fire more than once a fortnight, so this is safe to call on
@@ -1342,7 +1345,9 @@ class _HomeScreenState extends State<HomeScreen>
                   // loaded), so on a quiet day this costs the composer no
                   // space at all and Home learns nothing about campaign
                   // state. Its own 16px margin matches the composer's.
-                  const IphoneFundraiserCard(),
+                  // Belt and braces: never built on iOS, whatever the card
+                  // decides for itself (it asks users for money).
+                  if (!kHidePayments) const IphoneFundraiserCard(),
                   ComposerEntry(
                     photoUrl: _viewerPhotoUrl(),
                     name: _displayFullName(),

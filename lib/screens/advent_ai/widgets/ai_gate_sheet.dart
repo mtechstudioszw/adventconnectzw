@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../config/platform_flags.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -114,7 +115,9 @@ class _GateSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpace.lg),
 
-            if (copy.primaryLabel != null)
+            // Never on iOS: this opens the Premium screen, and no
+            // In-App Purchase is configured there.
+            if (copy.primaryLabel != null && !kHidePayments)
               _PrimaryButton(
                 label: copy.primaryLabel!,
                 onTap: () {

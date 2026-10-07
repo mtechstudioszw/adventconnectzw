@@ -3,6 +3,7 @@ import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_version.dart';
+import '../../config/platform_flags.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/notification_preferences_service.dart';
@@ -404,6 +405,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     return [
       // Subscription — keywords cover how people actually describe it
       // ("remove ads", "stop ads") rather than only the product name.
+      // Hidden on iOS (no In-App Purchase configured).
+      if (!kHidePayments)
       _SettingsEntry(
         'Go Premium',
         'Subscription',
@@ -436,7 +439,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         Icons.block,
         AppColors.red,
         'block unblock privacy people',
-        () => context.pushNamed('blocked_contacts'),
+        () => context.pushNamed('blocked_users'),
       ),
       // Preferences
       _SettingsEntry(
@@ -445,7 +448,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         Icons.notifications_active_outlined,
         AppColors.goldAccent,
         'alerts push permission',
-        () => context.pushNamed('notification_permissions'),
+        () => context.pushNamed('permissions'),
       ),
       _SettingsEntry(
         'Sound & haptics',
@@ -486,7 +489,9 @@ class _SettingsScreenState extends State<SettingsScreen>
         Icons.description_outlined,
         AppColors.textMuted,
         'legal terms conditions',
-        () => context.pushNamed('terms'),
+        () => _openLegal(
+          'https://mtechstudioszw.github.io/adventconnect-legal/terms.html',
+        ),
       ),
       _SettingsEntry(
         'Privacy policy',
@@ -494,7 +499,9 @@ class _SettingsScreenState extends State<SettingsScreen>
         Icons.privacy_tip_outlined,
         AppColors.textMuted,
         'legal privacy data',
-        () => context.pushNamed('privacy'),
+        () => _openLegal(
+          'https://mtechstudioszw.github.io/adventconnect-legal/privacy.html',
+        ),
       ),
       _SettingsEntry(
         'Community guidelines',
@@ -502,7 +509,9 @@ class _SettingsScreenState extends State<SettingsScreen>
         Icons.groups_outlined,
         AppColors.textMuted,
         'rules conduct moderation',
-        () => context.pushNamed('community_guidelines'),
+        () => _openLegal(
+          'https://mtechstudioszw.github.io/adventconnect-legal/guidelines.html',
+        ),
       ),
       // Support
       _SettingsEntry(
@@ -519,7 +528,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         Icons.help_outline,
         AppColors.successGreen,
         'faq support question',
-        () => context.pushNamed('help_center'),
+        () => context.pushNamed('feedback'),
       ),
       _SettingsEntry(
         'Report a problem',
@@ -527,7 +536,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         Icons.bug_report_outlined,
         AppColors.red,
         'bug broken crash issue',
-        () => context.pushNamed('report_problem'),
+        () => context.pushNamed('feedback'),
       ),
       // App
       _SettingsEntry(
@@ -730,6 +739,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       // Top of the list on purpose. Gold is the app's
                       // one-accent-per-screen colour, so this reads as the
                       // single different thing here without shouting.
+                      if (!kHidePayments)
                       ValueListenableBuilder<bool>(
                         valueListenable: PremiumService.isPremium,
                         builder: (context, isPremium, _) => Padding(
@@ -990,8 +1000,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ],
                       ),
                       const SizedBox(height: 18),
-                      _DonationCard(onTap: _openDonation),
-                      const SizedBox(height: 18),
+                      // Hidden on iOS: donations must use In-App Purchase there.
+                      if (!kHidePayments) ...[
+                        _DonationCard(onTap: _openDonation),
+                        const SizedBox(height: 18),
+                      ],
                       _Section(
                         title: 'Support',
                         accent: AppColors.successGreen,
@@ -1054,13 +1067,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                               onTap: () =>
                                   context.pushNamed('admin_event_approvals'),
                             ),
-                            const _Divider(),
-                            _NavRow(
-                              icon: Icons.volunteer_activism_outlined,
-                              label: 'iPhone contributions',
-                              onTap: () =>
-                                  context.pushNamed('admin_fundraiser'),
-                            ),
+                            if (!kHidePayments) ...[
+                              const _Divider(),
+                              _NavRow(
+                                icon: Icons.volunteer_activism_outlined,
+                                label: 'iPhone contributions',
+                                onTap: () =>
+                                    context.pushNamed('admin_fundraiser'),
+                              ),
+                            ],
                             const _Divider(),
                             _NavRow(
                               icon: Icons.library_books_outlined,

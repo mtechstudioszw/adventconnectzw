@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_version.dart';
+import '../../config/platform_flags.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -92,11 +93,15 @@ class AboutScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _SponsorCard(
-                    number: _sponsorEcoCash,
-                    accountName: _sponsorEcoCashName,
-                  ),
-                  const SizedBox(height: 16),
+                  // Hidden on iOS: Apple requires In-App Purchase for
+                  // anything that asks users to send money (Guideline 3.1.1).
+                  if (!kHidePayments) ...[
+                    _SponsorCard(
+                      number: _sponsorEcoCash,
+                      accountName: _sponsorEcoCashName,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   _buildSection(
                     title: 'Legal',
                     children: [
@@ -699,4 +704,3 @@ class _Divider extends StatelessWidget {
     );
   }
 }
-

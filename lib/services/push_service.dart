@@ -357,7 +357,9 @@ class PushService {
 
     // 8. Initial token + signed-in user → save now. The auth listener
     //    below handles the "user signs in later" case.
-    await _maybeSaveTokenForCurrentUser();
+    // Not awaited: on iOS this may wait several seconds for the APNs
+    // token, and main() registers the tap listener right after initialize().
+    unawaited(_maybeSaveTokenForCurrentUser());
     _authSub?.cancel();
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
       _maybeSaveTokenForCurrentUser();
@@ -391,14 +393,34 @@ class PushService {
     }
   }
 
+  static bool _tokenSaveInFlight = false;
+
   static Future<void> _maybeSaveTokenForCurrentUser() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    if (_tokenSaveInFlight) return;
+    if (Supabase.instance.client.auth.currentUser == null) return;
+    _tokenSaveInFlight = true;
     try {
+      // iOS: getToken() throws `apns-token-not-set` if called before Apple
+      // has handed the device its APNs token. That used to be swallowed and
+      // never retried, leaving profiles.fcm_token empty. Wait for it.
+      if (Platform.isIOS) {
+        String? apns;
+        for (var i = 0; i < 15 && apns == null; i++) {
+          apns = await _messaging.getAPNSToken();
+          if (apns == null) await Future.delayed(const Duration(seconds: 1));
+        }
+        if (apns == null) {
+          debugPrint('PushService: no APNs token after 15s; will retry on '
+              'token refresh / next auth event');
+          return;
+        }
+      }
       final token = await _messaging.getToken();
       if (token != null) await NotificationService.updateFcmToken(token);
     } catch (e, st) {
       debugPrint('PushService: token save failed: $e\n$st');
+    } finally {
+      _tokenSaveInFlight = false;
     }
   }
 

@@ -37,6 +37,19 @@
 //  remembered to configure a secret" is the idiom that left play-rtdn
 //  wide open; it is not repeated here.
 //
+//  ## 21 Oct 2026: iOS delivery + dead-token cleanup
+//
+//  1. Chat pushes are DATA-ONLY. Android wakes the app and the app draws
+//     the banner. iOS does not: Apple only delivers a background push that
+//     carries an `aps` alert (or content-available), and FCM adds neither
+//     to a data-only message. So iPhones never received chat pushes while
+//     the app was closed. Every push now carries an explicit `apns` block;
+//     chat pushes get a real alert (generic text if the message is
+//     encrypted, because the server cannot read it).
+//  2. When FCM answers UNREGISTERED the token is dead for good. It is now
+//     cleared from profiles (only if it is still the same token), so the
+//     function stops calling FCM for it on every notification.
+//
 //  Deploy:
 //    supabase functions deploy notify-fcm
 //
@@ -158,6 +171,7 @@ async function sendFcm({
   data,
   dataOnly = false,
   imageUrl,
+  apnsBody,
 }: {
   account: ServiceAccount;
   accessToken: string;
@@ -173,6 +187,9 @@ async function sendFcm({
   // is the difference between a line of text and something you tap — it is
   // what YouTube's own notifications do.
   imageUrl?: string | null;
+  // Text for the iOS alert on a data-only (chat) push. Differs from `body`
+  // when the message is end-to-end encrypted.
+  apnsBody?: string;
 }): Promise<void> {
   const url =
     `https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`;
@@ -188,6 +205,24 @@ async function sendFcm({
       },
     },
   };
+
+  // iOS (APNs). Android ignores this block entirely.
+  // deno-lint-ignore no-explicit-any
+  const apns: any = { headers: { "apns-priority": "10" }, payload: { aps: {} } };
+  if (dataOnly) {
+    // A real alert, so iOS shows it even when the app is closed. Also
+    // content-available so the app can still run its delivered-tick logic.
+    apns.headers["apns-push-type"] = "alert";
+    apns.payload.aps = {
+      alert: { title, body: apnsBody ?? body },
+      sound: "default",
+      "mutable-content": 1,
+      "content-available": 1,
+    };
+  } else {
+    apns.payload.aps = { sound: "default" };
+  }
+
   if (!dataOnly) {
     message.message.notification = { title, body };
     message.message.android.notification = {
@@ -198,12 +233,12 @@ async function sendFcm({
       // same URL echoed through APNs' fcm_options for its attachment.
       message.message.notification.image = imageUrl;
       message.message.android.notification.image = imageUrl;
-      message.message.apns = {
-        payload: { aps: { "mutable-content": 1 } },
-        fcm_options: { image: imageUrl },
-      };
+      apns.payload.aps["mutable-content"] = 1;
+      apns.fcm_options = { image: imageUrl };
     }
   }
+  message.message.apns = apns;
+
   const resp = await fetch(url, {
     method: "POST",
     headers: {
@@ -466,6 +501,12 @@ Deno.serve(async (req: Request) => {
     imageUrl = `https://i.ytimg.com/vi/${referenceId}/hqdefault.jpg`;
   }
 
+  // Encrypted chat: the row's body is ciphertext. The iOS alert is drawn by
+  // the system, so it cannot be rebuilt on the device first. Use a neutral
+  // line instead of showing base64.
+  const encrypted = e2eeVersion !== "" && e2eeVersion !== "0";
+  const apnsBody = isConversation && encrypted ? "New message" : undefined;
+
   try {
     const accessToken = await fetchGoogleAccessToken(account);
     await sendFcm({
@@ -475,6 +516,7 @@ Deno.serve(async (req: Request) => {
       imageUrl,
       title,
       body,
+      apnsBody,
       dataOnly: isConversation,
       data: {
         reference_id: referenceId,
@@ -495,7 +537,25 @@ Deno.serve(async (req: Request) => {
       },
     });
   } catch (e) {
-    return new Response(`Push failed: ${(e as Error).message}`, {
+    const msg = (e as Error).message ?? "";
+    // UNREGISTERED = FCM says this token will never work again (app
+    // uninstalled, token rotated). Clear it, but only if it is still the
+    // token we just tried, so a fresh token saved a moment ago is safe.
+    // Anything else (auth errors, quota, 5xx) is NOT proof the token is
+    // dead and must not wipe it.
+    if (msg.includes("UNREGISTERED")) {
+      try {
+        await supabase
+          .from("profiles")
+          .update({ fcm_token: null })
+          .eq("id", userId)
+          .eq("fcm_token", deviceToken);
+      } catch (_) {
+        // best-effort
+      }
+      return new Response("Stale token cleared", { status: 200 });
+    }
+    return new Response(`Push failed: ${msg}`, {
       status: 500,
     });
   }

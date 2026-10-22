@@ -1157,7 +1157,7 @@ class MessagingService {
       if (convo.isChurchChannel) return null;
 
       if (convo.isGroup) {
-        return E2eeService.encryptGroup(
+          return await E2eeService.encryptGroup(
           conversationId: conversationId,
           myUserId: me,
           plaintext: body,

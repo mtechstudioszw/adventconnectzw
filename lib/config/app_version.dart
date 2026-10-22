@@ -50,7 +50,8 @@ const int kAppBuildNumber = 14;
 ///
 /// Premium: Plus / Pro / Pro-yearly, as base plans on the one live
 /// product. That is a feature release, and the version should say so.
-const String kAppVersionName = '1.5.0';
+const String kAppVersionName = '2.0.2';
+
 
 /// Play Store listing id (Android applicationId) — used to deep-link to
 /// the store from the "Update required" screen.

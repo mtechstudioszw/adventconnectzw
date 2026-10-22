@@ -350,7 +350,7 @@ class EgwLoadJob {
       }
 
       await tmp.rename(file.path);
-      return file.readAsBytes();
+      return await file.readAsBytes();
     } on TimeoutException {
       debugPrint('EgwBookService: stalled fetching $url');
       return null;

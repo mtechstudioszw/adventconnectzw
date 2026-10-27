@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_tokens.dart';
 
 /// Advent AI's identity in one place.
@@ -39,54 +38,6 @@ abstract final class AdventAiBrand {
   /// empty state. The claim has to sit where the claim is made.
   static const String disclaimer =
       'Advent AI can make mistakes. Double-check the answer.';
-}
-
-/// The mark on its brand gradient, sized for a button.
-///
-/// Used by the floating bubble and the chat tab's entry point so the two
-/// cannot drift apart.
-class AdventAiMark extends StatelessWidget {
-  const AdventAiMark({
-    super.key,
-    this.size = 56,
-    this.iconSize = 26,
-    this.radius,
-  });
-
-  final double size;
-  final double iconSize;
-
-  /// Null renders a circle. A value renders a squircle, which is what the
-  /// chat tab wants so it sits in the same family as the compose button
-  /// directly beneath it.
-  final double? radius;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        shape: radius == null ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: radius == null ? null : BorderRadius.circular(radius!),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.32),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          AdventAiBrand.icon,
-          color: Colors.white,
-          size: iconSize,
-        ),
-      ),
-    );
-  }
 }
 
 /// The one-line "this can be wrong" note that sits under an answer.

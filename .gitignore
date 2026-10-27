@@ -87,3 +87,17 @@ supabase/functions/*/test/.build/
 *.csr
 *.certSigningRequest
 profile.plist
+# App Store Connect / APNs keys, distribution certs and decoded profiles.
+# These were committed once (removed 27 Oct 2026) — rotate, never re-add.
+*.p8
+*.p8.pem
+*.pem
+*.cer
+*.mobileprovision
+profile_base64.txt
+profile_check.plist
+# Stray files from a mistyped `openssl ... -in -inkey -out -name` command.
+/-in
+/-inkey
+/-name
+/-out

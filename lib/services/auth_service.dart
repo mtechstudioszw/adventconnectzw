@@ -1050,6 +1050,27 @@ class AuthService {
         }
       }
 
+      // Country carries the same 14-day cooldown (patch_215/221), enforced
+      // by trg_country_change_cooldown on the ROW. It must be written — and
+      // accepted — before auth metadata is touched. It used to ride the
+      // upsert below, AFTER `auth.updateUser`, so a rejected change still
+      // landed in metadata: the member saw "once every 2 weeks" while every
+      // screen reading metadata showed the new country and everything
+      // reading the row kept the old one (reported 27 Oct 2026).
+      //
+      // The trigger runs inside the UPDATE's row lock, so two concurrent
+      // saves serialise and the second sees the first's timestamp.
+      if (country != null) {
+        try {
+          await _client
+              .from('profiles')
+              .update({'country': country})
+              .eq('id', user.id);
+        } on PostgrestException catch (e) {
+          return AuthResult.failure(e.message);
+        }
+      }
+
       final current = user.userMetadata ?? const {};
       final next = <String, dynamic>{...current};
       String? sentinelOrNull(String? v) => (v != null && v.isEmpty) ? null : v;
@@ -1094,7 +1115,7 @@ class AuthService {
         dbUpdates['cover_photo_url'] = sentinelOrNull(coverPhotoUrl);
       }
       if (showAge != null) dbUpdates['show_age'] = showAge;
-      if (country != null) dbUpdates['country'] = country;
+      // country: already written above, in its own guarded statement.
       if (dbUpdates.isNotEmpty) {
         try {
           await _client.from('profiles').upsert({

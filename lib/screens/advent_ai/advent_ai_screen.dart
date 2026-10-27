@@ -9,7 +9,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
-import '../../widgets/advent_ai_bubble.dart';
 import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/screen_shell.dart';
 import 'ai_gate_copy.dart';
@@ -59,18 +58,12 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
   void initState() {
     super.initState();
     _conversationId = widget.conversationId;
-    // The app-wide bubble already refuses `/advent-ai` by route prefix.
-    // This says it a second way, from the screen itself, because the
-    // founder still saw the bubble here on 25 Aug 2026 and a mounted
-    // screen is a fact where a router location is an inference.
-    AdventAiBubble.suppress();
     AiBalanceService.refresh();
     if (_conversationId != null) _loadHistory();
   }
 
   @override
   void dispose() {
-    AdventAiBubble.unsuppress();
     _cancel?.cancel();
     _controller.dispose();
     _scroll.dispose();

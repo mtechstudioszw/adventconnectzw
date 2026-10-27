@@ -25,6 +25,7 @@ import '../../services/marketplace_service.dart';
 import '../../services/search_suggest_service.dart';
 import '../../services/secure_storage_service.dart';
 import '../../widgets/cached_image.dart';
+import '../../utils/photo_url.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
@@ -526,6 +527,11 @@ class _SearchScreenState extends State<SearchScreen>
       safe(() => YoutubeService.search(query, limit: 12)),
     ]);
     if (!mounted) return;
+    // Drop a stale answer. Searches overlap — "joh" is still in flight when
+    // the debounce fires "john" — and whichever lands LAST used to win, so
+    // a slow earlier query could replace the results for what is actually
+    // in the box (or repaint results after the field was cleared).
+    if (query != _lastQuery) return;
     final people = (results[0] as List<MemberDirectoryEntry>).take(12).toList();
     final churches = (results[1] as List<Church>).take(12).toList();
     final events = (results[2] as List<Event>).take(12).toList();
@@ -2479,7 +2485,12 @@ class _PersonAvatar extends StatelessWidget {
         color: AppColors.primaryBlue.withValues(alpha: 0.10),
         image: hasPhoto
             ? DecorationImage(
-                image: CachedNetworkImageProvider(photoUrl!),
+                // 44px at up to 3x. The stored Google URL is `=s96-c`, a
+                // 96px thumbnail — upscaled and soft in every result row.
+                image: CachedNetworkImageProvider(
+                  photoUrlAtSize(photoUrl, 132),
+                  cacheManager: adventImageCacheManager,
+                ),
                 fit: BoxFit.cover,
               )
             : null,

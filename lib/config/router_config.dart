@@ -455,9 +455,9 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
-      // Advent AI. Reached from the app-wide bubble (AdventAiBubble),
-      // which is mounted above this Navigator in MaterialApp.builder —
-      // so the push lands on the ROOT navigator, not inside a tab shell.
+      // Advent AI. Its only entry point is the Chat tab's inbox button
+      // (conversations_screen.dart). Top-level, so it opens full-screen
+      // rather than inside a tab shell.
       //
       // `?c=<id>` resumes a conversation. Absent means a new one, and
       // no row is written until the first send.

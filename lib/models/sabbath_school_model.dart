@@ -176,12 +176,35 @@ class SsDay {
   final String readPath;
   final DateTime? date;
 
-  /// True when this is today's reading.
+  /// True for the seven daily readings (ids `01`…`07`, Sabbath → Friday).
+  ///
+  /// The API appends supplements to the same `days` list — `hope-ss`,
+  /// `inside-story`, `teacher-comments` — every one dated Friday. They are
+  /// not a day of the week and must not be labelled or highlighted as one.
+  bool get isDailyReading => int.tryParse(id) != null;
+
+  /// True when this is today's reading. Supplements never are, or every
+  /// Friday would light up four chips.
   bool get isToday {
     final d = date;
-    if (d == null) return false;
+    if (d == null || !isDailyReading) return false;
     final now = DateTime.now();
     return d.year == now.year && d.month == now.month && d.day == now.day;
+  }
+
+  /// Label for the reader's day selector, derived from the day's own date
+  /// so the chip can never disagree with the content under it.
+  String get chipLabel {
+    if (!isDailyReading) {
+      return switch (id) {
+        'inside-story' => 'Story',
+        'teacher-comments' => 'Teacher',
+        'hope-ss' => 'Hope',
+        _ => 'Extra',
+      };
+    }
+    final d = date;
+    return d == null ? '${int.parse(id)}' : ssWeekdayShort(d);
   }
 
   factory SsDay.fromJson(Map<String, dynamic> json) => SsDay(
@@ -274,6 +297,14 @@ DateTime? parseSsDate(String? raw) {
   if (d == null || m == null || y == null) return null;
   return DateTime(y, m, d);
 }
+
+/// Short weekday name for a calendar date, Sabbath as "Sab".
+///
+/// Indexed by `DateTime.weekday` (Monday = 1 … Sunday = 7). The reader used
+/// `weekday % 7` into a Sabbath-first list, which shifted every label back
+/// one day — Tuesday's reading sat under a "Mon" chip.
+String ssWeekdayShort(DateTime date) =>
+    const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sab', 'Sun'][date.weekday - 1];
 
 /// Inverse of [parseSsDate], for the offline cache round-trip.
 String? formatSsDate(DateTime? date) {

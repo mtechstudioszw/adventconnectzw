@@ -32,7 +32,6 @@ import 'services/push_service.dart';
 import 'services/theme_service.dart';
 import 'theme/app_text_styles.dart';
 import 'theme/app_theme.dart';
-import 'widgets/advent_ai_bubble.dart';
 import 'widgets/ambient_background.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/global_media_bars.dart';
@@ -700,18 +699,12 @@ class _AdventConnectAppState extends State<AdventConnectApp>
                           // GlobalMediaBars, because the Watch player and the
                           // music card park independently.
                           Positioned.fill(child: GlobalMediaBars()),
-                          // Advent AI. Same layer, same reason: it is
-                          // ABOVE the router's Navigator, so the floating
-                          // navigation island cannot paint over it. The
-                          // last floating bubble this app shipped was
-                          // mounted inside the Navigator and was
-                          // unreachable for exactly that reason.
-                          //
-                          // It hides itself on its own blocked routes —
-                          // messaging above all (founder rule: an AI
-                          // button over a private chat reads as being
-                          // watched). See AdventAiBubble.blockedPrefixes.
-                          Positioned.fill(child: AdventAiBubble()),
+                          // No Advent AI layer here (founder, 27 Oct 2026).
+                          // Its only entry point is the stationary button
+                          // on the Chat tab's inbox (conversations_screen).
+                          // An app-wide bubble decided where to hide from
+                          // the router's URL, which `push` never updates —
+                          // so it floated over chats opened from a profile.
                         ],
                       ),
                     ),

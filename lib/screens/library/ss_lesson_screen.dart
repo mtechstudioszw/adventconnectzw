@@ -694,7 +694,6 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
   /// completed days ticked.
   Widget _dayStrip(BuildContext context) {
     final palette = context.palette;
-    const labels = ['Sab', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     return SizedBox(
       height: 68,
       child: ListView.separated(
@@ -706,9 +705,7 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
           final day = _days[i];
           final selected = i == _index;
           final read = SabbathSchoolPrefs.isRead(day.readPath);
-          final label = day.date != null
-              ? labels[day.date!.weekday % 7]
-              : '${i + 1}';
+          final label = day.chipLabel;
           return Pressable(
             onTap: () => _pageCtrl.animateToPage(
               i,
@@ -750,6 +747,14 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
                       color: selected
                           ? AppColors.white
                           : AppColors.successGreen,
+                    )
+                  else if (!day.isDailyReading)
+                    // A supplement shares Friday's date; repeating "30"
+                    // under it would read as a second Friday.
+                    Icon(
+                      Icons.auto_stories_rounded,
+                      size: 15,
+                      color: selected ? AppColors.white : palette.textMuted,
                     )
                   else
                     Text(

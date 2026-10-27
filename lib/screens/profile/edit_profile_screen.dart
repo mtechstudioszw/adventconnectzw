@@ -304,6 +304,11 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       context.pop();
     } else {
       setState(() => _error = result.errorMessage);
+      // Re-read the row. A rejected country/church must not stay on screen
+      // as if it were saved, and one that DID save before a later field
+      // failed must become the new baseline — otherwise retrying sends it
+      // again and trips the cooldown it just started.
+      _loadProfileFields();
     }
   }
 

@@ -3,6 +3,7 @@ import '../models/product_model.dart';
 import '../utils/postgrest_filter.dart';
 import 'seller_service.dart';
 import 'post_limit_error.dart';
+import 'market_ranking.dart';
 
 class MarketplaceService {
   MarketplaceService._();
@@ -21,19 +22,31 @@ class MarketplaceService {
   /// `products` has no seller-name column, so every grid tile, saved
   /// listing and basket line read the fallback and said "Seller". The
   /// approval lookup was already being made; it now brings the name too.
-  static Future<Map<String, String>> _fetchApprovedSellers() async {
+  static Future<Map<String, String>> _fetchApprovedSellers() async =>
+      {for (final e in (await _approvedSellerMeta()).entries) e.key: e.value.name};
+
+  /// The approved sellers with what ranking needs: name, when they were
+  /// approved, and their rating. One query, as before.
+  static Future<Map<String, _SellerMeta>> _approvedSellerMeta() async {
     final rows = await _client
         .from(_sellersTable)
-        .select('auth_user_id, business_name')
+        .select('auth_user_id, business_name, approved_at, created_at, '
+            'rating, rating_count')
         .eq('status', 'approved')
         .eq('is_active', true);
     return {
       for (final r in (rows as List).cast<Map<String, dynamic>>())
         if ((r['auth_user_id'] ?? '').toString().isNotEmpty)
-          r['auth_user_id'].toString():
-              ((r['business_name'] as String?)?.trim().isNotEmpty ?? false)
-                  ? (r['business_name'] as String).trim()
-                  : 'Seller',
+          r['auth_user_id'].toString(): _SellerMeta(
+            name: ((r['business_name'] as String?)?.trim().isNotEmpty ?? false)
+                ? (r['business_name'] as String).trim()
+                : 'Seller',
+            since: DateTime.tryParse(
+              (r['approved_at'] ?? r['created_at'] ?? '').toString(),
+            ),
+            rating: (r['rating'] as num?)?.toDouble() ?? 0,
+            ratingCount: (r['rating_count'] as num?)?.toInt() ?? 0,
+          ),
     };
   }
 
@@ -122,56 +135,112 @@ class MarketplaceService {
         .toList();
   }
 
+  /// Ranked listings for callers that just want a list (Home's rail,
+  /// global search). See [fetchCatalog] for the marketplace itself.
   static Future<List<Product>> fetchProducts({
     String? search,
     String? category,
-    /// ISO 3166-1 alpha-2. Null means worldwide.
-    ///
-    /// The marketplace is country-scoped by default (founder, 18 Aug 2026)
-    /// because this app never handles the sale: handoff is WhatsApp plus
-    /// local pickup, so a listing in another country is one the buyer
-    /// cannot act on. Showing it is not generosity, it is noise — and it
-    /// mixes currencies in the grid for no reachable listing.
-    ///
-    /// Worldwide stays one tap away rather than being removed: the
-    /// diaspora genuinely does buy from home, and a member whose profile
-    /// country is wrong needs an escape hatch that is not "edit profile".
     String? country,
   }) async {
-    final sellers = await _fetchApprovedSellers();
-    if (sellers.isEmpty) return const [];
-    final approvedIds = sellers.keys.toSet();
+    final catalog = await fetchCatalog(
+      search: search,
+      category: category,
+      country: country,
+    );
+    return catalog.ranked(viewer: _client.auth.currentUser?.id ?? '');
+  }
+
+  /// Listings plus what the ranking needs about their sellers.
+  ///
+  /// Everything that narrows the list happens in the query — category,
+  /// country, price, condition, place, seller and the search text —
+  /// so filters apply to the whole catalogue, not to a page already
+  /// fetched. Search matches the title, the description AND the shop name
+  /// (products have no seller-name column, so names are matched against
+  /// the approved-seller list and folded in as seller ids).
+  ///
+  /// [country]: ISO 3166-1 alpha-2, null = worldwide. Country-scoped by
+  /// default (founder, 18 Aug 2026): the sale is a WhatsApp handoff and
+  /// local pickup, so another country's listing is one a buyer can't act on.
+  static Future<MarketCatalog> fetchCatalog({
+    String? search,
+    String? category,
+    String? country,
+    MarketFilters filters = MarketFilters.none,
+    int limit = 200,
+  }) async {
+    final sellers = await _approvedSellerMeta();
+    if (sellers.isEmpty) return MarketCatalog.empty;
+    final approvedIds = sellers.keys.toList();
 
     var query = _client
         .from(_table)
         .select()
         .eq('status', 'available')
-        .inFilter('seller_id', approvedIds.toList());
+        .inFilter('seller_id', approvedIds);
 
     if (country != null && country.isNotEmpty) {
       query = query.eq('country', country);
     }
-
     if (category != null && category.isNotEmpty && category != 'all') {
       query = query.eq('category', category);
     }
-
-    if (search != null && search.trim().isNotEmpty) {
-      final term = orFilterValue('%${search.trim()}%');
-      query = query.or('title.ilike.$term,description.ilike.$term');
+    if (filters.minPrice != null) query = query.gte('price', filters.minPrice!);
+    if (filters.maxPrice != null) query = query.lte('price', filters.maxPrice!);
+    if (filters.condition != null) {
+      query = query.eq('condition', filters.condition!);
+    }
+    if (filters.sellerId != null) {
+      query = query.eq('seller_id', filters.sellerId!);
+    }
+    final place = (filters.location ?? '').trim();
+    if (place.isNotEmpty) {
+      final t = orFilterValue('%$place%');
+      query = query.or('location.ilike.$t,province.ilike.$t');
     }
 
-    // Pull the most recent 200, then SHUFFLE so the grid is mixed rather
-    // than strictly newest-first — newer sellers' items still surface and
-    // the marketplace doesn't look like a chronological feed.
-    final response =
-        await query.order('created_at', ascending: false).limit(200);
+    final term = (search ?? '').trim();
+    final matchedSellers = <String>{};
+    if (term.isNotEmpty) {
+      final lower = term.toLowerCase();
+      for (final e in sellers.entries) {
+        if (e.value.name.toLowerCase().contains(lower)) matchedSellers.add(e.key);
+      }
+      final t = orFilterValue('%$term%');
+      query = query.or([
+        'title.ilike.$t',
+        'description.ilike.$t',
+        if (matchedSellers.isNotEmpty)
+          'seller_id.in.(${matchedSellers.join(',')})',
+      ].join(','));
+    }
 
-    final list = (response as List)
-        .map((row) => _withSellerName(row as Map<String, dynamic>, sellers))
+    final response =
+        await query.order('created_at', ascending: false).limit(limit);
+    final products = (response as List)
+        .map((row) => _withSellerName(
+              row as Map<String, dynamic>,
+              {for (final e in sellers.entries) e.key: e.value.name},
+            ))
         .toList();
-    list.shuffle();
-    return list;
+
+    final now = DateTime.now();
+    return MarketCatalog(
+      products: products,
+      // A seller's first three weeks after approval.
+      newSellerIds: {
+        for (final e in sellers.entries)
+          if (e.value.since != null &&
+              now.difference(e.value.since!).inDays <= 21)
+            e.key,
+      },
+      // Only ratings that rest on enough reviews to mean something.
+      sellerRatings: {
+        for (final e in sellers.entries)
+          if (e.value.ratingCount >= 3) e.key: e.value.rating,
+      },
+      matchedSellerIds: matchedSellers,
+    );
   }
 
   static Future<Product?> fetchProductById(String id) async {
@@ -267,4 +336,52 @@ class MarketplaceService {
     );
     return inserted['id'].toString();
   }
+}
+
+class _SellerMeta {
+  const _SellerMeta({
+    required this.name,
+    required this.since,
+    required this.rating,
+    required this.ratingCount,
+  });
+  final String name;
+  final DateTime? since;
+  final double rating;
+  final int ratingCount;
+}
+
+/// What the marketplace query returns: the listings, unordered, and the
+/// seller facts the ranking reads.
+class MarketCatalog {
+  const MarketCatalog({
+    required this.products,
+    this.newSellerIds = const {},
+    this.sellerRatings = const {},
+    this.matchedSellerIds = const {},
+  });
+
+  final List<Product> products;
+  final Set<String> newSellerIds;
+  final Map<String, double> sellerRatings;
+
+  /// Shops whose NAME matched the search.
+  final Set<String> matchedSellerIds;
+
+  static const empty = MarketCatalog(products: []);
+
+  List<Product> ranked({
+    String viewer = '',
+    MarketSort sort = MarketSort.best,
+    Set<String> interestCategories = const {},
+    DateTime? now,
+  }) => MarketRanking.rank(
+    products,
+    sort: sort,
+    now: now ?? DateTime.now(),
+    viewer: viewer,
+    newSellerIds: newSellerIds,
+    sellerRatings: sellerRatings,
+    interestCategories: interestCategories,
+  );
 }

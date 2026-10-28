@@ -69,7 +69,7 @@ to run in the SQL editor; app features depending on it say so until it runs
 | 2 | Shared post card + menu: own posts in Home, Save (+ Saved screen), Hide, Copy link, Report; feed/profile consistency; comment reply-to-reply | **patch_273** saved_posts, hidden_posts | code done (Unfollow added in stage 3) |
 | 3 | Profile redesign + followers (one-way) alongside friends; privacy | **patch_274** follows, profile links/privacy | code done (shared `ProfileHeader`, follow lists + requests, Edit profile link + private toggle, post-menu Follow/Unfollow, notification routing); waits on patch_274 |
 | 4 | Organization Pages (create/manage/follow), church associations | **patch_275** pages, page_admins, page_follows, posts.page_id | code done (directory, Page view, create/edit, admins, follow, post as Page, moderation/verify for super admin); waits on patch_275 |
-| 5 | Marketplace discovery: sections, server-side search/filters/pagination, deterministic ranking + exploration, labelled sponsorship | maybe (indexes, ranking view) | |
+| 5 | Marketplace discovery: sections, server-side search/filters/pagination, deterministic ranking + exploration, labelled sponsorship | **patch_276** (security: seller privilege guard) | code done |
 | 6 | Product detail, storefront, seller tools, product form, cart/checkout review | maybe (stock, product reviews) | |
 | 7 | Jobs: landing, detail, stepped posting form, saved jobs, applications, company profiles | **patch_27x** saved_jobs, job_applications, companies | |
 | 8 | Premium foundations: entitlements table, promotion records — **no prices** | **patch_27x** entitlements, promotions | |
@@ -118,3 +118,25 @@ to run in the SQL editor; app features depending on it say so until it runs
   preview for Pages (share uses the store link until one exists).
 - Churches tab on personal profiles is unchanged: it already shows only
   the member's own church, and following a Page never implies membership.
+
+## Stage 5 notes
+
+- **Security finding (patch_276):** sellers could self-approve, self-verify,
+  feature themselves and invent ratings through the API; products could
+  self-feature. Live data showed no sign of abuse. "Featured" labels are
+  only trustworthy once patch_276 runs — until then there are 0 featured
+  rows, so nothing shows.
+- Ranking: `MarketRanking` (lib/services/market_ranking.dart). Recency,
+  listing quality, new-seller boost (first 21 days), seller rating only
+  with 3+ reviews, the viewer's recent categories, and a per-day seeded
+  jitter. Same order all day, moves daily. Never follower counts, sales or
+  views. Featured is a separate labelled shelf, never mixed in.
+- Filters (price, condition, town/province, shop) and search (title,
+  description, shop name) run in the query. Sort: best / newest / price.
+- Shelves show only with distinct, real content: Featured stores,
+  Shops in the community, Featured, Recently viewed (2+, still for sale),
+  New arrivals (only when the catalogue has 12+ listings and 3+ are new).
+  With 9 live listings today, most shelves correctly stay hidden.
+- "Pagination": the query caps at 200 listings and the grid reveals 24 at a
+  time. True server pagination needs the ranking in the database (a view
+  or RPC) — worth doing once the catalogue passes ~200.

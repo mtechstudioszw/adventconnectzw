@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +13,9 @@ import '../../widgets/country_scope_toggle.dart';
 import '../../services/cache_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/market_ranking.dart';
+import '../../services/recently_viewed_service.dart';
+import '../../widgets/marketplace/market_filter_sheet.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -79,6 +83,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final String _country = AuthService.currentCountry();
 
   String _query = '';
+
+  /// The text the SERVER last searched for. Typing filters what's loaded at
+  /// once ([_query]); a moment later the whole catalogue is searched.
+  String _serverQuery = '';
+  Timer? _serverDebounce;
+
+  MarketFilters _filters = MarketFilters.none;
+
+  /// Seller facts the ranking reads, from the last load.
+  MarketCatalog _catalog = MarketCatalog.empty;
+
+  /// Grid rows revealed so far; "Show more" adds a page.
+  static const _page = 24;
+  int _shown = _page;
   bool _loading = true;
 
   /// True until the first product request settles. Only that first load
@@ -94,7 +112,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   int _loadGen = 0;
 
   /// The scope the offline cache holds (see [_loadProducts]).
-  bool get _isDefaultScope => _selectedCategory == 'all' && !_worldwide;
+  bool get _isDefaultScope =>
+      _selectedCategory == 'all' &&
+      !_worldwide &&
+      _serverQuery.isEmpty &&
+      _filters.isEmpty;
+
+  /// Plain browsing: no search, no filters, every category. Only then do
+  /// the discovery sections show — a search wants results, not shelves.
+  bool get _browsing =>
+      _query.isEmpty && _filters.isEmpty && _selectedCategory == 'all';
 
   static const _cacheKey = 'products_list';
 
@@ -106,10 +133,18 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _loadShops();
     _loadMySeller();
     _loadSaved();
+    RecentlyViewedService.load();
+    RecentlyViewedService.items.addListener(_onRecentChanged);
+  }
+
+  void _onRecentChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    RecentlyViewedService.items.removeListener(_onRecentChanged);
+    _serverDebounce?.cancel();
     _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -185,12 +220,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       _error = null;
     });
     try {
-      final list = await MarketplaceService.fetchProducts(
+      final catalog = await MarketplaceService.fetchCatalog(
+        search: _serverQuery,
         category: _selectedCategory,
         country: _worldwide ? null : _country,
+        filters: _filters,
       );
+      final list = catalog.products;
       if (!mounted || gen != _loadGen) return;
       setState(() {
+        _catalog = catalog;
+        _shown = _page;
         _products = list;
         _loading = false;
         _firstLoad = false;
@@ -232,6 +272,34 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _debounce = Timer(const Duration(milliseconds: 120), () {
       if (mounted) setState(() => _query = value.trim().toLowerCase());
     });
+    // Then ask the server, so the search covers the whole catalogue and
+    // shop names, not just what happened to be loaded.
+    _serverDebounce?.cancel();
+    _serverDebounce = Timer(const Duration(milliseconds: 450), () {
+      final q = value.trim();
+      if (!mounted || q == _serverQuery) return;
+      _serverQuery = q;
+      _loadProducts();
+    });
+  }
+
+  Future<void> _openFilters() async {
+    final picked = await showMarketFilterSheet(
+      context,
+      current: _filters,
+      shops: _scopedShops,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _filters = picked);
+    _loadProducts(filterChanged: true);
+  }
+
+  void _setSort(MarketSort sort) {
+    if (sort == _filters.sort) return;
+    setState(() {
+      _filters = _filters.copyWith(sort: sort);
+      _shown = _page;
+    });
   }
 
   void _selectCategory(String id) {
@@ -240,13 +308,52 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     _loadProducts(filterChanged: true);
   }
 
+  /// Loaded listings, narrowed by what's typed, in ranked order (see
+  /// MarketRanking — deterministic per day, never a shuffle).
   List<Product> get _visibleProducts {
-    if (_query.isEmpty) return _products;
-    return _products.where((p) {
-      return p.title.toLowerCase().contains(_query) ||
-          (p.description?.toLowerCase().contains(_query) ?? false) ||
-          p.sellerName.toLowerCase().contains(_query);
-    }).toList();
+    final list = _query.isEmpty
+        ? _products
+        : _products.where((p) {
+            return p.title.toLowerCase().contains(_query) ||
+                (p.description?.toLowerCase().contains(_query) ?? false) ||
+                p.sellerName.toLowerCase().contains(_query);
+          }).toList();
+    return MarketRanking.rank(
+      list,
+      sort: _filters.sort,
+      now: DateTime.now(),
+      viewer: AuthService.currentUser?.id ?? '',
+      newSellerIds: _catalog.newSellerIds,
+      sellerRatings: _catalog.sellerRatings,
+      interestCategories: RecentlyViewedService.interestCategories,
+    );
+  }
+
+  /// Recently viewed, but only listings still for sale in this scope.
+  List<Product> get _recentForSale {
+    final live = {for (final p in _products) p.id: p};
+    return [
+      for (final r in RecentlyViewedService.items.value)
+        if (live[r.id] != null) live[r.id]!,
+    ];
+  }
+
+  /// New this fortnight — shown only when the catalogue is big enough that
+  /// this isn't simply the whole grid again.
+  List<Product> get _newArrivals {
+    if (_products.length < 12) return const [];
+    final cutoff = DateTime.now().subtract(const Duration(days: 14));
+    final fresh = _products.where((p) => p.createdAt.isAfter(cutoff)).toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return fresh.length >= 3 ? fresh.take(10).toList() : const [];
+  }
+
+  /// Shops whose name matches the search.
+  List<Seller> get _matchingShops {
+    if (_query.isEmpty) return const [];
+    return _scopedShops
+        .where((s) => s.businessName.toLowerCase().contains(_query))
+        .toList();
   }
 
   Future<void> _toggleSave(Product product) async {
@@ -330,7 +437,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             onQueryChanged: _onSearchChanged,
             onClearQuery: () {
               _searchController.clear();
+              _serverDebounce?.cancel();
               setState(() => _query = '');
+              if (_serverQuery.isNotEmpty) {
+                _serverQuery = '';
+                _loadProducts();
+              }
             },
             onCartTap: () => context.pushNamed('cart'),
           ),
@@ -339,16 +451,69 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           SliverToBoxAdapter(child: _SellerStatusBanner(seller: _mySeller!)),
         SliverToBoxAdapter(child: const _ShopJobsSegment(active: _Section.shop)),
 
-        // Shops rail — hidden while searching, since a text query is about
-        // finding a product, not browsing shops.
-        if (_scopedShops.isNotEmpty && _query.isEmpty)
-          SliverToBoxAdapter(child: _buildShopsRail()),
+        // Discovery shelves (brief §11) — only while browsing, and each
+        // only when it has real, distinct content. Nothing is invented to
+        // fill a shelf, and a shelf that would just repeat the grid stays
+        // hidden.
+        if (_browsing) ...[
+          if (_featuredShops.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _buildShopsRail(
+                title: 'Featured stores',
+                shops: _featuredShops,
+                labelled: true,
+              ),
+            ),
+          if (_communityShops.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _buildShopsRail(
+                title: 'Shops in the community',
+                shops: _communityShops,
+              ),
+            ),
+          if (_featuredProducts.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _ProductShelf(
+                title: 'Featured',
+                subtitle: 'Featured by the marketplace team',
+                products: _featuredProducts,
+                savedIds: _savedIds,
+                onToggleSave: _toggleSave,
+              ),
+            ),
+          if (_recentForSale.length >= 2)
+            SliverToBoxAdapter(
+              child: _ProductShelf(
+                title: 'Recently viewed',
+                products: _recentForSale,
+                savedIds: _savedIds,
+                onToggleSave: _toggleSave,
+              ),
+            ),
+          if (_newArrivals.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _ProductShelf(
+                title: 'New arrivals',
+                products: _newArrivals,
+                savedIds: _savedIds,
+                onToggleSave: _toggleSave,
+              ),
+            ),
+        ] else if (_matchingShops.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _buildShopsRail(title: 'Shops', shops: _matchingShops),
+          ),
 
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.only(top: AppSpace.xl),
             child: SectionHeader(
-              title: _query.isEmpty ? 'Browse everything' : 'Results',
+              title: !_browsing
+                  ? 'Results'
+                  : (RecentlyViewedService.interestCategories.isNotEmpty &&
+                        _products.length >= 12)
+                  ? 'Recommended for you'
+                  : 'All listings',
               // The "Categories" link is gone. It opened a whole screen whose
               // only job was a grid of the same categories the chips below
               // already offer inline — a second way to do the same thing, one
@@ -380,6 +545,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         SliverPersistentHeader(
           pinned: true,
           delegate: _CategoryStripDelegate(child: _buildCategoryStrip()),
+        ),
+        SliverToBoxAdapter(
+          child: _FilterRow(
+            filters: _filters,
+            resultCount: _loading ? null : products.length,
+            onOpenFilters: _openFilters,
+            onSort: _setSort,
+            onClear: _filters.isEmpty
+                ? null
+                : () {
+                    setState(() => _filters = MarketFilters(sort: _filters.sort));
+                    _loadProducts(filterChanged: true);
+                  },
+          ),
         ),
 
         if (cachedAt != null && _query.isEmpty)
@@ -430,7 +609,24 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 // just latency the user has to sit through.
                 if (i >= 6) return tile;
                 return StaggeredReveal(index: i, rise: 20, child: tile);
-              }, childCount: products.length),
+              }, childCount: math.min(_shown, products.length)),
+            ),
+          ),
+        if (products.length > _shown)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                0,
+                AppSpace.lg,
+                AppSpace.lg,
+              ),
+              child: OutlinedButton(
+                onPressed: () => setState(() => _shown += _page),
+                child: Text(
+                  'Show more (${products.length - _shown} left)',
+                ),
+              ),
             ),
           ),
 
@@ -443,8 +639,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
 
-  Widget _buildShopsRail() {
-    final shops = _scopedShops;
+  /// Stores the marketplace team featured (sellers.featured — admin-set;
+  /// patch_276 stops sellers setting it themselves). Labelled, never mixed
+  /// into the organic order.
+  List<Seller> get _featuredShops =>
+      _scopedShops.where((s) => s.featured).toList();
+
+  List<Seller> get _communityShops =>
+      _scopedShops.where((s) => !s.featured).toList();
+
+  List<Product> get _featuredProducts =>
+      _products.where((p) => p.isFeatured).take(10).toList();
+
+  Widget _buildShopsRail({
+    required String title,
+    required List<Seller> shops,
+    bool labelled = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -452,7 +663,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         // No "See all": it pushed the CATEGORY grid, which has nothing to do
         // with shops. The rail already carries every approved seller and
         // scrolls horizontally, so there is nothing hidden behind it.
-        const SectionHeader(title: 'Shops in the community'),
+        SectionHeader(title: title),
+        if (labelled)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.lg, 2, AppSpace.lg, 0),
+            child: Text(
+              'Featured by the marketplace team',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+          ),
         const SizedBox(height: AppSpace.md),
         SizedBox(
           height: ShopCard.railHeight,
@@ -1317,6 +1538,176 @@ class _CategoryStripDelegate extends SliverPersistentHeaderDelegate {
     return Material(
       color: context.palette.scaffoldBg,
       child: SizedBox(height: _height, child: child),
+    );
+  }
+}
+
+/// One horizontal shelf of listings (Recently viewed, New arrivals,
+/// Featured). Fixed-height tiles so prices line up across the row.
+class _ProductShelf extends StatelessWidget {
+  const _ProductShelf({
+    required this.title,
+    required this.products,
+    required this.savedIds,
+    required this.onToggleSave,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final List<Product> products;
+  final Set<String> savedIds;
+  final void Function(Product) onToggleSave;
+
+  static const double _tileWidth = 156;
+  static const double _height = 252;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppSpace.xl),
+        SectionHeader(title: title),
+        if (subtitle != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.lg, 2, AppSpace.lg, 0),
+            child: Text(
+              subtitle!,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+          ),
+        const SizedBox(height: AppSpace.md),
+        SizedBox(
+          height: _height,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+            itemCount: products.length,
+            separatorBuilder: (_, _) => const SizedBox(width: AppSpace.md),
+            itemBuilder: (context, i) {
+              final p = products[i];
+              return SizedBox(
+                width: _tileWidth,
+                // No hero tag: the same listing can sit on a shelf and in
+                // the grid at once, and duplicate tags throw.
+                child: ProductTile(
+                  product: p,
+                  saved: savedIds.contains(p.id),
+                  onToggleSave: () => onToggleSave(p),
+                  onTap: () => context.pushNamed(
+                    'product_details',
+                    pathParameters: {'id': p.id},
+                    extra: p,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Filters + sort above the grid. One row: a Filters button that shows
+/// how many are on, the result count, and the sort menu.
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({
+    required this.filters,
+    required this.resultCount,
+    required this.onOpenFilters,
+    required this.onSort,
+    required this.onClear,
+  });
+
+  final MarketFilters filters;
+  final int? resultCount;
+  final VoidCallback onOpenFilters;
+  final ValueChanged<MarketSort> onSort;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final n = filters.activeCount;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.lg, 0),
+      child: Row(
+        children: [
+          Material(
+            color: n > 0 ? AppColors.primaryBlue : palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+            child: InkWell(
+              onTap: onOpenFilters,
+              borderRadius: BorderRadius.circular(AppRadius.button),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                  border: n > 0 ? null : Border.all(color: palette.divider),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 18,
+                      color: n > 0 ? AppColors.white : palette.text,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      n > 0 ? 'Filters · $n' : 'Filters',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: n > 0 ? AppColors.white : palette.text,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (onClear != null)
+            TextButton(onPressed: onClear, child: const Text('Clear')),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: Text(
+              resultCount == null
+                  ? ''
+                  : '$resultCount listing${resultCount == 1 ? '' : 's'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+            ),
+          ),
+          PopupMenuButton<MarketSort>(
+            initialValue: filters.sort,
+            onSelected: onSort,
+            tooltip: 'Sort',
+            itemBuilder: (_) => [
+              for (final s in MarketSort.values)
+                PopupMenuItem(value: s, child: Text(s.label)),
+            ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.sort_rounded, size: 18, color: palette.text),
+                const SizedBox(width: 4),
+                Text(
+                  filters.sort.label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

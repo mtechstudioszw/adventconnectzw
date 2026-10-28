@@ -405,7 +405,9 @@ Requests screen, Edit profile Website + Private account, post-menu
 Follow/Unfollow. Soft profile glow (owner-approved palette exception,
 see CLAUDE.md). Stage 4 = organization Pages (patch_275; see
 docs/REDESIGN_PLAN.md "Stage 4 notes" — churches deliberately not
-migrated). **Next: Stage 5 — Marketplace discovery.**
+migrated). Stage 5 = marketplace ranking/filters/shelves + patch_276
+security guard. **Next: Stage 6 — product detail, storefront, seller
+tools, product form, cart.**
 
 Older note, kept for the record:
 **Batch 2 is IN PROGRESS (awaiting owner device check). Next: Batch 3 — Library information architecture &
@@ -426,7 +428,8 @@ Batch 2 items that were planned (kept for the record):
 
 ## 5. Pending owner actions
 
-0. **Run patches 270–275 in the Supabase SQL editor, in order.** The app
+0. **Run patch_276 FIRST (security: sellers can currently self-approve /
+   self-verify / self-feature), then 270–275 in order.** The app
    degrades honestly without them (features say a database update is
    needed), but Save/Hide (273), moderation hide + appeal (272) and
    following/private accounts (274) and Pages (275) only work once they

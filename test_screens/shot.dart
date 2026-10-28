@@ -45,6 +45,14 @@ Future<void> loadShotFonts() async {
   );
   final roboto = '$sdk/bin/cache/artifacts/material_fonts';
   await load('Roboto', '$roboto/Roboto-Regular.ttf');
+
+  // The image cache wants a folder. Photos still can't load (no network).
+  final tmp = Directory.systemTemp.createTempSync('shots');
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        (_) async => tmp.path,
+      );
 }
 
 final _boundary = GlobalKey();
@@ -57,6 +65,13 @@ Future<void> pumpShot(
   Size size = const Size(412, 892),
   bool dark = true,
 }) async {
+  // Sample photo URLs can't load here; that must not fail the shot.
+  final onError = FlutterError.onError;
+  FlutterError.onError = (d) {
+    if (d.library == 'image resource service') return;
+    onError?.call(d);
+  };
+  addTearDown(() => FlutterError.onError = onError);
   t.view.physicalSize = size * 2.0;
   t.view.devicePixelRatio = 2.0;
   t.view.padding = const FakeViewPadding(top: 48, bottom: 32);
@@ -94,4 +109,6 @@ Future<void> saveShot(WidgetTester t, String name, {int rounds = 8}) async {
     await Directory(dir).create(recursive: true);
     await File('$dir/$name.png').writeAsBytes(png!.buffer.asUint8List());
   });
+  // Drain retry timers (postgrest, image cache) before the test ends.
+  await t.pump(const Duration(seconds: 30));
 }

@@ -11,6 +11,7 @@ import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/cart_service.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/recently_viewed_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
@@ -103,6 +104,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         }
         _loading = false;
       });
+      // Only listings someone else is selling, and only while for sale —
+      // your own stock isn't "recently viewed".
+      if (fetched != null &&
+          fetched.status == 'available' &&
+          fetched.sellerId != AuthService.currentUser?.id) {
+        RecentlyViewedService.add(fetched);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {

@@ -3,41 +3,74 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
+import '../../models/org_page_model.dart';
 import '../../screens/onboarding/widgets/film_scenes.dart'
     show AmbientPainter, byBrightness;
+import '../../services/auth_service.dart';
+import '../../services/devotion_service.dart';
+import '../../services/page_service.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../motion/pressable.dart';
+import '../user_avatar.dart';
+import 'composer_sheet.dart' show readPostDraft;
 
 /// Everything a member can put into the app from Home.
 enum CreateKind { post, story, event, prayer, news, notice, job, product }
 
-/// Facebook-style "what do you want to share?" chooser, as a full screen.
+/// What the studio asks Home to open: a kind, plus how to start it.
+@immutable
+class CreateRequest {
+  const CreateRequest(
+    this.kind, {
+    this.page,
+    this.initialText,
+    this.pickPhoto = false,
+  });
+
+  final CreateKind kind;
+
+  /// Post as this organization Page instead of as yourself.
+  final OrgPage? page;
+
+  /// Seed text for a post — a starter or today's verse.
+  final String? initialText;
+
+  /// Open the composer straight on the photo picker.
+  final bool pickPhoto;
+}
+
+/// The create studio (28 Oct 2026 redesign, founder: "make it look like a
+/// workspace, like a studio").
 ///
-/// The composer row used to go straight to a text post, which quietly hid
-/// seven other things a member can create — events, prayer requests, news
-/// submissions, notices, jobs and marketplace listings all lived behind
-/// separate tabs most people never opened.
+/// The previous two versions were menus — first a list, then a grid of
+/// cards — and both read as generated, because a menu only tells you what
+/// exists. A studio is where you START, so this one opens on a canvas:
 ///
-/// Presented as a blurred full-screen overlay rather than a bottom sheet so
-/// it reads as a deliberate moment: Home stays visible but recedes behind the
-/// blur, the tiles spring in on a stagger, and the whole thing reverses on
-/// the way out. Every animation is driven by the route's own animation, so
-/// dismissing plays the entrance backwards instead of cutting.
+/// - **Canvas** — an artboard with a sheet of paper on it, signed with who
+///   you're posting as. If you have an unpublished post it shows your
+///   words, and "Write" becomes "Continue". The draft is the one the
+///   composer already autosaves; the studio just stops hiding it.
+/// - **Posting as** — members who run Pages switch identity here, before
+///   writing, instead of hunting for the Page's own screen.
+/// - **Today's verse** — when the day's devotion is cached, one tap starts
+///   a post with that verse already quoted.
+/// - **Photo / Photo story** — open straight on the picker, no extra tap.
+/// - **Start from** — openers for the posts people actually write here,
+///   with a Sabbath greeting on Friday and Saturday.
+/// - **Publish elsewhere** — the five occasional tools, as a dock.
 ///
-/// Styled to match [TranslationPicker], the Bible version switcher: navy
-/// scrim, gold overline, and glass cards rather than opaque white tiles. The
-/// white-card version read as a different app's component dropped onto a navy
-/// backdrop — light-mode cards carrying dark text over a dark scrim.
+/// Every animation is driven by the route's own animation, so dismissing
+/// plays the entrance backwards instead of cutting.
 ///
-/// Returns the chosen kind, or null if dismissed. Deliberately presentational
+/// Returns what to open, or null if dismissed. Deliberately presentational
 /// — the caller owns navigation, because posts and stories come back with a
 /// value the feed needs and the rest are plain route pushes.
-Future<CreateKind?> showCreateSheet(BuildContext context) {
-  return showGeneralDialog<CreateKind>(
+Future<CreateRequest?> showCreateSheet(BuildContext context) {
+  return showGeneralDialog<CreateRequest>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Close create menu',
@@ -50,14 +83,25 @@ Future<CreateKind?> showCreateSheet(BuildContext context) {
 
 @immutable
 class _Option {
-  const _Option(this.kind, this.icon, this.title, this.subtitle, this.lands);
+  const _Option(this.kind, this.icon, this.title, this.subtitle);
   final CreateKind kind;
   final IconData icon;
-  final String title;
-  final String subtitle;
 
-  /// Where the thing ends up once it's made — the studio's "output" label.
-  final String lands;
+  /// Short — it sits under a dock icon.
+  final String title;
+
+  /// Read out by screen readers with the title.
+  final String subtitle;
+}
+
+@immutable
+class _Starter {
+  const _Starter(this.icon, this.title, this.text);
+  final IconData icon;
+  final String title;
+
+  /// What the post opens with; the member finishes the sentence.
+  final String text;
 }
 
 class _CreateScreen extends StatefulWidget {
@@ -72,10 +116,15 @@ class _CreateScreen extends StatefulWidget {
 class _CreateScreenState extends State<_CreateScreen>
     with SingleTickerProviderStateMixin {
   /// The same slow ambient drift the splash, onboarding film, auth shell
-  /// and maintenance screen run on. Reused rather than reinvented: this
-  /// is the app's own background, so Create now reads as part of Advent
-  /// Connect instead of a dark rectangle that could belong to anything.
+  /// and maintenance screen run on. It also blinks the canvas caret and
+  /// runs nothing else — one controller for the whole studio.
   late final AnimationController _ambient;
+
+  /// Pages this member can post as (visible ones only).
+  List<OrgPage> _pages = const [];
+
+  /// Who the post goes out as; null is yourself.
+  OrgPage? _as;
 
   @override
   void initState() {
@@ -84,6 +133,22 @@ class _CreateScreenState extends State<_CreateScreen>
       vsync: this,
       duration: const Duration(seconds: 14),
     );
+    _loadPages();
+  }
+
+  Future<void> _loadPages() async {
+    try {
+      final pages = await PageService.mine();
+      if (!mounted) return;
+      setState(
+        () => _pages = [
+          for (final p in pages)
+            if (!p.isHidden) p,
+        ],
+      );
+    } catch (_) {
+      // No switcher is a fine outcome; posting as yourself still works.
+    }
   }
 
   @override
@@ -108,54 +173,18 @@ class _CreateScreenState extends State<_CreateScreen>
 
   Animation<double> get animation => widget.animation;
 
-  /// ## A studio, not a menu (28 Oct 2026)
-  ///
-  /// The last version was a ranked list: two cards and five rows. Correct
-  /// hierarchy, but it read as a settings page — "generic", in the
-  /// founder's word. A studio shows you the FORMATS you can make and what
-  /// each one turns into, so the redesign is built around that:
-  ///
-  /// - **Formats** — Post and Story, each with a small live-drawn preview of
-  ///   what it becomes (a feed card, a 9:16 frame). Nobody has to read the
-  ///   label to know which is which.
-  /// - **Tools** — the five occasional ones, as a two-across grid of tool
-  ///   cards, each stamped with where it lands (Events, Marketplace…).
-  ///   The grid falls back to one column at large text sizes or on narrow
-  ///   phones; the long labels ("Reviewed before it goes live") must never
-  ///   truncate or overflow, which is why the old version used rows.
-  ///
-  /// Still palette-only: blue carries the hierarchy, the screen's single
-  /// gold moment stays on the overline.
-  static const _post = _Option(
-    CreateKind.post,
-    Icons.edit_note_rounded,
-    'Post',
-    'Words and photos',
-    'Home feed',
-  );
-
-  static const _story = _Option(
-    CreateKind.story,
-    Icons.auto_awesome_outlined,
-    'Story',
-    'Gone in 24 hours',
-    'Stories',
-  );
-
   static const _tools = <_Option>[
     _Option(
       CreateKind.event,
       Icons.event_outlined,
       'Event',
       'Invite people along',
-      'Events',
     ),
     _Option(
       CreateKind.prayer,
       Icons.volunteer_activism_outlined,
-      'Prayer request',
-      'Ask for prayer',
       'Prayer',
+      'Ask for prayer',
     ),
     // REMOVED 23 Aug 2026 — "Church notice / Tell your local church".
     //
@@ -179,31 +208,124 @@ class _CreateScreenState extends State<_CreateScreen>
     _Option(
       CreateKind.news,
       Icons.newspaper_outlined,
-      'Advent News',
-      'Reviewed before it goes live',
       'News',
+      'Advent News — reviewed before it goes live',
     ),
     _Option(
       CreateKind.product,
       Icons.storefront_outlined,
-      'Sell something',
-      'List on the marketplace',
-      'Marketplace',
+      'Sell',
+      'List something on the marketplace',
     ),
     _Option(
       CreateKind.job,
       Icons.work_outline_rounded,
-      'Job opening',
-      'Post an opportunity',
-      'Jobs',
+      'Hire',
+      'Post a job opening',
     ),
   ];
 
-  /// Per-tile progress: tile [i] starts [i * 0.05] into the route animation
+  /// Openers for the posts people write from here. Day-aware: the Sabbath
+  /// greeting leads on Friday and Saturday and is gone the rest of the week.
+  List<_Starter> _starters() {
+    final day = DateTime.now().weekday;
+    return [
+      if (day == DateTime.friday || day == DateTime.saturday)
+        const _Starter(
+          Icons.wb_twilight_rounded,
+          'Sabbath greeting',
+          'Happy Sabbath, family! ',
+        ),
+      const _Starter(
+        Icons.record_voice_over_outlined,
+        'Testimony',
+        'I want to share what God did this week: ',
+      ),
+      const _Starter(
+        Icons.favorite_border_rounded,
+        'Grateful for',
+        "Today I'm thankful for ",
+      ),
+      const _Starter(Icons.church_outlined, 'Church recap', 'At church today '),
+      const _Starter(
+        Icons.help_outline_rounded,
+        'Ask the family',
+        'A question for my church family: ',
+      ),
+    ];
+  }
+
+  /// Today's devotion verse, quoted, or null when none is cached.
+  String? _verseText() {
+    try {
+      final d = DevotionService.cachedToday();
+      final text = d?.bibleText.trim() ?? '';
+      final ref = d?.bibleRef.trim() ?? '';
+      if (text.isEmpty || ref.isEmpty) return null;
+      return '“$text”\n— $ref\n\n';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reading the signed-in user must never take the studio down (see the
+  /// composer's identity row — the client can be uninitialised in tests and
+  /// early startup).
+  ({String name, String? photo}) _who() {
+    final page = _as;
+    if (page != null) return (name: page.name, photo: page.logoUrl);
+    try {
+      final meta = AuthService.currentUser?.userMetadata ?? const {};
+      final full = (meta['full_name'] as String?)?.trim() ?? '';
+      return (
+        name: full.isEmpty ? 'You' : full,
+        photo: meta['profile_photo_url'] as String?,
+      );
+    } catch (_) {
+      return (name: 'You', photo: null);
+    }
+  }
+
+  void _go(CreateRequest request) {
+    HapticFeedback.selectionClick();
+    Navigator.of(context).pop(request);
+  }
+
+  void _post({String? text, bool photo = false}) => _go(
+    CreateRequest(
+      CreateKind.post,
+      page: _as,
+      initialText: text,
+      pickPhoto: photo,
+    ),
+  );
+
+  Future<void> _chooseIdentity() async {
+    if (_pages.isEmpty) return;
+    final self = _who();
+    final picked = await showModalBottomSheet<_Identity>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.sheet),
+        ),
+      ),
+      builder: (ctx) => _IdentitySheet(
+        selfName: _as == null ? self.name : 'You',
+        selfPhoto: _as == null ? self.photo : null,
+        pages: _pages,
+        current: _as,
+      ),
+    );
+    if (picked != null && mounted) setState(() => _as = picked.page);
+  }
+
+  /// Per-tile progress: tile [i] starts [i * 0.06] into the route animation
   /// and takes 55% of it to land. Capped so the last tile isn't still
   /// arriving after the route has settled.
   double _tileT(int i) {
-    final start = (i * 0.05).clamp(0.0, 0.40);
+    final start = (i * 0.06).clamp(0.0, 0.40);
     return ((animation.value - start) / 0.55).clamp(0.0, 1.0);
   }
 
@@ -213,8 +335,8 @@ class _CreateScreenState extends State<_CreateScreen>
 
     // Scaffold, not a bare Stack. A `showGeneralDialog` page has no Material
     // ancestor, so every Text here inherited Flutter's missing-Material error
-    // style — black glyphs with a double YELLOW underline — and no amount of
-    // palette work could fix it. This is the transparent-Material fix.
+    // style — black glyphs with a double YELLOW underline. This is the
+    // transparent-Material fix.
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AnimatedBuilder(
@@ -223,10 +345,11 @@ class _CreateScreenState extends State<_CreateScreen>
           final t = animate
               ? Curves.easeOutCubic.transform(animation.value.clamp(0.0, 1.0))
               : 1.0;
+          double tile(int i) => animate ? _tileT(i) : 1.0;
 
           return Stack(
             children: [
-              // Scrim + blur. Tapping anywhere off the tiles closes.
+              // Scrim + blur. Tapping anywhere off the studio closes.
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -309,11 +432,14 @@ class _CreateScreenState extends State<_CreateScreen>
               SafeArea(
                 child: LayoutBuilder(
                   builder: (context, box) {
-                    // Two-across only while it can't overflow: a narrow
-                    // phone or a large system font gets one column.
+                    // Wide layouts only while they can't overflow: a narrow
+                    // phone or a large system font gets the compact one.
                     final scale =
                         MediaQuery.textScalerOf(context).scale(14) / 14;
                     final roomy = box.maxWidth >= 340 && scale <= 1.3;
+                    final who = _who();
+                    final draft = readPostDraft(page: _as);
+                    final verse = _verseText();
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -321,8 +447,14 @@ class _CreateScreenState extends State<_CreateScreen>
                           opacity: t,
                           child: Transform.translate(
                             offset: Offset(0, -16 * (1 - t)),
-                            child: _Header(
+                            child: _TopBar(
                               onClose: () => Navigator.of(context).pop(),
+                              identity: _IdentityPill(
+                                name: who.name,
+                                photo: who.photo,
+                                switchable: _pages.isNotEmpty,
+                                onTap: _chooseIdentity,
+                              ),
                             ),
                           ),
                         ),
@@ -330,69 +462,100 @@ class _CreateScreenState extends State<_CreateScreen>
                           child: SingleChildScrollView(
                             padding: const EdgeInsets.fromLTRB(
                               AppSpace.lg,
-                              AppSpace.md,
+                              AppSpace.sm,
                               AppSpace.lg,
                               AppSpace.xl,
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                _SectionLabel(
-                                  'FORMATS',
-                                  t: animate ? _tileT(0) : 1.0,
-                                ),
-                                const SizedBox(height: AppSpace.md),
-                                _pair(
-                                  roomy: roomy,
-                                  flex: const [3, 2],
-                                  children: [
-                                    _FormatCard(
-                                      option: _post,
-                                      t: animate ? _tileT(0) : 1.0,
-                                      preview: const _FeedPreview(),
+                                _Enter(
+                                  t: tile(0),
+                                  child: _Artboard(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _Canvas(
+                                          name: who.name,
+                                          photo: who.photo,
+                                          draft: draft,
+                                          caret: _ambient,
+                                          animate: animate,
+                                          onWrite: () => _post(),
+                                          onPhoto: () => _post(photo: true),
+                                          onVerse: verse == null
+                                              ? null
+                                              : () => _post(text: verse),
+                                        ),
+                                        const SizedBox(height: AppSpace.md),
+                                        _StoryRow(
+                                          stacked: !roomy,
+                                          onText: () => _go(
+                                            const CreateRequest(
+                                              CreateKind.story,
+                                            ),
+                                          ),
+                                          onPhoto: () => _go(
+                                            const CreateRequest(
+                                              CreateKind.story,
+                                              pickPhoto: true,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    _FormatCard(
-                                      option: _story,
-                                      t: animate ? _tileT(1) : 1.0,
-                                      preview: _StoryPreview(
-                                        progress: _ambient,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                                 const SizedBox(height: AppSpace.xl),
-                                _SectionLabel(
-                                  'TOOLS',
-                                  t: animate ? _tileT(2) : 1.0,
-                                ),
+                                _SectionLabel('START FROM', t: tile(2)),
                                 const SizedBox(height: AppSpace.md),
-                                for (var i = 0; i < _tools.length; i += 2)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: AppSpace.md,
-                                    ),
-                                    child: _pair(
-                                      roomy: roomy,
-                                      flex: const [1, 1],
+                                _Enter(
+                                  t: tile(2),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    clipBehavior: Clip.none,
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        for (
-                                          var j = i;
-                                          j < i + 2 && j < _tools.length;
-                                          j++
-                                        )
-                                          _ToolCard(
-                                            option: _tools[j],
-                                            t: animate ? _tileT(j + 2) : 1.0,
-                                            // The odd one out spans the row
-                                            // and lies flat instead.
-                                            wide:
-                                                !roomy ||
-                                                (j == i &&
-                                                    j == _tools.length - 1),
+                                        for (final s in _starters())
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              right: AppSpace.sm,
+                                            ),
+                                            child: _StarterCard(
+                                              starter: s,
+                                              onTap: () => _post(text: s.text),
+                                            ),
                                           ),
                                       ],
                                     ),
                                   ),
+                                ),
+                                const SizedBox(height: AppSpace.xl),
+                                _SectionLabel('PUBLISH ELSEWHERE', t: tile(3)),
+                                const SizedBox(height: AppSpace.md),
+                                _Enter(
+                                  t: tile(3),
+                                  child: _ToolDock(
+                                    tools: _tools,
+                                    columns: roomy ? 5 : 3,
+                                    onPick: (o) => _go(CreateRequest(o.kind)),
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpace.sm),
+                                Opacity(
+                                  opacity: tile(3),
+                                  child: Text(
+                                    'News is reviewed by editors before it '
+                                    'goes live.',
+                                    textAlign: TextAlign.center,
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: context.palette.textMuted,
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -408,56 +571,27 @@ class _CreateScreenState extends State<_CreateScreen>
       ),
     );
   }
-
-  /// Side by side at equal height when [roomy], else stacked.
-  Widget _pair({
-    required bool roomy,
-    required List<int> flex,
-    required List<Widget> children,
-  }) {
-    if (children.length == 1) return children.first;
-    if (!roomy) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const SizedBox(height: AppSpace.md),
-            children[i],
-          ],
-        ],
-      );
-    }
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const SizedBox(width: AppSpace.md),
-            Expanded(flex: flex[i], child: children[i]),
-          ],
-        ],
-      ),
-    );
-  }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.onClose});
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.onClose, required this.identity});
 
   final VoidCallback onClose;
+  final Widget identity;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpace.xl,
         AppSpace.lg,
+        AppSpace.md,
         AppSpace.lg,
-        AppSpace.sm,
+        AppSpace.md,
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _CloseButton(onTap: onClose),
+          const SizedBox(width: AppSpace.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,34 +600,187 @@ class _Header extends StatelessWidget {
                 Text(
                   'CREATE',
                   style: AppTextStyles.labelSmall.copyWith(
-                    // The screen's one gold moment, in the same slot the
-                    // Bible switcher uses it.
+                    // The screen's one gold moment.
                     color: AppColors.goldAccent,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.8,
                   ),
                 ),
-                const SizedBox(height: AppSpace.xs),
                 Text(
-                  'Your studio',
-                  style: AppTextStyles.displayMedium.copyWith(
+                  'Studio',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.headlineMedium.copyWith(
                     color: context.palette.text,
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: AppSpace.xs),
-                Text(
-                  'Pick a format or a tool to start.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.palette.textMuted,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: AppSpace.md),
-          _CloseButton(onTap: onClose),
+          const SizedBox(width: AppSpace.sm),
+          identity,
         ],
+      ),
+    );
+  }
+}
+
+/// "Posting as" — tappable only when there's someone else to be.
+class _IdentityPill extends StatelessWidget {
+  const _IdentityPill({
+    required this.name,
+    required this.photo,
+    required this.switchable,
+    required this.onTap,
+  });
+
+  final String name;
+  final String? photo;
+  final bool switchable;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final first = name.split(RegExp(r'\s+')).first;
+    final pill = Container(
+      constraints: const BoxConstraints(maxWidth: 160),
+      padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
+      decoration: BoxDecoration(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: context.palette.divider),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          UserAvatar(photoUrl: photo, name: name, size: 28),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              first,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (switchable) ...[
+            const SizedBox(width: 2),
+            Icon(
+              Icons.expand_more_rounded,
+              size: 18,
+              color: context.palette.textMuted,
+            ),
+          ],
+        ],
+      ),
+    );
+    return Semantics(
+      button: switchable,
+      label: switchable ? 'Posting as $name. Change' : 'Posting as $name',
+      excludeSemantics: true,
+      child: switchable
+          ? Pressable(onTap: onTap, pressedScale: 0.94, child: pill)
+          : pill,
+    );
+  }
+}
+
+/// The picker's answer — wraps the page so "yourself" (null) is a real
+/// choice, distinct from dismissing the sheet.
+class _Identity {
+  const _Identity(this.page);
+  final OrgPage? page;
+}
+
+class _IdentitySheet extends StatelessWidget {
+  const _IdentitySheet({
+    required this.selfName,
+    required this.selfPhoto,
+    required this.pages,
+    required this.current,
+  });
+
+  final String selfName;
+  final String? selfPhoto;
+  final List<OrgPage> pages;
+  final OrgPage? current;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget row({
+      required String title,
+      required String subtitle,
+      required String? photo,
+      required bool selected,
+      required _Identity value,
+    }) {
+      return ListTile(
+        onTap: () => Navigator.of(context).pop(value),
+        leading: UserAvatar(photoUrl: photo, name: title, size: 40),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: context.palette.text,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: AppTextStyles.caption.copyWith(
+            color: context.palette.textMuted,
+          ),
+        ),
+        trailing: selected
+            ? Icon(Icons.check_rounded, color: context.palette.brandBlue)
+            : null,
+      );
+    }
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                AppSpace.sm,
+                AppSpace.lg,
+                AppSpace.sm,
+              ),
+              child: Text(
+                'Post as',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: context.palette.text,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            row(
+              title: selfName,
+              subtitle: 'Your profile',
+              photo: selfPhoto,
+              selected: current == null,
+              value: const _Identity(null),
+            ),
+            for (final p in pages)
+              row(
+                title: p.name,
+                subtitle: 'Page you manage',
+                photo: p.logoUrl,
+                selected: current?.id == p.id,
+                value: _Identity(p),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -543,65 +830,230 @@ class _Enter extends StatelessWidget {
       opacity: clamped,
       child: Transform.translate(
         offset: Offset(0, 22 * (1 - clamped)),
-        child: Transform.scale(scale: 0.92 + 0.08 * eased, child: child),
+        child: Transform.scale(scale: 0.94 + 0.06 * eased, child: child),
       ),
     );
   }
 }
 
-/// The tappable card every option sits on — one surface recipe so formats
-/// and tools differ by content, not by chrome.
-class _StudioSurface extends StatelessWidget {
-  const _StudioSurface({
-    required this.option,
-    required this.t,
-    required this.padding,
-    required this.child,
-    this.pressedScale = 0.96,
-  });
+/// The workspace: a dot-grid board, like a design tool's canvas, that the
+/// paper and the story tools sit on.
+class _Artboard extends StatelessWidget {
+  const _Artboard({required this.child});
 
-  final _Option option;
-  final double t;
-  final EdgeInsets padding;
-  final double pressedScale;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return _Enter(
-      t: t,
-      child: Semantics(
-        button: true,
-        label: '${option.title}. ${option.subtitle}',
-        excludeSemantics: true,
-        child: Pressable(
-          haptics: true,
-          pressedScale: pressedScale,
-          onTap: () {
-            HapticFeedback.selectionClick();
-            Navigator.of(context).pop(option.kind);
-          },
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: context.palette.card,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: context.palette.divider),
-              boxShadow: AppShadows.card(context),
-            ),
-            child: child,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.sheet),
+      child: CustomPaint(
+        painter: _DotGridPainter(
+          background: context.palette.scaffoldBg,
+          dot: context.palette.textMuted.withValues(alpha: 0.22),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpace.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.sheet),
+            border: Border.all(color: context.palette.divider),
           ),
+          child: child,
         ),
       ),
     );
   }
 }
 
-/// "→ Marketplace" — where the thing you make ends up.
-class _LandsTag extends StatelessWidget {
-  const _LandsTag(this.lands);
+class _DotGridPainter extends CustomPainter {
+  const _DotGridPainter({required this.background, required this.dot});
 
-  final String lands;
+  final Color background;
+  final Color dot;
+
+  static const _gap = 14.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = background);
+    final paint = Paint()..color = dot;
+    for (var y = _gap / 2; y < size.height; y += _gap) {
+      for (var x = _gap / 2; x < size.width; x += _gap) {
+        canvas.drawCircle(Offset(x, y), 0.9, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DotGridPainter old) =>
+      old.background != background || old.dot != dot;
+}
+
+/// The sheet of paper: who's writing, the words so far, and a toolbar.
+class _Canvas extends StatelessWidget {
+  const _Canvas({
+    required this.name,
+    required this.photo,
+    required this.draft,
+    required this.caret,
+    required this.animate,
+    required this.onWrite,
+    required this.onPhoto,
+    required this.onVerse,
+  });
+
+  final String name;
+  final String? photo;
+  final ({String body, List<String> photos})? draft;
+  final Animation<double> caret;
+  final bool animate;
+  final VoidCallback onWrite;
+  final VoidCallback onPhoto;
+  final VoidCallback? onVerse;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = draft;
+    final hasDraft = d != null;
+    return Container(
+      decoration: BoxDecoration(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: context.palette.divider),
+        boxShadow: AppShadows.card(context),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            button: true,
+            label: hasDraft ? 'Continue your draft' : 'Write a post',
+            excludeSemantics: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onWrite,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.md,
+                  AppSpace.md,
+                  AppSpace.md,
+                  AppSpace.sm,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        UserAvatar(photoUrl: photo, name: name, size: 32),
+                        const SizedBox(width: AppSpace.sm),
+                        Expanded(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: context.palette.text,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (hasDraft) const _DraftTag(),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpace.md),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 64),
+                      child: hasDraft
+                          ? _DraftBody(draft: d)
+                          : _Prompt(caret: caret, animate: animate),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Container(height: 1, color: context.palette.divider),
+          Padding(
+            padding: const EdgeInsets.all(AppSpace.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 2,
+                    runSpacing: 2,
+                    children: [
+                      _ToolbarButton(
+                        icon: Icons.photo_outlined,
+                        label: 'Photo',
+                        onTap: onPhoto,
+                      ),
+                      if (onVerse != null)
+                        _ToolbarButton(
+                          icon: Icons.menu_book_outlined,
+                          label: "Today's verse",
+                          onTap: onVerse!,
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                _WriteButton(
+                  label: hasDraft ? 'Continue' : 'Write',
+                  onTap: onWrite,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "What's on your heart?" with a blinking caret — the canvas waiting.
+class _Prompt extends StatelessWidget {
+  const _Prompt({required this.caret, required this.animate});
+
+  final Animation<double> caret;
+  final bool animate;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = AppTextStyles.titleMedium.copyWith(
+      color: context.palette.textMuted,
+      fontWeight: FontWeight.w500,
+    );
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Text.rich(
+        TextSpan(
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: AnimatedBuilder(
+                animation: caret,
+                builder: (context, _) {
+                  // ~1.1s blink off the 14s ambient loop.
+                  final on = !animate || (caret.value * 14) % 1.1 < 0.55;
+                  return Container(
+                    width: 2,
+                    height: 22,
+                    margin: const EdgeInsets.only(right: 3),
+                    color: on ? AppColors.primaryBlue : Colors.transparent,
+                  );
+                },
+              ),
+            ),
+            TextSpan(text: "What's on your heart?", style: style),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DraftTag extends StatelessWidget {
+  const _DraftTag();
 
   @override
   Widget build(BuildContext context) {
@@ -611,397 +1063,454 @@ class _LandsTag extends StatelessWidget {
         color: context.palette.chipBg,
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.north_east_rounded,
-            size: 11,
-            color: context.palette.brandBlue,
-          ),
-          const SizedBox(width: 3),
-          Flexible(
-            child: Text(
-              lands,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.caption.copyWith(
-                color: context.palette.brandBlue,
-                fontWeight: FontWeight.w700,
-                fontSize: 10.5,
-              ),
-            ),
-          ),
-        ],
+      child: Text(
+        'DRAFT',
+        style: AppTextStyles.labelSmall.copyWith(
+          color: context.palette.brandBlue,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.0,
+          fontSize: 10,
+        ),
       ),
     );
   }
 }
 
-class _GradientChip extends StatelessWidget {
-  const _GradientChip(this.icon, {this.size = 40});
+class _DraftBody extends StatelessWidget {
+  const _DraftBody({required this.draft});
 
-  final IconData icon;
-  final double size;
+  final ({String body, List<String> photos}) draft;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(AppRadius.button),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.30),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
+    final n = draft.photos.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (draft.body.trim().isNotEmpty)
+          Text(
+            draft.body.trim(),
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: context.palette.text,
+              height: 1.4,
+            ),
+          ),
+        if (n > 0) ...[
+          const SizedBox(height: AppSpace.sm),
+          Row(
+            children: [
+              Icon(
+                Icons.photo_library_outlined,
+                size: 16,
+                color: context.palette.textMuted,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                n == 1 ? '1 photo' : '$n photos',
+                style: AppTextStyles.caption.copyWith(
+                  color: context.palette.textMuted,
+                ),
+              ),
+            ],
           ),
         ],
-      ),
-      alignment: Alignment.center,
-      child: Icon(icon, size: size * 0.5, color: AppColors.white),
+        const SizedBox(height: AppSpace.sm),
+        Text(
+          'Saved on this phone',
+          style: AppTextStyles.caption.copyWith(
+            color: context.palette.textMuted,
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// Post and Story: a preview of what you'll make, then its name.
-class _FormatCard extends StatelessWidget {
-  const _FormatCard({
-    required this.option,
-    required this.t,
-    required this.preview,
+class _ToolbarButton extends StatelessWidget {
+  const _ToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
   });
 
-  final _Option option;
-  final double t;
-  final Widget preview;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return _StudioSurface(
-      option: option,
-      t: t,
-      pressedScale: 0.95,
-      padding: const EdgeInsets.all(AppSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // The "canvas": a stage the preview sits on, like an editor's
-          // artboard.
-          Container(
-            height: 112,
-            decoration: BoxDecoration(
-              color: context.palette.scaffoldBg,
-              borderRadius: BorderRadius.circular(AppRadius.card - 2),
-            ),
-            alignment: Alignment.center,
-            child: ExcludeSemantics(child: preview),
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.94,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpace.sm,
+            vertical: 8,
           ),
-          const SizedBox(height: AppSpace.md),
-          Row(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _GradientChip(option.icon, size: 36),
-              const SizedBox(width: AppSpace.sm),
-              Expanded(
-                child: Text(
-                  option.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: context.palette.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Text(
-            option.subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.caption.copyWith(
-              color: context.palette.textMuted,
-              height: 1.3,
-            ),
-          ),
-          const Spacer(),
-          const SizedBox(height: AppSpace.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _LandsTag(option.lands),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A feed card in miniature: author, photo, a few lines of text.
-class _FeedPreview extends StatelessWidget {
-  const _FeedPreview();
-
-  @override
-  Widget build(BuildContext context) {
-    final line = context.palette.divider;
-    Widget bar(double w) => Container(
-      width: w,
-      height: 5,
-      decoration: BoxDecoration(
-        color: line,
-        borderRadius: BorderRadius.circular(3),
-      ),
-    );
-    return Container(
-      width: 132,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: AppShadows.card(context),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.28),
-                  shape: BoxShape.circle,
-                ),
-              ),
+              Icon(icon, size: 19, color: context.palette.brandBlue),
               const SizedBox(width: 5),
-              bar(44),
+              Text(
+                label,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.palette.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Container(
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.primaryBlue.withValues(alpha: 0.22),
-                  AppColors.primaryBlue.withValues(alpha: 0.08),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.image_outlined,
-              size: 18,
-              color: context.palette.brandBlue.withValues(alpha: 0.7),
-            ),
-          ),
-          const SizedBox(height: 6),
-          bar(96),
-          const SizedBox(height: 4),
-          bar(64),
-        ],
-      ),
-    );
-  }
-}
-
-/// A 9:16 story frame whose first segment fills on the ambient loop —
-/// the one moving part, so the studio feels live. Still when motion is
-/// off (the loop then sits at 0, so the bar shows a fixed third).
-class _StoryPreview extends StatelessWidget {
-  const _StoryPreview({required this.progress});
-
-  final Animation<double> progress;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      height: 96,
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.28),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AnimatedBuilder(
-            animation: progress,
-            builder: (context, _) {
-              // Seven seconds to fill, matching nothing in particular but
-              // calm; the 14s loop runs it twice.
-              final v = progress.value == 0 ? 0.33 : (progress.value * 2) % 1.0;
-              return Row(
-                children: [
-                  Expanded(child: _Segment(fill: v)),
-                  const SizedBox(width: 2),
-                  const Expanded(child: _Segment(fill: 0)),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 4),
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: AppColors.white.withValues(alpha: 0.85),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const Spacer(),
-          Center(
-            child: Text(
-              'Aa',
-              textScaler: TextScaler.noScaling,
-              style: AppTextStyles.titleMedium.copyWith(
-                color: AppColors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
-  }
-}
-
-class _Segment extends StatelessWidget {
-  const _Segment({required this.fill});
-
-  final double fill;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
-      child: SizedBox(
-        height: 2.5,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ColoredBox(color: AppColors.white.withValues(alpha: 0.35)),
-            FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: fill.clamp(0.0, 1.0),
-              child: const ColoredBox(color: AppColors.white),
-            ),
-          ],
         ),
       ),
     );
   }
 }
 
-/// The occasional five. Tall when two share a row; flat when one has the
-/// row to itself, so it doesn't stand there half-empty.
-class _ToolCard extends StatelessWidget {
-  const _ToolCard({required this.option, required this.t, this.wide = false});
+/// The paper's one primary action — gradient, radius 14, per the rules.
+class _WriteButton extends StatelessWidget {
+  const _WriteButton({required this.label, required this.onTap});
 
-  final _Option option;
-  final double t;
-  final bool wide;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final chip = Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        // Tinted, not filled: the other half of the hierarchy — same icon
-        // language as the formats, visibly less weight.
-        color: AppColors.primaryBlue.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppRadius.button),
-      ),
-      alignment: Alignment.center,
-      child: Icon(option.icon, size: 21, color: context.palette.brandBlue),
-    );
-    final title = Text(
-      option.title,
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-      style: AppTextStyles.bodyMedium.copyWith(
-        color: context.palette.text,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-    final subtitle = Text(
-      option.subtitle,
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-      style: AppTextStyles.caption.copyWith(
-        color: context.palette.textMuted,
-        height: 1.3,
-      ),
-    );
-
-    if (wide) {
-      return _StudioSurface(
-        option: option,
-        t: t,
-        padding: const EdgeInsets.all(AppSpace.md),
+    return Pressable(
+      onTap: onTap,
+      haptics: true,
+      pressedScale: 0.94,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(AppRadius.button),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withValues(alpha: 0.30),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            chip,
-            const SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  title,
-                  const SizedBox(height: 1),
-                  subtitle,
-                  const SizedBox(height: AppSpace.sm),
-                  _LandsTag(option.lands),
-                ],
+            Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.white,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(width: AppSpace.sm),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: context.palette.textMuted,
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              size: 16,
+              color: AppColors.white,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Text story / Photo story, under the paper on the same board.
+class _StoryRow extends StatelessWidget {
+  const _StoryRow({
+    required this.stacked,
+    required this.onText,
+    required this.onPhoto,
+  });
+
+  final bool stacked;
+  final VoidCallback onText;
+  final VoidCallback onPhoto;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = _StoryButton(
+      glyph: Text(
+        'Aa',
+        textScaler: TextScaler.noScaling,
+        style: AppTextStyles.bodySmall.copyWith(
+          color: AppColors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      title: 'Text story',
+      onTap: onText,
+    );
+    final photo = _StoryButton(
+      glyph: const Icon(
+        Icons.photo_camera_outlined,
+        size: 17,
+        color: AppColors.white,
+      ),
+      title: 'Photo story',
+      onTap: onPhoto,
+    );
+    if (stacked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          text,
+          const SizedBox(height: AppSpace.sm),
+          photo,
+        ],
       );
     }
+    return Row(
+      children: [
+        Expanded(child: text),
+        const SizedBox(width: AppSpace.sm),
+        Expanded(child: photo),
+      ],
+    );
+  }
+}
 
-    return _StudioSurface(
-      option: option,
-      t: t,
-      padding: const EdgeInsets.all(AppSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          chip,
-          const SizedBox(height: AppSpace.md),
-          title,
-          const SizedBox(height: 2),
-          subtitle,
-          const Spacer(),
-          const SizedBox(height: AppSpace.sm),
-          _LandsTag(option.lands),
-        ],
+class _StoryButton extends StatelessWidget {
+  const _StoryButton({
+    required this.glyph,
+    required this.title,
+    required this.onTap,
+  });
+
+  final Widget glyph;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$title. Gone in 24 hours',
+      excludeSemantics: true,
+      child: Pressable(
+        onTap: onTap,
+        haptics: true,
+        pressedScale: 0.95,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpace.sm),
+          decoration: BoxDecoration(
+            color: context.palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: context.palette.divider),
+          ),
+          child: Row(
+            children: [
+              // A story ring around the glyph — the shape members already
+              // read as "story" from the rail on Home.
+              Container(
+                width: 36,
+                height: 36,
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppColors.primaryGradient,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: context.palette.card, width: 2),
+                    color: AppColors.primaryBlue,
+                  ),
+                  alignment: Alignment.center,
+                  child: glyph,
+                ),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'Gone in 24h',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption.copyWith(
+                        color: context.palette.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StarterCard extends StatelessWidget {
+  const _StarterCard({required this.starter, required this.onTap});
+
+  final _Starter starter;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Start a post: ${starter.title}',
+      excludeSemantics: true,
+      child: Pressable(
+        onTap: onTap,
+        haptics: true,
+        pressedScale: 0.95,
+        child: Container(
+          width: 150,
+          padding: const EdgeInsets.all(AppSpace.md),
+          decoration: BoxDecoration(
+            color: context.palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: context.palette.divider),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(starter.icon, size: 20, color: context.palette.brandBlue),
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                starter.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '“${starter.text.trim().replaceAll(RegExp(r'[:!,]$'), '')}…”',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                  color: context.palette.textMuted,
+                  fontStyle: FontStyle.italic,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The occasional five, as a tool dock.
+class _ToolDock extends StatelessWidget {
+  const _ToolDock({
+    required this.tools,
+    required this.columns,
+    required this.onPick,
+  });
+
+  final List<_Option> tools;
+  final int columns;
+  final ValueChanged<_Option> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpace.xs,
+        vertical: AppSpace.md,
+      ),
+      decoration: BoxDecoration(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: context.palette.divider),
+        boxShadow: AppShadows.card(context),
+      ),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth / columns;
+          return Wrap(
+            alignment: WrapAlignment.center,
+            runSpacing: AppSpace.md,
+            children: [
+              for (final o in tools)
+                SizedBox(
+                  width: w,
+                  child: _DockItem(option: o, onTap: () => onPick(o)),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DockItem extends StatelessWidget {
+  const _DockItem({required this.option, required this.onTap});
+
+  final _Option option;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '${option.title}. ${option.subtitle}',
+      excludeSemantics: true,
+      child: Pressable(
+        onTap: onTap,
+        haptics: true,
+        pressedScale: 0.9,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(AppRadius.button),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                option.icon,
+                size: 22,
+                color: context.palette.brandBlue,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              option.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.caption.copyWith(
+                color: context.palette.text,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

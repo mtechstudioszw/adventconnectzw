@@ -21,7 +21,7 @@ class HomeComposeFab extends StatelessWidget {
   const HomeComposeFab({super.key, required this.onCreate});
 
   /// Fires with whatever the member picked in the sheet.
-  final void Function(CreateKind) onCreate;
+  final void Function(CreateRequest) onCreate;
 
   @override
   Widget build(BuildContext context) {

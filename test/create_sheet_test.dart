@@ -48,8 +48,8 @@ void main() {
       await _open(t, scale);
 
       expect(t.takeException(), isNull);
-      expect(find.text('Post'), findsOneWidget);
-      expect(find.text('Story'), findsOneWidget);
+      expect(find.text('Write'), findsOneWidget);
+      expect(find.text('Text story'), findsOneWidget);
     });
   }
 
@@ -76,13 +76,15 @@ void main() {
     // If the feature is rebuilt properly (church_id + an
     // is_approved_church_admin policy), add it back here at the same time.
     for (final label in const [
-      'Post',
-      'Story',
+      'Write',
+      'Photo',
+      'Text story',
+      'Photo story',
       'Event',
-      'Prayer request',
-      'Advent News',
-      'Sell something',
-      'Job opening',
+      'Prayer',
+      'News',
+      'Sell',
+      'Hire',
     ]) {
       expect(
         find.text(label),
@@ -109,7 +111,7 @@ void main() {
     t.view.devicePixelRatio = 1.0;
     addTearDown(t.view.reset);
 
-    CreateKind? chosen;
+    CreateRequest? chosen;
     await t.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
@@ -129,14 +131,13 @@ void main() {
     await t.pump();
     await t.pump(const Duration(milliseconds: 700));
 
-    // A tool card, since those are the ones that changed shape. It sits
-    // below the fold on a short phone since the studio redesign, so scroll
-    // to it the way a member would.
-    await t.ensureVisible(find.text('Job opening'));
+    // A dock tool. It sits below the fold on a short phone, so scroll to
+    // it the way a member would.
+    await t.ensureVisible(find.text('Hire'));
     await t.pump();
-    await t.tap(find.text('Job opening'));
+    await t.tap(find.text('Hire'));
     await t.pumpAndSettle();
 
-    expect(chosen, CreateKind.job);
+    expect(chosen?.kind, CreateKind.job);
   });
 }

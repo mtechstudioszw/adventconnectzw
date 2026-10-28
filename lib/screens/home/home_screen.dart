@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_version.dart';
 import '../../models/advent_news_model.dart';
+import '../../models/org_page_model.dart';
 import '../../models/devotion_model.dart';
 import '../../models/church_model.dart';
 import '../../models/event_model.dart';
@@ -968,8 +969,17 @@ class _HomeScreenState extends State<HomeScreen>
         .toUpperCase();
   }
 
-  Future<void> _openPostComposer() async {
-    final post = await showPostComposer(context);
+  Future<void> _openPostComposer({
+    OrgPage? page,
+    String? initialText,
+    bool pickPhoto = false,
+  }) async {
+    final post = await showPostComposer(
+      context,
+      page: page,
+      initialText: initialText,
+      pickPhoto: pickPhoto,
+    );
     if (!mounted || post == null) return;
     // The post is already at the top: FeedService.postChanges delivered it
     // (see _onPostChange), the same way it reaches Profile.
@@ -991,8 +1001,8 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Future<void> _openStoryComposer() async {
-    final story = await showStoryComposer(context);
+  Future<void> _openStoryComposer({bool pickPhoto = false}) async {
+    final story = await showStoryComposer(context, pickPhoto: pickPhoto);
     if (!mounted || story == null) return;
     setState(() => _stories = [story, ..._stories]);
   }
@@ -1283,12 +1293,16 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   /// Routes a pick from the create chooser to the right composer or screen.
-  Future<void> _handleCreate(CreateKind kind) async {
-    switch (kind) {
+  Future<void> _handleCreate(CreateRequest request) async {
+    switch (request.kind) {
       case CreateKind.post:
-        await _openPostComposer();
+        await _openPostComposer(
+          page: request.page,
+          initialText: request.initialText,
+          pickPhoto: request.pickPhoto,
+        );
       case CreateKind.story:
-        await _openStoryComposer();
+        await _openStoryComposer(pickPhoto: request.pickPhoto);
       case CreateKind.event:
         await context.pushNamed('post_event');
       case CreateKind.prayer:
@@ -1969,7 +1983,8 @@ class _HomeScreenState extends State<HomeScreen>
                 const SizedBox(width: AppSpace.md),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: () => _handleCreate(CreateKind.post),
+                    onPressed: () =>
+                        _handleCreate(const CreateRequest(CreateKind.post)),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.primaryBlue,
                     ),

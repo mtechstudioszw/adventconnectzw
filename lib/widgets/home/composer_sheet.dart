@@ -27,25 +27,77 @@ import 'story_text_style.dart';
 
 /// Opens the "write a post" bottom sheet. Resolves to the freshly
 /// created Post or null if the user cancelled.
+///
+/// [initialText] seeds the body (the create studio's starters and "today's
+/// verse"); if a draft is restored it is appended below the draft rather
+/// than replacing words the member already wrote. [pickPhoto] opens the
+/// photo picker as soon as the sheet is up.
 Future<Post?> showPostComposer(
   BuildContext context, {
   String? churchId,
   OrgPage? page,
+  String? initialText,
+  bool pickPhoto = false,
 }) {
   return showBlurredSheet<Post>(
     context: context,
-    builder: (ctx) => _PostComposer(churchId: churchId, page: page),
+    builder: (ctx) => _PostComposer(
+      churchId: churchId,
+      page: page,
+      initialText: initialText,
+      pickPhoto: pickPhoto,
+    ),
   );
 }
 
+/// The autosaved, unpublished post for this identity, if there is one —
+/// what the create studio offers to "continue".
+({String body, List<String> photos})? readPostDraft({
+  String? churchId,
+  OrgPage? page,
+}) {
+  try {
+    final raw = CacheService.readStringStale(
+      postDraftKey(churchId: churchId, page: page),
+    );
+    if (raw == null || raw.isEmpty) return null;
+    final m = jsonDecode(raw) as Map<String, dynamic>;
+    final body = (m['body'] as String?) ?? '';
+    final photos = <String>[
+      if (m['images'] is List)
+        for (final u in m['images'] as List)
+          if (u != null && u.toString().isNotEmpty) u.toString(),
+      if (m['image'] is String && (m['image'] as String).isNotEmpty)
+        m['image'] as String,
+    ];
+    if (body.trim().isEmpty && photos.isEmpty) return null;
+    return (body: body, photos: photos);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Church updates and Page posts keep their own draft so a half-written
+/// one can't overwrite a half-written personal post. User-scoped on
+/// purpose (no `pref:`), so sign-out clears it.
+String postDraftKey({String? churchId, OrgPage? page}) =>
+    'composer_draft_v1'
+    '${churchId == null ? '' : ':$churchId'}'
+    '${page == null ? '' : ':page:${page.id}'}';
+
 /// Opens the "share a story" bottom sheet. Resolves to the freshly
 /// created Story or null if the user cancelled.
-Future<Story?> showStoryComposer(BuildContext context) {
+///
+/// [pickPhoto] opens straight on the photo picker instead of a text story.
+Future<Story?> showStoryComposer(
+  BuildContext context, {
+  bool pickPhoto = false,
+}) {
   return showModalBottomSheet<Story>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => const _StoryComposer(),
+    builder: (ctx) => _StoryComposer(pickPhoto: pickPhoto),
   );
 }
 
@@ -53,7 +105,15 @@ Future<Story?> showStoryComposer(BuildContext context) {
 //  Post composer
 // ===================================================================
 class _PostComposer extends StatefulWidget {
-  const _PostComposer({this.churchId, this.page});
+  const _PostComposer({
+    this.churchId,
+    this.page,
+    this.initialText,
+    this.pickPhoto = false,
+  });
+
+  final String? initialText;
+  final bool pickPhoto;
 
   /// When set, the post is published as a church update (shows the church's
   /// name + gold tick in the feed).
@@ -114,12 +174,8 @@ class _PostComposerState extends State<_PostComposer>
   final _scroll = ScrollController();
   bool _scrolled = false;
 
-  /// Church updates keep their own draft so a half-written church notice
-  /// can't overwrite a half-written personal post.
   String get _draftKey =>
-      'composer_draft_v1'
-      '${widget.churchId == null ? '' : ':${widget.churchId}'}'
-      '${widget.page == null ? '' : ':page:${widget.page!.id}'}';
+      postDraftKey(churchId: widget.churchId, page: widget.page);
 
   /// The church this update is going out as, when posting from a church
   /// admin dashboard. Loaded here as well as in the identity row because
@@ -130,6 +186,21 @@ class _PostComposerState extends State<_PostComposer>
   void initState() {
     super.initState();
     _restoreDraft();
+    final seed = widget.initialText?.trim() ?? '';
+    if (seed.isNotEmpty) {
+      final current = _controller.text.trimRight();
+      _controller.text = current.isEmpty
+          ? widget.initialText!
+          : '$current\n\n${widget.initialText!}';
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+    }
+    if (widget.pickPhoto) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pickImage();
+      });
+    }
     _controller.addListener(_onBodyChanged);
     _scroll.addListener(_onScroll);
     _entrance.forward();
@@ -145,7 +216,9 @@ class _PostComposerState extends State<_PostComposer>
     try {
       final church = await ChurchService.fetchChurchById(id);
       if (mounted) setState(() => _church = church);
-    } catch (_) {/* preview falls back to the plain card */}
+    } catch (_) {
+      /* preview falls back to the plain card */
+    }
   }
 
   @override
@@ -473,8 +546,9 @@ class _PostComposerState extends State<_PostComposer>
           child: Container(
             decoration: BoxDecoration(
               color: palette.sheet,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.darkNavy.withValues(alpha: 0.16),
@@ -558,14 +632,16 @@ class _PostComposerState extends State<_PostComposer>
 
                         if (_draftRestored) ...[
                           const SizedBox(height: 12),
-                          _DraftRestoredNote(onDiscard: () {
-                            _clearDraft();
-                            setState(() {
-                              _controller.clear();
-                              _photos.clear();
-                              _draftRestored = false;
-                            });
-                          }),
+                          _DraftRestoredNote(
+                            onDiscard: () {
+                              _clearDraft();
+                              setState(() {
+                                _controller.clear();
+                                _photos.clear();
+                                _draftRestored = false;
+                              });
+                            },
+                          ),
                         ],
 
                         const SizedBox(height: 6),
@@ -613,8 +689,9 @@ class _PostComposerState extends State<_PostComposer>
                               ),
                               border: InputBorder.none,
                               isDense: true,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 10),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 10,
+                              ),
                             ),
                           ),
                         ),
@@ -1117,10 +1194,7 @@ class _Tile extends StatelessWidget {
               left: 6,
               bottom: 6,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.darkNavy.withValues(alpha: 0.60),
                   borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -1455,7 +1529,9 @@ class _VisibilityOption extends StatelessWidget {
                 ),
               ),
               Text(
-                isPublic ? 'Anyone on Adventist Super App' : 'Only your friends',
+                isPublic
+                    ? 'Anyone on Adventist Super App'
+                    : 'Only your friends',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.labelSmall.copyWith(
@@ -1481,7 +1557,9 @@ class _VisibilityOption extends StatelessWidget {
 //  Story composer
 // ===================================================================
 class _StoryComposer extends StatefulWidget {
-  const _StoryComposer();
+  const _StoryComposer({this.pickPhoto = false});
+
+  final bool pickPhoto;
 
   @override
   State<_StoryComposer> createState() => _StoryComposerState();
@@ -1507,6 +1585,16 @@ class _StoryComposerState extends State<_StoryComposer> {
     0xFFD32F2F, // red
     0xFF00695C, // teal
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.pickPhoto) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pickImage();
+      });
+    }
+  }
 
   @override
   void dispose() {

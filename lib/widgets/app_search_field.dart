@@ -78,6 +78,9 @@ class AppSearchField extends StatelessWidget {
               ),
               decoration: InputDecoration(
                 isDense: true,
+                // The app theme fills fields white; inside this pill that
+                // painted a white box around the text.
+                filled: false,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,

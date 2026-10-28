@@ -354,3 +354,23 @@ updated; they fall back to the old buttons until the patch runs.
 - Security: members could INSERT orders/order_items directly (any price,
   any status). Revoked; place_order (SECURITY DEFINER) is the only way in.
 
+### Search redesign (13-batch plan, Batch 9 — 28 Oct 2026)
+
+- Three states: landing (Jump-to grid for People, Pages, Churches, Shop,
+  Jobs, Events, Videos, Library; recent searches; a rail of people you may
+  know; grouped discovery lists) → **suggestions while typing** → full
+  results on submit, in underlined tabs with real counts (Top, People,
+  Pages, Posts, Shop, Jobs, Churches, Events, Videos — empty ones hidden).
+- Suggestions (SearchTypeaheadService): a few rows per type, only the
+  columns shown, in parallel, stale answers dropped; church/people names
+  ride the existing trigram indexes. Bible references ("John 3:16") open
+  the Bible at that verse; hymn numbers/titles open the hymn. No new
+  backend — a combined search function can replace its body later.
+- Fixed: typing ran the full seven-way search on every pause, and the
+  church part downloaded up to 5,000 churches to show 12 (now 20, and
+  only on submit). The search field drew a white box around the text
+  (theme fill) — fixed in the shared AppSearchField, which also fixes it
+  in Chat's search. Pages are now searchable.
+- Results are grouped cards with hairlines instead of one floating card
+  per row; avatars are fetched at 3x their drawn size.
+

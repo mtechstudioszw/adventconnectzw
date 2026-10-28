@@ -23,6 +23,13 @@ import '../../widgets/youtube/youtube_video_card.dart';
 import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/search_suggest_service.dart';
+import '../../services/search_typeahead_service.dart';
+import '../../services/page_service.dart';
+import '../../services/bible_service.dart';
+import '../../models/hymn_model.dart';
+import '../../models/org_page_model.dart';
+import '../library/bible_tab.dart' show BibleReaderScreen;
+import '../library/hymnal_tab.dart' show HymnReaderScreen;
 import '../../services/secure_storage_service.dart';
 import '../../widgets/cached_image.dart';
 import '../../utils/photo_url.dart';
@@ -61,7 +68,17 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-enum _Filter { all, people, posts, churches, events, marketplace, jobs, videos }
+enum _Filter {
+  all,
+  people,
+  pages,
+  posts,
+  churches,
+  events,
+  marketplace,
+  jobs,
+  videos,
+}
 
 class _SearchScreenState extends State<SearchScreen>
     with TickerProviderStateMixin {
@@ -94,6 +111,15 @@ class _SearchScreenState extends State<SearchScreen>
   List<MemberDirectoryEntry> _people = const [];
   List<Post> _posts = const [];
   List<YoutubeVideo> _videos = const [];
+  List<OrgPage> _pages = const [];
+
+  /// What's in the field right now, and the as-you-type suggestions for it
+  /// (search redesign, 28 Oct 2026). The full search runs only once the
+  /// member submits or taps "See all results" — [_showResults].
+  String _typed = '';
+  List<SearchHit> _hits = const [];
+  bool _suggesting = false;
+  bool _showResults = false;
 
   // Fallback list — surfaced when the query has no matches. Loaded
   // lazily the first time we hit an empty-result state.
@@ -222,8 +248,8 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     final me = AuthService.currentUser?.id;
-    _homeChurchId =
-        AuthService.currentUser?.userMetadata?['church_id']?.toString();
+    _homeChurchId = AuthService.currentUser?.userMetadata?['church_id']
+        ?.toString();
     final results = await Future.wait([
       safe(() => FeedService.fetchMyFriendships(), <Friendship>[]),
       safe(() => ChurchService.fetchUserFollowedChurchIds(), <String>{}),
@@ -462,16 +488,49 @@ class _SearchScreenState extends State<SearchScreen>
     } catch (_) {}
   }
 
+  /// Typing shows suggestions; it no longer runs the full seven-way search
+  /// on every pause (that downloaded up to 5,000 churches each time).
   void _onChanged(String value) {
+    final q = value.trim();
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
-      _runSearch(value.trim());
+    setState(() {
+      _typed = q;
+      _showResults = false;
+      if (q.isEmpty) {
+        _hits = const [];
+        _suggesting = false;
+      }
+    });
+    if (q.isEmpty) {
+      _runSearch('');
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 180), () => _suggest(q));
+  }
+
+  Future<void> _suggest(String q) async {
+    if (!mounted) return;
+    setState(() => _suggesting = true);
+    final hits = await SearchTypeaheadService.suggest(q);
+    // A newer keystroke owns the screen now.
+    if (!mounted || q != _typed) return;
+    setState(() {
+      _hits = hits;
+      _suggesting = false;
     });
   }
 
   void _submit(String value) {
     _debounce?.cancel();
-    _runSearch(value.trim());
+    final q = value.trim();
+    if (q.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _typed = q;
+      _showResults = true;
+    });
+    unawaited(_saveRecent(q));
+    _runSearch(q);
   }
 
   void _useRecent(String query) {
@@ -479,8 +538,43 @@ class _SearchScreenState extends State<SearchScreen>
     _controller.selection = TextSelection.fromPosition(
       TextPosition(offset: query.length),
     );
-    _focusNode.requestFocus();
-    _runSearch(query);
+    _submit(query);
+  }
+
+  /// Opens what a suggestion points at, remembering the search.
+  Future<void> _openHit(SearchHit h) async {
+    unawaited(_saveRecent(_typed));
+    switch (h.kind) {
+      case SearchHitKind.person:
+        context.pushNamed('user_profile', pathParameters: {'userId': h.id});
+      case SearchHitKind.page:
+        context.pushNamed('page_details', pathParameters: {'id': h.id});
+      case SearchHitKind.church:
+        context.pushNamed('church_details', pathParameters: {'id': h.id});
+      case SearchHitKind.product:
+        context.pushNamed('product_details', pathParameters: {'id': h.id});
+      case SearchHitKind.job:
+        context.pushNamed('job_details', pathParameters: {'id': h.id});
+      case SearchHitKind.verse:
+        final ref = h.payload! as BibleReference;
+        // The reader counts chapters and verses from 0; a reference from 1.
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => BibleReaderScreen(
+              book: ref.book,
+              chapter: ref.chapter - 1,
+              scrollToVerse: ref.verse == null ? null : ref.verse! - 1,
+            ),
+          ),
+        );
+      case SearchHitKind.hymn:
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                HymnReaderScreen(hymns: [h.payload! as Hymn], initialIndex: 0),
+          ),
+        );
+    }
   }
 
   Future<void> _runSearch(String query) async {
@@ -496,6 +590,7 @@ class _SearchScreenState extends State<SearchScreen>
         _people = const [];
         _posts = const [];
         _videos = const [];
+        _pages = const [];
       });
       return;
     }
@@ -519,12 +614,14 @@ class _SearchScreenState extends State<SearchScreen>
 
     final results = await Future.wait([
       safe(() => _searchPeople(query)),
-      safe(() => ChurchService.fetchChurches(search: query)),
+      // 20, not the default 5,000: twelve are shown.
+      safe(() => ChurchService.fetchChurches(search: query, limit: 20)),
       safe(() => EventService.fetchEvents(search: query)),
       safe(() => MarketplaceService.fetchProducts(search: query)),
       safe(() => JobService.fetchJobs(search: query)),
       safe(() => FeedService.searchPosts(query)),
       safe(() => YoutubeService.search(query, limit: 12)),
+      safe(() => PageService.directory(query: query, limit: 12)),
     ]);
     if (!mounted) return;
     // Drop a stale answer. Searches overlap — "joh" is still in flight when
@@ -539,7 +636,9 @@ class _SearchScreenState extends State<SearchScreen>
     final jobs = (results[4] as List<Job>).take(12).toList();
     final posts = (results[5] as List<Post>).take(12).toList();
     final videos = (results[6] as List<YoutubeVideo>).take(12).toList();
+    final pages = (results[7] as List<OrgPage>).take(12).toList();
     setState(() {
+      _pages = pages;
       _people = people;
       _churches = churches;
       _events = events;
@@ -559,7 +658,8 @@ class _SearchScreenState extends State<SearchScreen>
         products.isNotEmpty ||
         jobs.isNotEmpty ||
         posts.isNotEmpty ||
-        videos.isNotEmpty;
+        videos.isNotEmpty ||
+        pages.isNotEmpty;
     if (!hasAny) {
       // Ask what they MEANT before offering something else entirely.
       // Fires alongside the generic fallback rather than before it, so the
@@ -596,8 +696,9 @@ class _SearchScreenState extends State<SearchScreen>
     // 80 covers both callers: the local substring match in _searchPeople
     // and the empty-state fallback, which only shows 30. One fetch, not two
     // at different limits.
-    return _suggestedFuture ??=
-        DirectoryService.fetchSuggestedMembers(limit: 80);
+    return _suggestedFuture ??= DirectoryService.fetchSuggestedMembers(
+      limit: 80,
+    );
   }
 
   Future<void> _loadFallback() async {
@@ -690,11 +791,13 @@ class _SearchScreenState extends State<SearchScreen>
 
   bool get _hasResults =>
       _people.isNotEmpty ||
+      _pages.isNotEmpty ||
       _churches.isNotEmpty ||
       _events.isNotEmpty ||
       _products.isNotEmpty ||
       _jobs.isNotEmpty ||
-      _posts.isNotEmpty;
+      _posts.isNotEmpty ||
+      _videos.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -705,19 +808,20 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           children: [
             _buildSearchBar(),
-            if (_lastQuery.isNotEmpty && _hasResults) _buildFilterChips(),
+            if (_showResults && _lastQuery.isNotEmpty && _hasResults)
+              _buildFilterChips(),
             Expanded(
-              // Row-shaped shimmer while searching, crossfading into
-              // whichever state lands (results / recent / empty).
-              child: ContentReveal(
-                loading: _searching,
-                skeleton: ShimmerLoaders.peopleList(),
-                child: _lastQuery.isEmpty
-                    ? _buildRecent()
-                    : _hasResults
-                    ? _buildResults()
-                    : _buildEmpty(),
-              ),
+              // Landing → suggestions while typing → full results on
+              // submit. Row-shaped shimmer while the full search runs.
+              child: _typed.isEmpty
+                  ? _buildRecent()
+                  : !_showResults
+                  ? _buildTypeahead()
+                  : ContentReveal(
+                      loading: _searching,
+                      skeleton: ShimmerLoaders.peopleList(),
+                      child: _hasResults ? _buildResults() : _buildEmpty(),
+                    ),
             ),
           ],
         ),
@@ -788,58 +892,114 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
+  /// Result scopes as underlined tabs with real counts — only the ones
+  /// that found something (plus All), so no tab leads to an empty list.
   Widget _buildFilterChips() {
-    // Each scope carries its own glyph. With eight text-only pills the
-    // rail was a wall of similar words you had to read one by one; an
-    // icon makes the one you want findable at a glance, and makes the
-    // active chip obvious from the corner of the eye.
-    final chips = <_FilterDef>[
-      const _FilterDef(_Filter.all, 'All', Icons.auto_awesome_rounded),
-      const _FilterDef(_Filter.videos, 'Videos', Icons.play_circle_outline),
-      const _FilterDef(_Filter.people, 'People', Icons.people_alt_outlined),
-      const _FilterDef(_Filter.posts, 'Posts', Icons.article_outlined),
-      const _FilterDef(_Filter.churches, 'Churches', Icons.church_outlined),
-      const _FilterDef(_Filter.events, 'Events', Icons.event_outlined),
-      const _FilterDef(
-        _Filter.marketplace,
-        'Marketplace',
-        Icons.storefront_outlined,
-      ),
-      const _FilterDef(_Filter.jobs, 'Jobs', Icons.work_outline_rounded),
-    ];
+    final palette = context.palette;
+    final tabs = <(_Filter, String, int)>[
+      (_Filter.all, 'Top', -1),
+      (_Filter.people, 'People', _people.length),
+      (_Filter.pages, 'Pages', _pages.length),
+      (_Filter.posts, 'Posts', _posts.length),
+      (_Filter.marketplace, 'Shop', _products.length),
+      (_Filter.jobs, 'Jobs', _jobs.length),
+      (_Filter.churches, 'Churches', _churches.length),
+      (_Filter.events, 'Events', _events.length),
+      (_Filter.videos, 'Videos', _videos.length),
+    ].where((t) => t.$3 != 0).toList();
     return Container(
-      // Transparent, like the search bar above it — together they form the
-      // top region of this screen, and painting either one opaque leaves a
-      // band where the ambient field stops dead.
-      color: Colors.transparent,
-      padding: const EdgeInsets.only(bottom: 10),
-      // No fixed height. The rail used to be pinned at 38dp with text
-      // inside it that scales with the system font — at large
-      // accessibility sizes the labels simply clipped (silently: there is
-      // no Flex here, so nothing throws). Let the content size the row.
-      child: SingleChildScrollView(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: palette.divider)),
+      ),
+      height: 44,
+      child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        children: [
+          for (final t in tabs)
+            _ScopeTab(
+              label: t.$2,
+              count: t.$3 < 0 ? null : t.$3,
+              active: _filter == t.$1,
+              onTap: () {
+                if (_filter == t.$1) return;
+                setState(() => _filter = t.$1);
+                _replayListEnter();
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// As-you-type suggestions: a "Search for …" row, then direct matches
+  /// (a Bible reference or hymn first, then people, Pages, churches, shop
+  /// items, jobs). Tapping one opens it; the first row runs the full
+  /// search.
+  Widget _buildTypeahead() {
+    final palette = context.palette;
+    return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [
+        _Group(
           children: [
-            for (var i = 0; i < chips.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              _FilterChip(
-                label: chips[i].label,
-                icon: chips[i].icon,
-                active: chips[i].filter == _filter,
-                onTap: () {
-                  if (chips[i].filter == _filter) return;
-                  setState(() => _filter = chips[i].filter);
-                  // The list underneath is now a different set of rows,
-                  // so it arrives rather than swapping in place.
-                  _replayListEnter();
-                },
+            _SuggestRow(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.search_rounded,
+                  color: AppColors.primaryBlue,
+                  size: 20,
+                ),
               ),
-            ],
+              title: 'Search for "$_typed"',
+              subtitle: 'See all results',
+              query: '',
+              bold: true,
+              onTap: () => _submit(_typed),
+            ),
+            for (final h in _hits)
+              _SuggestRow(
+                leading: _HitLeading(hit: h),
+                title: h.title,
+                subtitle: h.subtitle,
+                query: _typed,
+                verified: h.verified,
+                onTap: () => _openHit(h),
+              ),
           ],
         ),
-      ),
+        if (_suggesting && _hits.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: palette.textMuted,
+                ),
+              ),
+            ),
+          )
+        else if (!_suggesting && _hits.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
+            child: Text(
+              'No quick matches. Search to look through posts, events and '
+              'videos too.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+            ),
+          ),
+      ],
     );
   }
 
@@ -848,10 +1008,17 @@ class _SearchScreenState extends State<SearchScreen>
         ? _recent
         : _recent.take(5).toList(growable: false);
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       // Was 8 here + 16 on the first section = 24dp of stacked dead space
       // under the field before anything readable started.
       padding: const EdgeInsets.fromLTRB(0, 2, 0, 24),
       children: [
+        _JumpGrid(
+          onPeople: () {
+            setState(() => _filter = _Filter.people);
+            _focusNode.requestFocus();
+          },
+        ),
         if (_recent.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
@@ -957,37 +1124,54 @@ class _SearchScreenState extends State<SearchScreen>
       sections.add(
         _landingHeader(
           'People you may know',
-          actionLabel: _suggestions.length > 6
+          actionLabel: _suggestions.length > 3
               ? (_seeAllSuggestions ? 'Show less' : 'See all')
               : null,
-          onAction: _suggestions.length > 6
+          onAction: _suggestions.length > 3
               ? () => setState(() => _seeAllSuggestions = !_seeAllSuggestions)
               : null,
         ),
       );
       sections.add(
-        _landingList([
-          // Same rich row as the results list — so the landing state is
-          // somewhere you can actually add people, not just a list of
-          // links back into the profile screen.
-          for (final p
-              in (_seeAllSuggestions ? _suggestions : _suggestions.take(6)))
-            _PersonResultRow(
-              person: p,
-              query: '',
-              state: _friendIds.contains(p.userId)
-                  ? _FriendState.friends
-                  : _pendingFriendIds.contains(p.userId)
-                  ? _FriendState.pending
-                  : _FriendState.none,
-              busy: _actionBusy.contains(p.userId),
-              onAdd: () => _addFriend(p.userId),
-              onTap: () => context.pushNamed(
-                'user_profile',
-                pathParameters: {'userId': p.userId},
+        _seeAllSuggestions
+            ? _landingList([
+                for (final p in _suggestions)
+                  _PersonResultRow(
+                    person: p,
+                    query: '',
+                    state: _friendStateOf(p.userId),
+                    busy: _actionBusy.contains(p.userId),
+                    onAdd: () => _addFriend(p.userId),
+                    onTap: () => context.pushNamed(
+                      'user_profile',
+                      pathParameters: {'userId': p.userId},
+                    ),
+                  ),
+              ])
+            // A rail of faces reads as "people", where a stack of rows
+            // with an Add button each read as a form to fill in.
+            : SizedBox(
+                height: 196,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  itemCount: _suggestions.length.clamp(0, 12),
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (context, i) {
+                    final p = _suggestions[i];
+                    return _PersonCard(
+                      person: p,
+                      state: _friendStateOf(p.userId),
+                      busy: _actionBusy.contains(p.userId),
+                      onAdd: () => _addFriend(p.userId),
+                      onTap: () => context.pushNamed(
+                        'user_profile',
+                        pathParameters: {'userId': p.userId},
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-        ]),
       );
     }
 
@@ -1147,15 +1331,19 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
+  _FriendState _friendStateOf(String userId) => _friendIds.contains(userId)
+      ? _FriendState.friends
+      : _pendingFriendIds.contains(userId)
+      ? _FriendState.pending
+      : _FriendState.none;
+
+  /// One grouped card with hairlines between rows — the way a settings
+  /// list or a polished search app groups related results, instead of a
+  /// separate floating card per row.
   Widget _landingList(List<Widget> rows) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          for (final r in rows)
-            Padding(padding: const EdgeInsets.only(bottom: 10), child: r),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: _Group(children: rows),
     );
   }
 
@@ -1272,6 +1460,9 @@ class _SearchScreenState extends State<SearchScreen>
     final showVideos =
         (_filter == _Filter.all || _filter == _Filter.videos) &&
         _videos.isNotEmpty;
+    final showPages =
+        (_filter == _Filter.all || _filter == _Filter.pages) &&
+        _pages.isNotEmpty;
 
     final anyForFilter =
         showPeople ||
@@ -1280,7 +1471,8 @@ class _SearchScreenState extends State<SearchScreen>
         showEvents ||
         showProducts ||
         showJobs ||
-        showVideos;
+        showVideos ||
+        showPages;
 
     if (!anyForFilter) {
       return Padding(
@@ -1305,7 +1497,7 @@ class _SearchScreenState extends State<SearchScreen>
     final sections = <Widget>[
       if (showPeople)
         _Section(
-          label: 'PEOPLE',
+          label: 'People',
           count: _people.length,
           onSeeAll: grouped && _people.length > allCap
               ? () => setState(() => _filter = _Filter.people)
@@ -1332,9 +1524,44 @@ class _SearchScreenState extends State<SearchScreen>
               ),
           ],
         ),
+      if (showPages)
+        _Section(
+          label: 'Pages',
+          count: _pages.length,
+          onSeeAll: grouped && _pages.length > allCap
+              ? () => setState(() => _filter = _Filter.pages)
+              : null,
+          children: [
+            for (final pg in cap(_pages))
+              _Row(
+                icon: Icons.flag_outlined,
+                imageUrl: pg.logoUrl,
+                title: pg.name,
+                subtitle: [
+                  'Page',
+                  if ((pg.city ?? '').isNotEmpty) pg.city!,
+                ].join('  ·  '),
+                trailing: pg.isVerified
+                    ? const Icon(
+                        Icons.verified,
+                        color: AppColors.goldAccent,
+                        size: 15,
+                      )
+                    : null,
+                onTap: () => _openResult(
+                  _lastQuery,
+                  () => context.pushNamed(
+                    'page_details',
+                    pathParameters: {'id': pg.id},
+                    extra: pg,
+                  ),
+                ),
+              ),
+          ],
+        ),
       if (showChurches)
         _Section(
-          label: 'CHURCHES',
+          label: 'Churches',
           count: _churches.length,
           onSeeAll: grouped && _churches.length > allCap
               ? () => setState(() => _filter = _Filter.churches)
@@ -1361,7 +1588,7 @@ class _SearchScreenState extends State<SearchScreen>
         ),
       if (showEvents)
         _Section(
-          label: 'EVENTS',
+          label: 'Events',
           count: _events.length,
           onSeeAll: grouped && _events.length > allCap
               ? () => setState(() => _filter = _Filter.events)
@@ -1387,7 +1614,7 @@ class _SearchScreenState extends State<SearchScreen>
         ),
       if (showPosts)
         _Section(
-          label: 'POSTS',
+          label: 'Posts',
           count: _posts.length,
           onSeeAll: grouped && _posts.length > allCap
               ? () => setState(() => _filter = _Filter.posts)
@@ -1404,7 +1631,8 @@ class _SearchScreenState extends State<SearchScreen>
         ),
       if (showVideos)
         _Section(
-          label: 'VIDEOS',
+          grouped: false,
+          label: 'Videos',
           count: _videos.length,
           onSeeAll: grouped && _videos.length > allCap
               ? () => setState(() => _filter = _Filter.videos)
@@ -1426,7 +1654,7 @@ class _SearchScreenState extends State<SearchScreen>
         ),
       if (showProducts)
         _Section(
-          label: 'MARKETPLACE',
+          label: 'Shop',
           count: _products.length,
           onSeeAll: grouped && _products.length > allCap
               ? () => setState(() => _filter = _Filter.marketplace)
@@ -1449,7 +1677,7 @@ class _SearchScreenState extends State<SearchScreen>
         ),
       if (showJobs)
         _Section(
-          label: 'JOBS',
+          label: 'Jobs',
           count: _jobs.length,
           onSeeAll: grouped && _jobs.length > allCap
               ? () => setState(() => _filter = _Filter.jobs)
@@ -1487,6 +1715,8 @@ class _SearchScreenState extends State<SearchScreen>
         return 'results';
       case _Filter.people:
         return 'people';
+      case _Filter.pages:
+        return 'Pages';
       case _Filter.posts:
         return 'posts';
       case _Filter.churches:
@@ -1542,86 +1772,6 @@ class _StaggerIn extends StatelessWidget {
         );
       },
       child: child,
-    );
-  }
-}
-
-class _FilterDef {
-  const _FilterDef(this.filter, this.label, this.icon);
-  final _Filter filter;
-  final String label;
-  final IconData icon;
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.icon,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          // Animated rather than a hard colour swap: the selected chip
-          // fills, its border lights and a soft blue shadow settles under
-          // it, so the eye can follow the selection moving along the rail
-          // instead of two chips blinking at once.
-          child: AnimatedContainer(
-            duration: AppMotion.maybe(context, AppMotion.quick),
-            curve: AppMotion.ease,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              gradient: active ? AppColors.primaryGradient : null,
-              color: active ? null : palette.chipBg,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: active ? Colors.transparent : palette.divider,
-              ),
-              boxShadow: active
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.28),
-                        blurRadius: 14,
-                        offset: const Offset(0, 5),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 15,
-                  color: active ? AppColors.white : palette.textMuted,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: active ? AppColors.white : palette.text,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1731,77 +1881,487 @@ class _Section extends StatelessWidget {
     required this.count,
     required this.children,
     this.onSeeAll,
+    this.grouped = true,
   });
   final String label;
   final int count;
   final List<Widget> children;
 
-  /// Non-null only when the section is truncated on the "All" scope.
-  /// Switches the chip filter to this type rather than expanding in
-  /// place — the chips already exist, this just makes them discoverable
-  /// from the results instead of requiring you to plan ahead.
+  /// Non-null only when the section is truncated on the Top tab. Switches
+  /// to this type's tab rather than expanding in place.
   final VoidCallback? onSeeAll;
+
+  /// Rows share one card; false for things that are cards themselves
+  /// (videos).
+  final bool grouped;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          child: Row(
-            children: [
-              Text(
-                label,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.palette.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.4,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '$count',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontSize: 10.5,
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: palette.text,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-              const Spacer(),
-              if (onSeeAll != null)
-                GestureDetector(
-                  onTap: onSeeAll,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 4,
-                    ),
-                    child: Text(
-                      'See all $count',
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: AppColors.primaryBlue,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
+                const SizedBox(width: 6),
+                Text(
+                  '$count',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: palette.textMuted,
+                  ),
+                ),
+                const Spacer(),
+                if (onSeeAll != null)
+                  GestureDetector(
+                    onTap: onSeeAll,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Text(
+                        'See all',
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
+              ],
+            ),
+          ),
+          if (grouped)
+            _Group(children: children)
+          else
+            for (final c in children) ...[c, const SizedBox(height: 10)],
+        ],
+      ),
+    );
+  }
+}
+
+/// Rows in one card, hairline-separated.
+class _Group extends StatelessWidget {
+  const _Group({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.divider),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0)
+              Divider(
+                height: 1,
+                thickness: 1,
+                indent: 68,
+                color: palette.divider,
+              ),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A results-scope tab: label, count, and an underline when active.
+class _ScopeTab extends StatelessWidget {
+  const _ScopeTab({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.count,
+  });
+  final String label;
+  final int? count;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Semantics(
+      button: true,
+      selected: active,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: label),
+                    if (count != null)
+                      TextSpan(
+                        text: ' $count',
+                        style: TextStyle(
+                          color: active
+                              ? AppColors.primaryBlue.withValues(alpha: 0.7)
+                              : palette.textMuted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
                 ),
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: active ? AppColors.primaryBlue : palette.text,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 10),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 3,
+                width: active ? 28 : 0,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
             ],
           ),
         ),
-        for (final c in children) ...[c, const SizedBox(height: 10)],
-        const SizedBox(height: 6),
-      ],
+      ),
+    );
+  }
+}
+
+/// One as-you-type suggestion.
+class _SuggestRow extends StatelessWidget {
+  const _SuggestRow({
+    required this.leading,
+    required this.title,
+    required this.query,
+    required this.onTap,
+    this.subtitle,
+    this.verified = false,
+    this.bold = false,
+  });
+  final Widget leading;
+  final String title;
+  final String? subtitle;
+  final String query;
+  final bool verified;
+  final bool bold;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+        child: Row(
+          children: [
+            leading,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: _HighlightedText(
+                          text: title,
+                          query: query,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: palette.text,
+                            fontWeight: bold
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (verified) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.verified,
+                          color: AppColors.goldAccent,
+                          size: 14,
+                        ),
+                      ],
+                    ],
+                  ),
+                  if ((subtitle ?? '').isNotEmpty)
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(Icons.north_west_rounded, size: 16, color: palette.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The picture for a suggestion: a face, a logo, a product photo, or the
+/// kind's icon.
+class _HitLeading extends StatelessWidget {
+  const _HitLeading({required this.hit});
+  final SearchHit hit;
+
+  @override
+  Widget build(BuildContext context) {
+    if (hit.kind == SearchHitKind.person) {
+      return _PersonAvatar(
+        photoUrl: hit.imageUrl,
+        fullName: hit.title,
+        size: 40,
+      );
+    }
+    final icon = switch (hit.kind) {
+      SearchHitKind.page => Icons.flag_outlined,
+      SearchHitKind.church => Icons.church_outlined,
+      SearchHitKind.product => Icons.shopping_bag_outlined,
+      SearchHitKind.job => Icons.work_outline_rounded,
+      SearchHitKind.verse => Icons.menu_book_rounded,
+      SearchHitKind.hymn => Icons.music_note_rounded,
+      SearchHitKind.person => Icons.person_outline,
+    };
+    final url = hit.imageUrl;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 40,
+        height: 40,
+        color: AppColors.primaryBlue.withValues(alpha: 0.10),
+        child: (url ?? '').isNotEmpty
+            ? CachedImage(url!, fit: BoxFit.cover, width: 40, height: 40)
+            : Icon(icon, color: AppColors.primaryBlue, size: 20),
+      ),
+    );
+  }
+}
+
+/// Shortcuts at the top of Search to the places people look things up.
+class _JumpGrid extends StatelessWidget {
+  const _JumpGrid({required this.onPeople});
+  final VoidCallback onPeople;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final items = <(IconData, String, VoidCallback)>[
+      (Icons.people_alt_outlined, 'People', onPeople),
+      (Icons.flag_outlined, 'Pages', () => context.pushNamed('pages')),
+      (Icons.church_outlined, 'Churches', () => context.pushNamed('churches')),
+      (Icons.storefront_outlined, 'Shop', () => context.goNamed('marketplace')),
+      (Icons.work_outline_rounded, 'Jobs', () => context.pushNamed('jobs')),
+      (Icons.event_outlined, 'Events', () => context.pushNamed('events')),
+      (Icons.play_circle_outline, 'Videos', () => context.goNamed('watch')),
+      (Icons.menu_book_outlined, 'Library', () => context.pushNamed('library')),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+      child: GridView(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        // Height grows with the member's text size — a fixed aspect
+        // ratio overflowed at large accessibility sizes.
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          mainAxisExtent:
+              62 + MediaQuery.textScalerOf(context).scale(11.5) * 1.6,
+        ),
+        children: [
+          for (final (icon, label, onTap) in items)
+            Semantics(
+              button: true,
+              label: label,
+              excludeSemantics: true,
+              child: Pressable(
+                onTap: onTap,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: palette.card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: palette.divider),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          icon,
+                          color: AppColors.primaryBlue,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A person in the landing rail: face, name, place, and Add.
+class _PersonCard extends StatelessWidget {
+  const _PersonCard({
+    required this.person,
+    required this.state,
+    required this.busy,
+    required this.onAdd,
+    required this.onTap,
+  });
+  final MemberDirectoryEntry person;
+  final _FriendState state;
+  final bool busy;
+  final VoidCallback onAdd;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final name = (person.fullName ?? '').trim().isEmpty
+        ? 'Member'
+        : person.fullName!.trim();
+    final place = (person.city ?? person.province ?? '').trim();
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: palette.divider),
+        ),
+        child: Column(
+          children: [
+            _PersonAvatar(
+              photoUrl: person.profilePhotoUrl,
+              fullName: name,
+              size: 64,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (person.isVerified) ...[
+                  const SizedBox(width: 3),
+                  const Icon(
+                    Icons.verified,
+                    color: AppColors.goldAccent,
+                    size: 13,
+                  ),
+                ],
+              ],
+            ),
+            Text(
+              place.isEmpty ? ' ' : place,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.textMuted,
+                fontSize: 11.5,
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: switch (state) {
+                _FriendState.friends => InlineAction(
+                  label: 'Friends',
+                  icon: Icons.check,
+                  filled: false,
+                  onTap: null,
+                ),
+                _FriendState.pending => InlineAction(
+                  label: 'Pending',
+                  icon: Icons.hourglass_top_rounded,
+                  filled: false,
+                  onTap: null,
+                ),
+                _FriendState.none => InlineAction(
+                  label: 'Add',
+                  icon: Icons.person_add_alt_1,
+                  busy: busy,
+                  onTap: onAdd,
+                ),
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1896,22 +2456,20 @@ class _ResultShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressEffect(
-      child: ScreenCard(
-        padding: const EdgeInsets.all(12),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Row(
-              children: [
-                leading,
-                const SizedBox(width: 12),
-                Expanded(child: body),
-                if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-              ],
-            ),
+    // Flat: the row sits in a grouped card (_Group) with its neighbours.
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
+            children: [
+              leading,
+              const SizedBox(width: 12),
+              Expanded(child: body),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+            ],
           ),
         ),
       ),
@@ -1979,7 +2537,9 @@ class _PersonResultRow extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           _HighlightedText(
-            text: parts.isEmpty ? 'On Adventist Super App' : parts.join('  ·  '),
+            text: parts.isEmpty
+                ? 'On Adventist Super App'
+                : parts.join('  ·  '),
             query: query,
             style: AppTextStyles.bodySmall.copyWith(
               color: context.palette.textMuted,
@@ -2462,9 +3022,14 @@ class _JobResultRow extends StatelessWidget {
 }
 
 class _PersonAvatar extends StatelessWidget {
-  const _PersonAvatar({required this.photoUrl, required this.fullName});
+  const _PersonAvatar({
+    required this.photoUrl,
+    required this.fullName,
+    this.size = 44,
+  });
   final String? photoUrl;
   final String fullName;
+  final double size;
 
   String get _initials {
     final parts = fullName.trim().split(RegExp(r'\s+'));
@@ -2478,17 +3043,17 @@ class _PersonAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
     return Container(
-      width: 44,
-      height: 44,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: AppColors.primaryBlue.withValues(alpha: 0.10),
         image: hasPhoto
             ? DecorationImage(
-                // 44px at up to 3x. The stored Google URL is `=s96-c`, a
-                // 96px thumbnail — upscaled and soft in every result row.
+                // Asked for at 3x the drawn size. The stored Google URL is
+                // `=s96-c`, a 96px thumbnail — upscaled and soft otherwise.
                 image: CachedNetworkImageProvider(
-                  photoUrlAtSize(photoUrl, 132),
+                  photoUrlAtSize(photoUrl, (size * 3).round()),
                   cacheManager: adventImageCacheManager,
                 ),
                 fit: BoxFit.cover,
@@ -2503,7 +3068,7 @@ class _PersonAvatar extends StatelessWidget {
               style: AppTextStyles.labelMedium.copyWith(
                 color: AppColors.primaryBlue,
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
+                fontSize: size * 0.3,
               ),
             ),
     );
@@ -2605,13 +3170,12 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScreenCard(
-      padding: const EdgeInsets.all(14),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Row(
             children: [
               if ((imageUrl ?? '').isNotEmpty)

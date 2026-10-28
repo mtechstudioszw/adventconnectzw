@@ -5,10 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// The "What would you like to share?" chooser.
 ///
-/// It used to be eight identical glass tiles two-across. The redesign splits
-/// them: Post and Story as a primary pair, the other six as full-width rows.
+/// Now a "studio" (28 Oct 2026): Post and Story as format cards with
+/// previews, the other five as tool cards — two across, or one column at
+/// large text sizes.
 ///
-/// The rows are the part worth pinning. Their labels are long ("Reviewed
+/// The tool labels are the part worth pinning. Their labels are long ("Reviewed
 /// before it goes live") and they scale with the system font — a tighter
 /// grid would either truncate them or overflow. A `Row` that runs out of
 /// width THROWS rather than clipping quietly, and this project has shipped
@@ -97,7 +98,8 @@ void main() {
     expect(
       find.text('Church notice'),
       findsNothing,
-      reason: 'Church notice is ungated — it needs notices.church_id and an '
+      reason:
+          'Church notice is ungated — it needs notices.church_id and an '
           'is_approved_church_admin policy before it goes back on the sheet',
     );
   });
@@ -127,7 +129,11 @@ void main() {
     await t.pump();
     await t.pump(const Duration(milliseconds: 700));
 
-    // A secondary row, since those are the ones that changed shape.
+    // A tool card, since those are the ones that changed shape. It sits
+    // below the fold on a short phone since the studio redesign, so scroll
+    // to it the way a member would.
+    await t.ensureVisible(find.text('Job opening'));
+    await t.pump();
     await t.tap(find.text('Job opening'));
     await t.pumpAndSettle();
 
